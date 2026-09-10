@@ -7,7 +7,7 @@ description: "Research lived community experience before adopting, upgrading, bu
 
 Community-sentiment recon. Answers "what is it actually like to use/run/own this, according to the people doing it right now?" and identifies which communities to watch. It weights lived experience over authority, always checks Reddit, and always surfaces a recommended set of topic-appropriate forums and user groups.
 
-Before checking local knowledge or choosing where the memo is written, validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `research-tools-set-up`; do not choose a fallback output path. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
+Before checking local knowledge or choosing where the memo is written, validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
 
 When a user supplies an audio or video review, interview, or discussion as evidence, invoke `transcribe` before analysis. It only resolves the input; this skill still owns scope and the durable output.
 

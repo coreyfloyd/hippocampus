@@ -17,7 +17,7 @@ is deliberately local configuration, not package content.
 
 ## Optional wiki
 
-The wiki is optional. `research-tools-set-up` explains both the wiki and the
+The wiki is optional. `hippocampus-set-up` explains both the wiki and the
 no-wiki alternative in neutral terms, with no default lean, and can enable or
 disable the wiki later without disturbing the rest of an existing
 configuration. `research-to-wiki` and `wiki-audit` gate on the profile
@@ -27,7 +27,7 @@ has no `wiki/` directory, no `hot_file`, and no `wiki_followup_destination`,
 and no Wiki Additions class appears in any research artifact or
 knowledge-capture proposal it produces.
 
-Disabling the wiki never deletes or modifies an existing `wiki/` directory or anything in it; only `research-tools-set-up`'s own enable/disable conversation changes the profile fields, and only after the user approves.
+Disabling the wiki never deletes or modifies an existing `wiki/` directory or anything in it; only `hippocampus-set-up`'s own enable/disable conversation changes the profile fields, and only after the user approves.
 
 ## Navigation and links
 

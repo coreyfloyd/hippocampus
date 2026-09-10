@@ -7,7 +7,7 @@ description: Investigate supplied sources, improve an insufficient evidence set,
 
 Turn supplied evidence into a durable, source-grounded research artifact. This skill may analyze a fixed evidence set, improve an incomplete one, or prepare a proposal for an existing target. It does not directly promote knowledge or mutate a target without explicit authorization.
 
-Before selecting an output location, validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `research-tools-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
+Before selecting an output location, validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
 
 ## Modes
 

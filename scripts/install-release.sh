@@ -16,8 +16,8 @@ if [ "$TOP_LEVEL_COUNT" != "1" ]; then
   exit 1
 fi
 PAYLOAD="$(find "$WORK" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-if [ "$(basename "$PAYLOAD")" != "research-tools" ]; then
-  echo "release archive top-level directory must be named research-tools (found $(basename "$PAYLOAD"))" >&2
+if [ "$(basename "$PAYLOAD")" != "hippocampus" ]; then
+  echo "release archive top-level directory must be named hippocampus (found $(basename "$PAYLOAD"))" >&2
   exit 1
 fi
 test -f "$PAYLOAD/VERSION"

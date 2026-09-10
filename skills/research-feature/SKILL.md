@@ -11,7 +11,7 @@ When a supplied demo, talk, or video is material evidence, invoke `transcribe` t
 
 Firecrawl is a runtime-detected optional integration. Use it first for web search and page extraction when it is available. If it is unavailable or blocked for a source, use native web tools and state that fallback in the report.
 
-Validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill, before writing the document. If it is missing or invalid, stop and use `research-tools-set-up`; do not choose a fallback output path. This skill is read-only except for its required research artifact. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
+Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill, before writing the document. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. This skill is read-only except for its required research artifact. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
 
 ## Execution Modes
 

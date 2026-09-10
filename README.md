@@ -1,7 +1,7 @@
-# research-tools
+# Hippocampus
 
 AI makes it easy to open a hundred curiosity loops and leave the useful answers
-behind in old chats. `research-tools` closes those loops by moving a question
+behind in old chats. `Hippocampus` closes those loops by moving a question
 through a grounded answer to an explicit action.
 
 Here, research means looking things up and organizing the evidence to make a
@@ -33,11 +33,11 @@ tied to what your sources actually say, with far less outside influence and far
 less room for confident invention. `research-sources` and `research-topic` build
 their artifacts on top of that grounded layer.
 
-After installation, start with `research-tools-set-up`. It walks you through the
+After installation, start with `hippocampus-set-up`. It walks you through the
 knowledge-store structure, local policy, and follow-up routing, then shows the
 complete proposed configuration before creating or changing anything.
 
-The system stands on excellent tools others built — [Gemini Notebook][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Firecrawl][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `research-tools` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.
+The system stands on excellent tools others built — [Gemini Notebook][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Firecrawl][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.
 
 ## Research skills
 
@@ -78,7 +78,7 @@ These skills help you get research filed where it belongs.
 ## Knowledge store
 
 The wiki is optional. The system always creates three directories, plus a
-fourth for the compiled knowledge base when `research-tools-set-up` configures
+fourth for the compiled knowledge base when `hippocampus-set-up` configures
 the wiki as enabled:
 
 ```text
@@ -94,7 +94,7 @@ profile fields exist only when the wiki is enabled; declining it at setup
 skips the wiki folder, its profile fields, wiki routing in absorption plans
 and knowledge captures, and the `research-to-wiki` / `wiki-audit` skills,
 which refuse to run without it. The wiki can be turned on or off later
-through `research-tools-set-up` alone. The directory names are part of the
+through `hippocampus-set-up` alone. The directory names are part of the
 public [Karpathy-wiki contract][2]. The organization of the `wiki/`is
 customizable, but relies on internal wikilinks for traversal by AI and
 wikilink-aware tools.

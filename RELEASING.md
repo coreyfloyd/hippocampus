@@ -1,7 +1,7 @@
-# Releasing research-tools
+# Releasing Hippocampus
 
 This is the public, version-coupled maintainer runbook for producing a
-`research-tools` GitHub release. Version-specific scope, evidence, release
+`Hippocampus` GitHub release. Version-specific scope, evidence, release
 notes, and publication results belong in `RELEASE_CANDIDATE.md`.
 
 ## Release contract
@@ -11,10 +11,10 @@ A release uses the version in `VERSION` and publishes:
 ```text
 tag and title: v<version>
 
-research-tools-<version>.tar.gz
-research-tools-<version>.tar.gz.sha256
-research-tools-<version>.tar.gz.asc
-research-tools-release.asc
+hippocampus-<version>.tar.gz
+hippocampus-<version>.tar.gz.sha256
+hippocampus-<version>.tar.gz.asc
+hippocampus-release.asc
 install-release.sh
 verify-release.sh
 ```
@@ -26,7 +26,7 @@ unverified archive.
 
 The checksum is signed, not the archive directly. The expected public signing
 fingerprint is stored in `RELEASE_SIGNING_FINGERPRINT`; the matching public key
-is `keys/research-tools-release.asc`. Never replace that public key as part of a
+is `keys/hippocampus-release.asc`. Never replace that public key as part of a
 routine release. Key rotation requires a separately reviewed transition.
 
 ## Signing is a manual maintainer step
@@ -183,7 +183,7 @@ test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$COMMIT"
 
 VERSION_VALUE="$(tr -d '[:space:]' < VERSION)"
 TAG="v$VERSION_VALUE"
-git tag -a "$TAG" "$COMMIT" -m "research-tools $VERSION_VALUE"
+git tag -a "$TAG" "$COMMIT" -m "Hippocampus $VERSION_VALUE"
 git push origin "$TAG"
 ```
 
@@ -210,7 +210,7 @@ must not run it. Run it from an interactive terminal so pinentry can prompt:
 ```bash
 export GPG_TTY="$(tty)"
 FINGERPRINT="$(tr -d '[:space:]' < RELEASE_SIGNING_FINGERPRINT)"
-RESEARCH_TOOLS_GPG_KEY="$FINGERPRINT" bash scripts/build-release.sh dist
+HIPPOCAMPUS_GPG_KEY="$FINGERPRINT" bash scripts/build-release.sh dist
 ```
 
 An agent driving the release stops here, hands the maintainer the command above,
@@ -221,8 +221,8 @@ verification onward is agent-safe:
 VERSION_VALUE="$(tr -d '[:space:]' < VERSION)"
 FINGERPRINT="$(tr -d '[:space:]' < RELEASE_SIGNING_FINGERPRINT)"
 bash scripts/verify-release.sh \
-  "dist/research-tools-$VERSION_VALUE.tar.gz" \
-  keys/research-tools-release.asc \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz" \
+  keys/hippocampus-release.asc \
   "$FINGERPRINT"
 ```
 
@@ -230,10 +230,10 @@ Review the six exact upload paths before publication:
 
 ```bash
 ls -l \
-  "dist/research-tools-$VERSION_VALUE.tar.gz" \
-  "dist/research-tools-$VERSION_VALUE.tar.gz.sha256" \
-  "dist/research-tools-$VERSION_VALUE.tar.gz.asc" \
-  keys/research-tools-release.asc \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz" \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz.sha256" \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz.asc" \
+  keys/hippocampus-release.asc \
   scripts/install-release.sh \
   scripts/verify-release.sh
 ```
@@ -242,8 +242,8 @@ Inspect the archive's contents before publication: list it and assert its
 root directory:
 
 ```bash
-ARCHIVE_LIST="$(tar -tzf "dist/research-tools-$VERSION_VALUE.tar.gz")"
-test -z "$(printf '%s\n' "$ARCHIVE_LIST" | grep -v '^research-tools/')"
+ARCHIVE_LIST="$(tar -tzf "dist/hippocampus-$VERSION_VALUE.tar.gz")"
+test -z "$(printf '%s\n' "$ARCHIVE_LIST" | grep -v '^hippocampus/')"
 printf '%s\n' "$ARCHIVE_LIST"
 ```
 
@@ -255,7 +255,7 @@ named `v<VERSION>` exists and `HEAD` is not that tag.
 
 The archive is therefore always equal to the tree at `HEAD`: it can contain
 only tracked files (minus anything marked `export-ignore` in
-`.gitattributes`), rooted at a literal `research-tools/` prefix, never the
+`.gitattributes`), rooted at a literal `hippocampus/` prefix, never the
 build directory's basename. When the release tag already exists, the gate
 above additionally guarantees `HEAD` is that tagged commit, which is what
 makes the archive the tagged release's tree rather than merely some
@@ -270,10 +270,10 @@ already-pushed tag:
 
 ```bash
 gh release create "$TAG" \
-  "dist/research-tools-$VERSION_VALUE.tar.gz" \
-  "dist/research-tools-$VERSION_VALUE.tar.gz.sha256" \
-  "dist/research-tools-$VERSION_VALUE.tar.gz.asc" \
-  keys/research-tools-release.asc \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz" \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz.sha256" \
+  "dist/hippocampus-$VERSION_VALUE.tar.gz.asc" \
+  keys/hippocampus-release.asc \
   scripts/install-release.sh \
   scripts/verify-release.sh \
   --title "$TAG" \
@@ -294,12 +294,12 @@ VERIFY_DIR="$(mktemp -d)"
 gh release download "$TAG" --dir "$VERIFY_DIR"
 
 test "$(find "$VERIFY_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 6
-cmp "$VERIFY_DIR/research-tools-release.asc" keys/research-tools-release.asc
+cmp "$VERIFY_DIR/hippocampus-release.asc" keys/hippocampus-release.asc
 cmp "$VERIFY_DIR/install-release.sh" scripts/install-release.sh
 cmp "$VERIFY_DIR/verify-release.sh" scripts/verify-release.sh
 bash scripts/verify-release.sh \
-  "$VERIFY_DIR/research-tools-$VERSION_VALUE.tar.gz" \
-  "$VERIFY_DIR/research-tools-release.asc" \
+  "$VERIFY_DIR/hippocampus-$VERSION_VALUE.tar.gz" \
+  "$VERIFY_DIR/hippocampus-release.asc" \
   "$FINGERPRINT"
 
 gh release view "$TAG" \
@@ -319,7 +319,7 @@ names, and checksums before changing remote state.
 - Do not assume uploading an identically named asset overwrites it.
 - Preserve evidence for an incomplete or incorrect release before deciding
   whether to upload a missing asset or delete and recreate the release.
-- Never replace `research-tools-release.asc` without an intentional,
+- Never replace `hippocampus-release.asc` without an intentional,
   documented key rotation.
 - After recovery, redownload and repeat the complete public-asset verification.
 

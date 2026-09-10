@@ -5,7 +5,7 @@ description: Review sources, synthesized findings, and artifacts from the curren
 
 # Knowledge Capture
 
-Turn conversation knowledge into an explicit, complete disposition. Before proposing or performing a persistent capture, validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `research-tools-set-up`; do not choose a fallback destination. Cross-project work uses `artifact_followup_destination`, not the wiki-maintenance route. This skill owns only knowledge preservation and routing; `record-update` owns work records and `harness-improve` owns lessons about the harness. A durable research artifact is processed by `research-absorb`, not by this session-capture workflow.
+Turn conversation knowledge into an explicit, complete disposition. Before proposing or performing a persistent capture, validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback destination. Cross-project work uses `artifact_followup_destination`, not the wiki-maintenance route. This skill owns only knowledge preservation and routing; `record-update` owns work records and `harness-improve` owns lessons about the harness. A durable research artifact is processed by `research-absorb`, not by this session-capture workflow.
 
 ## Procedure
 

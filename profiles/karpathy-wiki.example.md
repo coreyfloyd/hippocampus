@@ -11,7 +11,7 @@ artifact_followup_destination: "Describe the task system and routing rule for re
 # wiki_enabled: false
 ---
 
-Copy to `~/.config/research-tools/profile.md` and set `knowledge_root`.
+Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.
 
 ## Optional local policy
 

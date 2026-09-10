@@ -1,40 +1,11 @@
-# Upgrading a published research-tools release
+# Migrating to Hippocampus 0.8.0
 
-The public installer upgrades only a published research-tools release. It
-creates package-owned skill links through one stable `current` pointer, so a
-completed upgrade activates all package skills together. A foreign skill link,
-broken link, or real directory is a collision and remains unchanged.
+Hippocampus stores new installations in `~/.config/hippocampus/` and `~/.local/share/hippocampus/`. The knowledge root and its contents do not move.
 
-This repository does not migrate legacy dotfiles or vault skill links. Such a
-migration is installation-specific and belongs to the private integration that
-owns its exact historical paths and approved manifest.
+Running the 0.8.0 installer upgrades a valid research-tools installation by copying its profile byte-for-byte to `~/.config/hippocampus/profile.md`, adding a new versioned release tree, and atomically repointing package-owned Claude and Codex skill links. It leaves `~/.config/research-tools/` and every old release directory in place for recovery.
 
-## Profile version 4
+The old `research-tools-set-up` command remains a forwarding compatibility skill. Use `hippocampus-set-up` in new instructions.
 
-Before installing a version-4 profile release, create
-`~/.config/research-tools/profile.md` from the public template, set an existing
-absolute `knowledge_root`, and ensure its canonical `raw/`, `wiki/`, `output/`,
-and `docs/` directories plus the three state files already exist:
+The installer stops without changing links when it finds a foreign skill link, a broken or tampered legacy release, or different old and new profile files. For a profile conflict, compare the two files, keep the intended content in the Hippocampus path, then rerun `bash install.sh`. A stopped or interrupted run is safe to rerun: release and link updates are atomic and the old installation is never deleted.
 
-```yaml
-profile_version: 4
-knowledge_root: /absolute/path/to/knowledge
-hot_file: wiki/hot.md
-operation_log_file: docs/log.md
-decision_log_file: docs/DECISIONS.md
-wiki_followup_destination: Describe the backlog or task route for knowledge-base maintenance.
-artifact_followup_destination: Describe the task system and routing rule for research findings that affect another project.
-```
-
-The two follow-up destinations are intentionally independent and may name
-external systems. The profile body defines entry formats and any routing
-distinctions. State-file locations are configurable within the knowledge root;
-the canonical directories are not.
-
-## Optional wiki
-
-`raw/`, `output/`, and `docs/` are always required; `wiki/` and its two
-profile fields (`hot_file` and `wiki_followup_destination`) are required only
-when the wiki is enabled, which is the default.
-
-Existing version-4 profiles need no change: an absent `wiki_enabled` field means the wiki stays enabled exactly as it worked before this field existed. A profile only needs `wiki_enabled: false` when a user later chooses to disable the wiki through `research-tools-set-up`.
+Existing profile version 4 files continue to validate unchanged. An absent `wiki_enabled` means the wiki remains enabled; setting `wiki_enabled: false` continues to opt out of it.

@@ -5,7 +5,7 @@ description: Read-only structural audit of a configured Karpathy-wiki knowledge 
 
 # Wiki Audit
 
-Validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py --require-wiki`, resolved relative to this skill, and read the [public Karpathy-wiki contract](../../contracts/karpathy-wiki.md) before auditing. If the profile is missing or invalid, stop and use `research-tools-set-up`; do not audit another root or choose a fallback report path. If the validator refuses with `--require-wiki` because the wiki is not configured, stop and relay its message verbatim — research-tools-set-up enables it; this is not a judgment to make by reading the profile yourself. Run only against the configured `knowledge_root`, applying any free-form local policy body only within that root. Produce a ranked report in canonical `output/`; modify nothing.
+Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py --require-wiki`, resolved relative to this skill, and read the [public Karpathy-wiki contract](../../contracts/karpathy-wiki.md) before auditing. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not audit another root or choose a fallback report path. If the validator refuses with `--require-wiki` because the wiki is not configured, stop and relay its message verbatim — hippocampus-set-up enables it; this is not a judgment to make by reading the profile yourself. Run only against the configured `knowledge_root`, applying any free-form local policy body only within that root. Produce a ranked report in canonical `output/`; modify nothing.
 
 ## When to use
 

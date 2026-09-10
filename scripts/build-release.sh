@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 OUT="${1:-$ROOT/dist}"
-KEY="${RESEARCH_TOOLS_GPG_KEY:?set RESEARCH_TOOLS_GPG_KEY to the signing key fingerprint}"
+KEY="${HIPPOCAMPUS_GPG_KEY:?set HIPPOCAMPUS_GPG_KEY to the signing key fingerprint}"
 
 # Only tracked-file modifications count as "dirty" here: an in-tree, untracked
 # output directory (this script's own OUT, editor droppings, etc.) must not
@@ -28,11 +28,11 @@ if (cd "$ROOT" && git rev-parse --verify --quiet "refs/tags/$TAG") >/dev/null 2>
 fi
 
 mkdir -p "$OUT"
-ARCHIVE="$OUT/research-tools-$VERSION.tar.gz"
+ARCHIVE="$OUT/hippocampus-$VERSION.tar.gz"
 # Build from the git-tracked tree at HEAD, not the working directory: the
 # archive root is a literal prefix (never the checkout's basename) and only
 # tracked files (minus any export-ignore paths in .gitattributes) can appear,
 # so build output and untracked files are structurally excluded.
-(cd "$ROOT" && git archive --format=tar.gz --prefix=research-tools/ -o "$ARCHIVE" HEAD)
+(cd "$ROOT" && git archive --format=tar.gz --prefix=hippocampus/ -o "$ARCHIVE" HEAD)
 (cd "$OUT" && shasum -a 256 "$(basename "$ARCHIVE")") > "$ARCHIVE.sha256"
 gpg --batch --yes --local-user "$KEY" --detach-sign --armor --output "$ARCHIVE.asc" "$ARCHIVE.sha256"

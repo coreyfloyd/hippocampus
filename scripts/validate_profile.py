@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the minimal versioned research-tools profile schema."""
+"""Validate the minimal versioned Hippocampus profile schema."""
 import pathlib
 import sys
 
@@ -115,7 +115,7 @@ def main():
                 fail(f"{key} must be absent when wiki_enabled is false")
         if require_wiki:
             fail(
-                "wiki is not configured; run research-tools-set-up to enable it"
+                "wiki is not configured; run hippocampus-set-up to enable it"
             )
 
     print(root)

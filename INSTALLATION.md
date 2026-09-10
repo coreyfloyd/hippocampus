@@ -5,7 +5,7 @@ is a separate, guided step that chooses where the system stores knowledge and
 how agents route follow-up work.
 
 Installation is supported on macOS and Linux. Native Windows is not supported;
-Windows users can instead run research-tools and their agent client inside the
+Windows users can instead run Hippocampus and their agent client inside the
 same WSL Linux distribution.
 
 ## Prerequisites
@@ -50,7 +50,7 @@ stable pointer to the active version, and skill links for both Claude and
 Codex:
 
 ```text
-~/.local/share/research-tools/
+~/.local/share/hippocampus/
 ├── releases/
 │   └── <version>/
 │       ├── skills/
@@ -60,8 +60,8 @@ Codex:
 │       └── manifest
 └── current -> releases/<version>
 
-$HOME/.claude/skills/<skill> -> $HOME/.local/share/research-tools/current/skills/<skill>
-$HOME/.codex/skills/<skill>  -> $HOME/.local/share/research-tools/current/skills/<skill>
+$HOME/.claude/skills/<skill> -> $HOME/.local/share/hippocampus/current/skills/<skill>
+$HOME/.codex/skills/<skill>  -> $HOME/.local/share/hippocampus/current/skills/<skill>
 ```
 
 The Codex root defaults to `$HOME/.codex` and can be changed with `CODEX_HOME`.
@@ -72,7 +72,7 @@ foreign skill link, broken package link, tampered release, or same-version
 release with different content.
 
 Installation succeeds before a knowledge profile exists so that the
-`research-tools-set-up` skill is available to guide configuration. The package is
+`hippocampus-set-up` skill is available to guide configuration. The package is
 installed at that point, but it is not ready for workflows that read or write
 the knowledge store. `bash install.sh --verify` remains the combined package
 integrity and configuration-readiness check.
@@ -88,7 +88,7 @@ bash install.sh
 Then ask your agent to configure it:
 
 ```text
-Use research-tools-set-up to walk me through configuring research-tools.
+Use hippocampus-set-up to walk me through configuring Hippocampus.
 ```
 
 The skill explains the storage model and workflow, inspects any existing
@@ -116,12 +116,12 @@ touch "$RESEARCH_KNOWLEDGE_ROOT/docs/DECISIONS.md"
 mkdir -p "$RESEARCH_KNOWLEDGE_ROOT/wiki"
 touch "$RESEARCH_KNOWLEDGE_ROOT/wiki/hot.md"
 
-mkdir -p ~/.config/research-tools
-cp ~/.local/share/research-tools/current/profiles/karpathy-wiki.example.md \
-  ~/.config/research-tools/profile.md
+mkdir -p ~/.config/hippocampus
+cp ~/.local/share/hippocampus/current/profiles/karpathy-wiki.example.md \
+  ~/.config/hippocampus/profile.md
 ```
 
-Edit `~/.config/research-tools/profile.md` and set:
+Edit `~/.config/hippocampus/profile.md` and set:
 
 - `knowledge_root` to the existing absolute root;
 - `operation_log_file` and `decision_log_file` to existing files relative to
@@ -163,8 +163,8 @@ the archive):
 
 ```bash
 bash install-release.sh \
-  research-tools-<version>.tar.gz \
-  research-tools-release.asc \
+  hippocampus-<version>.tar.gz \
+  hippocampus-release.asc \
   <maintainer-fingerprint>
 ```
 
@@ -175,7 +175,7 @@ the package installer. Reinstalling identical content is safe; a same-version,
 different-content collision fails.
 
 The current release-signing public key is
-[`keys/research-tools-release.asc`](keys/research-tools-release.asc). Its
+[`keys/hippocampus-release.asc`](keys/hippocampus-release.asc). Its
 fingerprint is `09674AFF392661238F4ACBD9F32B3A412CD5EFC5`.
 
 For published-release upgrades and migration boundaries, see

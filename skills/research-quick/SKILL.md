@@ -7,7 +7,7 @@ description: "Fast inline research on non-development topics—products, places,
 
 Inline research for non-dev questions: check configured local knowledge first, then Reddit plus domain-appropriate authoritative sources, and synthesize in the conversation. No notebooks, no files written.
 
-Read `~/.config/research-tools/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
+Read `~/.config/hippocampus/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
 
 If a supplied audio or video source is needed as evidence, invoke `transcribe` to acquire its text first. The transcript is input evidence; the response stays inline.
 

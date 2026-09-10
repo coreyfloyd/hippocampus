@@ -7,7 +7,7 @@ description: "Quick developer research for implementation or bug diagnosis, with
 
 Fast, inline research for implementation questions and bug diagnosis. No notebooks, no vault writes, no artifact generation — targeted source scraping, synthesis, and solution proposals delivered in the conversation.
 
-Read `~/.config/research-tools/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
+Read `~/.config/hippocampus/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
 
 For a supplied recording, conference talk, or video demonstration relevant to the diagnosis, invoke `transcribe` to obtain source text before continuing.
 

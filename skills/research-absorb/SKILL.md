@@ -8,9 +8,9 @@ description: Validate and execute the approved distribution plan in a durable re
 Process one research artifact through its existing proposed distribution plan.
 The artifact is coordination material, not an archive: it must reach terminal
 dispositions and then be deleted. Read [the artifact contract](references/artifact-contract.md)
-and validate `~/.config/research-tools/profile.md` with
+and validate `~/.config/hippocampus/profile.md` with
 `../../scripts/validate_profile.py`, resolved relative to this skill, before
-acting. If it is missing or invalid, stop and use `research-tools-set-up`; do not
+acting. If it is missing or invalid, stop and use `hippocampus-set-up`; do not
 mutate or delete the artifact. Research-derived tasks
 use `artifact_followup_destination`, never the wiki-maintenance route.
 

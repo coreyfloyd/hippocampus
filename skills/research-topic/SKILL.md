@@ -7,7 +7,7 @@ description: "Conduct deep, persistent topic-first research with NotebookLM: gat
 
 Conduct topic-first research with NotebookLM as the persistent source and synthesis layer. Use `research-sources` instead when the caller already supplies the evidence or asks to improve a named collection.
 
-Before choosing sources, a durable output location, or local follow-up policy, validate `~/.config/research-tools/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `research-tools-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
+Before choosing sources, a durable output location, or local follow-up policy, validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
 
 ## Scope and source set
 
