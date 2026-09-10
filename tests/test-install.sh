@@ -358,3 +358,36 @@ printf '\nlocal policy update\n' >> "$RENAME_HOME/.config/hippocampus/profile.md
 HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$ROOT/install.sh"
 grep -Fq 'local policy update' "$RENAME_HOME/.config/hippocampus/profile.md"
 rm -rf "$RENAME_HOME"
+
+# First-migration profile ambiguity and nonregular profile targets stop before
+# a Hippocampus release or client-link changes are made.
+PROFILE_CONFLICT_HOME="$(mktemp -d)"
+mkdir -p "$PROFILE_CONFLICT_HOME/.config/research-tools" "$PROFILE_CONFLICT_HOME/.config/hippocampus"
+printf 'legacy profile\n' > "$PROFILE_CONFLICT_HOME/.config/research-tools/profile.md"
+printf 'canonical profile\n' > "$PROFILE_CONFLICT_HOME/.config/hippocampus/profile.md"
+if HOME="$PROFILE_CONFLICT_HOME" CODEX_HOME="$PROFILE_CONFLICT_HOME/.codex" bash "$ROOT/install.sh"; then
+  exit 1
+fi
+test ! -e "$PROFILE_CONFLICT_HOME/.local/share/hippocampus/releases"
+rm -rf "$PROFILE_CONFLICT_HOME"
+
+NONREGULAR_PROFILE_HOME="$(mktemp -d)"
+mkdir -p "$NONREGULAR_PROFILE_HOME/.config/hippocampus/profile.md"
+if HOME="$NONREGULAR_PROFILE_HOME" CODEX_HOME="$NONREGULAR_PROFILE_HOME/.codex" bash "$ROOT/install.sh"; then
+  exit 1
+fi
+test ! -e "$NONREGULAR_PROFILE_HOME/.local/share/hippocampus/releases"
+rm -rf "$NONREGULAR_PROFILE_HOME"
+
+# An interruption after package links point through a missing new `current`
+# pointer is safe to rerun; the valid release tree remains and activation
+# completes on the retry.
+INTERRUPTED_HOME="$(mktemp -d)"
+mkdir -p "$INTERRUPTED_HOME/knowledge/raw" "$INTERRUPTED_HOME/knowledge/wiki" "$INTERRUPTED_HOME/knowledge/output" "$INTERRUPTED_HOME/knowledge/docs" "$INTERRUPTED_HOME/.config/hippocampus"
+touch "$INTERRUPTED_HOME/knowledge/wiki/hot.md" "$INTERRUPTED_HOME/knowledge/docs/log.md" "$INTERRUPTED_HOME/knowledge/docs/DECISIONS.md"
+sed "s|/absolute/path/to/knowledge|$INTERRUPTED_HOME/knowledge|" "$ROOT/profiles/karpathy-wiki.example.md" > "$INTERRUPTED_HOME/.config/hippocampus/profile.md"
+HOME="$INTERRUPTED_HOME" CODEX_HOME="$INTERRUPTED_HOME/.codex" bash "$ROOT/install.sh"
+rm "$INTERRUPTED_HOME/.local/share/hippocampus/current"
+HOME="$INTERRUPTED_HOME" CODEX_HOME="$INTERRUPTED_HOME/.codex" bash "$ROOT/install.sh"
+HOME="$INTERRUPTED_HOME" CODEX_HOME="$INTERRUPTED_HOME/.codex" bash "$ROOT/install.sh" --verify
+rm -rf "$INTERRUPTED_HOME"

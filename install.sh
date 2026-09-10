@@ -34,7 +34,9 @@ manifest_listing() {
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
-manifest_hash() { manifest_listing "${1:-$ROOT}" | cksum | awk '{print $1 ":" $2}'; }
+manifest_hash() {
+  manifest_listing "${1:-$ROOT}" | cksum | awk '{print $1 ":" $2}'
+}
 manifest_hash_legacy() {
   manifest_root="${1:-$ROOT}"
   (
@@ -48,23 +50,36 @@ manifest_hash_legacy() {
 SOURCE_HASH="$(manifest_hash)"
 
 copy_release_tree() {
-  source="$1" destination="$2"
+  source="$1"
+  destination="$2"
   mkdir -p "$destination"
-  (cd "$source" && tar --exclude='.build' --exclude='.DS_Store' --exclude='.Ulysses-*' -cf - .) | (cd "$destination" && tar -xf -)
+  (
+    cd "$source"
+    tar --exclude='.build' --exclude='.DS_Store' --exclude='.Ulysses-*' -cf - .
+  ) | (
+    cd "$destination"
+    tar -xf -
+  )
 }
 
 valid_release_at() {
-  release="$1" expected_root="$2"
+  release="$1"
+  expected_root="$2"
   [ "$(dirname "$release")" = "$expected_root" ] || return 1
   [ -d "$release" ] && [ -f "$release/manifest" ] || return 1
   stored="$(cat "$release/manifest")"
   [ "$(manifest_hash "$release")" = "$stored" ] || [ "$(manifest_hash_legacy "$release")" = "$stored" ]
 }
-valid_release() { valid_release_at "$1" "$RELEASE_ROOT"; }
-valid_legacy_release() { valid_release_at "$1" "$LEGACY_RELEASE_ROOT"; }
+valid_release() {
+  valid_release_at "$1" "$RELEASE_ROOT"
+}
+valid_legacy_release() {
+  valid_release_at "$1" "$LEGACY_RELEASE_ROOT"
+}
 
 is_package_link() {
-  target="$1" skill="$2"
+  target="$1"
+  skill="$2"
   [ -L "$target" ] || return 1
   case "$(readlink "$target")" in
     "$RELEASE_ROOT"/*/skills/"$skill"|"$CURRENT_LINK"/skills/"$skill") return 0 ;;
@@ -72,7 +87,8 @@ is_package_link() {
   esac
 }
 is_legacy_package_link() {
-  target="$1" skill="$2"
+  target="$1"
+  skill="$2"
   [ -L "$target" ] || return 1
   case "$(readlink "$target")" in
     "$LEGACY_RELEASE_ROOT"/*/skills/"$skill"|"$LEGACY_CURRENT_LINK"/skills/"$skill") return 0 ;;
@@ -81,7 +97,9 @@ is_legacy_package_link() {
 }
 
 replace_link() {
-  destination="$1" source="$2" expected="$3"
+  destination="$1"
+  source="$2"
+  expected="$3"
   python3 - "$destination" "$source" "$expected" "$PACKAGE" <<'PY'
 import os, sys
 destination, source, expected, package = sys.argv[1:]
@@ -97,32 +115,63 @@ os.symlink(source, temporary)
 os.replace(temporary, destination)
 PY
 }
-set_current_release() { replace_link "$CURRENT_LINK" "$1" "$2"; }
+set_current_release() {
+  replace_link "$CURRENT_LINK" "$1" "$2"
+}
 
 CURRENT_RELEASE=""
 validate_current_pointer() {
-  if [ ! -e "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then return 0; fi
-  if [ ! -L "$CURRENT_LINK" ]; then echo "collision: current pointer is not a symlink" >&2; return 1; fi
+  if [ ! -e "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
+    return 0
+  fi
+  if [ ! -L "$CURRENT_LINK" ]; then
+    echo "collision: current pointer is not a symlink" >&2
+    return 1
+  fi
   CURRENT_RELEASE="$(readlink "$CURRENT_LINK")"
-  valid_release "$CURRENT_RELEASE" || { echo "collision: current pointer is not a valid Hippocampus release" >&2; return 1; }
+  if ! valid_release "$CURRENT_RELEASE"; then
+    echo "collision: current pointer is not a valid Hippocampus release" >&2
+    return 1
+  fi
 }
 validate_legacy_current_pointer() {
-  if [ ! -e "$LEGACY_CURRENT_LINK" ] && [ ! -L "$LEGACY_CURRENT_LINK" ]; then return 0; fi
-  if [ ! -L "$LEGACY_CURRENT_LINK" ]; then echo "collision: legacy current pointer is not a symlink (move or repair it before migrating)" >&2; return 1; fi
+  if [ ! -e "$LEGACY_CURRENT_LINK" ] && [ ! -L "$LEGACY_CURRENT_LINK" ]; then
+    return 0
+  fi
+  if [ ! -L "$LEGACY_CURRENT_LINK" ]; then
+    echo "collision: legacy current pointer is not a symlink (move or repair it before migrating)" >&2
+    return 1
+  fi
   legacy_current="$(readlink "$LEGACY_CURRENT_LINK")"
-  valid_legacy_release "$legacy_current" || { echo "collision: legacy current pointer is not a valid research-tools release (restore it or remove the broken install before migrating)" >&2; return 1; }
+  if ! valid_legacy_release "$legacy_current"; then
+    echo "collision: legacy current pointer is not a valid research-tools release (restore it or remove the broken install before migrating)" >&2
+    return 1
+  fi
 }
 
 validate_profile() {
-  if [ ! -f "$PROFILE" ]; then echo "profile missing: run the hippocampus-set-up skill after installing" >&2; return 1; fi
+  if [ ! -f "$PROFILE" ]; then
+    echo "profile missing: run the hippocampus-set-up skill after installing" >&2
+    return 1
+  fi
   validator="$ROOT/scripts/validate_profile.py"
   [ ! -f "$CURRENT_LINK/scripts/validate_profile.py" ] || validator="$CURRENT_LINK/scripts/validate_profile.py"
   python3 "$validator" "$PROFILE" >/dev/null
 }
 
 LOCK_HELD=0
-release_lock() { if [ "$LOCK_HELD" = "1" ]; then rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi; }
-interrupted() { release_lock; trap - EXIT HUP INT TERM; exit "$1"; }
+release_lock() {
+  if [ "$LOCK_HELD" = "1" ]; then
+    rm -f "$LOCK_DIR/pid"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    LOCK_HELD=0
+  fi
+}
+interrupted() {
+  release_lock
+  trap - EXIT HUP INT TERM
+  exit "$1"
+}
 acquire_lock() {
   attempts=0
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
@@ -204,7 +253,15 @@ for skill in $(for_each_skill); do
       if [ -L "$target" ] && [ "$(readlink "$target")" = "$CURRENT_LINK/skills/$skill" ]; then continue; fi
       if is_package_link "$target" "$skill"; then
         candidate="$(readlink "$target")"
-        case "$candidate" in "$CURRENT_LINK"/*) candidate="$CURRENT_RELEASE";; *) candidate="${candidate%/skills/$skill}";; esac
+        case "$candidate" in
+          "$CURRENT_LINK"/*)
+            # A signal can arrive after client links are replaced but before
+            # the new current pointer is installed. That state is recoverable.
+            [ -n "$CURRENT_RELEASE" ] || continue
+            candidate="$CURRENT_RELEASE"
+            ;;
+          *) candidate="${candidate%/skills/$skill}" ;;
+        esac
         valid_release "$candidate" || { echo "collision: invalid Hippocampus package link $target" >&2; exit 1; }; continue
       fi
       if is_legacy_package_link "$target" "$skill"; then
@@ -225,11 +282,18 @@ if [ ! -d "$RELEASE_DIR" ]; then
   printf '%s\n' "$SOURCE_HASH" > "$TEMP_RELEASE/manifest"; mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
   existing_manifest=""; [ ! -f "$RELEASE_DIR/manifest" ] || existing_manifest="$(cat "$RELEASE_DIR/manifest")"
-  if [ "$(manifest_hash "$RELEASE_DIR")" = "$SOURCE_HASH" ] && [ "$existing_manifest" = "$SOURCE_HASH" ]; then rm -rf "$TEMP_RELEASE"
-  elif [ "$(manifest_hash "$RELEASE_DIR")" = "$SOURCE_HASH" ] && [ "$existing_manifest" = "$(manifest_hash_legacy "$RELEASE_DIR")" ]; then
-    printf '%s\n' "$SOURCE_HASH" > "$RELEASE_DIR/manifest"
-    echo "migrated release manifest: $RELEASE_DIR" >&2
-    rm -rf "$TEMP_RELEASE"
+  if [ "$(manifest_hash "$RELEASE_DIR")" = "$SOURCE_HASH" ]; then
+    if [ "$existing_manifest" = "$SOURCE_HASH" ]; then
+      rm -rf "$TEMP_RELEASE"
+    elif [ -n "$existing_manifest" ] && [ "$existing_manifest" = "$(manifest_hash_legacy "$RELEASE_DIR")" ]; then
+      printf '%s\n' "$SOURCE_HASH" > "$RELEASE_DIR/manifest"
+      echo "migrated release manifest: $RELEASE_DIR" >&2
+      rm -rf "$TEMP_RELEASE"
+    else
+      echo "release manifest mismatch: $VERSION content matches this checkout but its stored manifest does not (move or remove $RELEASE_DIR and re-run install.sh)" >&2
+      rm -rf "$TEMP_RELEASE"
+      exit 1
+    fi
   else
     echo "release version collision: $VERSION has different content (move or remove $RELEASE_DIR and re-run install.sh)" >&2
     diff <(manifest_listing "$ROOT") <(manifest_listing "$RELEASE_DIR") >&2 || true
