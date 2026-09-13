@@ -1,16 +1,12 @@
 # Hippocampus
 
-AI makes it easy to open a hundred curiosity loops and leave the useful answers
-behind in old chats. `Hippocampus` closes those loops by moving a question
-through a grounded answer to an explicit action.
+`Hippocampus` is an opinionated research and knowledge system for Claude Code and Codex. It is a set of Agent Skills that cover quick in-chat research, durable research reports, updates to existing documentation, and an optional curated wiki in the style of Karpathy's LLM wiki. It works from documents, websites, videos, or audio such as podcasts.
 
-Here, research means looking things up and organizing the evidence to make a
-decision. It can start with a broad question or with sources you already have:
-documents, websites, videos, audio, or saved notes.
+Whatever the source, getting an answer out of it is only part of the work. You still have to judge the evidence, decide what applies to your situation, and carry the result into your notes, plans, or projects. That last step is easy to skip, and the answer stays behind in an old chat. Hippocampus keeps the evidence attached to the decision it informed, so you can see why you reached a conclusion, what is still uncertain, and what you meant to do next. When you learn more, you can revisit the decision without redoing the research.
 
 ![A broad question or selected sources move through Question, Answer, and Action, then into documents, follow-up work, an optional wiki, or a deliberate discard.](docs/images/question-answer-action.svg)
 
-The system organizes that work around three stages:
+Every piece of research moves through the same three stages:
 
 1. **Question** names the decision and scope, and identifies any evidence you
    are starting with.
@@ -20,9 +16,9 @@ The system organizes that work around three stages:
    documents, file follow-up work, compile selected sources into an optional
    wiki, or discard it and close the loop.
 
-**Everything the system stores is plain Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are all `.md` files under one knowledge root you choose. There is no database, no proprietary format, and no lock-in. That is a deliberate assumption about how you work: you own the files, read and edit them in any editor, browse them in [Obsidian][7] or a Git host, version-control them, and keep them long after the conversation that produced them is gone. The same files are the AI's working set and yours.
+**Everything the system stores is plain Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are `.md` files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor, browse them in [Obsidian][7] or a Git host, version-control them, and keep them after the conversation that produced them is gone. The same files are the AI's working set and yours.
 
-This is the system I developed for my own personal research - much of it was built to learn about AI itself. My favorite use case is ingesting knowledge from YouTube videos and podcasts in order to plan improvements to my AI systems.
+I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.
 
 Substantial research is grounded in **Gemini Notebook** (Google's product
 formerly named NotebookLM). This is a deliberate design choice, not just a
