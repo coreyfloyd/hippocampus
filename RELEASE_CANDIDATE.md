@@ -26,8 +26,29 @@ Release archive names and roots now use `hippocampus`. The public signing key ha
 
 ## Publication checklist
 
-- [ ] Complete the verification commands above from the candidate commit.
+- [x] Complete the verification commands above from the candidate commit.
 - [ ] Rename the GitHub repository and verify its redirects.
-- [ ] Tag the exact pushed commit as `v0.8.0`.
-- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [ ] Verify the signed archive and published release assets before announcing.
+- [x] Tag the exact pushed commit as `v0.8.0`.
+- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [x] Verify the signed archive and published release assets before announcing.
+
+## Publication result — 2026-09-13
+
+Published [v0.8.0](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.0) at 2026-09-13 19:40:30 UTC, from commit `e7d662f65a3d320c8eebfa20c73cf5d12b1ffae6`. The annotated tag and remote main matched that commit before publication. Corey signed the candidate; the agent verified and published it. Earlier pre-publication tag moves were explicitly approved by Corey to include presentation and README changes.
+
+All contract, installer, release, and Swift checks passed on the MacBook against the release commit (Swift: 5/5). The signed archive contains 82 entries under `hippocampus/` and matches the tracked release tree byte-for-byte. Public-key bytes and fingerprint are unchanged from v0.7.0.
+
+Six public assets were downloaded into a fresh directory and verified:
+
+- `hippocampus-0.8.0.tar.gz`
+- `hippocampus-0.8.0.tar.gz.sha256`
+- `hippocampus-0.8.0.tar.gz.asc`
+- `hippocampus-release.asc`
+- `install-release.sh`
+- `verify-release.sh`
+
+The downloaded archive matches the signed local archive; downloaded key and installer/verifier scripts match the tagged source. Signature and checksum verification passed. The release is public, not a draft or prerelease. GitHub CLI's release command hit a GraphQL rate limit before creating anything; publication completed through GitHub's REST API.
+
+The MacBook installed the downloaded release and passed `install.sh --verify` for both clients. Migration preserved the legacy profile byte-for-byte (SHA-256 `37988016589af8b475b893d7eaa3858f19b4a54661c73142ef3c531e9d589673`) and retained old releases. A before/after comparison found no changes among 13,905 Markdown files in the knowledge root, excluding `.git` and `.obsidian`. Other machines were not verified.
+
+Remaining cutover observation: the canonical repository and issue URLs work, but the plain old issue URL still returned HTTP 404 from the MacBook during release preflight. The rename/redirect checklist item remains unchecked pending full verification. No announcement was sent.
