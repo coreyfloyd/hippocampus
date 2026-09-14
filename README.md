@@ -16,7 +16,7 @@ Every piece of research moves through the same three stages:
    documents, file follow-up work, compile selected sources into an optional
    wiki, or discard it and close the loop.
 
-**Everything the system stores is plain Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are `.md` files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor, browse them in [Obsidian][7] or a Git host, version-control them, and keep them after the conversation that produced them is gone. The same files are the AI's working set and yours.
+**Everything the system stores is plain Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are `.md` files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor or on a Git host, version-control them, and keep them after the conversation that produced them is gone. Following the links between wiki articles needs a client that understands `[[wikilinks]]`, such as [Obsidian][7]. The same files are the AI's working set and yours.
 
 I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.
 
@@ -290,9 +290,11 @@ Audit the configured wiki with wiki-audit. Do not modify it.
 - Full Reddit-thread reading used by `research-quick` and `research-feedback`
   requires an interactive macOS session with Safari signed into Reddit. Other
   sources continue through the available web tools.
-- **Obsidian** is an optional client for browsing the Markdown wiki. The file
-  contract uses wikilinks whether or not Obsidian is installed; Obsidian adds
-  native link resolution, backlinks, and graph views.
+- **Obsidian** is not required to run the system or to read the wiki, but it
+  is the practical way for a person to browse it. Wiki articles link to each
+  other with `[[wikilinks]]`, which GitHub, VS Code, and most Markdown viewers
+  show as plain text rather than links. Any wikilink-aware client works;
+  Obsidian is the one this project names and adds backlinks and graph views.
 
 ## Installation and configuration
 
