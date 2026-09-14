@@ -49,6 +49,17 @@ Six public assets were downloaded into a fresh directory and verified:
 
 The downloaded archive matches the signed local archive; downloaded key and installer/verifier scripts match the tagged source. Signature and checksum verification passed. The release is public, not a draft or prerelease. GitHub CLI's release command hit a GraphQL rate limit before creating anything; publication completed through GitHub's REST API.
 
-The MacBook installed the downloaded release and passed `install.sh --verify` for both clients. Migration preserved the legacy profile byte-for-byte (SHA-256 `37988016589af8b475b893d7eaa3858f19b4a54661c73142ef3c531e9d589673`) and retained old releases. A before/after comparison found no changes among 13,905 Markdown files in the knowledge root, excluding `.git` and `.obsidian`. Other machines were not verified.
+The MacBook installed the downloaded release and passed `install.sh --verify` for both clients. Migration preserved the legacy profile byte-for-byte (SHA-256 `37988016589af8b475b893d7eaa3858f19b4a54661c73142ef3c531e9d589673`) and retained old releases. A before/after comparison found no changes among 13,905 Markdown files in the knowledge root, excluding `.git` and `.obsidian`. Other machines were not verified at publication; see the subsequent rollout below.
 
 Remaining cutover observation: the canonical repository and issue URLs work, but the plain old issue URL still returned HTTP 404 from the MacBook during release preflight. The rename/redirect checklist item remains unchecked pending full verification. No announcement was sent.
+
+## Mac Mini rollout — 2026-09-14
+
+Both Minis downloaded the six public v0.8.0 assets, verified the signature and checksum against fingerprint `09674AFF392661238F4ACBD9F32B3A412CD5EFC5`, installed the release, and passed `install.sh --verify` for Claude and Codex. Both migrated from research-tools v0.6.0. Profiles were preserved byte-for-byte; legacy profiles and releases remain available. The dotfiles installer on each machine already recognized Hippocampus ownership.
+
+| Machine / account | Markdown files compared | Changed | Preserved profile SHA-256 |
+|---|---:|---:|---|
+| Mini 1 / `coreyfloyd` | 7,220 | 0 | `a18645a77a604b8cc3ba9ac5e7f8d21e9554841c3cbbf61269d05e99aaeefdfa` |
+| Mini 2 / `claude` | 3,711 | 0 | `763872b7c2342ea289d0514eb9124bc1e64f82ecc4d7ed3dd327940b61227946` |
+
+The comparison excludes `.git` and `.obsidian`. Both downloaded archives have SHA-256 `6be606588305347601f427d1fdd0fe1abcafa64546493813744728c31ccd182d`. Connections used the documented LAN routes because Tailscale was stopped on the MacBook. No Tailscale settings were changed.
