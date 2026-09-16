@@ -13,7 +13,7 @@ Before choosing sources, a durable output location, or local follow-up policy, v
 
 1. Establish the research question, decision it informs, and material constraints. Ask for caller-held sources before discovery; they take priority.
 2. Check for a related NotebookLM notebook. Ask before adding to an existing notebook; otherwise create one and preserve its ID.
-3. Use the built-in `WebSearch` tool for discovery (`allowed_domains` restricts a search to specific sites) and Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` — for complete-page extraction. Use native web tools for sources the endpoint cannot reach and record that fallback.
+3. Use the built-in `WebSearch` tool for discovery (`allowed_domains` restricts a search to specific sites) and Defuddle's hosted endpoint — `curl https://defuddle.md/<url>`, a runtime-detected optional integration — for complete-page extraction. Use native web tools for sources the endpoint cannot reach and record that fallback.
 4. Add user-provided and discovered sources to NotebookLM, retaining original URLs or paths. Invoke `transcribe` for material audio or video; prefer native YouTube indexing when it suffices.
 5. Wait until sources are indexed before synthesis.
 

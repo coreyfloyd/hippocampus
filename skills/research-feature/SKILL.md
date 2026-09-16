@@ -9,7 +9,7 @@ Investigate how other products solve the same problem the feature being designed
 
 When a supplied demo, talk, or video is material evidence, invoke `transcribe` to obtain it in the appropriate form before comparing patterns. Do not create a separate media-research workflow.
 
-Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. If a source is blocked for either, use native web tools and state that fallback in the report.
+Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint, a runtime-detected optional integration — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. If a source is blocked for either, use native web tools and state that fallback in the report.
 
 Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill, before writing the document. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. This skill is read-only except for its required research artifact. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
 
