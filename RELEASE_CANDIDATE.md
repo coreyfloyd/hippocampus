@@ -34,7 +34,15 @@ Updated: `research-absorb` and its artifact contract, `research-to-wiki`, and th
 
 ## Publication checklist
 
-- [ ] Complete the verification commands above from the candidate commit.
-- [ ] Tag the exact pushed commit as `v0.8.2`.
-- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [ ] Verify the signed archive and published release assets before announcing.
+- [x] Complete the verification commands above from the candidate commit.
+- [x] Tag the exact pushed commit as `v0.8.2`.
+- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [x] Verify the signed archive and published release assets before announcing.
+
+## Publication result — 2026-09-16
+
+Published [v0.8.2](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.2) from commit `03aebb8532baa300d8fc491c7bdbc8dc68010545`. The annotated tag and remote main both resolved to that commit before the build. Contract, installer, and release suites passed on the MacBook against that commit; Swift 5/5; `git diff --check` clean. The documentation sweep found one README paragraph still describing staging without the text requirement and it was aligned in the same commit.
+
+Corey signed; the agent verified, published, and installed. All six public assets downloaded and verified (`hippocampus-0.8.2.tar.gz: OK`, scripts and key byte-identical to the checkout). Installed and verified on all three machines: MacBook from the published assets; mini1 and mini2 from the same verified assets copied over SSH, because mini1's GitHub token was rate-limited at install time. Each resolves `current` to `releases/0.8.2` and the installed `research-absorb` carries the extracted-text requirement.
+
+Closes [hippocampus#21](https://github.com/coreyfloyd/hippocampus/issues/21).
