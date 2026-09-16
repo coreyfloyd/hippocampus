@@ -25,7 +25,7 @@ Use when the caller identifies an existing document, wiki article, context file,
 
 ## Source handling
 
-NotebookLM is the persistent, source-grounded synthesis layer. Firecrawl is a runtime-detected optional integration: for supplied web pages, use it first when available, then add the original URL to NotebookLM. Record a native-reader fallback when Firecrawl is unavailable.
+NotebookLM is the persistent, source-grounded synthesis layer. For supplied web pages, extract with Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and needs no install or API key — then add the original URL to NotebookLM. Record a native-reader fallback when the endpoint is unavailable or the page is blocked.
 
 For supplied audio or video, invoke `transcribe` to choose the input route. Prefer NotebookLM's native YouTube indexing when sufficient; use a local transcript only when the source or requested output requires one. Keep original media provenance alongside any transcript.
 

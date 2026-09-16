@@ -9,7 +9,7 @@ Investigate how other products solve the same problem the feature being designed
 
 When a supplied demo, talk, or video is material evidence, invoke `transcribe` to obtain it in the appropriate form before comparing patterns. Do not create a separate media-research workflow.
 
-Firecrawl is a runtime-detected optional integration. Use it first for web search and page extraction when it is available. If it is unavailable or blocked for a source, use native web tools and state that fallback in the report.
+Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. If a source is blocked for either, use native web tools and state that fallback in the report.
 
 Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile.py`, resolved relative to this skill, before writing the document. If it is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. This skill is read-only except for its required research artifact. Any proposed follow-up task uses `artifact_followup_destination`, never the wiki-maintenance route.
 
@@ -30,7 +30,7 @@ Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile
 ## How to Research
 
 1. Read the requirements to understand what the feature does and who it's for
-2. Use Firecrawl first, when available, to find and extract how 3-5 established products handle this — search for "[feature] UX pattern", "[product] [feature] design". Use native web search as supplementary discovery or the fallback when Firecrawl is unavailable or blocked.
+2. Use `WebSearch` to find how 3-5 established products handle this — search for "[feature] UX pattern", "[product] [feature] design" — and `curl https://defuddle.md/<url>` to extract the pages worth reading in full. Note any source the endpoint cannot reach.
 3. Check product review sites, Reddit discussions, and design case studies for user feedback
 4. Look for Apple Human Interface Guidelines or platform-specific patterns if building for iOS/macOS
 5. Identify what works, what frustrates users, and what's table stakes vs. differentiating

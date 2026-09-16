@@ -11,7 +11,7 @@ Read `~/.config/hippocampus/profile.md` before checking local knowledge; use onl
 
 If a supplied audio or video source is needed as evidence, invoke `transcribe` to acquire its text first. The transcript is input evidence; the response stays inline.
 
-Firecrawl is a runtime-detected optional integration. Prefer it for web search and page extraction. When it is unavailable or blocked for a source, use native web tools and say so in the response; do not silently reduce source coverage.
+Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. When a source is blocked for either, use native web tools and say so in the response; do not silently reduce source coverage.
 
 ## When NOT to Use
 
@@ -33,20 +33,20 @@ If the local profile defines a knowledge preflight, run it before web search. Su
 | **Place/travel** | city name, "visit", "trip", "restaurant", "hotel", "neighborhood" | TripAdvisor, Atlas Obscura, local subreddits |
 | **Health/wellness** | symptom, medication, diet, supplement, "is X safe" | Mayo Clinic, Examine.com, NIH/PubMed (via search) |
 | **Finance/money** | investing, savings, budget, mortgage, tax, crypto | Investopedia, NerdWallet, Bogleheads |
-| **Current events** | recent dates, news topics, "what happened with" | Google News via Firecrawl, AP, Reuters |
+| **Current events** | recent dates, news topics, "what happened with" | Google News, AP, Reuters |
 | **Concept/topic** | "what is", "how does", "explain", abstract nouns | Wikipedia, relevant subreddits |
 | **Service/company** | brand name, app name, subscription, "is X legit" | Trustpilot, BBB, Reddit |
-| **General/unclear** | anything else | Wikipedia + 2 Firecrawl web searches |
+| **General/unclear** | anything else | Wikipedia + 2 general web searches |
 
 If the domain is genuinely ambiguous and the wrong source set would waste the search, ask one short question up front: "What kind of angle are you looking for — [option A] or [option B]?" Then go.
 
-## Phase 2 — Firecrawl Research
+## Phase 2 — Web Research
 
 Run all searches in parallel.
 
-1. **Reddit** (always): `firecrawl_search("site:reddit.com <query>")` — pick the 3 most relevant threads
+1. **Reddit** (always): `WebSearch` with `allowed_domains: ["reddit.com"]` — pick the 3 most relevant threads
 2. **Domain source 1**: first authoritative source from the table above
-3. **Domain source 2** (if warranted): second source or a broader Firecrawl web search
+3. **Domain source 2** (if warranted): second source or a broader `WebSearch`
 4. **Read full Reddit threads** through the user's signed-in browser session:
    Reddit blocks programmatic scrapers but serves the real page to the user's
    own logged-in browser, so the route is: load the thread in that browser,
@@ -63,8 +63,7 @@ Run all searches in parallel.
    read to another agent runtime with access) are equally valid when local
    policy names them. When no browser route is available, fall back to
    search-result snippets and note the reduced coverage. Scrape non-Reddit
-   sources with `firecrawl_scrape` as normal.
-5. Call `firecrawl_search_feedback` with the search ID after each search to refund a credit
+   sources with `curl https://defuddle.md/<url>` as normal.
 
 ## Output Format
 

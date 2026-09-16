@@ -63,13 +63,13 @@ routes, then waits for the authorized writer.
 
 ## Optional integrations
 
-Firecrawl and local Apple Speech are runtime-detected optional integrations,
-not profile capabilities. A skill checks whether its relevant integration is
-available at the time of use. When Firecrawl is unavailable or blocked, research
-uses native web tools and reports that fallback. When local Apple Speech is
-unsupported or unavailable, `transcribe` selects or reports an appropriate
-alternative input route. A profile never promises that either integration is
-installed or permitted.
+Defuddle's hosted extraction endpoint and local Apple Speech are runtime-detected
+optional integrations, not profile capabilities. A skill checks whether its relevant
+integration is available at the time of use. When the extraction endpoint is
+unavailable or a page is blocked, research uses native web tools and reports that
+fallback. When local Apple Speech is unsupported or unavailable, `transcribe`
+selects or reports an appropriate alternative input route. A profile never promises
+that either integration is installed or permitted.
 
 ## Attribution
 

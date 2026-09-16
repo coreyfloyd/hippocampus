@@ -11,7 +11,7 @@ Read `~/.config/hippocampus/profile.md` before checking local knowledge; use onl
 
 For a supplied recording, conference talk, or video demonstration relevant to the diagnosis, invoke `transcribe` to obtain source text before continuing.
 
-Firecrawl is a runtime-detected optional integration. Prefer it for web search and page extraction. When it is unavailable or blocked for a source, use native web tools and state that fallback; do not silently reduce source coverage.
+Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. When a source is blocked for either, use native web tools and say so in the report; do not silently reduce source coverage.
 
 ## When NOT to Use
 
@@ -40,15 +40,15 @@ Ask these questions upfront in a single message. Don't proceed until you have en
    ```
    If the notebook already contains a good answer, surface it before running web research. Do not create a notebook for this inline workflow.
 
-## Phase 2 — Firecrawl Research
+## Phase 2 — Web Research
 
 Run searches in parallel where possible.
 
-1. **Scrape user-provided sources.** Use `firecrawl_scrape` on each URL the user provided. These take priority over anything else you find.
+1. **Extract user-provided sources.** Run `curl https://defuddle.md/<url>` on each URL the user provided. These take priority over anything else you find.
 
 2. **Search GitHub Issues on the relevant repo.** Known bugs and workarounds usually live in the maintainers' issue tracker:
    ```
-   firecrawl_search "site:github.com/<owner>/<repo> <error or symptom>"
+   WebSearch "<error or symptom> <owner>/<repo>" with allowed_domains: ["github.com"]
    ```
    Or if the repo is known: `gh search issues --repo <owner>/<repo> "<symptom>" --state all --limit 10`
 

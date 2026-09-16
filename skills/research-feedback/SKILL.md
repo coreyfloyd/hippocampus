@@ -11,7 +11,7 @@ Before checking local knowledge or choosing where the memo is written, validate 
 
 When a user supplies an audio or video review, interview, or discussion as evidence, invoke `transcribe` before analysis. It only resolves the input; this skill still owns scope and the durable output.
 
-Firecrawl is a runtime-detected optional integration. Prefer it for web search and page extraction. When it is unavailable or blocked for a source, use native web tools and say so in the report; do not silently reduce community coverage.
+Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` to restrict a search to specific sites. Page extraction uses Defuddle's hosted endpoint — `curl https://defuddle.md/<url>` returns Markdown with YAML frontmatter and requires no install or API key. When a source is blocked for either, use native web tools and say so in the report; do not silently reduce community coverage.
 
 ## When to Use vs. Not
 
@@ -53,19 +53,18 @@ Identify the venues where real users of this topic congregate. Always include Re
 
 Pick the 2-4 most relevant venues. Name any user groups, Discords, or local meetups worth following if they exist for the topic.
 
-## Phase 3 — Firecrawl Research (parallel)
+## Phase 3 — Web Research (parallel)
 
 Run searches in parallel.
 
-1. **Reddit — always.** `firecrawl_search` with `includeDomains: ["reddit.com"]` (or `site:reddit.com`). Target the decision: e.g. "<subject> stability daily driver worth it", "<subject> problems after a month". Pull the 4-8 most relevant threads.
+1. **Reddit — always.** `WebSearch` with `allowed_domains: ["reddit.com"]`. Target the decision: e.g. "<subject> stability daily driver worth it", "<subject> problems after a month". Pull the 4-8 most relevant threads.
 2. **Primary community forum** for the topic (from Phase 2).
 3. **Official source for hard constraints** when the decision has a factual gate (system requirements, compatibility, pricing). Sentiment can't override a hard requirement.
 4. **Read full Reddit threads** through the user's signed-in browser session — comment bodies are the lived-experience signal this skill exists for. Use the browser route named in the profile's local policy; the bundled Safari reference implementation is:
    ```bash
    ../research-quick/reddit-read.sh "<thread-url>"
    ```
-   Run it on the 3-5 most relevant threads. See `research-quick` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to another agent runtime with access) before settling for snippet-level coverage. Scrape non-Reddit forums with `firecrawl_scrape` as normal.
-5. After each `firecrawl_search`, call `firecrawl_search_feedback` with the search ID to refund a credit.
+   Run it on the 3-5 most relevant threads. See `research-quick` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to another agent runtime with access) before settling for snippet-level coverage. Extract non-Reddit forums with `curl https://defuddle.md/<url>` as normal.
 
 ## Phase 4 — Synthesize (sentiment-weighted)
 
@@ -105,7 +104,7 @@ Scope: [version or date range the feedback covers]   Researched: [date]
 - [User group / Discord / forum] — (url)
 
 ## Sources
-- [Thread or page](url) — [date] — [poster's version] — [read via browser / Firecrawl / snippet only]
+- [Thread or page](url) — [date] — [poster's version] — [read via browser / Defuddle / snippet only]
 ```
 
 Consolidate agreeing sources. Make conflicts explicit. **Communities to watch**

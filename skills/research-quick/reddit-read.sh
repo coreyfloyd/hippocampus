@@ -2,7 +2,7 @@
 # reddit-read.sh <reddit-thread-url>
 #
 # Read a Reddit thread's full rendered text (post + comments) WITHOUT the
-# programmatic-scrape blocks that hit Firecrawl/curl/WebFetch, and WITHOUT
+# programmatic-scrape blocks that hit Defuddle/curl/WebFetch, and WITHOUT
 # stealing window focus.
 #
 # How it works: Reddit serves the real page to a normal human-loaded browser
