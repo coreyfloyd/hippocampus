@@ -33,7 +33,7 @@ After installation, start with `hippocampus-set-up`. It walks you through the
 knowledge-store structure, local policy, and follow-up routing, then shows the
 complete proposed configuration before creating or changing anything.
 
-The system stands on excellent tools others built — [Gemini Notebook][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Firecrawl][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.
+The system stands on excellent tools others built — [Gemini Notebook][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Defuddle][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.
 
 ## Research skills
 
@@ -281,9 +281,10 @@ Audit the configured wiki with wiki-audit. Do not modify it.
   inspect public playlists or retrieve subtitles, then hand selected URLs to
   Gemini Notebook. Neither that skill nor `yt-dlp` is bundled or required by this
   package; Gemini Notebook can index a supplied YouTube URL directly.
-- **Firecrawl** is optional and detected at runtime. Relevant skills prefer it
-  when available and fall back to native web tools when it is unavailable or
-  blocked.
+- **Defuddle** is optional and detected at runtime. Relevant skills extract
+  supplied pages through its hosted endpoint, which needs no install or API key,
+  and fall back to native web tools when it is unavailable or a page is blocked.
+  Web search uses the runtime's own search tool; no search service is bundled.
 - **Apple Speech** source is bundled under the `transcribe` skill and built on demand.
   The local route requires macOS 26 or later; otherwise the calling workflow
   must use another input route.
@@ -313,4 +314,4 @@ commands.
 [10]:	docs/examples/2026-09-03-fable-5-1-model-routing.md
 [11]:	https://notebook.google.com/notebook/6df011dc-7391-4399-919f-345b6067e29f
 [8]:	https://notebooklm.google.com
-[9]:	https://firecrawl.dev
+[9]:	https://defuddle.md

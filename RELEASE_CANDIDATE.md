@@ -2,7 +2,7 @@
 
 ## Scope
 
-`0.9.0` retires Firecrawl from the research skills. Web search moves to the runtime's built-in `WebSearch` tool, and page extraction moves to Defuddle's hosted endpoint at `https://defuddle.md/`.
+`0.8.1` retires Firecrawl from the research skills. Web search moves to the runtime's built-in `WebSearch` tool, and page extraction moves to Defuddle's hosted endpoint at `https://defuddle.md/`.
 
 ## Compatibility
 
@@ -24,7 +24,7 @@ The signing key material and fingerprint are unchanged.
 
 ## Release-note draft
 
-`v0.9.0` replaces Firecrawl with the runtime's built-in `WebSearch` tool and Defuddle's hosted extraction endpoint across the research skills.
+`v0.8.1` replaces Firecrawl with the runtime's built-in `WebSearch` tool and Defuddle's hosted extraction endpoint across the research skills.
 
 Search calls now pass `allowed_domains` where they previously used `includeDomains` or a `site:` prefix. Page extraction is `curl https://defuddle.md/<url>`, which returns Markdown with YAML frontmatter and requires no install, API key, or local Node. The `firecrawl_search_feedback` credit-refund calls are removed.
 
@@ -35,6 +35,6 @@ Updated: `research-quick`, `research-feedback`, `research-dev`, `research-featur
 ## Publication checklist
 
 - [ ] Complete the verification commands above from the candidate commit.
-- [ ] Tag the exact pushed commit as `v0.9.0`.
+- [ ] Tag the exact pushed commit as `v0.8.1`.
 - [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
 - [ ] Verify the signed archive and published release assets before announcing.
