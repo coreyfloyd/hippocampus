@@ -4,6 +4,8 @@
 
 `0.8.1` retires Firecrawl from the research skills. Web search moves to the runtime's built-in `WebSearch` tool, and page extraction moves to Defuddle's hosted endpoint at `https://defuddle.md/`.
 
+It also carries one unrelated contract addition that was already in the working tree: an Action row's filed task must outlive the artifact, so it carries its own evidence and cites durable targets only.
+
 ## Compatibility
 
 No installer, profile, or package-path change. This release is skill content and the optional-integration clause of the Karpathy wiki contract only, so a valid v0.8.0 installation upgrades in place with no migration.
