@@ -50,8 +50,12 @@ filed follow-up task should own.
   session, and only when its own item says so.
 - For a Wiki Addition, place the selected external source material and
   provenance in canonical `raw/research/` when it is not already there, then
-  invoke `research-to-wiki` on that curated subset. Do not send the report
-  itself to the compiler. Wiki Additions apply only when the profile records
+  invoke `research-to-wiki` on that curated subset. Source material means the
+  extracted source text: the page-extraction output, the transcript, or the
+  file conversion, under provenance frontmatter. An agent-written summary may
+  sit above the text as its own section but never replaces it, and a
+  NotebookLM source id is a pointer, not a copy. A staged file whose body is
+  only a summary is not staged. Do not send the report itself to the compiler. Wiki Additions apply only when the profile records
   the wiki as enabled: when it is disabled, the artifact has no Wiki Additions
   class, and this workflow stages no provenance for compilation and never
   invokes `research-to-wiki`.

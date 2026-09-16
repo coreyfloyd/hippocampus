@@ -13,6 +13,7 @@ Validate `~/.config/hippocampus/profile.md` with `../../scripts/validate_profile
 
 - Accept a selected subset already in `raw/research/`, `raw/archive/`, or another valid raw location. If sources are already raw, skip staging.
 - When an approved research artifact identifies external sources for the wiki, `research-absorb` stages their provenance in `raw/research/` and invokes this skill with only that subset. The artifact itself is not compile input.
+- A staged raw file must hold the extracted source text under its provenance frontmatter. A file whose body is only an agent summary, or only a NotebookLM source id, is not compile input: stop and obtain the extraction before compiling.
 - When invoked from `research-absorb` or `knowledge-capture`, disposition decisions — topic assignment, approved named referents, page conventions — were already made and approved upstream. Honor them; do not re-derive routing. Re-derive routing only on a direct invocation with no upstream plan.
 - When a source set is insufficiently grounded, use `research-sources` in **Improve evidence** mode before compiling. Compile from the evaluated source set, not an unsupported transcript alone.
 - Exclude corpora marked `compile_exclude` or `compile_mode: exclude`; route `compile_mode: update` sources through their targeted update workflow.

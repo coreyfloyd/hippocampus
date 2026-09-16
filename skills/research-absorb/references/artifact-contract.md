@@ -218,7 +218,8 @@ parent item is invalid.
   Document Updates rows have executed, so it can cite the compiled destinations
   rather than the transient plan.
 - Do not treat a report as a raw knowledge-base source. Preserve selected source
-  provenance in canonical `raw/research/`, then use `research-to-wiki` for the
-  curated subset. Promote a report to derived material only when it is itself a
+  provenance in canonical `raw/research/` as the extracted source text under
+  provenance frontmatter, never as a summary alone, then use `research-to-wiki`
+  for the curated subset. Promote a report to derived material only when it is itself a
   required durable transformation and approval covers that promotion.
 - When the profile records the wiki as disabled, `research-absorb` does not stage source provenance into `raw/research/` for compilation and never invokes `research-to-wiki`.
