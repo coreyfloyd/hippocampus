@@ -209,6 +209,14 @@ parent item is invalid.
   candidate; no per-item confirmation is required.
 - No retain or archive state exists for the artifact. After all rows have a
   terminal disposition, `research-absorb` deletes the artifact.
+- **An Action row's task must outlive the artifact.** The artifact is deleted, so
+  a ticket it files carries everything its executor needs *inside the ticket* —
+  the evidence, the options and their tradeoffs, the source assessment, and what
+  would settle the question — citing only durable targets. A ticket that points
+  back at the artifact is malformed: it dangles on deletion, or it blocks the
+  deletion the contract requires. File the task **after** the Wiki Additions and
+  Document Updates rows have executed, so it can cite the compiled destinations
+  rather than the transient plan.
 - Do not treat a report as a raw knowledge-base source. Preserve selected source
   provenance in canonical `raw/research/`, then use `research-to-wiki` for the
   curated subset. Promote a report to derived material only when it is itself a
