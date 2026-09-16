@@ -36,7 +36,17 @@ Updated: `research-quick`, `research-feedback`, `research-dev`, `research-featur
 
 ## Publication checklist
 
-- [ ] Complete the verification commands above from the candidate commit.
-- [ ] Tag the exact pushed commit as `v0.8.1`.
-- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [ ] Verify the signed archive and published release assets before announcing.
+- [x] Complete the verification commands above from the candidate commit.
+- [x] Tag the exact pushed commit as `v0.8.1`.
+- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [x] Verify the signed archive and published release assets before announcing.
+
+## Publication result — 2026-09-15
+
+Published [v0.8.1](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.1) from commit `e925a3abcc796d37f63e83445bedb0d4364554a0`. The annotated tag and remote main both resolved to that commit before publication, and the working tree was clean.
+
+The tag was first pushed at `fffc6be`, before two commits landed that the release needed. Because no release had been published against it, the tag was moved to `e925a3a` with Corey's explicit approval — the same pre-publication exception recorded for v0.8.0.
+
+All contract, installer, and release checks passed on the MacBook against the release commit; Swift 5/5. The signed archive verified against `keys/hippocampus-release.asc` (`hippocampus-0.8.1.tar.gz: OK`), contains 82 entries under a single `hippocampus/` root, and carries `VERSION` 0.8.1. Packaged skills contain zero Firecrawl references and ten `defuddle.md` endpoint references. Six assets published.
+
+Corey signed; the agent verified, published, and installed. Installed and verified on all three machines — MacBook, mini1, mini2 — each resolving `current` to `releases/0.8.1` with zero Firecrawl references in the installed skill tree.
