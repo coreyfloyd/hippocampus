@@ -2,17 +2,17 @@
 
 ## Scope
 
-`0.8.1` retires Firecrawl from the research skills. Web search moves to the runtime's built-in `WebSearch` tool, and page extraction moves to Defuddle's hosted endpoint at `https://defuddle.md/`.
+`0.8.2` closes an ambiguity in the `research-absorb` raw-staging contract. The Wiki Addition rule said to place "the selected external source material and provenance" in `raw/research/` without defining material. In one knowledge base, eight absorbs on 2026-09-12 staged a 30-line agent summary with a NotebookLM source id and no page text, while four absorbs on 2026-09-15 staged full page extractions, both under the same 0.8.1 wording. A summary-only staged file leaves the knowledge base with no copy of the source and no way to re-verify the articles compiled from it.
 
-It also carries one unrelated contract addition that was already in the working tree: an Action row's filed task must outlive the artifact, so it carries its own evidence and cites durable targets only.
+The release defines the staged file as the extracted source text (page extraction, transcript, or file conversion) under provenance frontmatter. An agent summary may sit above the text as its own section but never replaces it, and a NotebookLM source id is a pointer, not a copy. `research-to-wiki` now refuses a summary-only raw file as compile input and asks for the extraction first.
+
+Tracking: [hippocampus#21](https://github.com/coreyfloyd/hippocampus/issues/21).
 
 ## Compatibility
 
-No installer, profile, or package-path change. This release is skill content and the optional-integration clause of the Karpathy wiki contract only, so a valid v0.8.0 installation upgrades in place with no migration.
+No installer, profile, package-path, or contract-file change. This release is skill prose only: `skills/research-absorb/SKILL.md`, `skills/research-absorb/references/artifact-contract.md`, `skills/research-to-wiki/SKILL.md`, and the matching README paragraph. A valid v0.8.1 installation upgrades in place.
 
-The removed integration was optional and runtime-detected, so an installation that never had Firecrawl configured behaves identically before and after. Installations that did have it lose nothing the skills still call: `firecrawl_search_feedback` refunded a Firecrawl credit and has no counterpart, and no skill referenced `firecrawl_crawl`, `_map`, `_monitor`, `_agent`, `_parse`, `_interact`, or `_download`.
-
-Defuddle's hosted endpoint needs no install, no API key, and no local Node runtime. `WebSearch` is provided by the runtime. Neither adds a prerequisite to the installer.
+Existing raw files staged as summaries are not rewritten by the release. A knowledge base that holds them backfills the extracted text itself; `research-to-wiki` will refuse them until it does.
 
 The signing key material and fingerprint are unchanged.
 
@@ -26,27 +26,15 @@ The signing key material and fingerprint are unchanged.
 
 ## Release-note draft
 
-`v0.8.1` replaces Firecrawl with the runtime's built-in `WebSearch` tool and Defuddle's hosted extraction endpoint across the research skills.
+`v0.8.2` defines what `research-absorb` stages in `raw/research/` for a Wiki Addition: the extracted source text under provenance frontmatter. A summary alone, or a NotebookLM source id alone, is no longer a valid staged source, and `research-to-wiki` refuses such a file as compile input until the extraction is present.
 
-Search calls now pass `allowed_domains` where they previously used `includeDomains` or a `site:` prefix. Page extraction is `curl https://defuddle.md/<url>`, which returns Markdown with YAML frontmatter and requires no install, API key, or local Node. The `firecrawl_search_feedback` credit-refund calls are removed.
+The previous wording let two sessions read the same rule two ways, one staging summaries and the other staging full extractions. Only the second leaves the knowledge base able to re-verify its compiled articles without the external notebook.
 
-Reddit handling is unchanged. Reddit blocks Defuddle exactly as it blocked Firecrawl, so the signed-in-browser route and the snippet-level fallback stand as written.
-
-Updated: `research-quick`, `research-feedback`, `research-dev`, `research-feature`, `research-topic`, `research-sources`, and the optional-integrations clause of `contracts/karpathy-wiki.md`.
+Updated: `research-absorb` and its artifact contract, `research-to-wiki`, and the README's absorb paragraph. No installer, profile, or contract-file change.
 
 ## Publication checklist
 
-- [x] Complete the verification commands above from the candidate commit.
-- [x] Tag the exact pushed commit as `v0.8.1`.
-- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [x] Verify the signed archive and published release assets before announcing.
-
-## Publication result — 2026-09-15
-
-Published [v0.8.1](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.1) from commit `e925a3abcc796d37f63e83445bedb0d4364554a0`. The annotated tag and remote main both resolved to that commit before publication, and the working tree was clean.
-
-The tag was first pushed at `fffc6be`, before two commits landed that the release needed. Because no release had been published against it, the tag was moved to `e925a3a` with Corey's explicit approval — the same pre-publication exception recorded for v0.8.0.
-
-All contract, installer, and release checks passed on the MacBook against the release commit; Swift 5/5. The signed archive verified against `keys/hippocampus-release.asc` (`hippocampus-0.8.1.tar.gz: OK`), contains 82 entries under a single `hippocampus/` root, and carries `VERSION` 0.8.1. Packaged skills contain zero Firecrawl references and ten `defuddle.md` endpoint references. Six assets published.
-
-Corey signed; the agent verified, published, and installed. Installed and verified on all three machines — MacBook, mini1, mini2 — each resolving `current` to `releases/0.8.1` with zero Firecrawl references in the installed skill tree.
+- [ ] Complete the verification commands above from the candidate commit.
+- [ ] Tag the exact pushed commit as `v0.8.2`.
+- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [ ] Verify the signed archive and published release assets before announcing.

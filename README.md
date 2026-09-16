@@ -167,8 +167,10 @@ coordination material rather than a permanent archive.
 
 If an approved row belongs in the wiki, `research-absorb` stages the selected
 external sources and their provenance under `raw/research/`, then invokes
-`research-to-wiki` on that curated subset. The research report itself is never
-raw compiler input.
+`research-to-wiki` on that curated subset. A staged source is the extracted
+source text under provenance frontmatter; a summary alone or a NotebookLM
+source id is not a staged source. The research report itself is never raw
+compiler input.
 
 ### Deliverables that are not absorbed
 
