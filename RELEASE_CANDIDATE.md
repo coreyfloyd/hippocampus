@@ -53,7 +53,23 @@ contract-file change.
 
 ## Publication checklist
 
-- [ ] Complete the verification commands above from the candidate commit.
-- [ ] Tag the exact pushed commit as `v0.8.3`.
-- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [ ] Verify the signed archive and published release assets before announcing.
+- [x] Complete the verification commands above from the candidate commit.
+- [x] Tag the exact pushed commit as `v0.8.3`.
+- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [x] Verify the signed archive and published release assets before announcing.
+
+## Publication result — 2026-09-17
+
+Published [v0.8.3](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.3) from
+commit `65e09db767ed96474f46b2e5ab8a2e5f3319eb79`. The annotated tag and remote main both
+resolved to that commit before the build (peeled tag verified local and remote). Contract,
+install, and release suites passed on the MacBook against that commit; Swift 5/5;
+`git diff --check` clean; the documentation sweep found nothing.
+
+Corey signed; the agent verified, published, and installed. All six public assets
+downloaded and verified (`hippocampus-0.8.3.tar.gz: OK`; scripts and key byte-identical to
+the checkout). Installed and verified on all three machines from the verified assets:
+MacBook locally, mini1 and mini2 with the assets copied over SSH. Each resolves `current`
+to `releases/0.8.3` and the installed `wiki-audit` carries the session-cache health check.
+
+Closes [hippocampus#22](https://github.com/coreyfloyd/hippocampus/issues/22).
