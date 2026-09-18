@@ -53,7 +53,10 @@ Report:
 - articles over 200 lines without `length_justified:`;
 - compiled articles missing `topic:` or `sources:` frontmatter;
 - bare mentions of existing pages that should be inline wikilinks;
-- unannotated trailing link-dump sections.
+- unannotated trailing link-dump sections;
+- session cache (`hot_file`) over its word cap, and bullets carried past the staleness threshold.
+
+For the session-cache check, read the word cap and staleness threshold from the local policy body (which may itself delegate wiki rules to a file within the root); report the cache's word count against the cap and count bullets older than the threshold. When no cap is declared, report the cache word count as an observation, not a failure. The audit surfaces cache bloat; it does not cull — culling is the authorized writer's session-end step.
 
 Respect local policy for folder taxonomy, entity placement, naming, and atomicity calibration. If none exists, classify these as observations rather than compliance failures.
 
