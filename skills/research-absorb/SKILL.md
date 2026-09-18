@@ -70,7 +70,20 @@ filed follow-up task should own.
   is resolved; it has no retain or archive disposition, and the run is not
   complete.
 - When every row has a terminal disposition, delete the artifact and report
-  what was integrated, updated, filed, or discarded.
+  what was integrated, updated, filed, or discarded. **Deletion is
+  unconditional and is never a decision to put to the caller.** The artifact
+  is transient coordination material by contract; it always ends deleted, and
+  approval of the plan is approval of the deletion. Do not offer to keep it,
+  and do not treat "something still links to it" as a reason to retain it.
+- **Before deleting, repoint every durable reference that cites the artifact**
+  so nothing is left pointing at a file that will not exist: a filed task's
+  "Research:" link, a project brief pointer, a context-file mention, a wiki
+  backlink. A reference is durable state that must survive the artifact, so
+  redirect it to the knowledge's new home (the compiled wiki page, the updated
+  document, or the owning task itself) as part of absorbing the row that
+  produced it — never leave a live link to a deleted artifact, and never keep
+  the artifact alive to preserve one. If a citation cannot be repointed, the
+  content it needs was not fully absorbed; fix that, then delete.
 
 ## Runtime seam
 
