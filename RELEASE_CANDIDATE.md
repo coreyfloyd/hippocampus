@@ -2,17 +2,32 @@
 
 ## Scope
 
-`0.8.2` closes an ambiguity in the `research-absorb` raw-staging contract. The Wiki Addition rule said to place "the selected external source material and provenance" in `raw/research/` without defining material. In one knowledge base, eight absorbs on 2026-09-12 staged a 30-line agent summary with a NotebookLM source id and no page text, while four absorbs on 2026-09-15 staged full page extractions, both under the same 0.8.1 wording. A summary-only staged file leaves the knowledge base with no copy of the source and no way to re-verify the articles compiled from it.
+`0.8.3` closes a gap in `wiki-audit`'s structural-health pass. The audit read the
+session cache (`hot_file`) for context at the start of a run but never checked it
+against the profile-declared word cap or staleness threshold. A cache many times
+over its cap was therefore never surfaced by the audit — the one read-only pass
+whose job is to surface structural health — so the breach could accumulate
+indefinitely. In one knowledge base the session cache had grown to roughly twelve
+times its stated cap with no audit ever reporting it.
 
-The release defines the staged file as the extracted source text (page extraction, transcript, or file conversion) under provenance frontmatter. An agent summary may sit above the text as its own section but never replaces it, and a NotebookLM source id is a pointer, not a copy. `research-to-wiki` now refuses a summary-only raw file as compile input and asks for the extraction first.
+The release adds a session-cache health check to `wiki-audit` step 4 (structural
+health): it reads the word cap and staleness threshold from the local policy body,
+reports the cache's word count against the cap and the count of bullets carried
+past the staleness threshold, and treats an undeclared cap as an observation
+rather than a failure. The audit remains read-only — it surfaces cache bloat and
+does not cull; culling belongs to the authorized writer's session-end step.
 
-Tracking: [hippocampus#21](https://github.com/coreyfloyd/hippocampus/issues/21).
+Tracking: [hippocampus#22](https://github.com/coreyfloyd/hippocampus/issues/22).
 
 ## Compatibility
 
-No installer, profile, package-path, or contract-file change. This release is skill prose only: `skills/research-absorb/SKILL.md`, `skills/research-absorb/references/artifact-contract.md`, `skills/research-to-wiki/SKILL.md`, and the matching README paragraph. A valid v0.8.1 installation upgrades in place.
+No installer, profile, package-path, or contract-file change. This release is
+skill prose only: `skills/wiki-audit/SKILL.md`. A valid v0.8.2 installation
+upgrades in place.
 
-Existing raw files staged as summaries are not rewritten by the release. A knowledge base that holds them backfills the extracted text itself; `research-to-wiki` will refuse them until it does.
+The check reads the cap and staleness threshold from the local policy body a
+knowledge base already declares; a base that declares neither sees the cache word
+count reported as an observation, unchanged behavior for everything else.
 
 The signing key material and fingerprint are unchanged.
 
@@ -26,23 +41,19 @@ The signing key material and fingerprint are unchanged.
 
 ## Release-note draft
 
-`v0.8.2` defines what `research-absorb` stages in `raw/research/` for a Wiki Addition: the extracted source text under provenance frontmatter. A summary alone, or a NotebookLM source id alone, is no longer a valid staged source, and `research-to-wiki` refuses such a file as compile input until the extraction is present.
+`v0.8.3` teaches `wiki-audit` to check the session cache against its own limits.
+The audit already read the session cache for context; it now also reports the
+cache's word count against the profile-declared cap and counts bullets carried
+past the staleness threshold, treating an undeclared cap as an observation. The
+audit stays read-only: it surfaces cache bloat and never culls.
 
-The previous wording let two sessions read the same rule two ways, one staging summaries and the other staging full extractions. Only the second leaves the knowledge base able to re-verify its compiled articles without the external notebook.
-
-Updated: `research-absorb` and its artifact contract, `research-to-wiki`, and the README's absorb paragraph. No installer, profile, or contract-file change.
+Before this, a session cache could grow far past its stated cap with no audit
+pass ever flagging it. Updated: `wiki-audit` only. No installer, profile, or
+contract-file change.
 
 ## Publication checklist
 
-- [x] Complete the verification commands above from the candidate commit.
-- [x] Tag the exact pushed commit as `v0.8.2`.
-- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [x] Verify the signed archive and published release assets before announcing.
-
-## Publication result — 2026-09-16
-
-Published [v0.8.2](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.2) from commit `03aebb8532baa300d8fc491c7bdbc8dc68010545`. The annotated tag and remote main both resolved to that commit before the build. Contract, installer, and release suites passed on the MacBook against that commit; Swift 5/5; `git diff --check` clean. The documentation sweep found one README paragraph still describing staging without the text requirement and it was aligned in the same commit.
-
-Corey signed; the agent verified, published, and installed. All six public assets downloaded and verified (`hippocampus-0.8.2.tar.gz: OK`, scripts and key byte-identical to the checkout). Installed and verified on all three machines: MacBook from the published assets; mini1 and mini2 from the same verified assets copied over SSH, because mini1's GitHub token was rate-limited at install time. Each resolves `current` to `releases/0.8.2` and the installed `research-absorb` carries the extracted-text requirement.
-
-Closes [hippocampus#21](https://github.com/coreyfloyd/hippocampus/issues/21).
+- [ ] Complete the verification commands above from the candidate commit.
+- [ ] Tag the exact pushed commit as `v0.8.3`.
+- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [ ] Verify the signed archive and published release assets before announcing.
