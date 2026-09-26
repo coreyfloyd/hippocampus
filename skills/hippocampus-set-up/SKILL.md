@@ -7,7 +7,7 @@ description: Guide a user through configuring or repairing a Hippocampus knowled
 
 Configure the system through a conversation. The purpose of this skill is not merely to produce a valid file: help the user understand the storage model, make the choices that belong to them, and see how those choices affect later research and knowledge workflows.
 
-The installed, version-matched template is [`profiles/karpathy-wiki.example.md`](../../profiles/karpathy-wiki.example.md). The canonical structural check is [`scripts/validate_profile.py`](../../scripts/validate_profile.py). Resolve both relative to this skill so the configuration matches the active package release.
+The installed, version-matched template is [`profiles/karpathy-wiki.example.md`](../../profiles/karpathy-wiki.example.md). The canonical structural check is [`scripts/validate_profile.py`](../../scripts/validate_profile.py). Resolve both relative to this skill so the configuration matches the active package release; run the validator with `python3`.
 
 ## Explain the model first
 
@@ -75,7 +75,7 @@ After approval:
 1. Create only missing canonical directories: `raw/`, `output/`, and `docs/`, plus `wiki/` when the wiki is enabled.
 2. Create only missing state files: `docs/log.md` and `docs/DECISIONS.md`, plus `wiki/hot.md` when the wiki is enabled. Never truncate them.
 3. Create or update `~/.config/hippocampus/profile.md` from the active example schema. Use root-relative state paths and preserve unapproved frontmatter values and body content. When the wiki is declined, set `wiki_enabled: false` and omit `hot_file` and `wiki_followup_destination`; when it is enabled, omit `wiki_enabled` (or set it to `true`) and include both wiki fields.
-4. Run the active `scripts/validate_profile.py` against the resulting profile.
+4. Run the active `scripts/validate_profile.py` with `python3` against the resulting profile.
 5. If validation fails, report the exact failure and propose the smallest repair; do not replace the profile wholesale.
 6. If validation succeeds, summarize the configured root and routes, then teach the user one short first workflow appropriate to their goal. When the wiki is declined, the summary and that first-workflow teaching mention no wiki.
 
