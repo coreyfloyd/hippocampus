@@ -347,7 +347,18 @@ touch "$RENAME_HOME/knowledge/wiki/hot.md" "$RENAME_HOME/knowledge/docs/log.md" 
 sed "s|/absolute/path/to/knowledge|$RENAME_HOME/knowledge|" "$RENAME_HOME/profiles/karpathy-wiki.example.md" > "$RENAME_HOME/.config/research-tools/profile.md"
 PROFILE_SUM="$(shasum -a 256 "$RENAME_HOME/.config/research-tools/profile.md")"
 HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$RENAME_HOME/install.sh"
+# v0.7.0 shipped research-tools-set-up, now on the retired list: verify refuses
+# the leftover links, and the install removes them instead of stopping.
+test -L "$RENAME_HOME/.claude/skills/research-tools-set-up"
+test -L "$RENAME_HOME/.codex/skills/research-tools-set-up"
+if HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$ROOT/install.sh" --verify; then
+  exit 1
+fi
 HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$ROOT/install.sh"
+test ! -e "$RENAME_HOME/.claude/skills/research-tools-set-up"
+test ! -L "$RENAME_HOME/.claude/skills/research-tools-set-up"
+test ! -e "$RENAME_HOME/.codex/skills/research-tools-set-up"
+test ! -L "$RENAME_HOME/.codex/skills/research-tools-set-up"
 cmp "$RENAME_HOME/.config/research-tools/profile.md" "$RENAME_HOME/.config/hippocampus/profile.md"
 test "$(shasum -a 256 "$RENAME_HOME/.config/research-tools/profile.md")" = "$PROFILE_SUM"
 test -d "$RENAME_HOME/.local/share/research-tools/releases/0.7.0"
