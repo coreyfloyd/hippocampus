@@ -1,0 +1,500 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Hippocampus: durable research to knowledge root",
+    "output": "runtime.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/coreyfloyd/hippocampus.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "c5b2f85de4ffd61ed4a2491761baedc5c3c6c070"
+    }
+  },
+  "components": [
+    {
+      "id": "researcher",
+      "type": "external",
+      "label": "Researcher",
+      "sublabel": "user in an agent session",
+      "pos": [
+        40,
+        380
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "durable",
+      "type": "backend",
+      "label": "Durable research",
+      "sublabel": "research-sources · research-topic",
+      "pos": [
+        280,
+        380
+      ],
+      "size": [
+        350,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-sources/SKILL.md",
+          "line": 12,
+          "end_line": 24,
+          "label": "supplied-source modes"
+        },
+        {
+          "path": "skills/research-topic/SKILL.md",
+          "line": 12,
+          "end_line": 18,
+          "label": "topic-first source set"
+        }
+      ]
+    },
+    {
+      "id": "notebook",
+      "type": "external",
+      "label": "Gemini Notebook",
+      "sublabel": "notebooklm CLI",
+      "pos": [
+        290,
+        190
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "sources": [
+        {
+          "path": "skills/research-sources/SKILL.md",
+          "line": 28,
+          "label": "persistent synthesis layer"
+        },
+        {
+          "path": "skills/research-topic/SKILL.md",
+          "line": 22,
+          "end_line": 24,
+          "label": "query + verify claims"
+        }
+      ]
+    },
+    {
+      "id": "web",
+      "type": "external",
+      "label": "Web pages",
+      "sublabel": "defuddle.md endpoint",
+      "pos": [
+        460,
+        190
+      ],
+      "size": [
+        140,
+        60
+      ],
+      "sources": [
+        {
+          "path": "skills/research-sources/SKILL.md",
+          "line": 28,
+          "label": "curl defuddle.md"
+        },
+        {
+          "path": "skills/research-topic/SKILL.md",
+          "line": 16,
+          "label": "WebSearch + extraction"
+        }
+      ]
+    },
+    {
+      "id": "transcribe",
+      "type": "backend",
+      "label": "transcribe",
+      "sublabel": "Apple Speech, macOS 26+",
+      "pos": [
+        620,
+        190
+      ],
+      "size": [
+        160,
+        60
+      ],
+      "sources": [
+        {
+          "path": "skills/transcribe/SKILL.md",
+          "line": 10,
+          "end_line": 24,
+          "label": "route + local CLI"
+        },
+        {
+          "path": "skills/research-sources/SKILL.md",
+          "line": 30,
+          "label": "invoked for media"
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "type": "security",
+      "label": "Profile gate",
+      "sublabel": "validate_profile.py",
+      "pos": [
+        280,
+        580
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "~/.config/hippocampus",
+      "sources": [
+        {
+          "path": "scripts/validate_profile.py",
+          "line": 71,
+          "end_line": 121,
+          "label": "root + dir checks"
+        },
+        {
+          "path": "profiles/karpathy-wiki.example.md",
+          "line": 1,
+          "end_line": 14,
+          "label": "profile v4 fields"
+        },
+        {
+          "path": "skills/research-sources/SKILL.md",
+          "line": 10,
+          "label": "stop if invalid"
+        }
+      ]
+    },
+    {
+      "id": "artifact",
+      "type": "database",
+      "label": "Research artifact",
+      "sublabel": "output/ · transient",
+      "pos": [
+        540,
+        580
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/references/artifact-contract.md",
+          "line": 1,
+          "end_line": 50,
+          "label": "required sections"
+        },
+        {
+          "path": "skills/research-topic/SKILL.md",
+          "line": 28,
+          "end_line": 34,
+          "label": "write, report path"
+        }
+      ]
+    },
+    {
+      "id": "absorb",
+      "type": "backend",
+      "label": "research-absorb",
+      "sublabel": "executes the approved plan",
+      "pos": [
+        860,
+        380
+      ],
+      "size": [
+        220,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 28,
+          "end_line": 44,
+          "label": "validate, then approval"
+        },
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 46,
+          "end_line": 86,
+          "label": "execute + delete"
+        }
+      ]
+    },
+    {
+      "id": "targets",
+      "type": "database",
+      "label": "Target documents",
+      "sublabel": "briefs, context, repo docs",
+      "pos": [
+        820,
+        190
+      ],
+      "size": [
+        160,
+        60
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 62,
+          "end_line": 63,
+          "label": "named target update"
+        },
+        {
+          "path": "skills/research-absorb/references/artifact-contract.md",
+          "line": 72,
+          "end_line": 73,
+          "label": "Document Updates"
+        }
+      ]
+    },
+    {
+      "id": "followup",
+      "type": "external",
+      "label": "Follow-up route",
+      "sublabel": "artifact_followup_destination",
+      "pos": [
+        1000,
+        190
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 64,
+          "end_line": 66,
+          "label": "file task"
+        },
+        {
+          "path": "skills/research-absorb/references/artifact-contract.md",
+          "line": 212,
+          "end_line": 219,
+          "label": "task outlives artifact"
+        }
+      ]
+    },
+    {
+      "id": "raw",
+      "type": "database",
+      "label": "raw/research/",
+      "sublabel": "source text + provenance",
+      "pos": [
+        960,
+        580
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 51,
+          "end_line": 58,
+          "label": "staging rule"
+        },
+        {
+          "path": "skills/research-absorb/references/artifact-contract.md",
+          "line": 220,
+          "end_line": 223
+        }
+      ]
+    },
+    {
+      "id": "compile",
+      "type": "backend",
+      "label": "research-to-wiki",
+      "sublabel": "curated-subset compiler",
+      "pos": [
+        1200,
+        380
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-to-wiki/SKILL.md",
+          "line": 10,
+          "end_line": 16,
+          "label": "--require-wiki + inputs"
+        },
+        {
+          "path": "skills/research-to-wiki/SKILL.md",
+          "line": 41,
+          "end_line": 56,
+          "label": "compile + finish"
+        }
+      ]
+    },
+    {
+      "id": "wiki",
+      "type": "database",
+      "label": "wiki/",
+      "sublabel": "articles, _index, hot.md",
+      "pos": [
+        1210,
+        580
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-to-wiki/SKILL.md",
+          "line": 50,
+          "end_line": 56,
+          "label": "indexes, cache, log"
+        },
+        {
+          "path": "contracts/karpathy-wiki.md",
+          "line": 33,
+          "end_line": 38,
+          "label": "topic folders"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Knowledge root (knowledge_root)",
+      "wraps": [
+        "artifact",
+        "raw",
+        "wiki"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ask",
+      "from": "researcher",
+      "to": "durable",
+      "label": "question or sources",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gate",
+      "from": "durable",
+      "to": "profile",
+      "label": "validate first",
+      "variant": "security"
+    },
+    {
+      "id": "ground",
+      "from": "durable",
+      "to": "notebook",
+      "label": "add + query",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "extract",
+      "from": "durable",
+      "to": "web",
+      "label": "extract",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "media",
+      "from": "durable",
+      "to": "transcribe",
+      "label": "media",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "write-artifact",
+      "from": "durable",
+      "to": "artifact",
+      "label": "write artifact"
+    },
+    {
+      "id": "read-plan",
+      "from": "absorb",
+      "to": "artifact",
+      "label": "read plan, act on approval",
+      "variant": "emphasis"
+    },
+    {
+      "id": "update-doc",
+      "from": "absorb",
+      "to": "targets",
+      "label": "update"
+    },
+    {
+      "id": "file-task",
+      "from": "absorb",
+      "to": "followup",
+      "label": "file task",
+      "variant": "dashed"
+    },
+    {
+      "id": "stage",
+      "from": "absorb",
+      "to": "raw",
+      "label": "stage if wiki on"
+    },
+    {
+      "id": "invoke",
+      "from": "absorb",
+      "to": "compile",
+      "label": "invoke if wiki on"
+    },
+    {
+      "id": "read-raw",
+      "from": "compile",
+      "to": "raw",
+      "label": "read subset"
+    },
+    {
+      "id": "write-wiki",
+      "from": "compile",
+      "to": "wiki",
+      "label": "articles + indexes"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Gates",
+      "items": [
+        "Every root-writing skill validates the profile first; invalid means stop",
+        "research-absorb mutates nothing until the user approves the plan",
+        "Every row ends integrated, updated, filed, or discarded; then the artifact is deleted"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Knowledge root",
+      "items": [
+        "raw/, output/, docs/ always; wiki/ only when enabled",
+        "Compile appends docs/log.md and updates hot.md",
+        "The report is never compiler input; only extracted source text is"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Not shown",
+      "items": [
+        "Inline research-quick / research-dev (answer in chat only)",
+        "research-feature / research-feedback (own deliverables, not absorbed)",
+        "knowledge-capture, wiki-audit, hippocampus-set-up, install + release scripts"
+      ]
+    }
+  ]
+}
