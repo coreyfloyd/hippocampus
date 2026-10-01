@@ -240,6 +240,10 @@ selected raw sources before existing wiki synthesis, drafts claims, then checks
 nearby articles for real tensions and gaps instead of silently blending
 incompatible assertions.
 
+## Architecture
+
+[`docs/architecture/runtime.html`](docs/architecture/runtime.html) is an interactive map of how a research request moves through these skills to durable outputs: the research skills, NotebookLM and source extraction, the profile gate, the research artifact, `research-absorb`, and the knowledge root (`raw/research/`, `wiki/`). Each box links to the file and lines it came from. [`runtime.architecture.json`](docs/architecture/runtime.architecture.json) is its source, pinned to one commit. Agents should read it before structural changes, confirm against the code, and regenerate it with the [Archify](https://github.com/tt-a1i/archify) skill when a change moves a box or an edge.
+
 ## Example requests
 
 Natural-language requests work across Agent Skills-compatible clients:
