@@ -80,7 +80,7 @@ Write a decision memo. It exists to be read once and acted on, not absorbed
 into a knowledge base: `research-absorb` does not apply. Placement: when the
 subject is a competitor or the research otherwise serves a project, write the
 memo into that project at the path the caller names; otherwise write it to the
-local profile's destination, where it is deleted once the decision is made.
+local profile's destination. After the decision and authorized actions are complete, retain a knowledge-root memo in `raw/derived/` as an excluded reference artifact rather than deleting it. Project memos stay under that project's retention policy.
 Report the path at completion.
 
 ```markdown

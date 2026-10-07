@@ -2,10 +2,7 @@
 
 Every durable artifact produced by `research-sources` or `research-topic` is a
 transient, evidence-grounded handoff to `research-absorb`. (`research-feature`
-and `research-feedback` produce deliverables that are read and filed or
-deleted, not absorbed; each defines its own document in its SKILL.md.) It is not raw wiki input and it is not a final
-archive. Its purpose is to let the user make the decisions the evidence raises,
-then be executed and deleted.
+and `research-feedback` produce deliverables that are read and retained or filed with their project, not absorbed; each defines its own document in its SKILL.md.) It is not raw wiki input. Its purpose is to let the user make the decisions the evidence raises, then execute the approved plan and preserve the completed report in `raw/derived/` as an excluded reference artifact.
 
 This contract is the only place the artifact's sections are defined. A producing
 skill adds requirements of its own; it does not restate the section list.
@@ -207,19 +204,10 @@ parent item is invalid.
   leaves its row pending.
 - Approval of the plan is the explicit discard for every inline-rejected
   candidate; no per-item confirmation is required.
-- No retain or archive state exists for the artifact. After all rows have a
-  terminal disposition, `research-absorb` deletes the artifact.
-- **An Action row's task must outlive the artifact.** The artifact is deleted, so
-  a ticket it files carries everything its executor needs *inside the ticket* —
-  the evidence, the options and their tradeoffs, the source assessment, and what
-  would settle the question — citing only durable targets. A ticket that points
-  back at the artifact is malformed: it dangles on deletion, or it blocks the
-  deletion the contract requires. File the task **after** the Wiki Additions and
-  Document Updates rows have executed, so it can cite the compiled destinations
-  rather than the transient plan.
+- After all rows are terminal, `research-absorb` moves the completed artifact from `output/` to `raw/derived/` and records its absorbed status, original path, date, and compile exclusion. Pending rows keep it in output. Never overwrite an existing archive or delete the completed record by default.
+- **An Action row's task must be independently actionable.** It carries the evidence, options and tradeoffs, source assessment, and what would settle the question inside the task; the preserved report can supplement those details. File the task after relevant Wiki Additions and Document Updates execute so it can cite their actual destinations. Repoint path references when the report moves.
 - Do not treat a report as a raw knowledge-base source. Preserve selected source
   provenance in canonical `raw/research/` as the extracted source text under
   provenance frontmatter, never as a summary alone, then use `research-to-wiki`
-  for the curated subset. Promote a report to derived material only when it is itself a
-  required durable transformation and approval covers that promotion.
+  for the curated subset. Retain a completed report as `use: artifact` and `compile_mode: exclude`; retaining execution history does not authorize mining an agent synthesis as primary evidence.
 - When the profile records the wiki as disabled, `research-absorb` does not stage source provenance into `raw/research/` for compilation and never invokes `research-to-wiki`.

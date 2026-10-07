@@ -192,3 +192,7 @@ bash tests/test-install.sh
 bash tests/test-release.sh
 (cd skills/transcribe/tools/apple-speech && swift test)
 ```
+
+## Optional meeting inputs
+
+`meeting-capture` shares the knowledge-capture disposition workflow. Profile version 4 also accepts three independent optional fields: `meeting_transcript_source` and `meeting_event_source` name providers or retrieval instructions; `meeting_daily_note_path` is root-relative and contains exactly one `{date}` placeholder, such as `daily/{date}.md`. Use unquoted values or `disabled`. Existing profiles need no migration: an absent transcript field uses supplied/available sources, while absent event and daily-note fields skip those lookups. These settings select sources; they do not install connectors. Daily notes and calendar events are read-only context.

@@ -6,19 +6,18 @@ description: Validate and execute the approved distribution plan in a durable re
 # Research Absorb
 
 Process one research artifact through its existing proposed distribution plan.
-The artifact is coordination material, not an archive: it must reach terminal
-dispositions and then be deleted. Read [the artifact contract](references/artifact-contract.md)
+The artifact coordinates the work: every row must reach a terminal disposition, then the completed artifact is preserved in `raw/derived/` as a reference record. Read [the artifact contract](references/artifact-contract.md)
 and run `python3` with `../../scripts/validate_profile.py` (resolved
 relative to this skill) and `~/.config/hippocampus/profile.md` before
 acting. If it is missing or invalid, stop and use `hippocampus-set-up`; do not
-mutate or delete the artifact. Research-derived tasks
+mutate or move the artifact. Research-derived tasks
 use `artifact_followup_destination`, never the wiki-maintenance route.
 
 ## Interface
 
 Input: a single durable research artifact with a **How to Absorb** section and its execution appendix.
 Output: an approved execution summary that names the final disposition of every
-row, then no remaining artifact.
+row and the archived artifact path, then no remaining artifact in `output/`.
 
 Do not use this to extract knowledge from the current conversation; that is
 `knowledge-capture`. Do not perform routine project records, ticket updates, or
@@ -64,26 +63,10 @@ filed follow-up task should own.
 - File a research-derived follow-up task when the plan calls for future work.
   File it through `artifact_followup_destination` with its evidence; do not
   perform the implementation in this workflow.
-- Mark the actual terminal disposition for every row: integrated, target
-  document updated, task filed, or explicitly discarded. If any row cannot
-  reach a terminal disposition, the artifact stays blocked until the blocker
-  is resolved; it has no retain or archive disposition, and the run is not
-  complete.
-- When every row has a terminal disposition, delete the artifact and report
-  what was integrated, updated, filed, or discarded. **Deletion is
-  unconditional and is never a decision to put to the caller.** The artifact
-  is transient coordination material by contract; it always ends deleted, and
-  approval of the plan is approval of the deletion. Do not offer to keep it,
-  and do not treat "something still links to it" as a reason to retain it.
-- **Before deleting, repoint every durable reference that cites the artifact**
-  so nothing is left pointing at a file that will not exist: a filed task's
-  "Research:" link, a project brief pointer, a context-file mention, a wiki
-  backlink. A reference is durable state that must survive the artifact, so
-  redirect it to the knowledge's new home (the compiled wiki page, the updated
-  document, or the owning task itself) as part of absorbing the row that
-  produced it — never leave a live link to a deleted artifact, and never keep
-  the artifact alive to preserve one. If a citation cannot be repointed, the
-  content it needs was not fully absorbed; fix that, then delete.
+- Mark the actual terminal disposition for every row: integrated, target document updated, task filed, or explicitly discarded. If any row remains blocked, keep the artifact in `output/`; archiving never substitutes for completing the approved plan.
+- When every row is terminal, move the artifact to the knowledge root's `raw/derived/`, preserving its filename unless that would collide. Never overwrite a prior record. Preserve the plan, evidence, execution results, and source links; set `status: absorbed`, `use: artifact`, `compile_mode: exclude`, `absorbed_at`, and `archived_from` in its frontmatter. Record the durable archive path in the execution summary. The approved absorption includes this retention step; deletion requires a separate explicit user direction.
+- Update durable path references to the archived artifact and add links to the actual compiled or updated destinations where useful. Wikilinks by unique filename may remain unchanged. A filed task must still carry the evidence and next action its executor needs; the archive link supplements that context rather than replacing it.
+- The archived synthesis is a reference artifact, not fresh primary evidence for another compile. Compile knowledge from the selected extracted sources, not the report. Respect a caller's explicit retention destination when supplied and compatible with the target's rules.
 
 ## Runtime seam
 

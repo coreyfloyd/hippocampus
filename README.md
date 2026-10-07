@@ -51,7 +51,7 @@ In addition, there are three research skills for specific domains:
 | Skill               | Use it when                                                                                                     | Result and next step                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `research-feature`  | You need competitor UX, established patterns, user expectations, or platform conventions before feature design. | Produces a design input document filed with the project, beside the requirements it answers. Not absorbed. |
-| `research-feedback` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, delete it (or file it with the project it serves). Not absorbed. |
+| `research-feedback` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed. |
 | `research-dev`      | You are investigating a bug, API behavior, library, or implementation approach.                                 | Returns diagnoses, competing explanations, and sources inline.                                           |
 
 
@@ -61,7 +61,8 @@ These skills help you get research filed where it belongs.
 
 | Skill               | Use it when                                                                                             | Result and next step                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `research-absorb`   | You created a research artifact and you are ready to move the knowledge into permanent locations.       | Executes the approved plan, records a terminal disposition for every row, then deletes the completed artifact.                           |
+| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Archives complete available sources, compiles dated people records, routes approved document changes and actionable dated tasks, and retains absorbed review artifacts. |
+| `research-absorb`   | You created a research artifact and you are ready to move the knowledge into permanent locations.       | Executes the approved plan, records a terminal disposition for every row, then archives the completed artifact in raw/derived.                           |
 | `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, asks for approval, then performs only the approved captures. It does not process research artifacts. |
 
 ## Personal Knowledge Curation skills
@@ -163,7 +164,7 @@ recommendation when a genuine choice exists. Nothing may be merely staged:
 absorb it or discard it. Adoption decisions about third-party work require
 real-world usage and sentiment evidence, not just the source itself.
 The artifact is durable enough to support review and execution, but it is
-coordination material rather than a permanent archive.
+coordination material while pending; completed absorption preserves it in `raw/derived/` as an excluded reference record.
 
 If an approved row belongs in the wiki, `research-absorb` stages the selected
 external sources and their provenance under `raw/research/`, then invokes
@@ -197,7 +198,7 @@ it answers:
 Every claim cites a source row by ID.
 
 `research-feedback` produces a **decision memo**. It answers one adopt, buy,
-upgrade, switch, or wait question, and is read once and then deleted, or filed
+upgrade, switch, or wait question, and is read once and then retained as a reference, or filed
 with the project it serves:
 
 ```text
@@ -222,7 +223,7 @@ current conversation
   -> discard | retain output | capture provenance | preserve synthesis | compile
 ```
 
-Use this path for knowledge created or discussed in the current conversation.
+Use this path for knowledge created or discussed in the current conversation. For meeting imports, `meeting-capture` applies the same disposition logic to transcripts plus optionally configured calendar events and daily notes; it preserves dated people and coaching records, routes actions, and updates permitted existing documents.
 Use `research-absorb` instead when a durable research artifact already exists.
 
 ### Compile and audit an existing source collection

@@ -7,6 +7,7 @@ TOP_LEVEL_FIELDS = {
     "profile_version", "knowledge_root", "hot_file", "operation_log_file",
     "decision_log_file", "wiki_followup_destination", "artifact_followup_destination",
     "wiki_enabled",
+    "meeting_transcript_source", "meeting_event_source", "meeting_daily_note_path",
 }
 
 
@@ -99,6 +100,22 @@ def main():
         contained_file(root, values.get(key), key)
     if not values.get("artifact_followup_destination"):
         fail("missing artifact_followup_destination")
+
+    # Meeting adapters are optional, independent, runtime-neutral settings.
+    for key in ("meeting_transcript_source", "meeting_event_source", "meeting_daily_note_path"):
+        if key in values and not values[key]:
+            fail(f"{key} must name a source or be disabled")
+    daily = values.get("meeting_daily_note_path", "disabled")
+    if daily != "disabled":
+        if daily.count("{date}") != 1 or "{" in daily.replace("{date}", "") or "}" in daily.replace("{date}", ""):
+            fail("meeting_daily_note_path must contain exactly one {date} placeholder")
+        candidate = pathlib.Path(daily.replace("{date}", "2000-01-01"))
+        if candidate.is_absolute():
+            fail("meeting_daily_note_path must be relative to knowledge_root")
+        try:
+            (root / candidate).resolve().relative_to(root)
+        except ValueError:
+            fail("meeting_daily_note_path escapes knowledge_root")
 
     if wiki_enabled:
         contained(root, root / "wiki", "wiki")
