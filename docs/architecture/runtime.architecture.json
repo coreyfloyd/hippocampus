@@ -9,7 +9,7 @@
       "url": "https://github.com/coreyfloyd/hippocampus.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "c5b2f85de4ffd61ed4a2491761baedc5c3c6c070"
+      "revision": "7b9d5a563818f6df66e0c7442c04c91adbaaf94d"
     }
   },
   "components": [
@@ -31,7 +31,7 @@
       "id": "durable",
       "type": "backend",
       "label": "Durable research",
-      "sublabel": "research-sources · research-topic",
+      "sublabel": "research-sources \u00b7 research-topic",
       "pos": [
         280,
         380
@@ -152,14 +152,14 @@
       "sources": [
         {
           "path": "scripts/validate_profile.py",
-          "line": 71,
-          "end_line": 121,
+          "line": 76,
+          "end_line": 148,
           "label": "root + dir checks"
         },
         {
           "path": "profiles/karpathy-wiki.example.md",
           "line": 1,
-          "end_line": 14,
+          "end_line": 19,
           "label": "profile v4 fields"
         },
         {
@@ -173,7 +173,7 @@
       "id": "artifact",
       "type": "database",
       "label": "Research artifact",
-      "sublabel": "output/ · transient",
+      "sublabel": "output/ \u00b7 transient",
       "pos": [
         540,
         580
@@ -219,9 +219,9 @@
         },
         {
           "path": "skills/research-absorb/SKILL.md",
-          "line": 46,
-          "end_line": 86,
-          "label": "execute + delete"
+          "line": 45,
+          "end_line": 69,
+          "label": "execute + retain"
         }
       ]
     },
@@ -241,8 +241,8 @@
       "sources": [
         {
           "path": "skills/research-absorb/SKILL.md",
-          "line": 62,
-          "end_line": 63,
+          "line": 61,
+          "end_line": 62,
           "label": "named target update"
         },
         {
@@ -269,15 +269,15 @@
       "sources": [
         {
           "path": "skills/research-absorb/SKILL.md",
-          "line": 64,
-          "end_line": 66,
+          "line": 63,
+          "end_line": 65,
           "label": "file task"
         },
         {
           "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 212,
-          "end_line": 219,
-          "label": "task outlives artifact"
+          "line": 208,
+          "end_line": 208,
+          "label": "independently actionable task"
         }
       ]
     },
@@ -303,8 +303,9 @@
         },
         {
           "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 220,
-          "end_line": 223
+          "line": 209,
+          "end_line": 213,
+          "label": "primary evidence only"
         }
       ]
     },
@@ -361,6 +362,28 @@
           "line": 33,
           "end_line": 38,
           "label": "topic folders"
+        }
+      ]
+    },
+    {
+      "id": "retained",
+      "type": "database",
+      "label": "raw/derived/",
+      "sublabel": "absorbed report \u00b7 excluded reference",
+      "pos": [
+        1180,
+        780
+      ],
+      "size": [
+        310,
+        64
+      ],
+      "sources": [
+        {
+          "path": "skills/research-absorb/SKILL.md",
+          "line": 66,
+          "end_line": 69,
+          "label": "terminal rows, retained archive"
         }
       ]
     }
@@ -466,6 +489,13 @@
       "from": "compile",
       "to": "wiki",
       "label": "articles + indexes"
+    },
+    {
+      "id": "retain-report",
+      "from": "absorb",
+      "to": "retained",
+      "label": "retain after all rows terminal",
+      "variant": "dashed"
     }
   ],
   "cards": [
@@ -475,7 +505,7 @@
       "items": [
         "Every root-writing skill validates the profile first; invalid means stop",
         "research-absorb mutates nothing until the user approves the plan",
-        "Every row ends integrated, updated, filed, or discarded; then the artifact is deleted"
+        "Every row ends integrated, updated, filed, or discarded; then retain the report as an excluded reference"
       ]
     },
     {
@@ -484,7 +514,7 @@
       "items": [
         "raw/, output/, docs/ always; wiki/ only when enabled",
         "Compile appends docs/log.md and updates hot.md",
-        "The report is never compiler input; only extracted source text is"
+        "Only selected primary source text feeds the compiler; the retained report is excluded"
       ]
     },
     {
@@ -493,7 +523,7 @@
       "items": [
         "Inline research-quick / research-dev (answer in chat only)",
         "research-feature / research-feedback (own deliverables, not absorbed)",
-        "knowledge-capture, wiki-audit, hippocampus-set-up, install + release scripts"
+        "Meeting capture (README flow), knowledge-capture, wiki-audit, setup, install + release scripts"
       ]
     }
   ]
