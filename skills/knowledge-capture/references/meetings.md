@@ -8,6 +8,8 @@ Run `python3` with `../../../scripts/validate_profile.py` (resolved relative to 
 
 Resolve the requested people, meetings, and dates through supplied sources or available connected meeting tools. Establish the user's identity for speaker attribution. If a name search fails, inspect a bounded recent meeting inventory before claiming no recording exists. Read complete available primary transcripts with pagination; summaries can help navigate but never replace unread transcript evidence. Distinguish calendar time from modification time, preserve timezone and meeting identifiers, and flag missing or partial recordings.
 
+Infer the purpose of the supplied source material, state that understanding to the user, and ask them to confirm or correct it before planning captures or actions. Distinguish core outcomes from ancillary ones and preserve the confirmed hierarchy in the disposition and resulting records. If the user has already explicitly confirmed the purpose and hierarchy, use that confirmation rather than asking again. This prevents an ancillary use from displacing the user’s purpose (2026-10-07: sprint participation and writing were mistakenly framed around coaching opportunities).
+
 ## Configurable source adapters
 
 Read these optional flat profile fields independently. Their values are provider names or retrieval instructions, except the note path. Use unquoted values; `disabled` explicitly skips that input. Configuration selects a source, not permission to mutate it or proof that a connector is available.
