@@ -32,7 +32,9 @@ The request authorizes only its stated routes. A request to review a meeting doe
 
 ## Capture and disposition
 
-Archive complete source material in the configured raw intake with source link, meeting date/timezone, meeting ID, sensitivity, and ingestion tracking. Deduplicate by meeting ID or supplied source identity. Preserve private material and paraphrase it in derived notes according to local policy.
+Resolve separate transcript intake and retained-source destinations from the knowledge root's local policy, honoring explicit meeting destination overrides in the private profile body. These are output destinations, independent of the three source adapters. Do not assume other users share a folder taxonomy; if either destination is unresolved or conflicts with local policy, ask before filing. Keep both destinations within the configured raw source library. A local policy may use `raw/inbox/` for intake and `raw/archive/meetings/` for retained transcripts.
+
+Stage new source material in the resolved intake with source link, meeting date/timezone, meeting ID, sensitivity, and ingestion tracking. Deduplicate across intake and retained sources by meeting ID or supplied source identity; reuse the existing canonical source on repeat capture. Preserve private material and paraphrase it in derived notes according to local policy. Preserve available partial transcripts with an explicit coverage gap; do not label them complete.
 
 Build one disposition inventory covering all of these routes, even if a route has no items:
 
@@ -48,6 +50,10 @@ Propose any route requiring approval as a concrete change. Existing authorizatio
 For approved wiki work, invoke `research-to-wiki` on the curated primary sources with the resolved referents and dates. If the profile disables the wiki, use the configured permitted document routes instead; never create a wiki as a side effect. Mark a source ingested only after its actual compilation result is known.
 
 For approved actions, load the available task workflow and discover write targets on the executing host. Search current tasks before creating one; enrich an exact existing match while preserving unrelated notes. Create or update each action with evidence, actionable wording, and an explicit due date when requested. Read back saved dates and targets; an unconfirmed write remains pending. Keep live task state in the task system, not mirrored in wiki or context. Report the saved actions and dates to the user.
+
+Once every authorized disposition route is completed or explicitly declined, move the original transcript from intake to the resolved retained-source destination. A wiki compile alone is insufficient when authorized document or task writes remain pending. Record unfinished capture work and its source pointer in the disposition record while leaving the source in intake; ingestion status describes compilation, not overall capture completion. Missing optional inputs or an explicitly documented partial recording do not themselves prevent closure of the authorized work; preserve those gaps in the retained record.
+
+Preserve transcript content, identity, sensitivity, and ingestion metadata during filing. Check the destination before moving: reuse an identical canonical source, but never overwrite a different file; resolve a distinct filename or ask about conflicting source versions. Update durable source references and any source manifest required by local policy, then verify the old path is gone, the retained source matches the original, and references resolve. The retained transcript stays primary compile evidence; never mark it excluded merely because capture finished. If link repair or filing fails, report capture as pending rather than complete.
 
 A review produced in output stays there while approved work is incomplete. After all approved routes are completed or explicitly declined, move it to `raw/derived/` as an absorbed reference artifact with `use: artifact`, `compile_mode: exclude`, original path, and date. Update durable references without overwriting another archive. Compile from transcripts, never from the archived analysis. A completed review need not be created if dated people records and source tracking already preserve the work.
 
