@@ -49,6 +49,10 @@ agent session has no path to it and the attempt fails with
 `gpg: signing failed: Inappropriate ioctl for device`. Treat that message as the
 gate working, not as a problem to solve.
 
+## Live activation boundary
+
+While preparing a release, validate candidate installations in temporary test homes. Do not activate a source checkout in the user's live skill directories unless the user explicitly authorizes a development installation. After publication, install from the downloaded, signature-verified release assets. A versioned local directory and a successful `install.sh --verify` do not attest a maintainer-signed release.
+
 ## Prerequisites
 
 - Run from the repository root on a trusted machine with the release secret key
@@ -94,6 +98,7 @@ Run all checks against the exact commit intended for release:
 
 ```bash
 git diff --check
+python3 tests/test-profile-meetings.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
 bash tests/test-release.sh

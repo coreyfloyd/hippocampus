@@ -12,8 +12,10 @@ artifact_followup_destination: "Describe the task system and routing rule for re
 # Optional meeting inputs; each can independently be disabled. Use unquoted values.
 # meeting_transcript_source: Connected meeting provider or supplied transcript
 # meeting_event_source: Connected calendar provider
-# meeting_daily_note_path: daily/{date}.md
-# Without these fields, transcripts use supplied/available sources and event/daily lookups are disabled.
+# meeting_note_path: notes/{date}.md
+# A fixed local path, absolute path, or HTTPS Google Docs document link also works.
+# A note path/link supplied for a specific meeting overrides this optional default.
+# Without these fields, transcripts use supplied/available sources and event/note lookups are disabled.
 ---
 
 Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.

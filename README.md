@@ -223,8 +223,24 @@ current conversation
   -> discard | retain output | capture provenance | preserve synthesis | compile
 ```
 
-Use this path for knowledge created or discussed in the current conversation. For meeting imports, `meeting-capture` applies the same disposition logic to transcripts plus optionally configured calendar events and daily notes; it preserves dated people and coaching records, routes actions, and updates permitted existing documents.
-Use `research-absorb` instead when a durable research artifact already exists.
+Use this path for knowledge created or discussed in the current conversation. Use `research-absorb` instead when a durable research artifact already exists.
+
+### Capture meetings
+
+```text
+transcript source       calendar event       note file or Google Doc
+  configured/supplied    optional source      per-meeting or profile default
+           \                   |                   /
+                  meeting-capture
+                         |
+          shared knowledge-capture disposition
+                         |
+       people/coaching records + permitted documents + dated actions
+                         |
+       complete authorized routes -> retain review in excluded raw archive
+```
+
+The three inputs are independent and configurable. `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
 
 ### Compile and audit an existing source collection
 

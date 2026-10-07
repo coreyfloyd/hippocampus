@@ -79,7 +79,7 @@ integrity and configuration-readiness check.
 
 ## Install from this checkout
 
-This checkout is a release candidate rather than a published release:
+This checkout is a development candidate rather than a published release. Use the verified signed-release route for normal live upgrades. An agent must obtain explicit authorization before activating a development checkout in the user's live skill directories; candidate tests use temporary homes. If intentionally installing the development checkout:
 
 ```bash
 bash install.sh
@@ -187,6 +187,7 @@ Run the shell contract, installation, and signed-release round-trip suites,
 then test the optional Apple Speech package:
 
 ```bash
+python3 tests/test-profile-meetings.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
 bash tests/test-release.sh
@@ -195,4 +196,4 @@ bash tests/test-release.sh
 
 ## Optional meeting inputs
 
-`meeting-capture` shares the knowledge-capture disposition workflow. Profile version 4 also accepts three independent optional fields: `meeting_transcript_source` and `meeting_event_source` name providers or retrieval instructions; `meeting_daily_note_path` is root-relative and contains exactly one `{date}` placeholder, such as `daily/{date}.md`. Use unquoted values or `disabled`. Existing profiles need no migration: an absent transcript field uses supplied/available sources, while absent event and daily-note fields skip those lookups. These settings select sources; they do not install connectors. Daily notes and calendar events are read-only context.
+`meeting-capture` shares the knowledge-capture disposition workflow. Profile version 4 accepts three independent optional inputs: `meeting_transcript_source` and `meeting_event_source` name providers or retrieval instructions; `meeting_note_path` is an optional default local path or HTTPS Google Docs document link. A local path may be fixed, absolute (including outside the knowledge root), or knowledge-root-relative; one `{date}` placeholder is optional. Use unquoted values or `disabled`. A note path or Google Doc link supplied for a particular meeting overrides the default, so no shared notes directory is required. Existing published version-4 profiles need no migration; the unreleased `meeting_daily_note_path` field is renamed to `meeting_note_path`. Absent transcript fields use supplied/available sources; absent event fields skip event lookup; absent note fields still allow explicitly supplied notes. These settings select sources; they do not install connectors or guarantee access. Notes and calendar events are read-only context.

@@ -2,74 +2,52 @@
 
 ## Scope
 
-`0.8.3` closes a gap in `wiki-audit`'s structural-health pass. The audit read the
-session cache (`hot_file`) for context at the start of a run but never checked it
-against the profile-declared word cap or staleness threshold. A cache many times
-over its cap was therefore never surfaced by the audit — the one read-only pass
-whose job is to surface structural health — so the breach could accumulate
-indefinitely. In one knowledge base the session cache had grown to roughly twelve
-times its stated cap with no audit ever reporting it.
+`0.9.0` adds portable meeting capture and retained absorption records. `meeting-capture` is a thin entry point to knowledge-capture's shared meeting mode, rather than a second disposition workflow. It retrieves complete available transcripts, adds optional calendar and meeting-note context, and routes people/coaching records, permitted existing-document updates, actions, and open questions.
 
-The release adds a session-cache health check to `wiki-audit` step 4 (structural
-health): it reads the word cap and staleness threshold from the local policy body,
-reports the cache's word count against the cap and the count of bullets carried
-past the staleness threshold, and treats an undeclared cap as an observation
-rather than a failure. The audit remains read-only — it surfaces cache bloat and
-does not cull; culling belongs to the authorized writer's session-end step.
+The three optional profile inputs are `meeting_transcript_source`, `meeting_event_source`, and `meeting_note_path`. Notes may be a fixed local path, an absolute path outside the knowledge root, a relative path, a local date template, or an HTTPS Google Docs document link. Explicit per-meeting note inputs override the profile default; no common meeting-notes directory is assumed. Sources remain separately attributed and read-only where required; inaccessible sources are reported.
 
-Tracking: [hippocampus#22](https://github.com/coreyfloyd/hippocampus/issues/22).
+Completed absorbed outputs now move to `raw/derived/` as reference artifacts with `use: artifact`, `compile_mode: exclude`, original path, and absorption date. Unfinished authorized work stays in output. The reference report is never primary compiler evidence. Existing archives are not automatically moved or recovered by installing the package.
+
+Also included since v0.8.3: Python-based profile-validator invocation corrections, the explorable research runtime architecture map, and reconciled skill/install/migration documentation. The architecture map is refreshed for retained absorption records; the README diagrams meeting capture separately.
+
+Tracking: [hippocampus#28](https://github.com/coreyfloyd/hippocampus/issues/28), building on [hippocampus#27](https://github.com/coreyfloyd/hippocampus/issues/27).
 
 ## Compatibility
 
-No installer, profile, package-path, or contract-file change. This release is
-skill prose only: `skills/wiki-audit/SKILL.md`. A valid v0.8.2 installation
-upgrades in place.
+Profile version remains 4. Existing published profiles need no migration. The unreleased development field `meeting_daily_note_path` is renamed to `meeting_note_path`; its validator error names the replacement. Default event lookup is disabled; default note lookup is absent unless a note is supplied. Transcript input uses supplied/available sources when unconfigured. Connectors are runtime capabilities, not installed by the profile.
 
-The check reads the cap and staleness threshold from the local policy body a
-knowledge base already declares; a base that declares neither sees the cache word
-count reported as an observation, unchanged behavior for everything else.
-
-The signing key material and fingerprint are unchanged.
+The live installation route uses downloaded, signature-verified release assets. Candidate validation uses temporary homes; activating a development checkout requires explicit authorization. Both Claude Code and Codex receive the same skill and shared references. The public signing key and fingerprint are unchanged.
 
 ## Verification
 
+Run against the exact candidate commit before tagging:
+
+- `python3 tests/test-profile-meetings.py`
 - `bash tests/test-contracts.sh`
 - `bash tests/test-install.sh`
 - `bash tests/test-release.sh`
 - `swift test` in `skills/transcribe/tools/apple-speech`
 - `git diff --check`
+- Required documentation sweep and refreshed architecture-map checks
+
+The meeting-note acceptance test failed on unsupported `meeting_note_path` before implementation. Final commit identifiers and completed evidence are recorded in the release-session issue; publication evidence is appended after release to avoid a self-referential commit.
 
 ## Release-note draft
 
-`v0.8.3` teaches `wiki-audit` to check the session cache against its own limits.
-The audit already read the session cache for context; it now also reports the
-cache's word count against the profile-declared cap and counts bullets carried
-past the staleness threshold, treating an undeclared cap as an observation. The
-audit stays read-only: it surfaces cache bloat and never culls.
+Hippocampus v0.9.0 adds `meeting-capture`: preserve source-linked meeting and coaching records, route authorized document updates and follow-ups, and retain completed reviews. It shares knowledge-capture's disposition logic.
 
-Before this, a session cache could grow far past its stated cap with no audit
-pass ever flagging it. Updated: `wiki-audit` only. No installer, profile, or
-contract-file change.
+Configure transcript, calendar event, and notes independently. Supply a local note or Google Doc for an individual meeting, or set `meeting_note_path` as an optional profile default. A dated folder structure is optional. Missing or inaccessible inputs are reported, and inferred coaching analysis remains distinct from source evidence.
+
+Absorbed research outputs are preserved in raw as excluded reference records instead of being deleted. Existing archives remain untouched. Profile version 4 remains compatible with published profiles; users of the unreleased `meeting_daily_note_path` field should rename it to `meeting_note_path`. Both supported agent clients receive the same workflow.
 
 ## Publication checklist
 
-- [x] Complete the verification commands above from the candidate commit.
-- [x] Tag the exact pushed commit as `v0.8.3`.
-- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [x] Verify the signed archive and published release assets before announcing.
+- [ ] Complete verification and documentation sweep against the candidate commit.
+- [ ] Push and tag the exact candidate as `v0.9.0`.
+- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [ ] Verify signed assets, publish, and independently verify downloaded public assets.
+- [ ] Install and verify from signed assets.
 
-## Publication result — 2026-09-17
+## Publication status
 
-Published [v0.8.3](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.8.3) from
-commit `65e09db767ed96474f46b2e5ab8a2e5f3319eb79`. The annotated tag and remote main both
-resolved to that commit before the build (peeled tag verified local and remote). Contract,
-install, and release suites passed on the MacBook against that commit; Swift 5/5;
-`git diff --check` clean; the documentation sweep found nothing.
-
-Corey signed; the agent verified, published, and installed. All six public assets
-downloaded and verified (`hippocampus-0.8.3.tar.gz: OK`; scripts and key byte-identical to
-the checkout). Installed and verified on all three machines from the verified assets:
-MacBook locally, mini1 and mini2 with the assets copied over SSH. Each resolves `current`
-to `releases/0.8.3` and the installed `wiki-audit` carries the session-cache health check.
-
-Closes [hippocampus#22](https://github.com/coreyfloyd/hippocampus/issues/22).
+Pending maintainer signing and verified publication. No v0.9.0 release has been announced or activated.
