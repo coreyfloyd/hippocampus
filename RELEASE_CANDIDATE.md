@@ -42,12 +42,14 @@ Absorbed research outputs are preserved in raw as excluded reference records ins
 
 ## Publication checklist
 
-- [ ] Complete verification and documentation sweep against the candidate commit.
-- [ ] Push and tag the exact candidate as `v0.9.0`.
-- [ ] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
-- [ ] Verify signed assets, publish, and independently verify downloaded public assets.
-- [ ] Install and verify from signed assets.
+- [x] Complete verification and documentation sweep against the candidate commit.
+- [x] Push and tag the exact candidate as `v0.9.0`.
+- [x] Maintainer signs the candidate using `HIPPOCAMPUS_GPG_KEY`.
+- [x] Verify signed assets, publish, and independently verify downloaded public assets.
+- [x] Install and verify from signed assets.
 
 ## Publication status
 
-Pending maintainer signing and verified publication. No v0.9.0 release has been announced or activated.
+Published [v0.9.0](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.9.0) on 2026-10-07 at 20:16:02 UTC from candidate `acffd58d2f0e3fa0ae5a1f68f6cfc2a27e2db42e`. Corey signed the assets. All six independently downloaded public assets passed signature/checksum verification; the archive matched all 55 candidate files byte-for-byte. Archive SHA-256: `ff26b1097c64673958712d3a243af990992439a67204a65550f6821b019bc3b3`.
+
+Installed from those verified signed assets on the MacBook; package/profile verification passed for both clients. The private development field was migrated to `meeting_note_path`. Installation on other machines remains user-directed. The immutable v0.9.0 tag is unchanged; this publication record is a later documentation commit.
