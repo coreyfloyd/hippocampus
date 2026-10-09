@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Question, Answer, Action lifecycle</title>
+  <desc id="desc">A broad question or selected sources become a question, then an evidence-grounded answer, then an action that updates documents, files follow-up work, compiles an optional wiki, or discards the result and closes the loop.</desc>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #17212b;
+      --dim: #5d6975;
+      --line: #b8c1ca;
+      --question: #0284c7;
+      --question-bg: #e0f2fe;
+      --answer: #c2410c;
+      --answer-bg: #ffedd5;
+      --action: #047857;
+      --action-bg: #d1fae5;
+      --off: #64748b;
+      --off-bg: #f1f5f9;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15191d;
+        --panel: #22282e;
+        --ink: #f0f2f5;
+        --dim: #a2abb5;
+        --line: #59636e;
+        --question: #38bdf8;
+        --question-bg: #102f3f;
+        --answer: #fb923c;
+        --answer-bg: #402719;
+        --action: #34d399;
+        --action-bg: #14382e;
+        --off: #94a3b8;
+        --off-bg: #29313a;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #15191d;
+      --panel: #22282e;
+      --ink: #f0f2f5;
+      --dim: #a2abb5;
+      --line: #59636e;
+      --question: #38bdf8;
+      --question-bg: #102f3f;
+      --answer: #fb923c;
+      --answer-bg: #402719;
+      --action: #34d399;
+      --action-bg: #14382e;
+      --off: #94a3b8;
+      --off-bg: #29313a;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #17212b;
+      --dim: #5d6975;
+      --line: #b8c1ca;
+      --question: #0284c7;
+      --question-bg: #e0f2fe;
+      --answer: #c2410c;
+      --answer-bg: #ffedd5;
+      --action: #047857;
+      --action-bg: #d1fae5;
+      --off: #64748b;
+      --off-bg: #f1f5f9;
+    }
+    .stage { fill: var(--panel); stroke-width: 2.5; }
+    .input { fill: var(--question-bg); stroke: var(--question); stroke-width: 1.6; }
+    .outcome { fill: var(--action-bg); stroke: var(--action); stroke-width: 1.4; }
+    .discard { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.4; }
+    .label { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1.4px; }
+    .heading { fill: var(--ink); font-family: var(--sans); font-size: 23px; font-weight: 750; }
+    .stage-heading { fill: var(--ink); font-family: var(--sans); font-size: 19px; font-weight: 750; }
+    .copy { fill: var(--dim); font-family: var(--sans); font-size: 15px; }
+    .small { fill: var(--dim); font-family: var(--sans); font-size: 11.5px; }
+    .edge { fill: none; stroke: var(--line); stroke-width: 2.2; marker-end: url(#arrow); }
+    .branch { fill: none; stroke: var(--action); stroke-width: 1.8; marker-end: url(#action-arrow); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--line)"/>
+    </marker>
+    <marker id="action-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--action)"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="520" rx="20" fill="var(--bg)"/>
+  <text x="40" y="48" class="heading">Close the loop from curiosity to use</text>
+  <text x="40" y="75" class="copy">Two kinds of input move through one predictable lifecycle.</text>
+
+  <rect x="40" y="142" width="210" height="82" rx="12" class="input"/>
+  <text x="58" y="174" class="label" fill="var(--question)">ASK</text>
+  <text x="58" y="201" class="copy">a broad question</text>
+
+  <rect x="40" y="292" width="210" height="82" rx="12" class="input"/>
+  <text x="58" y="324" class="label" fill="var(--question)">BRING</text>
+  <text x="58" y="351" class="copy">selected sources</text>
+
+  <rect x="330" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--question)"/>
+  <text x="350" y="237" class="label" fill="var(--question)">QUESTION</text>
+  <text x="350" y="268" class="stage-heading">Set the target</text>
+  <text x="350" y="293" class="small">scope · decision · evidence</text>
+
+  <rect x="600" y="204" width="210" height="112" rx="14" class="stage" stroke="var(--answer)"/>
+  <text x="620" y="237" class="label" fill="var(--answer)">ANSWER</text>
+  <text x="620" y="268" class="stage-heading">Ground the result</text>
+  <text x="620" y="293" class="small">citations · assessment · gaps</text>
+
+  <rect x="890" y="108" width="270" height="344" rx="16" fill="var(--panel)" stroke="var(--action)" stroke-width="2.5"/>
+  <text x="912" y="140" class="label" fill="var(--action)">ACTION</text>
+  <text x="912" y="169" class="copy">Give the answer a destination.</text>
+
+  <circle cx="925" cy="279" r="11" fill="var(--action)"/>
+  <rect x="966" y="195" width="166" height="48" rx="9" class="outcome"/>
+  <text x="982" y="224" class="copy">notes &amp; documents</text>
+  <rect x="966" y="255" width="166" height="48" rx="9" class="outcome"/>
+  <text x="982" y="284" class="copy">follow-up work</text>
+  <rect x="966" y="315" width="166" height="48" rx="9" class="outcome"/>
+  <text x="982" y="344" class="copy">optional wiki</text>
+  <rect x="966" y="375" width="166" height="48" rx="9" class="discard"/>
+  <text x="982" y="404" class="copy">discard &amp; close</text>
+
+  <path d="M250,183 C285,183 292,232 330,244" class="edge"/>
+  <path d="M250,333 C285,333 292,288 330,276" class="edge"/>
+  <path d="M520,260 L600,260" class="edge"/>
+  <path d="M810,260 L890,260" class="edge"/>
+  <path d="M925,279 C944,279 944,219 966,219" class="branch"/>
+  <path d="M925,279 L966,279" class="branch"/>
+  <path d="M925,279 C944,279 944,339 966,339" class="branch"/>
+  <path d="M925,279 C944,279 944,399 966,399" class="branch"/>
+</svg>

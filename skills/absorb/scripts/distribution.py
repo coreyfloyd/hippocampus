@@ -225,11 +225,15 @@ def row_scope(row: dict) -> str:
 
 
 def set_plan(path: Path, decisions: list[str], rows: list[dict],
-             writing_result: str | None = None) -> None:
+             writing_result: str | None = None,
+             legacy_results: dict[str, dict] | None = None) -> None:
     with locked(path):
         state = read_record(path)
         proposed = dict(state, decisions=decisions, rows=rows)
         validate_rows(proposed)
+        legacy_results = legacy_results or {}
+        if legacy_results and (state['kind'] != 'research' or set(legacy_results) - {r['id'] for r in rows}):
+            raise ValueError('legacy receipts must belong to normalized research rows')
         previous = {r['id']: r for r in state['rows']}
         new_rows = []
         for raw in rows:
@@ -251,6 +255,13 @@ def set_plan(path: Path, decisions: list[str], rows: list[dict],
                 if row.get('inflight'):
                     raise ValueError('reconcile uncertain effects before declining a row')
                 row['state'] = 'declined'
+            if row['id'] in legacy_results:
+                result = legacy_results[row['id']]
+                if row['authorization'] != 'approved' or row.get('inflight') or result.get('confirmed') is not True or not result.get('receipt') or result.get('target') != row.get('target'):
+                    raise ValueError('legacy result requires authorized unchanged scope and verified target read-back')
+                if row.get('receipt') and row['receipt'].get('receipt') != result['receipt']:
+                    raise ValueError('legacy receipt conflicts with saved execution history')
+                row.update(state='complete', receipt=dict(result, confirmed_at=now()))
             new_rows.append(row)
         # Removing work must not erase pending effects or confirmed history.
         if any(r.get('inflight') or r.get('state') == 'pending' for r in previous.values()):

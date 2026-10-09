@@ -1,0 +1,1085 @@
+<meta charset="utf-8">
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="../../"><title>Capture and absorption: public documentation candidate</title><style>:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
+
+.label{font-family:var(--mono);font-size:16px;fill:var(--ink)}.small{font-size:13px;fill:var(--dim)}.edge{fill:none;stroke:var(--line);stroke-width:2;marker-end:url(#arrow)}
+article{max-width:1040px;margin:auto;padding:18px}article img{max-width:100%;height:auto}
+article h2{margin-top:28px}a{color:var(--host)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--offbg);padding:16px}
+summary{cursor:pointer;font-size:18px;font-weight:600;padding:12px}.notice{border:2px solid var(--warn);padding:16px;border-radius:10px}
+iframe{width:100%;height:720px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+button{padding:8px 16px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+</style></head>
+<body><main class="wrap"><h1>Capture, absorption and writing</h1>
+<p class="notice">Candidate review · Public-communication approval pending. No release or publication approved.</p>
+<button onclick="document.documentElement.dataset.theme='light'">Light</button>
+<button onclick="document.documentElement.dataset.theme='dark'">Dark</button>
+<section><h2>Current lifecycle</h2><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 650" role="img" aria-labelledby="title desc">
+<title id="title">Capture, approved absorption and separate retention</title>
+<desc id="desc">Questions, primary research sources and meeting inputs feed source-linked plans. Absorb executes approved document, task, writing, optional wiki and retention routes. Meeting records remain in place; research reports are retained as excluded references; transcripts have a separate raw lifecycle.</desc>
+<style>:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
+
+.label{font-family:var(--mono);font-size:16px;fill:var(--ink)}.small{font-size:13px;fill:var(--dim)}.edge{fill:none;stroke:var(--line);stroke-width:2;marker-end:url(#arrow)}</style>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--line)"/></marker></defs>
+<rect width="1280" height="650" rx="18" fill="var(--bg)"/>
+<text x="32" y="44" class="label">Evidence → review → authorized action</text>
+<rect x="32" y="105" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="133" class="label">Question</text><text x="46" y="156" class="small">scope and decision</text>
+<rect x="32" y="225" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="253" class="label">Research sources</text><text x="46" y="276" class="small">selected primary evidence</text>
+<rect x="32" y="345" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="373" class="label">Meeting inputs</text><text x="46" y="396" class="small">transcript · event · notes</text>
+<rect x="325" y="200" width="230" height="98" rx="10" fill="var(--panel)" stroke="var(--sess)" stroke-width="2"/>
+<text x="339" y="228" class="label">Capture / research</text><text x="339" y="251" class="small">sources · coverage · proposals</text>
+<rect x="630" y="200" width="230" height="98" rx="10" fill="var(--panel)" stroke="var(--warn)" stroke-width="2"/>
+<text x="644" y="228" class="label">absorb</text><text x="644" y="251" class="small">approved rows + receipts</text>
+<rect x="1000" y="90" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="118" class="label">Documents</text><text x="1014" y="141" class="small">named targets and rules</text>
+<rect x="1000" y="190" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="218" class="label">Owned actions</text><text x="1014" y="241" class="small">deduplicate + read back</text>
+<rect x="1000" y="290" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="318" class="label">Writing</text><text x="1014" y="341" class="small">new · enrich · follow-up</text>
+<rect x="1000" y="390" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="418" class="label">wiki-compile</text><text x="1014" y="441" class="small">enabled + primary subset</text>
+<rect x="1000" y="490" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="518" class="label">Retain / decline</text><text x="1014" y="541" class="small">explicit disposition</text>
+<rect x="325" y="490" width="250" height="88" rx="10" fill="var(--panel)" stroke="var(--sess)" stroke-width="2"/>
+<text x="339" y="518" class="label">Meeting record</text><text x="339" y="541" class="small">same path; template is optional</text>
+<rect x="630" y="490" width="250" height="88" rx="10" fill="var(--panel)" stroke="var(--job)" stroke-width="2"/>
+<text x="644" y="518" class="label">Research report</text><text x="644" y="541" class="small">output → excluded raw/derived</text>
+<path d="M251,141 L290,141 L290,226 L326,226" class="edge"/>
+<path d="M251,261 L326,261" class="edge"/>
+<path d="M251,381 L290,381 L290,280 L326,280" class="edge"/>
+<path d="M554,248 L631,248" class="edge"/>
+<path d="M859,214 L928,214 L928,126 L1001,126" class="edge"/>
+<path d="M859,235 L1001,226" class="edge"/>
+<path d="M859,255 L928,255 L928,326 L1001,326" class="edge"/>
+<path d="M859,277 L950,277 L950,426 L1001,426" class="edge"/>
+<path d="M859,290 L974,290 L974,526 L1001,526" class="edge"/>
+<path d="M420,297 L420,491" class="edge"/>
+<path d="M745,297 L745,491" class="edge"/>
+<text x="325" y="630" class="small">Original transcripts: raw intake while pending → policy-defined archive after terminal routes + link repair.</text>
+</svg>
+
+<p class="src">Sources: meeting-capture, absorb, wiki-compile and their shared distribution contract; helper behavior exercised in isolated tests. External workflows are configured adapters.</p></section>
+<section><h1>Capture, absorption and writing: public documentation review</h1>
+<p>Status: candidate prepared; maintainer public-communication approval pending.
+Implementation approval does not approve communication, publication or release.
+Tracking: <a href="https://github.com/coreyfloyd/hippocampus/issues/31">hippocampus#31</a>.</p>
+<p>The rendered companion shows the finished README, referenced diagram and existing
+presentation alongside actual pre-change versions from candidate base <code>ae82e49</code>.
+Those original files remain in <code>2026-10-09-public-before/</code>; the earlier specification
+review remains unchanged. The current runtime map is regenerated from committed
+implementation evidence. External providers and live user records are outside this
+review; no production activation, release, backfill or personal task write occurred.</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>README skill tables and examples</td>
+<td>research-absorb/research-to-wiki presented as owners; meetings distributed people/doc/task outcomes</td>
+<td>absorb/wiki-compile own the shared flow; compatibility wrappers explained; configurable in-place meeting records and writing candidates included</td>
+</tr>
+<tr>
+<td>Referenced question-answer-action.svg</td>
+<td>two inputs; documents, follow-ups, optional wiki and discard destinations</td>
+<td>question/research/meeting inputs; approved shared execution; writing route; separate meeting/research/transcript retention</td>
+</tr>
+<tr>
+<td>Meeting lifecycle explanation</td>
+<td>completed output review retained in excluded raw archive</td>
+<td>record stays at its original meeting path; only original transcript follows raw intake/archive policy</td>
+</tr>
+<tr>
+<td>Existing presentation, slides 5–8</td>
+<td>research convergence, uniform report shape; calendar-item and report-discard claims</td>
+<td>independent meeting inputs, configurable record shape, scoped execution, read-back and writing; completed reports retained, pending routes preserved</td>
+</tr>
+<tr>
+<td>Profile/setup/install/migration</td>
+<td>three optional input adapters; no record defaults or writing configuration</td>
+<td>two optional record settings, unchanged profile v4, no validation writes, local writing/filing policy, explicit owned/unowned wrapper migration</td>
+</tr>
+<tr>
+<td>Compiler/audit contracts</td>
+<td>research-to-wiki compiler; local entry points separate</td>
+<td>canonical wiki-compile/wiki-audit; selected direct compile; opt-in read-only audit; local mode/coverage thresholds preserved</td>
+</tr>
+<tr>
+<td>Architecture map</td>
+<td>research-only artifact flow</td>
+<td>meeting capture/record, shared executor, writing workflow and distinct retention; source links pinned to the candidate implementation</td>
+</tr>
+<tr>
+<td>Public examples</td>
+<td>research artifact example only</td>
+<td>both meeting/research writing routes: new, enrich, published overlap and explicit no-candidate, with attribution/search/reuse boundaries</td>
+</tr>
+</tbody>
+</table>
+<p>The review is a local, portable generator artifact for the orchestrator to publish
+through the maintainer's normal review surface. No approval state is inferred from
+opening it. Detailed exact-command evidence is in the accompanying generator report.</p></section>
+<section><h2>README comparison</h2><details open><summary>After: full current README</summary><article><h1>Hippocampus</h1>
+<p><code>Hippocampus</code> is an opinionated research and knowledge system for Claude Code and Codex. It is a set of Agent Skills that cover quick in-chat research, durable research reports, updates to existing documentation, and an optional curated wiki in the style of Karpathy's LLM wiki. It works from documents, websites, videos, or audio such as podcasts.</p>
+<p>Whatever the source, getting an answer out of it is only part of the work. You still have to judge the evidence, decide what applies to your situation, and carry the result into your notes, plans, or projects. That last step is easy to skip, and the answer stays behind in an old chat. Hippocampus keeps the evidence attached to the decision it informed, so you can see why you reached a conclusion, what is still uncertain, and what you meant to do next. When you learn more, you can revisit the decision without redoing the research.</p>
+<p><img alt="Questions, research sources and meeting inputs become source-linked plans; absorb executes only authorized document, task, writing, wiki and retention routes. Meeting records stay in place; research reports are retained separately." src="docs/images/question-answer-action.svg" /></p>
+<p>Every piece of research moves through the same three stages:</p>
+<ol>
+<li><strong>Question</strong> names the decision and scope, and identifies any evidence you
+   are starting with.</li>
+<li><strong>Answer</strong> grounds the result in cited evidence, assesses the sources, and
+   makes gaps visible.</li>
+<li><strong>Action</strong> gives the result a terminal disposition: use it, integrate it into
+   documents, file follow-up work, compile selected sources into an optional
+   wiki, or discard it and close the loop.</li>
+</ol>
+<p><strong>Everything the system stores is plain Markdown on your disk.</strong> Research artifacts, wiki articles, indexes, and operation logs are <code>.md</code> files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor or on a Git host, version-control them, and keep them after the conversation that produced them is gone. Following the links between wiki articles needs a client that understands <code>[[wikilinks]]</code>, such as <a href="https://obsidian.md">Obsidian</a>. The same files are the AI's working set and yours.</p>
+<p>I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.</p>
+<p>Substantial research is grounded in <strong>Gemini Notebook</strong> (Google's product
+formerly named NotebookLM). This is a deliberate design choice, not just a
+convenience. Gemini Notebook answers only from the sources you give it and cites
+the exact passage behind every claim, instead of blending in a chat model's
+training data or opinions. Analyzing your evidence there keeps the synthesis
+tied to what your sources actually say, with far less outside influence and far
+less room for confident invention. <code>research-sources</code> and <code>research-topic</code> build
+their artifacts on top of that grounded layer.</p>
+<p>After installation, start with <code>hippocampus-set-up</code>. It walks you through the
+knowledge-store structure, local policy, and follow-up routing, then shows the
+complete proposed configuration before creating or changing anything.</p>
+<p>The system stands on excellent tools others built — <a href="https://notebooklm.google.com">Gemini Notebook</a> for source-grounded synthesis, <a href="https://github.com/teng-lin/notebooklm-py">notebooklm-py</a> for agent access to it, <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> and <a href="https://defuddle.md">Defuddle</a> for source gathering, Apple Speech for transcription, and <a href="https://obsidian.md">Obsidian</a> for browsing the result — and the wiki design is inspired by <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">Andrej Karpathy's LLM Wiki gist</a>. What <code>Hippocampus</code> contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.</p>
+<h2>Research skills</h2>
+<p>There are three general-purpose skills to get most research questions started:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>research-quick</code></td>
+<td>You need a cited answer to a general question.</td>
+<td>Returns findings inline. No notebook or artifact workflow.</td>
+</tr>
+<tr>
+<td><code>research-sources</code></td>
+<td>You already have URLs, files, media, a source collection, or a named target to analyze.</td>
+<td>Produces a source-grounded artifact ending in the decisions it raises. Review them, then use <code>absorb</code>.</td>
+</tr>
+<tr>
+<td><code>research-topic</code></td>
+<td>You need substantial topic-first research, persistent sources, gap filling, and claim verification.</td>
+<td>Produces a Gemini Notebook-backed artifact ending in the decisions it raises. Review them, then use <code>absorb</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>In addition, there are three research skills for specific domains:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>research-feature</code></td>
+<td>You need competitor UX, established patterns, user expectations, or platform conventions before feature design.</td>
+<td>Produces a design input document filed with the project, beside the requirements it answers. Not absorbed.</td>
+</tr>
+<tr>
+<td><code>research-feedback</code></td>
+<td>An adoption, purchase, upgrade, or wait decision depends on current community experience.</td>
+<td>Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed.</td>
+</tr>
+<tr>
+<td><code>research-dev</code></td>
+<td>You are investigating a bug, API behavior, library, or implementation approach.</td>
+<td>Returns diagnoses, competing explanations, and sources inline.</td>
+</tr>
+</tbody>
+</table>
+<h2>Knowledge Distribution &amp; Follow Up skills</h2>
+<p>These skills help you get research filed where it belongs.</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>meeting-capture</code></td>
+<td>Review calls or meetings and preserve records, document updates, and follow-ups.</td>
+<td>Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes, actions and writing opportunities. Approved rows go through absorb; the record stays in place.</td>
+</tr>
+<tr>
+<td><code>absorb</code></td>
+<td>A research artifact or meeting record has concrete approved changes ready to execute.</td>
+<td>Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts move to raw/derived as excluded references.</td>
+</tr>
+<tr>
+<td><code>knowledge-capture</code></td>
+<td>Useful sources or synthesis exist in the current conversation and need a complete disposition proposal.</td>
+<td>Inventories conversation knowledge, asks for approval, then performs only the approved captures. It does not process research artifacts.</td>
+</tr>
+</tbody>
+</table>
+<h2>Personal Knowledge Curation skills</h2>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wiki-compile</code></td>
+<td>A coherent, caller-selected subset of raw sources is ready to compile.</td>
+<td>Creates or updates atomic wiki articles, source status, indexes, and approved workflow records.</td>
+</tr>
+<tr>
+<td><code>wiki-audit</code></td>
+<td>You want a structural and source-coverage review of the configured wiki.</td>
+<td>Writes a ranked report in <code>output/</code> without changing articles, sources, indexes, logs, or tasks.</td>
+</tr>
+</tbody>
+</table>
+<h2>Knowledge store</h2>
+<p>The wiki is optional. The system always creates three directories, plus a
+fourth for the compiled knowledge base when <code>hippocampus-set-up</code> configures
+the wiki as enabled:</p>
+<pre><code class="language-text">&lt;knowledge-root&gt;/
+├── raw/       # source material and provenance
+├── output/    # research artifacts and audit reports
+├── docs/      # AI-maintained operation history and durable decisions
+└── wiki/      # compiled synthesis, topic indexes, and master index (only when the wiki is enabled)
+</code></pre>
+<p><code>raw/</code>, <code>output/</code>, and <code>docs/</code> are always present. <code>wiki/</code> and its two
+profile fields exist only when the wiki is enabled; declining it at setup
+skips the wiki folder, its profile fields, wiki routing in absorption plans
+and knowledge captures, and the <code>wiki-compile</code> / <code>wiki-audit</code> skills,
+which refuse to run without it. The wiki can be turned on or off later
+through <code>hippocampus-set-up</code> alone. The directory names are part of the
+public <a href="contracts/karpathy-wiki.md">Karpathy-wiki contract</a>. The organization of the <code>wiki/</code>is
+customizable, but relies on internal wikilinks for traversal by AI and
+wikilink-aware tools.</p>
+<h3>Index files (wiki enabled)</h3>
+<p>The wiki maintains three kinds of Markdown index so an agent (or you) can find the
+right article without scanning every file. This keeps context small and searches
+fast as the wiki grows:</p>
+<ul>
+<li><code>wiki/hot.md</code> — the recent-context entry point. Lists the latest and most
+  active content, so a session starts from what changed instead of the whole wiki.</li>
+<li><code>wiki/&lt;topic&gt;/_index.md</code> — one per topic folder, listing that topic's articles.</li>
+<li><code>wiki/_master-index.md</code> — the top-level map of every topic.</li>
+</ul>
+<p>The skills update these indexes automatically as articles are created or changed,
+so the fast-search entry points stay current without manual upkeep.</p>
+<h3>Audit Tracking</h3>
+<p>In addition, the system writes records to help agents understand how to operate on the knowledge system itself, supporting your own custom workflows, including:
+- an operation log,  <code>docs/log.md</code>;
+- a decision log, <code>docs/DECISIONS.md</code>.</p>
+<p>The installer validates this structure but does not create it.</p>
+<h2>How the skills fit together</h2>
+<h3>Quick inline research</h3>
+<pre><code class="language-text">question
+  -&gt; research-quick or research-dev
+  -&gt; cited answer in the conversation
+</code></pre>
+<p>Inline research does not automatically create a notebook, file, or knowledge
+capture task.</p>
+<h3>Durable research and distribution</h3>
+<p>These two skills share the <a href="skills/absorb/references/artifact-contract.md">research artifact contract</a>. Every artifact
+is one Markdown file in <code>output/</code> with the same documented structure:</p>
+<pre><code class="language-text">output/2026-08-28-example.md
+├── Question and Scope   # two required subsections
+│   ├── Question         # the decision, target, or question addressed, and scope
+│   └── Answer           # answer first, then confidence and what would change it
+├── Source Summary       # what the sources actually say, in enough detail to judge
+├── Source Assessment    # whether those sources can be trusted
+├── How to Absorb        # what the report exists to enable (below)
+├── Evidence Record      # one entry per source, plus what was searched and skipped
+├── Evidence Gaps        # what remains unanswered, and the follow-up that closes it
+└── Execution Appendix   # machine-actionable rows for absorb
+</code></pre>
+<p>The Answer is the first thing a reader judges and must stand without the
+later sections. A complete artifact in this shape, sanitized from a real
+session, is at <a href="docs/examples/2026-09-03-fable-5-1-model-routing.md">docs/examples/2026-09-03-fable-5-1-model-routing.md</a>,
+and the <a href="https://notebook.google.com/notebook/6df011dc-7391-4399-919f-345b6067e29f">public Gemini Notebook</a> it was grounded in is open for inspection.</p>
+<p>The summary and assessment sections feed the absorption plan, whose items are
+split by what the result touches: <strong>Actions</strong> — anything that is not a document,
+such as installing a skill or changing a workflow; <strong>Wiki Additions</strong> — the
+compiled knowledge base only; and <strong>Document Updates</strong> — context files, project
+briefs, standing documents, repository docs. Every item states what exists now,
+the change, why it matters, and how much to trust it, with options and a
+recommendation when a genuine choice exists. Nothing may be merely staged:
+absorb it or discard it. Adoption decisions about third-party work require
+real-world usage and sentiment evidence, not just the source itself.
+The artifact is durable enough to support review and execution, but it is
+coordination material while pending; completed absorption preserves it in <code>raw/derived/</code> as an excluded reference record.</p>
+<p>If an approved row belongs in the wiki, <code>absorb</code> stages the selected
+external sources and their provenance under <code>raw/research/</code>, then invokes
+<code>wiki-compile</code> on that curated subset. A staged source is the extracted
+source text under provenance frontmatter; a summary alone or a NotebookLM
+source id is not a staged source. The research report itself is never raw
+compiler input.</p>
+<h3>Deliverables that are not absorbed</h3>
+<p><code>research-feature</code> and <code>research-feedback</code> sit outside that lifecycle. Neither
+uses the artifact contract and neither goes through <code>absorb</code>; each
+writes a document with its own structure, defined in its own SKILL.md.</p>
+<p><code>research-feature</code> produces a <strong>design input document</strong>. It feeds the feature's
+design and spec, and is written into the project repo beside the requirements
+it answers:</p>
+<pre><code class="language-text"># Feature research: &lt;feature&gt;
+├── Comparison           # per product: how it works, strengths, complaints
+│                        # plus a requirement x product matrix for 3+ products
+├── Common patterns      # what most products do, and why it works
+├── Novel approaches     # unusual approaches worth knowing about
+├── Table stakes         # what users expect based on market norms
+├── Platform conventions # HIG, Material, or other platform guidance
+├── Implications         # what this suggests for your design
+└── Sources              # ID, product, type, link, date, version observed
+</code></pre>
+<p>Every claim cites a source row by ID.</p>
+<p><code>research-feedback</code> produces a <strong>decision memo</strong>. It answers one adopt, buy,
+upgrade, switch, or wait question, and is read once and then retained as a reference, or filed
+with the project it serves:</p>
+<pre><code class="language-text"># &lt;subject&gt; — &lt;decision&gt;
+├── Bottom line          # the verdict, tied to your decision context
+├── Hard constraints     # requirements and compatibility gates, or &quot;none&quot;
+├── What people are saying   # recurring themes, dated against the version in scope
+├── Recurring issues, ranked # by frequency and severity
+├── Communities to watch # the venues worth following afterward
+└── Sources              # thread, date, poster's version, how it was read
+</code></pre>
+<p><strong>Communities to watch</strong> always closes the body before the sources, because
+surfacing the right venues is a primary output rather than a footnote.</p>
+<h3>Capture knowledge from a conversation</h3>
+<pre><code class="language-text">current conversation
+  -&gt; knowledge-capture inventory and disposition proposal
+  -&gt; approval
+  -&gt; discard | retain output | capture provenance | preserve synthesis | compile
+</code></pre>
+<p>Use this path for knowledge created or discussed in the current conversation. Use <code>absorb</code> instead when a durable research artifact already exists.</p>
+<h3>Capture meetings</h3>
+<pre><code class="language-text">transcript source       calendar event       note file or Google Doc
+  configured/supplied    optional source      per-meeting or profile default
+           \                   |                   /
+                  meeting-capture
+                         |
+           configured template -&gt; meetings/record.md (stays here)
+                         |
+                 source-linked approved plan
+                         |
+                       absorb
+                  /      |       \
+         documents     actions   writing opportunities
+                         |
+      selected primary sources -&gt; wiki-compile (when wiki is enabled)
+                         |
+      terminal routes -&gt; original transcript filed in policy-defined raw archive
+</code></pre>
+<p>The three inputs are independent and configurable. <code>meeting_note_path</code> is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. <code>{date}</code> is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See <a href="skills/meeting-capture/SKILL.md">meeting capture</a>.</p>
+<p><code>meeting_record_folder</code> selects a folder within the knowledge root; its default
+is <code>meetings/</code>. <code>meeting_record_template</code> selects a Markdown template; its default
+is the bundled <a href="skills/meeting-capture/assets/meeting.md">minimal example</a>.
+Override the template for one capture when needed. Relative template paths resolve
+from the knowledge root and absolute template paths are accepted. Explicitly
+missing or invalid templates fail clearly. Validation creates no folders or records.
+Repeated capture finds the meeting by source identity and preserves its path, user
+edits and prior receipts. Coaching sections are optional.</p>
+<h3>Writing opportunities from meetings and research</h3>
+<p>Capture can propose a new idea, enrich an existing idea, or identify a follow-up
+to published material. It searches configured ideas, drafts and published records
+and reports missing coverage rather than asserting novelty. Candidates retain
+source pointers, speaker/author attribution, an angle, a specific proposed
+addition, privacy limits and approval state. No useful opportunity is a valid result.</p>
+<p>Local policy supplies storage, templates, scoring and the writing workflow.
+Without a writable destination, the candidate remains in its record. <code>absorb</code>
+files only approved rows and preserves authored drafts and published text. Capture
+does not draft first-person posts or publish. See the <a href="docs/examples/capture-writing.md">public route examples</a>.</p>
+<h3>Compile and audit an existing source collection</h3>
+<pre><code class="language-text">caller-curated raw subset
+  -&gt; wiki-compile
+  -&gt; wiki articles + indexes + source dispositions + workflow state
+  -&gt; wiki-audit (optional, read-only)
+  -&gt; ranked audit report in output/
+</code></pre>
+<p>Compilation is never a sweep of every uncompiled file in <code>raw/</code>. It reads the
+selected raw sources before existing wiki synthesis, drafts claims, then checks
+nearby articles for real tensions and gaps instead of silently blending
+incompatible assertions.</p>
+<h2>Architecture</h2>
+<p><a href="docs/architecture/runtime.html"><code>docs/architecture/runtime.html</code></a> maps research
+and meeting capture to shared absorption, local document/task/writing workflows,
+selected-source compilation and separate record/source retention. Its source is
+<a href="docs/architecture/runtime.architecture.json"><code>runtime.architecture.json</code></a>, pinned
+to the implementation commit. Read the relevant map before structural changes,
+confirm against the skills and helper, and regenerate it with Archify. The runtime
+map leaves out inline research, domain-specific deliverables, setup, installation,
+release and external provider internals. Earlier review artifacts remain dated
+history; this map describes the current candidate.</p>
+<h2>Example requests</h2>
+<p>Natural-language requests work across Agent Skills-compatible clients:</p>
+<pre><code class="language-text">Use research-quick to compare these two services and cite current sources.
+
+Use research-sources to analyze these URLs, identify evidence gaps, and write
+the durable artifact proposed by the skill.
+
+Use research-topic to investigate this question deeply, verify the major
+claims, and end with the decisions the evidence raises.
+
+Use research-feature to compare how established podcast apps handle this
+interaction before we design it.
+
+Use research-feedback to determine whether users consider this release stable
+enough to adopt and identify the communities worth following.
+
+Run absorb on output/2026-08-27-example.md. Validate and show me its
+existing plan before applying anything.
+
+Use wiki-compile on these three selected files under raw/research/.
+
+Audit the configured wiki with wiki-audit. Do not modify it.
+</code></pre>
+<h2>External and optional integrations</h2>
+<ul>
+<li><strong>Gemini Notebook</strong> (formerly <strong>NotebookLM</strong> — Google renamed it in July 2026;
+  the CLI and skill below still carry the old name) is the persistent source and
+  synthesis layer used by <code>research-sources</code> and <code>research-topic</code>. Its
+  source-grounded answers and inline citations are what keep this system's
+  analysis tied to your evidence rather than a model's training data. Agent
+  access is provided by the third-party <a href="https://github.com/teng-lin/notebooklm-py">notebooklm-py</a> CLI and its
+  <code>notebooklm</code> Agent Skill, not by Google or this package. <code>research-dev</code> also
+  uses that CLI when it is available. This package does not install it,
+  authenticate it, or validate the integration.</li>
+<li><strong>YouTube library search</strong> is an optional upstream source-discovery step. A
+  separate <code>youtube</code> Agent Skill can use the third-party <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> CLI to
+  inspect public playlists or retrieve subtitles, then hand selected URLs to
+  Gemini Notebook. Neither that skill nor <code>yt-dlp</code> is bundled or required by this
+  package; Gemini Notebook can index a supplied YouTube URL directly.</li>
+<li><strong>Defuddle</strong> is optional and detected at runtime. Relevant skills extract
+  supplied pages through its hosted endpoint, which needs no install or API key,
+  and fall back to native web tools when it is unavailable or a page is blocked.
+  Web search uses the runtime's own search tool; no search service is bundled.</li>
+<li><strong>Apple Speech</strong> source is bundled under the <code>transcribe</code> skill and built on demand.
+  The local route requires macOS 26 or later; otherwise the calling workflow
+  must use another input route.</li>
+<li>Full Reddit-thread reading used by <code>research-quick</code> and <code>research-feedback</code>
+  requires an interactive macOS session with Safari signed into Reddit. Other
+  sources continue through the available web tools.</li>
+<li><strong>Obsidian</strong> is not required to run the system or to read the wiki, but it
+  is the practical way for a person to browse it. Wiki articles link to each
+  other with <code>[[wikilinks]]</code>, which GitHub, VS Code, and most Markdown viewers
+  show as plain text rather than links. Any wikilink-aware client works;
+  Obsidian is the one this project names and adds backlinks and graph views.</li>
+</ul>
+<h2>Installation and configuration</h2>
+<p>See <a href="INSTALLATION.md">Installation and configuration</a> for supported platforms and
+prerequisites, the installed layout, checkout and signed-release installation,
+the guided configuration workflow, manual configuration, and verification
+commands.</p>
+<h2>Compatibility and candidate review</h2>
+<p><code>research-absorb</code> delegates to <code>absorb</code>; <code>research-to-wiki</code> and <code>vault-compile</code>
+delegate to <code>wiki-compile</code>; <code>vault-audit</code> delegates to opt-in, read-only
+<code>wiki-audit</code>. Existing artifact-contract links and version-4 profiles continue to
+work. Direct authorized compilation still accepts a selected primary subset
+without a meeting or research artifact. Local compiler/audit policy remains intact.</p>
+<p>The installer provides the same contracts, helpers and templates to Claude Code
+and Codex. It refuses unowned local skill collisions and never overwrites custom
+templates. See <a href="MIGRATION.md">migration</a> before replacing a local compiler/audit
+wrapper after installing a signed release.</p>
+<p>This development candidate includes updated README, diagrams and presentation.
+The <a href="docs/reviews/2026-10-09-public-documentation.md">before/after inventory</a>
+and rendered review accompany it. Maintainer approval of those finished materials
+is still required before public communication or release; implementation approval
+is not that sign-off.</p></article></details>
+<details><summary>Before: full README at ae82e49</summary><article><h1>Hippocampus</h1>
+<p><code>Hippocampus</code> is an opinionated research and knowledge system for Claude Code and Codex. It is a set of Agent Skills that cover quick in-chat research, durable research reports, updates to existing documentation, and an optional curated wiki in the style of Karpathy's LLM wiki. It works from documents, websites, videos, or audio such as podcasts.</p>
+<p>Whatever the source, getting an answer out of it is only part of the work. You still have to judge the evidence, decide what applies to your situation, and carry the result into your notes, plans, or projects. That last step is easy to skip, and the answer stays behind in an old chat. Hippocampus keeps the evidence attached to the decision it informed, so you can see why you reached a conclusion, what is still uncertain, and what you meant to do next. When you learn more, you can revisit the decision without redoing the research.</p>
+<p><img alt="A broad question or selected sources move through Question, Answer, and Action, then into documents, follow-up work, an optional wiki, or a deliberate discard." src="docs/reviews/2026-10-09-public-before/question-answer-action.svg" /></p>
+<p>Every piece of research moves through the same three stages:</p>
+<ol>
+<li><strong>Question</strong> names the decision and scope, and identifies any evidence you
+   are starting with.</li>
+<li><strong>Answer</strong> grounds the result in cited evidence, assesses the sources, and
+   makes gaps visible.</li>
+<li><strong>Action</strong> gives the result a terminal disposition: use it, integrate it into
+   documents, file follow-up work, compile selected sources into an optional
+   wiki, or discard it and close the loop.</li>
+</ol>
+<p><strong>Everything the system stores is plain Markdown on your disk.</strong> Research artifacts, wiki articles, indexes, and operation logs are <code>.md</code> files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor or on a Git host, version-control them, and keep them after the conversation that produced them is gone. Following the links between wiki articles needs a client that understands <code>[[wikilinks]]</code>, such as <a href="https://obsidian.md">Obsidian</a>. The same files are the AI's working set and yours.</p>
+<p>I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.</p>
+<p>Substantial research is grounded in <strong>Gemini Notebook</strong> (Google's product
+formerly named NotebookLM). This is a deliberate design choice, not just a
+convenience. Gemini Notebook answers only from the sources you give it and cites
+the exact passage behind every claim, instead of blending in a chat model's
+training data or opinions. Analyzing your evidence there keeps the synthesis
+tied to what your sources actually say, with far less outside influence and far
+less room for confident invention. <code>research-sources</code> and <code>research-topic</code> build
+their artifacts on top of that grounded layer.</p>
+<p>After installation, start with <code>hippocampus-set-up</code>. It walks you through the
+knowledge-store structure, local policy, and follow-up routing, then shows the
+complete proposed configuration before creating or changing anything.</p>
+<p>The system stands on excellent tools others built — <a href="https://notebooklm.google.com">Gemini Notebook</a> for source-grounded synthesis, <a href="https://github.com/teng-lin/notebooklm-py">notebooklm-py</a> for agent access to it, <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> and <a href="https://defuddle.md">Defuddle</a> for source gathering, Apple Speech for transcription, and <a href="https://obsidian.md">Obsidian</a> for browsing the result — and the wiki design is inspired by <a href="https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f">Andrej Karpathy's LLM Wiki gist</a>. What <code>Hippocampus</code> contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.</p>
+<h2>Research skills</h2>
+<p>There are three general-purpose skills to get most research questions started:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>research-quick</code></td>
+<td>You need a cited answer to a general question.</td>
+<td>Returns findings inline. No notebook or artifact workflow.</td>
+</tr>
+<tr>
+<td><code>research-sources</code></td>
+<td>You already have URLs, files, media, a source collection, or a named target to analyze.</td>
+<td>Produces a source-grounded artifact ending in the decisions it raises. Review them, then use <code>research-absorb</code>.</td>
+</tr>
+<tr>
+<td><code>research-topic</code></td>
+<td>You need substantial topic-first research, persistent sources, gap filling, and claim verification.</td>
+<td>Produces a Gemini Notebook-backed artifact ending in the decisions it raises. Review them, then use <code>research-absorb</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>In addition, there are three research skills for specific domains:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>research-feature</code></td>
+<td>You need competitor UX, established patterns, user expectations, or platform conventions before feature design.</td>
+<td>Produces a design input document filed with the project, beside the requirements it answers. Not absorbed.</td>
+</tr>
+<tr>
+<td><code>research-feedback</code></td>
+<td>An adoption, purchase, upgrade, or wait decision depends on current community experience.</td>
+<td>Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed.</td>
+</tr>
+<tr>
+<td><code>research-dev</code></td>
+<td>You are investigating a bug, API behavior, library, or implementation approach.</td>
+<td>Returns diagnoses, competing explanations, and sources inline.</td>
+</tr>
+</tbody>
+</table>
+<h2>Knowledge Distribution &amp; Follow Up skills</h2>
+<p>These skills help you get research filed where it belongs.</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>meeting-capture</code></td>
+<td>Review calls or meetings and preserve records, document updates, and follow-ups.</td>
+<td>Archives complete available sources, compiles dated people records, routes approved document changes and actionable dated tasks, and retains absorbed review artifacts.</td>
+</tr>
+<tr>
+<td><code>research-absorb</code></td>
+<td>You created a research artifact and you are ready to move the knowledge into permanent locations.</td>
+<td>Executes the approved plan, records a terminal disposition for every row, then archives the completed artifact in raw/derived.</td>
+</tr>
+<tr>
+<td><code>knowledge-capture</code></td>
+<td>Useful sources or synthesis exist in the current conversation and need a complete disposition proposal.</td>
+<td>Inventories conversation knowledge, asks for approval, then performs only the approved captures. It does not process research artifacts.</td>
+</tr>
+</tbody>
+</table>
+<h2>Personal Knowledge Curation skills</h2>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use it when</th>
+<th>Result and next step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>research-to-wiki</code></td>
+<td>A coherent, caller-selected subset of raw sources is ready to compile.</td>
+<td>Creates or updates atomic wiki articles, source status, indexes, and approved workflow records.</td>
+</tr>
+<tr>
+<td><code>wiki-audit</code></td>
+<td>You want a structural and source-coverage review of the configured wiki.</td>
+<td>Writes a ranked report in <code>output/</code> without changing articles, sources, indexes, logs, or tasks.</td>
+</tr>
+</tbody>
+</table>
+<h2>Knowledge store</h2>
+<p>The wiki is optional. The system always creates three directories, plus a
+fourth for the compiled knowledge base when <code>hippocampus-set-up</code> configures
+the wiki as enabled:</p>
+<pre><code class="language-text">&lt;knowledge-root&gt;/
+├── raw/       # source material and provenance
+├── output/    # research artifacts and audit reports
+├── docs/      # AI-maintained operation history and durable decisions
+└── wiki/      # compiled synthesis, topic indexes, and master index (only when the wiki is enabled)
+</code></pre>
+<p><code>raw/</code>, <code>output/</code>, and <code>docs/</code> are always present. <code>wiki/</code> and its two
+profile fields exist only when the wiki is enabled; declining it at setup
+skips the wiki folder, its profile fields, wiki routing in absorption plans
+and knowledge captures, and the <code>research-to-wiki</code> / <code>wiki-audit</code> skills,
+which refuse to run without it. The wiki can be turned on or off later
+through <code>hippocampus-set-up</code> alone. The directory names are part of the
+public <a href="contracts/karpathy-wiki.md">Karpathy-wiki contract</a>. The organization of the <code>wiki/</code>is
+customizable, but relies on internal wikilinks for traversal by AI and
+wikilink-aware tools.</p>
+<h3>Index files (wiki enabled)</h3>
+<p>The wiki maintains three kinds of Markdown index so an agent (or you) can find the
+right article without scanning every file. This keeps context small and searches
+fast as the wiki grows:</p>
+<ul>
+<li><code>wiki/hot.md</code> — the recent-context entry point. Lists the latest and most
+  active content, so a session starts from what changed instead of the whole wiki.</li>
+<li><code>wiki/&lt;topic&gt;/_index.md</code> — one per topic folder, listing that topic's articles.</li>
+<li><code>wiki/_master-index.md</code> — the top-level map of every topic.</li>
+</ul>
+<p>The skills update these indexes automatically as articles are created or changed,
+so the fast-search entry points stay current without manual upkeep.</p>
+<h3>Audit Tracking</h3>
+<p>In addition, the system writes records to help agents understand how to operate on the knowledge system itself, supporting your own custom workflows, including:
+- an operation log,  <code>docs/log.md</code>;
+- a decision log, <code>docs/DECISIONS.md</code>.</p>
+<p>The installer validates this structure but does not create it.</p>
+<h2>How the skills fit together</h2>
+<h3>Quick inline research</h3>
+<pre><code class="language-text">question
+  -&gt; research-quick or research-dev
+  -&gt; cited answer in the conversation
+</code></pre>
+<p>Inline research does not automatically create a notebook, file, or knowledge
+capture task.</p>
+<h3>Durable research and distribution</h3>
+<p>These two skills share the <a href="skills/research-absorb/references/artifact-contract.md">research artifact contract</a>. Every artifact
+is one Markdown file in <code>output/</code> with the same documented structure:</p>
+<pre><code class="language-text">output/2026-08-28-example.md
+├── Question and Scope   # two required subsections
+│   ├── Question         # the decision, target, or question addressed, and scope
+│   └── Answer           # answer first, then confidence and what would change it
+├── Source Summary       # what the sources actually say, in enough detail to judge
+├── Source Assessment    # whether those sources can be trusted
+├── How to Absorb        # what the report exists to enable (below)
+├── Evidence Record      # one entry per source, plus what was searched and skipped
+├── Evidence Gaps        # what remains unanswered, and the follow-up that closes it
+└── Execution Appendix   # machine-actionable rows for research-absorb
+</code></pre>
+<p>The Answer is the first thing a reader judges and must stand without the
+later sections. A complete artifact in this shape, sanitized from a real
+session, is at <a href="docs/examples/2026-09-03-fable-5-1-model-routing.md">docs/examples/2026-09-03-fable-5-1-model-routing.md</a>,
+and the <a href="https://notebook.google.com/notebook/6df011dc-7391-4399-919f-345b6067e29f">public Gemini Notebook</a> it was grounded in is open for inspection.</p>
+<p>The summary and assessment sections feed the absorption plan, whose items are
+split by what the result touches: <strong>Actions</strong> — anything that is not a document,
+such as installing a skill or changing a workflow; <strong>Wiki Additions</strong> — the
+compiled knowledge base only; and <strong>Document Updates</strong> — context files, project
+briefs, standing documents, repository docs. Every item states what exists now,
+the change, why it matters, and how much to trust it, with options and a
+recommendation when a genuine choice exists. Nothing may be merely staged:
+absorb it or discard it. Adoption decisions about third-party work require
+real-world usage and sentiment evidence, not just the source itself.
+The artifact is durable enough to support review and execution, but it is
+coordination material while pending; completed absorption preserves it in <code>raw/derived/</code> as an excluded reference record.</p>
+<p>If an approved row belongs in the wiki, <code>research-absorb</code> stages the selected
+external sources and their provenance under <code>raw/research/</code>, then invokes
+<code>research-to-wiki</code> on that curated subset. A staged source is the extracted
+source text under provenance frontmatter; a summary alone or a NotebookLM
+source id is not a staged source. The research report itself is never raw
+compiler input.</p>
+<h3>Deliverables that are not absorbed</h3>
+<p><code>research-feature</code> and <code>research-feedback</code> sit outside that lifecycle. Neither
+uses the artifact contract and neither goes through <code>research-absorb</code>; each
+writes a document with its own structure, defined in its own SKILL.md.</p>
+<p><code>research-feature</code> produces a <strong>design input document</strong>. It feeds the feature's
+design and spec, and is written into the project repo beside the requirements
+it answers:</p>
+<pre><code class="language-text"># Feature research: &lt;feature&gt;
+├── Comparison           # per product: how it works, strengths, complaints
+│                        # plus a requirement x product matrix for 3+ products
+├── Common patterns      # what most products do, and why it works
+├── Novel approaches     # unusual approaches worth knowing about
+├── Table stakes         # what users expect based on market norms
+├── Platform conventions # HIG, Material, or other platform guidance
+├── Implications         # what this suggests for your design
+└── Sources              # ID, product, type, link, date, version observed
+</code></pre>
+<p>Every claim cites a source row by ID.</p>
+<p><code>research-feedback</code> produces a <strong>decision memo</strong>. It answers one adopt, buy,
+upgrade, switch, or wait question, and is read once and then retained as a reference, or filed
+with the project it serves:</p>
+<pre><code class="language-text"># &lt;subject&gt; — &lt;decision&gt;
+├── Bottom line          # the verdict, tied to your decision context
+├── Hard constraints     # requirements and compatibility gates, or &quot;none&quot;
+├── What people are saying   # recurring themes, dated against the version in scope
+├── Recurring issues, ranked # by frequency and severity
+├── Communities to watch # the venues worth following afterward
+└── Sources              # thread, date, poster's version, how it was read
+</code></pre>
+<p><strong>Communities to watch</strong> always closes the body before the sources, because
+surfacing the right venues is a primary output rather than a footnote.</p>
+<h3>Capture knowledge from a conversation</h3>
+<pre><code class="language-text">current conversation
+  -&gt; knowledge-capture inventory and disposition proposal
+  -&gt; approval
+  -&gt; discard | retain output | capture provenance | preserve synthesis | compile
+</code></pre>
+<p>Use this path for knowledge created or discussed in the current conversation. Use <code>research-absorb</code> instead when a durable research artifact already exists.</p>
+<h3>Capture meetings</h3>
+<pre><code class="language-text">transcript source       calendar event       note file or Google Doc
+  configured/supplied    optional source      per-meeting or profile default
+           \                   |                   /
+                  meeting-capture
+                         |
+          shared knowledge-capture disposition
+                         |
+       people/coaching records + permitted documents + dated actions
+                         |
+       complete authorized routes -&gt; retain review in excluded raw archive
+</code></pre>
+<p>The three inputs are independent and configurable. <code>meeting_note_path</code> is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. <code>{date}</code> is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See <a href="skills/meeting-capture/SKILL.md">meeting capture</a>.</p>
+<h3>Compile and audit an existing source collection</h3>
+<pre><code class="language-text">caller-curated raw subset
+  -&gt; research-to-wiki
+  -&gt; wiki articles + indexes + source dispositions + workflow state
+  -&gt; wiki-audit (optional, read-only)
+  -&gt; ranked audit report in output/
+</code></pre>
+<p>Compilation is never a sweep of every uncompiled file in <code>raw/</code>. It reads the
+selected raw sources before existing wiki synthesis, drafts claims, then checks
+nearby articles for real tensions and gaps instead of silently blending
+incompatible assertions.</p>
+<h2>Architecture</h2>
+<p><a href="docs/architecture/runtime.html"><code>docs/architecture/runtime.html</code></a> is an interactive map of how a research request moves through these skills to durable outputs: the research skills, NotebookLM and source extraction, the profile gate, the research artifact, <code>research-absorb</code>, and the knowledge root (<code>raw/research/</code>, retained reference reports in <code>raw/derived/</code>, and <code>wiki/</code>). Each box links to the file and lines it came from. <a href="docs/architecture/runtime.architecture.json"><code>runtime.architecture.json</code></a> is its source, pinned to one commit. Agents should read it before structural changes, confirm against the code, and regenerate it with the <a href="https://github.com/tt-a1i/archify">Archify</a> skill when a change moves a box or an edge.</p>
+<h2>Example requests</h2>
+<p>Natural-language requests work across Agent Skills-compatible clients:</p>
+<pre><code class="language-text">Use research-quick to compare these two services and cite current sources.
+
+Use research-sources to analyze these URLs, identify evidence gaps, and write
+the durable artifact proposed by the skill.
+
+Use research-topic to investigate this question deeply, verify the major
+claims, and end with the decisions the evidence raises.
+
+Use research-feature to compare how established podcast apps handle this
+interaction before we design it.
+
+Use research-feedback to determine whether users consider this release stable
+enough to adopt and identify the communities worth following.
+
+Run research-absorb on output/2026-08-27-example.md. Validate and show me its
+existing plan before applying anything.
+
+Use research-to-wiki on these three selected files under raw/research/.
+
+Audit the configured wiki with wiki-audit. Do not modify it.
+</code></pre>
+<h2>External and optional integrations</h2>
+<ul>
+<li><strong>Gemini Notebook</strong> (formerly <strong>NotebookLM</strong> — Google renamed it in July 2026;
+  the CLI and skill below still carry the old name) is the persistent source and
+  synthesis layer used by <code>research-sources</code> and <code>research-topic</code>. Its
+  source-grounded answers and inline citations are what keep this system's
+  analysis tied to your evidence rather than a model's training data. Agent
+  access is provided by the third-party <a href="https://github.com/teng-lin/notebooklm-py">notebooklm-py</a> CLI and its
+  <code>notebooklm</code> Agent Skill, not by Google or this package. <code>research-dev</code> also
+  uses that CLI when it is available. This package does not install it,
+  authenticate it, or validate the integration.</li>
+<li><strong>YouTube library search</strong> is an optional upstream source-discovery step. A
+  separate <code>youtube</code> Agent Skill can use the third-party <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> CLI to
+  inspect public playlists or retrieve subtitles, then hand selected URLs to
+  Gemini Notebook. Neither that skill nor <code>yt-dlp</code> is bundled or required by this
+  package; Gemini Notebook can index a supplied YouTube URL directly.</li>
+<li><strong>Defuddle</strong> is optional and detected at runtime. Relevant skills extract
+  supplied pages through its hosted endpoint, which needs no install or API key,
+  and fall back to native web tools when it is unavailable or a page is blocked.
+  Web search uses the runtime's own search tool; no search service is bundled.</li>
+<li><strong>Apple Speech</strong> source is bundled under the <code>transcribe</code> skill and built on demand.
+  The local route requires macOS 26 or later; otherwise the calling workflow
+  must use another input route.</li>
+<li>Full Reddit-thread reading used by <code>research-quick</code> and <code>research-feedback</code>
+  requires an interactive macOS session with Safari signed into Reddit. Other
+  sources continue through the available web tools.</li>
+<li><strong>Obsidian</strong> is not required to run the system or to read the wiki, but it
+  is the practical way for a person to browse it. Wiki articles link to each
+  other with <code>[[wikilinks]]</code>, which GitHub, VS Code, and most Markdown viewers
+  show as plain text rather than links. Any wikilink-aware client works;
+  Obsidian is the one this project names and adds backlinks and graph views.</li>
+</ul>
+<h2>Installation and configuration</h2>
+<p>See <a href="INSTALLATION.md">Installation and configuration</a> for supported platforms and
+prerequisites, the installed layout, checkout and signed-release installation,
+the guided configuration workflow, manual configuration, and verification
+commands.</p></article></details></section>
+<section><h2>Referenced image comparison</h2><details open><summary>After</summary><img style="width:100%" src="docs/images/question-answer-action.svg" alt="Current shared capture lifecycle"></details>
+<details><summary>Before</summary><img style="width:100%" src="docs/reviews/2026-10-09-public-before/question-answer-action.svg" alt="Prior research lifecycle"></details></section>
+<section><h2>Presentation comparison</h2><p>Use the deck's arrow controls to review every slide, including changed slides 5–8.</p>
+<details open><summary>After: current presentation</summary><iframe src="docs/presentation.html" title="Current public presentation"></iframe></details>
+<details><summary>Before: presentation at ae82e49</summary><iframe src="docs/reviews/2026-10-09-public-before/presentation.html" title="Prior public presentation"></iframe></details></section>
+<section><h2>Architecture</h2><p><a href="docs/architecture/runtime.html">Open the regenerated interactive map</a>. Maintainer review remains separate from generator verification.</p></section>
+</main></body></html>

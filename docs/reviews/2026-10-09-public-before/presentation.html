@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hippocampus — Great Answer. Now What?</title>
-
-
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #1c2024;
@@ -16,7 +16,7 @@
       --text-main: #f0f2f5;
       --text-muted: #9ba3af;
       --text-dim: #606b76;
-
+      
       --cyan: #38bdf8;
       --cyan-glow: rgba(56, 189, 248, 0.15);
       --tangerine: #fb923c;
@@ -259,7 +259,7 @@
         <h2>Two Paths: Asking Questions vs. Studying Sources</h2>
         <p class="message">Start with a spontaneous prompt, or bring your own materials in virtually any format to learn from.</p>
       </div>
-
+      
       <div style="display: grid; grid-template-columns: 1.15fr 100px 1fr; align-items: center; gap: 14px; margin: auto 0;">
         <!-- Left: The Two Distinct Input Paths -->
         <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -286,7 +286,7 @@
               <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH B · STUDY YOUR SOURCES</div>
             </div>
             <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 10px;">Ingest Any Media You Care About</div>
-
+            
             <!-- Diverse Format Icon Grid -->
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
               <!-- PDFs & Docs -->
@@ -296,7 +296,7 @@
                   <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
                 <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">PDFs & Docs</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Specs, meeting notes</div>
+                <div style="font-size: 0.65rem; color: var(--text-dim);">Manuals, specs</div>
               </div>
 
               <!-- Web & Articles -->
@@ -345,8 +345,8 @@
         <!-- Right: Convergence Point -->
         <div class="blueprint-card" style="border-color: var(--cyan); text-align: center; padding: 36px 22px; background: rgba(56, 189, 248, 0.04);">
           <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background: var(--cyan-glow); color: var(--cyan); font-family: 'JetBrains Mono'; font-size: 0.8rem; margin-bottom: 14px; font-weight: 600;">INPUT CONVERGENCE</div>
-          <h3 style="font-size: 1.35rem; margin-bottom: 8px;">Capture &amp; Research</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.45;">Research sources and meeting inputs retain distinct provenance. Transcript, calendar and notes are independent; missing coverage is visible.</p>
+          <h3 style="font-size: 1.35rem; margin-bottom: 8px;">The Research Engine</h3>
+          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.45;">No matter where the info originates—a YouTube breakdown, a product PDF, or raw curiosity—it funnels into the same verified loop.</p>
         </div>
       </div>
       <div></div>
@@ -357,7 +357,7 @@
       <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
       <div>
         <h2>What Makes an Answer Truly Good?</h2>
-        <p class="message">It compares claims with selected primary evidence, cites the sources, and makes contradictions and missing coverage visible.</p>
+        <p class="message">It doesn't guess or hallucinate. It checks itself against your sources, transparently cites its evidence, and honestly points out its own gaps.</p>
       </div>
 
       <div style="margin: auto 0; display: flex; flex-direction: column; align-items: center; width: 100%;">
@@ -418,21 +418,21 @@
       <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
       <div>
         <h2>Reviewing and Understanding Your Answers</h2>
-        <p class="message">Research reports and configurable meeting records keep sources, decisions and proposed changes together for review.</p>
+        <p class="message">A standardized shape for every outcome. No more rereading massive chat walls just to figure out what to do.</p>
       </div>
 
       <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 36px; margin: auto 0; align-items: center;">
         <div style="background: var(--surface); border: 1px solid var(--surface-border); border-radius: 10px; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; line-height: 1.65; color: var(--text-muted);">
-          <div style="color: var(--text-dim); border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">output/report.md · meetings/record.md</div>
+          <div style="color: var(--text-dim); border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">output/report.md</div>
           <div style="color: var(--cyan); font-weight: 600;">1. # Question &amp; Scope</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">What we are asking.</div>
-
+          
           <div style="color: var(--tangerine); font-weight: 600;">2. # What the Sources Say</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Cross-source evidence and synthesis.</div>
-
-          <div style="color: var(--crimson); font-weight: 600;">3. # Coverage &amp; Proposed Changes</div>
+          
+          <div style="color: var(--crimson); font-weight: 600;">3. # Source Integrity &amp; Gaps</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Verified facts and missing context.</div>
-
+          
           <div style="color: var(--emerald); font-weight: 600;">4. # How to Absorb</div>
           <div style="font-size: 0.8rem; color: var(--text-dim);">Clear next steps for your personal notes.</div>
         </div>
@@ -440,11 +440,11 @@
         <div style="display: flex; flex-direction: column; gap: 18px;">
           <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px;">
             <div style="font-weight: 700; font-size: 1.05rem;">Know Exactly Where to Look</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Research keeps its documented shape; meeting headings come from your template. Sources and approval state stay visible.</p>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Whether you ran the search 5 minutes ago or last week, the structure never changes.</p>
           </div>
           <div class="blueprint-card" style="border-left: 4px solid var(--emerald); padding: 18px;">
             <div style="font-weight: 700; font-size: 1.05rem;">Built-in Next Steps</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Review concrete document, action, wiki and writing rows; existing authorization carries into absorb.</p>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Section 4 hands you the plan on a platter so you never stall out wondering what to do with the answer.</p>
           </div>
         </div>
       </div>
@@ -456,26 +456,26 @@
       <div class="tracker"><span>Question</span> | <span>Answer</span> | <span class="active-stage emerald">Action</span></div>
       <div>
         <h2>Acting on What You Found</h2>
-        <p class="message">Absorb executes only approved rows through your local workflows, with confirmed receipts and safe retries.</p>
+        <p class="message">The "No Parking" rule. Knowledge must move directly into active everyday tools, not sit indefinitely in a saved document.</p>
       </div>
 
       <div style="display: grid; grid-template-columns: 220px 80px 1fr 260px; gap: 16px; align-items: center; margin: auto 0;">
         <!-- Origin Report -->
         <div class="blueprint-card" style="border-style: dashed; border-color: var(--tangerine); text-align: center; padding: 28px 16px;">
           <div style="font-size: 2.2rem; margin-bottom: 8px;">📄</div>
-          <div style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--tangerine); font-weight: 600; margin-bottom: 4px;">SOURCE-LINKED PLAN</div>
-          <div style="font-weight: 700; font-size: 1.05rem;">Research or Meeting</div>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">Research moves to retained reference; meetings stay in place</p>
+          <div style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--tangerine); font-weight: 600; margin-bottom: 4px;">EPHEMERAL</div>
+          <div style="font-weight: 700; font-size: 1.05rem;">Staging Report</div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">Temporary bridge to action</p>
         </div>
 
         <!-- Branching Arrow SVG -->
         <svg viewBox="0 0 80 220" style="width: 100%; height: 210px;">
           <path d="M 5 110 C 40 110, 45 35, 75 35" fill="none" stroke="var(--emerald)" stroke-width="2.5" />
           <polygon points="73,30 80,35 73,40" fill="var(--emerald)" />
-
+          
           <path d="M 5 110 L 75 110" fill="none" stroke="var(--cyan)" stroke-width="2.5" />
           <polygon points="73,105 80,110 73,115" fill="var(--cyan)" />
-
+          
           <path d="M 5 110 C 40 110, 45 185, 75 185" fill="none" stroke="var(--text-dim)" stroke-width="2.5" />
           <polygon points="73,180 80,185 73,190" fill="var(--text-dim)" />
         </svg>
@@ -486,21 +486,21 @@
             <div style="font-size: 1.4rem;">📝</div>
             <div>
               <div style="font-weight: 700; font-size: 0.95rem;">Your Notes &amp; Docs</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Named document changes; wiki-compile reads selected primary sources.</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Permanently merge verified takeaways into your system.</div>
             </div>
           </div>
           <div class="blueprint-card" style="border-left: 4px solid var(--cyan); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
             <div style="font-size: 1.4rem;">✅</div>
             <div>
               <div style="font-weight: 700; font-size: 0.95rem;">To-Do Lists</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Owned tasks with saved-date read-back; no automatic calendar writes.</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Turn recommendations into calendar items or quick tasks.</div>
             </div>
           </div>
           <div class="blueprint-card" style="border-left: 4px solid var(--text-dim); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
             <div style="font-size: 1.4rem;">🗑️</div>
             <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">Writing &amp; Retention</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">New ideas, enrichment or published follow-ups; explicit no-candidate is valid.</div>
+              <div style="font-weight: 700; font-size: 0.95rem;">The Trash Can</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">Discard the staging report. Don't let it become clutter.</div>
             </div>
           </div>
         </div>
@@ -509,8 +509,8 @@
         <div class="blueprint-card" style="border: 2px dashed var(--crimson); text-align: center; padding: 28px 18px; position: relative;">
           <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--crimson); color: #000; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.1em; padding: 2px 10px; border-radius: 10px; text-transform: uppercase;">The Rule</div>
           <div style="font-size: 2.5rem; margin: 4px 0 10px 0;">🚫 🅿️</div>
-          <h3 style="font-size: 1.15rem; color: var(--crimson); margin-bottom: 6px;">Scoped Approval</h3>
-          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">Pending rows stay pending. Research reports become excluded references; meeting records remain in their folder. Transcript filing is separate.</p>
+          <h3 style="font-size: 1.15rem; color: var(--crimson); margin-bottom: 6px;">No Parking</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">Reports are temporary vehicles, not permanent homes. If you aren't filing it today, drop it.</p>
         </div>
       </div>
       <div></div>
@@ -638,11 +638,11 @@
     function showSlide(index) {
       if (index < 0) index = 0;
       if (index >= slides.length) index = slides.length - 1;
-
+      
       slides[current].classList.remove('active');
       current = index;
       slides[current].classList.add('active');
-
+      
       counter.textContent = `${current + 1} / ${slides.length}`;
     }
 

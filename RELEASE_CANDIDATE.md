@@ -1,3 +1,7 @@
+# Historical release review — v0.9.0
+
+This file records the completed October 7 release. The current unreleased capture/absorb/compiler candidate is tracked separately in [the October 9 review](docs/reviews/2026-10-09-public-documentation.md); its communication approval and release gates remain pending.
+
 # Release candidate review
 
 ## Scope

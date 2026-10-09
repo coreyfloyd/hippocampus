@@ -133,7 +133,7 @@ The wiki is enabled by default. To use it, also set `hot_file` to an existing
 file relative to the root and `wiki_followup_destination` to the route for
 knowledge-base maintenance. To skip the wiki, add `wiki_enabled: false` to the
 profile and omit both wiki fields; the `wiki/` directory is then neither
-required nor created, and `research-to-wiki` and `wiki-audit` refuse to run.
+required nor created, and `wiki-compile`, its compatibility commands and `wiki-audit` refuse to run.
 
 The follow-up destinations are intentionally independent. Replace the
 instructional placeholders with routes another agent can actually follow. The
@@ -188,6 +188,7 @@ then test the optional Apple Speech package:
 
 ```bash
 python3 tests/test-profile-meetings.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test-capture-absorb.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
 bash tests/test-release.sh
@@ -197,3 +198,31 @@ bash tests/test-release.sh
 ## Optional meeting inputs
 
 `meeting-capture` shares the knowledge-capture disposition workflow. Profile version 4 accepts three independent optional inputs: `meeting_transcript_source` and `meeting_event_source` name providers or retrieval instructions; `meeting_note_path` is an optional default local path or HTTPS Google Docs document link. A local path may be fixed, absolute (including outside the knowledge root), or knowledge-root-relative; one `{date}` placeholder is optional. Use unquoted values or `disabled`. A note path or Google Doc link supplied for a particular meeting overrides the default, so no shared notes directory is required. Existing published version-4 profiles need no migration; the unreleased `meeting_daily_note_path` field is renamed to `meeting_note_path`. Absent transcript fields use supplied/available sources; absent event fields skip event lookup; absent note fields still allow explicitly supplied notes. These settings select sources; they do not install connectors or guarantee access. Notes and calendar events are read-only context.
+
+
+## Meeting records, retention and writing
+
+Optional `meeting_record_folder` defaults to `meetings/` within the knowledge
+root; it may name a not-yet-created relative folder but cannot escape via a symlink.
+Optional `meeting_record_template` defaults to the packaged
+`skills/meeting-capture/assets/meeting.md`. Choose an existing nonempty Markdown
+file relative to the knowledge root or by explicit absolute path. Supported
+placeholders are `{{title}}`, `{{date}}`, `{{record_id}}`, `{{sources}}`,
+`{{coverage}}` and `{{event_url}}`; custom headings need not match the example.
+An unknown placeholder or unreadable selected template fails clearly. Profile
+validation never creates a meeting folder or record. A per-capture override does
+not alter the profile or copy over a custom template.
+
+The profile body can name transcript intake/archive folders within raw, separate
+from the meeting-record folder. All approved routes must be terminal before
+transcript retention filing; verify repaired references and preserve primary
+source metadata. The generated meeting record stays in place. Completed research
+reports retain their output-to-raw/derived transition and compilation exclusion.
+
+Writing policy may supply ideas/drafts/published search locations, a writable
+destination, local workflow, templates, scoring and privacy rules. With none
+configured, candidates stay in their meeting/research records. Setup does not
+invent an ideas directory or create tasks, drafts, backfills or publications.
+The helper is installed inside `skills/absorb/scripts/`; no persistent service or
+separate skills platform is required. Local adapters own destination confirmations,
+external permissions, deduplication and read-back.

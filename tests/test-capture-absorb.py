@@ -117,16 +117,23 @@ class CaptureAbsorb(unittest.TestCase):
             author='contract author', angle='Explain scoped compilation',
             addition='Add a source-linked note about the selected subset', privacy='public contract only',
             coverage={'ideas': 'searched', 'drafts': 'searched', 'published': 'unavailable'},
-            target='docs/draft.md', workflow='local writing workflow')
+            target='docs/writing-seeds.json', workflow='local writing workflow')
             for i, kind in enumerate(('new', 'enrich', 'published-followup'))]
         mod.set_plan(record, ['D1'], rows)
         seen = []
         def writing(req):
             seen.append(req['row']['opportunity'])
+            destination = self.root / req['row']['target']
+            seeds = json.loads(destination.read_text()) if destination.exists() else []
+            if not any(seed['identity'] == req['idempotency_key'] for seed in seeds):
+                seeds.append({'identity': req['idempotency_key'], 'kind': req['row']['opportunity'],
+                              'addition': req['row']['addition'], 'author': req['row']['author']})
+                destination.write_text(json.dumps(seeds))
             return dict(confirmed=True, receipt='writing:' + req['idempotency_key'], target=req['row']['target'])
         mod.execute(self.profile, record, {'writing': writing})
         mod.execute(self.profile, record, {'writing': writing})
         self.assertEqual(seen, ['new', 'enrich', 'published-followup'])
+        self.assertEqual(len(json.loads((self.root / 'docs/writing-seeds.json').read_text())), 3)
         self.assertEqual(authored.read_text(), 'Authored draft unchanged.\n')
         rows[0]['id'] = 'W4'; rows[0]['target'] = ''; rows[0]['workflow'] = ''
         mod.set_plan(record, ['D1'], [rows[0]])
@@ -189,6 +196,21 @@ print(json.dumps({'confirmed': saved['identity'] == request['idempotency_key'], 
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual((self.root / 'docs/task.json').read_bytes(), receipt)
         self.assertEqual(json.loads(second.stdout)['rows'][0]['state'], 'complete')
+
+    def test_legacy_confirmed_research_results_are_adopted_without_reexecution(self):
+        mod = self.module(); artifact = self.root / 'output/legacy.md'
+        artifact.write_text('# Legacy research\n\n## How to Absorb\nD1: review public contract\n\n## Execution Appendix\nA1: task filed and read back\n')
+        mod.initialize_research(artifact, [{'id': 'contract', 'path': 'raw/research/contract.md', 'primary': True, 'coverage': 'complete'}])
+        self.assertIn('legacy_results', mod.set_plan.__code__.co_varnames, 'normalization must accept verified legacy receipts')
+        result = dict(confirmed=True, receipt='existing task read-back', target='Test workflow')
+        mod.set_plan(artifact, ['D1'], [self.row()], legacy_results={'A1': result})
+        calls = []
+        mod.execute(self.profile, artifact, {'action': lambda req: calls.append(req)})
+        self.assertEqual(calls, [])
+        self.assertEqual(mod.read_record(artifact)['rows'][0]['receipt']['receipt'], result['receipt'])
+        self.assertIn('A1: task filed and read back', artifact.read_text())
+        with self.assertRaises(ValueError):
+            mod.set_plan(artifact, ['D1'], [self.row()], legacy_results={'unknown': result})
 
     def enable_wiki(self):
         (self.root / 'wiki').mkdir()

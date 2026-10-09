@@ -2,14 +2,14 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Hippocampus: durable research to knowledge root",
-    "output": "runtime.html",
+    "title": "Hippocampus: capture, approved absorption and retention",
+    "output": "docs/architecture/runtime.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/coreyfloyd/hippocampus.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "7b9d5a563818f6df66e0c7442c04c91adbaaf94d"
+      "revision": "b622db65aded3d482bf1558b4c73f0ad401893b2"
     }
   },
   "components": [
@@ -44,14 +44,8 @@
         {
           "path": "skills/research-sources/SKILL.md",
           "line": 12,
-          "end_line": 24,
-          "label": "supplied-source modes"
-        },
-        {
-          "path": "skills/research-topic/SKILL.md",
-          "line": 12,
-          "end_line": 18,
-          "label": "topic-first source set"
+          "end_line": 37,
+          "label": "source research"
         }
       ]
     },
@@ -70,15 +64,10 @@
       ],
       "sources": [
         {
-          "path": "skills/research-sources/SKILL.md",
-          "line": 28,
-          "label": "persistent synthesis layer"
-        },
-        {
           "path": "skills/research-topic/SKILL.md",
-          "line": 22,
-          "end_line": 24,
-          "label": "query + verify claims"
+          "line": 3,
+          "end_line": 13,
+          "label": "grounded notebook"
         }
       ]
     },
@@ -99,12 +88,8 @@
         {
           "path": "skills/research-sources/SKILL.md",
           "line": 28,
-          "label": "curl defuddle.md"
-        },
-        {
-          "path": "skills/research-topic/SKILL.md",
-          "line": 16,
-          "label": "WebSearch + extraction"
+          "end_line": 38,
+          "label": "extract primary text"
         }
       ]
     },
@@ -152,20 +137,15 @@
       "sources": [
         {
           "path": "scripts/validate_profile.py",
-          "line": 76,
-          "end_line": 148,
-          "label": "root + dir checks"
+          "line": 110,
+          "end_line": 135,
+          "label": "validate profile"
         },
         {
-          "path": "profiles/karpathy-wiki.example.md",
-          "line": 1,
-          "end_line": 19,
-          "label": "profile v4 fields"
-        },
-        {
-          "path": "skills/research-sources/SKILL.md",
-          "line": 10,
-          "label": "stop if invalid"
+          "path": "scripts/validate_profile.py",
+          "line": 77,
+          "end_line": 112,
+          "label": "template and folder"
         }
       ]
     },
@@ -179,29 +159,23 @@
         580
       ],
       "size": [
-        170,
+        200,
         64
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 1,
-          "end_line": 50,
-          "label": "required sections"
-        },
-        {
-          "path": "skills/research-topic/SKILL.md",
-          "line": 28,
-          "end_line": 34,
-          "label": "write, report path"
+          "path": "skills/absorb/references/artifact-contract.md",
+          "line": 13,
+          "end_line": 48,
+          "label": "research artifact shape"
         }
       ]
     },
     {
       "id": "absorb",
       "type": "backend",
-      "label": "research-absorb",
-      "sublabel": "executes the approved plan",
+      "label": "absorb",
+      "sublabel": "authorized rows + durable receipts",
       "pos": [
         860,
         380
@@ -212,16 +186,16 @@
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 28,
-          "end_line": 44,
-          "label": "validate, then approval"
+          "path": "skills/absorb/SKILL.md",
+          "line": 21,
+          "end_line": 61,
+          "label": "approved route ownership"
         },
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 45,
-          "end_line": 69,
-          "label": "execute + retain"
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 265,
+          "end_line": 355,
+          "label": "durable receipt executor"
         }
       ]
     },
@@ -240,16 +214,10 @@
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 61,
-          "end_line": 62,
-          "label": "named target update"
-        },
-        {
-          "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 72,
-          "end_line": 73,
-          "label": "Document Updates"
+          "path": "skills/absorb/SKILL.md",
+          "line": 38,
+          "end_line": 46,
+          "label": "target workflow and rules"
         }
       ]
     },
@@ -268,16 +236,10 @@
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 63,
-          "end_line": 65,
-          "label": "file task"
-        },
-        {
-          "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 208,
-          "end_line": 208,
-          "label": "independently actionable task"
+          "path": "skills/absorb/SKILL.md",
+          "line": 42,
+          "end_line": 50,
+          "label": "owned task workflow"
         }
       ]
     },
@@ -296,27 +258,21 @@
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 51,
-          "end_line": 58,
-          "label": "staging rule"
-        },
-        {
-          "path": "skills/research-absorb/references/artifact-contract.md",
-          "line": 209,
-          "end_line": 213,
-          "label": "primary evidence only"
+          "path": "skills/absorb/SKILL.md",
+          "line": 33,
+          "end_line": 41,
+          "label": "selected primary staging"
         }
       ]
     },
     {
       "id": "compile",
       "type": "backend",
-      "label": "research-to-wiki",
+      "label": "wiki-compile",
       "sublabel": "curated-subset compiler",
       "pos": [
-        1200,
-        380
+        950,
+        820
       ],
       "size": [
         190,
@@ -324,16 +280,10 @@
       ],
       "sources": [
         {
-          "path": "skills/research-to-wiki/SKILL.md",
-          "line": 10,
-          "end_line": 16,
-          "label": "--require-wiki + inputs"
-        },
-        {
-          "path": "skills/research-to-wiki/SKILL.md",
-          "line": 41,
-          "end_line": 56,
-          "label": "compile + finish"
+          "path": "skills/wiki-compile/SKILL.md",
+          "line": 12,
+          "end_line": 52,
+          "label": "primary subset and scope"
         }
       ]
     },
@@ -343,8 +293,8 @@
       "label": "wiki/",
       "sublabel": "articles, _index, hot.md",
       "pos": [
-        1210,
-        580
+        960,
+        1080
       ],
       "size": [
         170,
@@ -352,16 +302,10 @@
       ],
       "sources": [
         {
-          "path": "skills/research-to-wiki/SKILL.md",
+          "path": "skills/wiki-compile/SKILL.md",
           "line": 50,
-          "end_line": 56,
-          "label": "indexes, cache, log"
-        },
-        {
-          "path": "contracts/karpathy-wiki.md",
-          "line": 33,
-          "end_line": 38,
-          "label": "topic folders"
+          "end_line": 62,
+          "label": "wiki indexes and source state"
         }
       ]
     },
@@ -369,10 +313,10 @@
       "id": "retained",
       "type": "database",
       "label": "raw/derived/",
-      "sublabel": "absorbed report \u00b7 excluded reference",
+      "sublabel": "research only \u00b7 excluded reference",
       "pos": [
-        1180,
-        780
+        230,
+        1080
       ],
       "size": [
         310,
@@ -380,25 +324,103 @@
       ],
       "sources": [
         {
-          "path": "skills/research-absorb/SKILL.md",
-          "line": 66,
-          "end_line": 69,
-          "label": "terminal rows, retained archive"
+          "path": "skills/absorb/SKILL.md",
+          "line": 63,
+          "end_line": 83,
+          "label": "separate report retention"
+        }
+      ]
+    },
+    {
+      "id": "capture",
+      "type": "backend",
+      "label": "meeting-capture",
+      "sublabel": "independent source adapters",
+      "pos": [
+        180,
+        820
+      ],
+      "size": [
+        220,
+        70
+      ],
+      "sources": [
+        {
+          "path": "skills/knowledge-capture/references/meetings.md",
+          "line": 33,
+          "end_line": 63,
+          "label": "configured in-place record"
+        }
+      ]
+    },
+    {
+      "id": "meeting",
+      "type": "database",
+      "label": "Meeting record",
+      "sublabel": "configured template \u00b7 stays in place",
+      "pos": [
+        560,
+        820
+      ],
+      "size": [
+        270,
+        70
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 130,
+          "end_line": 195,
+          "label": "identity reuse and record writes"
+        }
+      ]
+    },
+    {
+      "id": "writing",
+      "type": "external",
+      "label": "Local writing workflow",
+      "sublabel": "new / enrich / published follow-up",
+      "pos": [
+        820,
+        20
+      ],
+      "size": [
+        280,
+        80
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 46,
+          "end_line": 54,
+          "label": "approved local writing route"
+        }
+      ]
+    },
+    {
+      "id": "source-retained",
+      "type": "database",
+      "label": "Retained transcripts",
+      "sublabel": "policy-defined raw archive",
+      "pos": [
+        590,
+        1080
+      ],
+      "size": [
+        240,
+        70
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 72,
+          "end_line": 86,
+          "label": "primary-source filing"
         }
       ]
     }
   ],
-  "boundaries": [
-    {
-      "kind": "region",
-      "label": "Knowledge root (knowledge_root)",
-      "wraps": [
-        "artifact",
-        "raw",
-        "wiki"
-      ]
-    }
-  ],
+  "boundaries": [],
   "connections": [
     {
       "id": "ask",
@@ -418,27 +440,21 @@
       "id": "ground",
       "from": "durable",
       "to": "notebook",
-      "label": "add + query",
-      "fromSide": "top",
-      "toSide": "bottom"
+      "label": "add + query"
     },
     {
       "id": "extract",
       "from": "durable",
       "to": "web",
       "label": "extract",
-      "variant": "dashed",
-      "fromSide": "top",
-      "toSide": "bottom"
+      "variant": "dashed"
     },
     {
       "id": "media",
       "from": "durable",
       "to": "transcribe",
       "label": "media",
-      "variant": "dashed",
-      "fromSide": "top",
-      "toSide": "bottom"
+      "variant": "dashed"
     },
     {
       "id": "write-artifact",
@@ -450,7 +466,7 @@
       "id": "read-plan",
       "from": "absorb",
       "to": "artifact",
-      "label": "read plan, act on approval",
+      "label": "approved research plan",
       "variant": "emphasis"
     },
     {
@@ -494,36 +510,76 @@
       "id": "retain-report",
       "from": "absorb",
       "to": "retained",
-      "label": "retain after all rows terminal",
+      "label": "research terminal: retain",
+      "variant": "dashed"
+    },
+    {
+      "id": "capture-gate",
+      "from": "capture",
+      "to": "profile",
+      "label": "validate first",
+      "variant": "security"
+    },
+    {
+      "id": "write-meeting",
+      "from": "capture",
+      "to": "meeting",
+      "label": "create or reuse"
+    },
+    {
+      "id": "meeting-plan",
+      "from": "meeting",
+      "to": "absorb",
+      "label": "approved meeting plan"
+    },
+    {
+      "id": "writing-route",
+      "from": "absorb",
+      "to": "writing",
+      "label": "approved writing",
+      "variant": "dashed"
+    },
+    {
+      "id": "retain-source",
+      "from": "absorb",
+      "to": "source-retained",
+      "label": "terminal + link repair",
       "variant": "dashed"
     }
   ],
   "cards": [
     {
       "dot": "rose",
-      "title": "Gates",
+      "title": "Approval and retry",
       "items": [
-        "Every root-writing skill validates the profile first; invalid means stop",
-        "research-absorb mutates nothing until the user approves the plan",
-        "Every row ends integrated, updated, filed, or discarded; then retain the report as an excluded reference"
+        "Capture proposes; only authorized rows execute. Changed scope or target confirmation stays pending.",
+        "Confirmed receipts prevent repeated tasks or writing additions; uncertain effects require read-back."
       ]
     },
     {
       "dot": "emerald",
-      "title": "Knowledge root",
+      "title": "Different retention",
       "items": [
-        "raw/, output/, docs/ always; wiki/ only when enabled",
-        "Compile appends docs/log.md and updates hot.md",
-        "Only selected primary source text feeds the compiler; the retained report is excluded"
+        "Meeting record remains at its original path; original transcript follows policy-defined raw intake/archive rules.",
+        "Research report moves from output to raw/derived only after terminal routes; it is excluded primary evidence.",
+        "Compilation ingestion status is distinct from complete capture and absorption."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Local policy and compatibility",
+      "items": [
+        "Profile v4 remains valid; templates, writing storage/workflows, compiler modes and audit coverage are local policy.",
+        "research-absorb, research-to-wiki and vault-compile/vault-audit delegate; direct selected-source compile remains supported."
       ]
     },
     {
       "dot": "slate",
       "title": "Not shown",
       "items": [
-        "Inline research-quick / research-dev (answer in chat only)",
-        "research-feature / research-feedback (own deliverables, not absorbed)",
-        "Meeting capture (README flow), knowledge-capture, wiki-audit, setup, install + release scripts"
+        "Inline research-quick/research-dev and feature/feedback deliverables.",
+        "Read-only opt-in wiki-audit, setup, installation/release and external provider internals.",
+        "This map describes skill/helper contracts; local workflow adapters own live provider permissions and read-back."
       ]
     }
   ]

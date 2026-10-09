@@ -1,134 +1,162 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
-  <title id="title">Question, Answer, Action lifecycle</title>
-  <desc id="desc">A broad question or selected sources become a question, then an evidence-grounded answer, then an action that updates documents, files follow-up work, compiles an optional wiki, or discards the result and closes the loop.</desc>
-  <style>
-    :root {
-      --bg: #f7f8fa;
-      --panel: #ffffff;
-      --ink: #17212b;
-      --dim: #5d6975;
-      --line: #b8c1ca;
-      --question: #0284c7;
-      --question-bg: #e0f2fe;
-      --answer: #c2410c;
-      --answer-bg: #ffedd5;
-      --action: #047857;
-      --action-bg: #d1fae5;
-      --off: #64748b;
-      --off-bg: #f1f5f9;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #15191d;
-        --panel: #22282e;
-        --ink: #f0f2f5;
-        --dim: #a2abb5;
-        --line: #59636e;
-        --question: #38bdf8;
-        --question-bg: #102f3f;
-        --answer: #fb923c;
-        --answer-bg: #402719;
-        --action: #34d399;
-        --action-bg: #14382e;
-        --off: #94a3b8;
-        --off-bg: #29313a;
-      }
-    }
-    :root[data-theme="dark"] {
-      --bg: #15191d;
-      --panel: #22282e;
-      --ink: #f0f2f5;
-      --dim: #a2abb5;
-      --line: #59636e;
-      --question: #38bdf8;
-      --question-bg: #102f3f;
-      --answer: #fb923c;
-      --answer-bg: #402719;
-      --action: #34d399;
-      --action-bg: #14382e;
-      --off: #94a3b8;
-      --off-bg: #29313a;
-    }
-    :root[data-theme="light"] {
-      --bg: #f7f8fa;
-      --panel: #ffffff;
-      --ink: #17212b;
-      --dim: #5d6975;
-      --line: #b8c1ca;
-      --question: #0284c7;
-      --question-bg: #e0f2fe;
-      --answer: #c2410c;
-      --answer-bg: #ffedd5;
-      --action: #047857;
-      --action-bg: #d1fae5;
-      --off: #64748b;
-      --off-bg: #f1f5f9;
-    }
-    .stage { fill: var(--panel); stroke-width: 2.5; }
-    .input { fill: var(--question-bg); stroke: var(--question); stroke-width: 1.6; }
-    .outcome { fill: var(--action-bg); stroke: var(--action); stroke-width: 1.4; }
-    .discard { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.4; }
-    .label { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1.4px; }
-    .heading { fill: var(--ink); font-family: var(--sans); font-size: 23px; font-weight: 750; }
-    .stage-heading { fill: var(--ink); font-family: var(--sans); font-size: 19px; font-weight: 750; }
-    .copy { fill: var(--dim); font-family: var(--sans); font-size: 15px; }
-    .small { fill: var(--dim); font-family: var(--sans); font-size: 11.5px; }
-    .edge { fill: none; stroke: var(--line); stroke-width: 2.2; marker-end: url(#arrow); }
-    .branch { fill: none; stroke: var(--action); stroke-width: 1.8; marker-end: url(#action-arrow); }
-  </style>
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
-      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--line)"/>
-    </marker>
-    <marker id="action-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
-      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--action)"/>
-    </marker>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 650" role="img" aria-labelledby="title desc">
+<title id="title">Capture, approved absorption and separate retention</title>
+<desc id="desc">Questions, primary research sources and meeting inputs feed source-linked plans. Absorb executes approved document, task, writing, optional wiki and retention routes. Meeting records remain in place; research reports are retained as excluded references; transcripts have a separate raw lifecycle.</desc>
+<style>:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-  <rect width="1200" height="520" rx="20" fill="var(--bg)"/>
-  <text x="40" y="48" class="heading">Close the loop from curiosity to use</text>
-  <text x="40" y="75" class="copy">Two kinds of input move through one predictable lifecycle.</text>
-
-  <rect x="40" y="142" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="174" class="label" fill="var(--question)">ASK</text>
-  <text x="58" y="201" class="copy">a broad question</text>
-
-  <rect x="40" y="292" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="324" class="label" fill="var(--question)">BRING</text>
-  <text x="58" y="351" class="copy">selected sources</text>
-
-  <rect x="330" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--question)"/>
-  <text x="350" y="237" class="label" fill="var(--question)">QUESTION</text>
-  <text x="350" y="268" class="stage-heading">Set the target</text>
-  <text x="350" y="293" class="small">scope · decision · evidence</text>
-
-  <rect x="600" y="204" width="210" height="112" rx="14" class="stage" stroke="var(--answer)"/>
-  <text x="620" y="237" class="label" fill="var(--answer)">ANSWER</text>
-  <text x="620" y="268" class="stage-heading">Ground the result</text>
-  <text x="620" y="293" class="small">citations · assessment · gaps</text>
-
-  <rect x="890" y="108" width="270" height="344" rx="16" fill="var(--panel)" stroke="var(--action)" stroke-width="2.5"/>
-  <text x="912" y="140" class="label" fill="var(--action)">ACTION</text>
-  <text x="912" y="169" class="copy">Give the answer a destination.</text>
-
-  <circle cx="925" cy="279" r="11" fill="var(--action)"/>
-  <rect x="966" y="195" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="224" class="copy">notes &amp; documents</text>
-  <rect x="966" y="255" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="284" class="copy">follow-up work</text>
-  <rect x="966" y="315" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="344" class="copy">optional wiki</text>
-  <rect x="966" y="375" width="166" height="48" rx="9" class="discard"/>
-  <text x="982" y="404" class="copy">discard &amp; close</text>
-
-  <path d="M250,183 C285,183 292,232 330,244" class="edge"/>
-  <path d="M250,333 C285,333 292,288 330,276" class="edge"/>
-  <path d="M520,260 L600,260" class="edge"/>
-  <path d="M810,260 L890,260" class="edge"/>
-  <path d="M925,279 C944,279 944,219 966,219" class="branch"/>
-  <path d="M925,279 L966,279" class="branch"/>
-  <path d="M925,279 C944,279 944,339 966,339" class="branch"/>
-  <path d="M925,279 C944,279 944,399 966,399" class="branch"/>
+.label{font-family:var(--mono);font-size:16px;fill:var(--ink)}.small{font-size:13px;fill:var(--dim)}.edge{fill:none;stroke:var(--line);stroke-width:2;marker-end:url(#arrow)}</style>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--line)"/></marker></defs>
+<rect width="1280" height="650" rx="18" fill="var(--bg)"/>
+<text x="32" y="44" class="label">Evidence → review → authorized action</text>
+<rect x="32" y="105" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="133" class="label">Question</text><text x="46" y="156" class="small">scope and decision</text>
+<rect x="32" y="225" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="253" class="label">Research sources</text><text x="46" y="276" class="small">selected primary evidence</text>
+<rect x="32" y="345" width="220" height="72" rx="10" fill="var(--panel)" stroke="var(--host)" stroke-width="2"/>
+<text x="46" y="373" class="label">Meeting inputs</text><text x="46" y="396" class="small">transcript · event · notes</text>
+<rect x="325" y="200" width="230" height="98" rx="10" fill="var(--panel)" stroke="var(--sess)" stroke-width="2"/>
+<text x="339" y="228" class="label">Capture / research</text><text x="339" y="251" class="small">sources · coverage · proposals</text>
+<rect x="630" y="200" width="230" height="98" rx="10" fill="var(--panel)" stroke="var(--warn)" stroke-width="2"/>
+<text x="644" y="228" class="label">absorb</text><text x="644" y="251" class="small">approved rows + receipts</text>
+<rect x="1000" y="90" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="118" class="label">Documents</text><text x="1014" y="141" class="small">named targets and rules</text>
+<rect x="1000" y="190" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="218" class="label">Owned actions</text><text x="1014" y="241" class="small">deduplicate + read back</text>
+<rect x="1000" y="290" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="318" class="label">Writing</text><text x="1014" y="341" class="small">new · enrich · follow-up</text>
+<rect x="1000" y="390" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="418" class="label">wiki-compile</text><text x="1014" y="441" class="small">enabled + primary subset</text>
+<rect x="1000" y="490" width="248" height="72" rx="10" fill="var(--panel)" stroke="var(--ok)" stroke-width="2"/>
+<text x="1014" y="518" class="label">Retain / decline</text><text x="1014" y="541" class="small">explicit disposition</text>
+<rect x="325" y="490" width="250" height="88" rx="10" fill="var(--panel)" stroke="var(--sess)" stroke-width="2"/>
+<text x="339" y="518" class="label">Meeting record</text><text x="339" y="541" class="small">same path; template is optional</text>
+<rect x="630" y="490" width="250" height="88" rx="10" fill="var(--panel)" stroke="var(--job)" stroke-width="2"/>
+<text x="644" y="518" class="label">Research report</text><text x="644" y="541" class="small">output → excluded raw/derived</text>
+<path d="M251,141 L290,141 L290,226 L326,226" class="edge"/>
+<path d="M251,261 L326,261" class="edge"/>
+<path d="M251,381 L290,381 L290,280 L326,280" class="edge"/>
+<path d="M554,248 L631,248" class="edge"/>
+<path d="M859,214 L928,214 L928,126 L1001,126" class="edge"/>
+<path d="M859,235 L1001,226" class="edge"/>
+<path d="M859,255 L928,255 L928,326 L1001,326" class="edge"/>
+<path d="M859,277 L950,277 L950,426 L1001,426" class="edge"/>
+<path d="M859,290 L974,290 L974,526 L1001,526" class="edge"/>
+<path d="M420,297 L420,491" class="edge"/>
+<path d="M745,297 L745,491" class="edge"/>
+<text x="325" y="630" class="small">Original transcripts: raw intake while pending → policy-defined archive after terminal routes + link repair.</text>
 </svg>

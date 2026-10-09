@@ -62,7 +62,7 @@ It does not generate prose, search external systems or grant approval.
 - `prepare-research RECORD --input sources.json`: add shared mechanics to a
   validated legacy artifact, preserving its prose and original execution table.
 - `plan RECORD --input plan.json`: `decisions`, `rows`, optional `writing_result`.
-  Normalize only a plan the caller has seen. Changed existing rows become pending;
+  Normalize only a plan the caller has seen. For a legacy research artifact, optional `legacy_results` maps row IDs to previously confirmed, target-matching read-back receipts; preserve the original table and adopt those results without reexecuting them. Uncertain writes still require reconciliation, and changed scope cannot inherit a legacy receipt. Changed existing rows become pending;
   a subsequent plan update records renewed authorization after approval. Existing
   receipts remain; pending removed rows must first be explicitly declined.
 - `execute RECORD --workflows workflows.json`: map kinds to explicitly authorized
