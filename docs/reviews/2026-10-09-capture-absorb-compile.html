@@ -1,0 +1,330 @@
+<meta charset="utf-8"><!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Hippocampus capture and writing review</title><style>:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
+body{max-width:1080px;margin:2rem auto;padding:0 1rem}svg text{fill:var(--ink);font:16px system-ui}svg rect{fill:var(--panel);stroke:var(--line)}svg path{stroke:var(--line);fill:none}details{padding:1rem;border:1px solid var(--line);margin:1rem 0}a{color:var(--sess)}</style></head><body><h1>Capture, review, absorb</h1><p><strong>Specification approval pending.</strong> Independent spec review skipped at Corey’s direction; independent code review required after implementation.</p><p>Static review: this Codex runtime has no configured surface-submission wake integration. Reply in the chat to approve or request changes. This approves the specification; implementation launches retain their separate configured launch approval.</p><p><a href="https://github.com/coreyfloyd/hippocampus/issues/31">hippocampus#31 — Unify meeting capture, absorption and compilation</a></p><h2>Why this exists</h2><div class="grid"><div class="card"><h3>Before</h3><p>No configurable persistent meeting record; duplicated compiler and distribution rules; writing opportunities easily missed.</p></div><div class="card"><h3>After</h3><p>Meeting records start and stay in the meeting folder. Research retains its output lifecycle. Both propose source-linked changes and writing opportunities, and absorb executes approved rows.</p></div></div><h2>The proposed flow</h2><div class="scroll"><svg viewBox="0 0 1040 330" role="img" aria-label="Meeting or research capture produces a record, reviewed by the user, then absorb routes approved rows to wiki, documents, tasks and writing."><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10" style="fill:var(--line)"/></marker></defs><rect x="15" y="25" width="210" height="70" rx="8"/><text x="30" y="54">Meeting + template</text><text x="30" y="79">record in meetings/</text><rect x="15" y="185" width="210" height="70" rx="8"/><text x="30" y="214">Research</text><text x="30" y="239">artifact in output/</text><rect x="310" y="105" width="170" height="90" rx="8"/><text x="326" y="141">Review proposals</text><text x="326" y="166">Source-linked rows</text><rect x="570" y="105" width="150" height="90" rx="8"/><text x="589" y="143">absorb</text><text x="589" y="168">Approved rows</text><rect x="810" y="5" width="215" height="60" rx="8"/><text x="824" y="42">Wiki via wiki-compile</text><rect x="810" y="85" width="215" height="60" rx="8"/><text x="824" y="122">Project / context docs</text><rect x="810" y="165" width="215" height="60" rx="8"/><text x="824" y="202">Owned tasks</text><rect x="810" y="245" width="215" height="60" rx="8"/><text x="824" y="282">Writing ideas / enrich</text><path d="M215 60 L285 60 L285 135 L320 135" marker-end="url(#arrow)"/><path d="M215 220 L285 220 L285 175 L320 175" marker-end="url(#arrow)"/><path d="M470 150 L580 150" marker-end="url(#arrow)"/><path d="M710 130 L770 130 L770 35 L820 35" marker-end="url(#arrow)"/><path d="M710 140 L790 140 L790 115 L820 115" marker-end="url(#arrow)"/><path d="M710 160 L790 160 L790 195 L820 195" marker-end="url(#arrow)"/><path d="M710 175 L770 175 L770 275 L820 275" marker-end="url(#arrow)"/></svg></div><p>Meetings stay in place through absorption. Completed research artifacts follow their existing retained-raw rule. Compilation status and completion of all routes are separate.</p><h2>Compatibility and limits</h2><p>Old commands remain thin entry points. Existing profile v4 remains usable. No production installation, signing, release or authored-prose rewrite is included. A selected missing template errors instead of silently falling back. Unowned install collisions remain blocked. Dedicated skills-platform setup is separate follow-up <a href="https://github.com/coreyfloyd/admin-panel/issues/456">admin-panel#456</a>, not a dependency for this pass.</p><details open><summary>Full binding specification, including every acceptance criterion</summary><h1
+id="template-driven-capture-shared-absorption-and-wiki-compilation">Template-driven
+capture, shared absorption and wiki compilation</h1>
+<h2 id="problem-statement">Problem Statement</h2>
+<p>Meeting capture currently distributes information without a
+persistent configurable meeting record. Research to Wiki and the
+vault-local compiler duplicate wiki-writing behavior, while research
+absorption and conversational capture duplicate distribution
+responsibilities. Users need one understandable lifecycle for capturing
+evidence, reviewing proposed changes and executing approved updates.</p>
+<h2 id="solution">Solution</h2>
+<p>Create meeting records directly in a configured meeting folder using
+a user-selected Markdown template. Provide a small public example;
+Corey’s richer coaching format remains private. Introduce absorb as the
+shared approved-plan executor and wiki-compile as its wiki-writing
+dependency, retaining compatibility entry points for existing commands.
+Research artifacts keep their existing output-to-retained-reference
+lifecycle; meeting records remain in place.</p>
+<h2 id="user-stories">User Stories</h2>
+<h3 id="s1--keep-a-configurable-meeting-record">S1 — Keep a configurable
+meeting record</h3>
+<ul>
+<li>A user can select a default meeting-record folder and Markdown
+template through the profile, and override the template for one
+capture.</li>
+<li>The record is created directly in that folder and retains its path
+through capture, review, partial execution and completed absorption. It
+is never staged in output or archived as a replacement for its primary
+sources.</li>
+<li>The bundled example includes identity/date, sources and coverage,
+summary, decisions, actions, writing opportunities, proposed changes,
+open questions and execution results; coaching is optional template
+content.</li>
+<li>Transcript, calendar event and meeting-note adapters remain
+independent. Local paths or Google Docs links remain accepted as note
+inputs, without requiring a common notes directory.</li>
+<li>A provider-returned calendar event URL is saved and linked when
+available; missing links or inputs are reported, not fabricated.</li>
+<li>Repeated capture reuses the record/source by source identity and
+preserves user edits and prior execution results.</li>
+<li>An explicitly selected missing or invalid template fails clearly
+instead of silently substituting the example. Relative paths resolve
+from the configured knowledge root; explicit absolute template paths are
+accepted. Record folders remain within the configured knowledge
+root.</li>
+<li>Public examples, tests and docs contain no private names, transcript
+excerpts or machine paths.</li>
+</ul>
+<h3 id="s2--absorb-an-approved-plan-across-destinations">S2 — Absorb an
+approved plan across destinations</h3>
+<ul>
+<li>absorb accepts supported research artifacts and meeting records,
+validates their source-linked proposed changes and executes only
+authorized rows.</li>
+<li>Shared row semantics cover wiki changes, named document changes,
+owned actions, writing opportunities and explicit retention/discard
+decisions; custom templates need not use the research artifact’s
+headings.</li>
+<li>Authorization already given is carried through; only changed scope,
+missing facts or destination-required confirmation produces a further
+approval request.</li>
+<li>Approved wiki rows call wiki-compile using selected primary
+evidence, never the generated record as independent evidence.</li>
+<li>Project, context, content and task writes use the target’s
+configured workflow and rules. Context confirmation, authored prose
+ownership and task deduplication/read-back remain intact.</li>
+<li>Each row records completion, pending work or explicit decline. A
+retry reuses confirmed results and never recreates already-confirmed
+tasks or source records.</li>
+<li>Meeting absorption updates the record in place. Research absorption
+retains the existing completed-artifact filing rule. Source ingestion
+status remains distinct from complete capture/absorption.</li>
+<li>Original transcripts keep a separate policy-configured raw
+intake/archive lifecycle: complete routes permit retention filing,
+pending routes retain intake, references are repaired and no different
+source is overwritten.</li>
+</ul>
+<h3 id="s3--use-one-wiki-compiler-and-audit-implementation">S3 — Use one
+wiki compiler and audit implementation</h3>
+<ul>
+<li>wiki-compile is the canonical compiler for selected primary sources.
+research-to-wiki and vault-compile delegate to it as compatibility entry
+points rather than maintaining independent synthesis rules.</li>
+<li>Explicit inbox/backlog triage selects a coherent source subset
+before compilation; there is no automatic whole-library sweep or
+approval expansion.</li>
+<li>Direct authorized compilation remains supported without first
+manufacturing a meeting/research artifact.</li>
+<li>Existing wiki-disabled behavior, blind drafting/source comparison,
+privacy, tension/gap checks, local page conventions, links/indexes and
+ingestion tracking remain supported.</li>
+<li>wiki-audit remains opt-in and read-only; vault-audit becomes a
+compatibility entry point. Local mode thresholds and coverage
+expectations come from policy rather than being discarded.</li>
+</ul>
+<h3 id="s4--preserve-packaging-clients-and-migration">S4 — Preserve
+packaging, clients and migration</h3>
+<ul>
+<li>Both Claude Code and Codex receive the same package skills,
+templates and contracts through normal installation.</li>
+<li>research-absorb remains a deprecated wrapper around absorb. Existing
+research artifact links continue resolving, including the former
+artifact-contract reference path.</li>
+<li>No installer overwrites an unowned local skill or custom template;
+collisions remain explicit. Migration docs explain local compiler/audit
+policy and wrapper replacement after installing a signed release.</li>
+<li>README, profile/setup instructions, installation/migration docs,
+contracts and architecture references agree on names, record shapes,
+execution and filing.</li>
+<li>Existing profile version 4 remains valid when the new optional
+settings are absent. Missing optional settings use the bundled minimal
+template and documented meeting-folder default; setting meeting defaults
+never creates files during profile validation.</li>
+</ul>
+<h3 id="s5--feed-source-grounded-opportunities-into-writing">S5 — Feed
+source-grounded opportunities into writing</h3>
+<ul>
+<li>Meeting capture and durable research skills offer a
+writing-opportunities route alongside actions, wiki and document
+changes; no useful opportunity is a valid explicit result.</li>
+<li>Candidates distinguish a new idea from enrichment of an existing
+idea or a follow-up to already-published material. Search configured
+ideas, drafts and published records before proposing duplicate ideas;
+report unavailable publication coverage rather than claiming
+novelty.</li>
+<li>Each candidate retains source pointers, speaker/author attribution,
+a proposed angle, target when known, a specific proposed addition,
+privacy/public-reuse limits and approval/execution state. Another
+person's idea is not attributed to the user.</li>
+<li>User-specific writing storage, templates, scoring and writing
+workflows are supplied by profile/local policy. Without a configured
+writable destination, candidates remain in the meeting/research
+artifact; do not invent an ideas directory or require the user's
+taxonomy.</li>
+<li>Capture proposes writing material, not unsolicited first-person
+drafts or publication. absorb files only authorized candidate rows
+through the configured writing workflow and preserves authored drafts,
+published text and target-required confirmations.</li>
+<li>Candidate identities and receipts support retry without duplicate
+seeds or repeated additions. Meeting candidates remain with the in-place
+meeting record; research candidates remain in the research artifact
+until its normal approved retention transition.</li>
+<li>Both meeting and research examples demonstrate new idea, enrichment,
+already-published overlap and no-candidate cases without private meeting
+content.</li>
+</ul>
+<h2 id="data-model">Data Model</h2>
+<p>One meeting record describes one meeting with source identifiers,
+source links, coverage, participants, date, template-derived content,
+proposed changes and execution results. One distribution row describes
+one proposed change with stable identity, evidence, target,
+authorization, timing when relevant and confirmed result. Writing
+opportunity is a distribution-row kind, identifying a proposed new idea,
+enrichment or published follow-up and its evidence. Record kind
+determines retention behavior. Original sources and generated records
+retain distinct provenance.</p>
+<h2 id="architecture-decisions">Architecture Decisions</h2>
+<p>Capture frontends gather evidence and propose dispositions. A shared
+distribution contract owns approval and execution semantics. absorb
+orchestrates the plan; wiki-compile owns wiki synthesis. Local policy
+owns taxonomy, personal templates and task/project adapters. Custom
+templates control presentation without removing provenance or approval
+requirements. Compatibility entry points contain delegation only.</p>
+<h2 id="testing-decisions">Testing Decisions</h2>
+<p>Use existing profile, contract, isolated-install and release/tamper
+suites. Add behavior checks for template selection/path resolution, root
+containment, absent defaults, preserved profile-version-4 compatibility
+and install collisions. Run realistic isolated captures/absorption
+against public or supplied source fixtures with stubbed target
+workflows: prove stable record location, optional coaching, correct
+calendar linking, selected-only execution, retry deduplication,
+wiki-disabled routing, new/enrich/published/no-candidate writing routes,
+preserved authored prose, writing retry deduplication and separate
+research/meeting retention. Contract checks must not merely assert
+heading wording. Swift transcription checks are unchanged but remain
+part of a future release gate.</p>
+<h2 id="out-of-scope">Out of Scope</h2>
+<p>No live meeting backfill, new personal follow-up tasks, paid
+consulting scope, changes to authored prose, unrelated open Hippocampus
+tickets, automatic research-to-wiki ingestion, scheduling, direct
+messages, production installation or release publication. Existing
+transcript-filing candidate and all worktrees are preserved; applicable
+approved filing behavior is reconciled without merging or publishing
+that candidate implicitly. Version/tag/signing decisions belong to a
+later authorized release pass.</p>
+<h2 id="evaluator-rubric">Evaluator Rubric</h2>
+<p>Existing runtime rubric for this pass; a dedicated skills platform
+and rubric are a separately tracked future workflow change.
+Feature-specific checks: configuration boundaries, source provenance,
+scoped authorization, durable results, idempotent external effects,
+client parity, packaging and documentation consistency.</p>
+<h2 id="open-questions">Open questions</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" checked="" />Independent spec
+evaluation: skipped at Corey’s direction on October 9; an independent
+agent code review of the finished changes is required.</label></li>
+</ul>
+<h2 id="further-notes">Further Notes</h2>
+<p>Scope reflects Corey’s October 9 directions: personal meeting format
+approved; record created and retained in meeting folder; configurable
+template with smaller public example; generic absorb coordinates
+approved changes; one shared wiki compiler with direct invocation and
+compatibility aliases. Package implementation authorized in chat; this
+document is the concrete acceptance contract for the development
+workflow, pending its formal review.</p>
+<p>October 9 scope amendment: Corey requested writing-opportunity
+capture for meetings and research, immediate routing using the existing
+workflow, future dedicated skills dispatch/evaluation setup, and
+personal meeting backfill beginning with Kate. Live backfill belongs to
+the vault capture pass, not this public-package implementation.
+Independent spec review remains skipped; independent code review remains
+required.</p>
+</details><p class="src">Agent-authored specification: codex/meeting-absorb-compile at 43f6321; October 9, 2026. Existing runtime dispatch resolution verified this pass. Personal meeting backfill is separate vault work.</p></body></html>
