@@ -1,6 +1,7 @@
 # {{title}}
 
-Date: {{date}}  
+Date: {{date}}
+
 Record identity: {{record_id}}
 
 ## Sources and coverage

@@ -6,7 +6,7 @@ Tracking: [hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31).
 
 The rendered companion shows the finished README, referenced diagram and existing
 presentation alongside actual pre-change versions from candidate base `ae82e49`.
-Those original files remain in `2026-10-09-public-before/`; the earlier specification
+Those original contents remain (the HTML snapshot normalizes trailing whitespace only) in `2026-10-09-public-before/`; the earlier specification
 review remains unchanged. The current runtime map is regenerated from committed
 implementation evidence. External providers and live user records are outside this
 review; no production activation, release, backfill or personal task write occurred.

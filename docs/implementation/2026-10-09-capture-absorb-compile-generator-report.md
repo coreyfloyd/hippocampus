@@ -29,7 +29,7 @@ release remain orchestrator/maintainer responsibilities.
   through existing manifest/installer mechanics. Unowned new-command collisions and
   custom-template preservation are tested. README, referenced SVG, existing deck,
   profile/setup/install/migration/architecture documents agree on the new lifecycle.
-  Actual pre-change README/image/deck files are preserved as dated history; older
+  Actual pre-change README/image/deck content is preserved as dated history (the deck has trailing whitespace normalized only); older
   specification review artifacts are unchanged.
 - S5: meeting/research capture proposes source-linked new/enrich/published-follow-up
   opportunities or explicit none, with search coverage, attribution and reuse limits.
@@ -53,13 +53,14 @@ All of the following completed with exit 0 unless explicitly stated otherwise:
 | `python3 tests/test-profile-meetings.py` | 12 tests pass; absent defaults, overrides, symlink containment, template failures, existing note URL/path cases |
 | `bash tests/test-contracts.sh` | Pass; expected invalid-profile refusals are negative tests |
 | `bash tests/test-install.sh` | Pass; temporary homes only, both-client parity, 8 new-command collision cases, custom-template preservation, upgrade/retry/tamper and actual v0.7.0 migration |
+| Final temporary-home `bash install.sh` and `bash install.sh --verify` with a wiki-disabled profile | Pass; the final normalized template is byte-identical in both isolated clients |
 | `bash tests/test-release.sh` | Pass; disposable repositories/keys only; expected checksum/signature refusals are negative tests, not published signing |
 | `swift test --scratch-path /tmp/hippocampus31-swift-build` in the Apple Speech package | Initial exit 1: nested `sandbox-exec` refused; no source failure established |
 | `CLANG_MODULE_CACHE_PATH=/tmp/hippocampus31-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/hippocampus31-module-cache swift test --disable-sandbox --scratch-path /tmp/hippocampus31-swift-build --cache-path /tmp/hippocampus31-swift-cache --config-path /tmp/hippocampus31-swift-config --security-path /tmp/hippocampus31-swift-security` | Pass: 5 unchanged Swift tests in 2 suites, using temporary caches/build paths |
 | `python3 <installed skill-creator>/scripts/quick_validate.py skills/<name>` for absorb, wiki-compile, vault-compile, vault-audit, research-absorb, research-to-wiki, meeting-capture and wiki-audit | All 8 pass |
 | Concrete relative Markdown reference scan under skills; `xml.etree.ElementTree.parse` on the public SVG | No missing concrete skill links; SVG parses. Initial broad scan caught existing literal `(url)` examples; the concrete-link scan excludes those placeholders |
 | `uv run --with markdown python scripts/render-public-review.py` | Pass; full before/after README, image and existing presentation embedded/linked in portable HTML |
-| `git diff --check` | Pass |
+| `git diff --check ae82e49 HEAD` | Final committed-range check passes; the audit found and removed whitespace in the new template and historical HTML snapshot |
 
 The behavior tests were written and observed failing before their production
 mechanics were added. Fixtures use the public package wiki contract and isolated

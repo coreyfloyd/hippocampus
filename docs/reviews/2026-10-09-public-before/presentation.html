@@ -16,7 +16,7 @@
       --text-main: #f0f2f5;
       --text-muted: #9ba3af;
       --text-dim: #606b76;
-      
+
       --cyan: #38bdf8;
       --cyan-glow: rgba(56, 189, 248, 0.15);
       --tangerine: #fb923c;
@@ -259,7 +259,7 @@
         <h2>Two Paths: Asking Questions vs. Studying Sources</h2>
         <p class="message">Start with a spontaneous prompt, or bring your own materials in virtually any format to learn from.</p>
       </div>
-      
+
       <div style="display: grid; grid-template-columns: 1.15fr 100px 1fr; align-items: center; gap: 14px; margin: auto 0;">
         <!-- Left: The Two Distinct Input Paths -->
         <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -286,7 +286,7 @@
               <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH B · STUDY YOUR SOURCES</div>
             </div>
             <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 10px;">Ingest Any Media You Care About</div>
-            
+
             <!-- Diverse Format Icon Grid -->
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
               <!-- PDFs & Docs -->
@@ -426,13 +426,13 @@
           <div style="color: var(--text-dim); border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">output/report.md</div>
           <div style="color: var(--cyan); font-weight: 600;">1. # Question &amp; Scope</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">What we are asking.</div>
-          
+
           <div style="color: var(--tangerine); font-weight: 600;">2. # What the Sources Say</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Cross-source evidence and synthesis.</div>
-          
+
           <div style="color: var(--crimson); font-weight: 600;">3. # Source Integrity &amp; Gaps</div>
           <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Verified facts and missing context.</div>
-          
+
           <div style="color: var(--emerald); font-weight: 600;">4. # How to Absorb</div>
           <div style="font-size: 0.8rem; color: var(--text-dim);">Clear next steps for your personal notes.</div>
         </div>
@@ -472,10 +472,10 @@
         <svg viewBox="0 0 80 220" style="width: 100%; height: 210px;">
           <path d="M 5 110 C 40 110, 45 35, 75 35" fill="none" stroke="var(--emerald)" stroke-width="2.5" />
           <polygon points="73,30 80,35 73,40" fill="var(--emerald)" />
-          
+
           <path d="M 5 110 L 75 110" fill="none" stroke="var(--cyan)" stroke-width="2.5" />
           <polygon points="73,105 80,110 73,115" fill="var(--cyan)" />
-          
+
           <path d="M 5 110 C 40 110, 45 185, 75 185" fill="none" stroke="var(--text-dim)" stroke-width="2.5" />
           <polygon points="73,180 80,185 73,190" fill="var(--text-dim)" />
         </svg>
@@ -638,11 +638,11 @@
     function showSlide(index) {
       if (index < 0) index = 0;
       if (index >= slides.length) index = slides.length - 1;
-      
+
       slides[current].classList.remove('active');
       current = index;
       slides[current].classList.add('active');
-      
+
       counter.textContent = `${current + 1} / ${slides.length}`;
     }
 
