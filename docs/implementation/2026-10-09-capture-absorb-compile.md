@@ -1,5 +1,12 @@
 # Implement capture, shared absorption and writing opportunities
 
+## Your execution role
+
+You are the implementation generator, already launched by the orchestrating interactive session through the approved runtime slate. Read the canonical generator role contracts at `~/.claude/dotfiles/roles/generate/runtime/core.md` and `~/.claude/dotfiles/roles/generate/runtime/feature.md` before executing this brief. Implement the approved specification in this assigned candidate, run its required checks, commit your work and return evidence.
+
+Do not re-dispatch this ticket, run a launch-generator command, ask for another go, or act as the interactive orchestrator. Corey already approved the specification and the execution slate. The external orchestrator owns launch planning, independent review, evaluation, ticket lifecycle and approval communication. Your job is the implementation within this brief’s scope. You may read repository and skill constraints, but the dev-execute orchestrator steps are not your generator task.
+
+
 Ticket: [hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31).
 
 Implement the approved contract in [the specification](../specs/2026-10-09-capture-absorb-compile.md), including all five stories and their acceptance criteria. Existing runtime generation, independent native review and isolated rubric evaluation are the selected workflow for this pass. Do not substitute an invented skills platform; [admin-panel#456](https://github.com/coreyfloyd/admin-panel/issues/456) owns that future workflow.
