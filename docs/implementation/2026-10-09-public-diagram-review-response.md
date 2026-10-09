@@ -45,7 +45,7 @@ Each source below was read this pass. Aliases are explicitly named; they are not
 | `meeting-input` | Meeting inputs — Source / input | `skills/knowledge-capture/references/meetings.md:15` |
 | `capture` | meeting-capture — Process / command | `skills/knowledge-capture/references/meetings.md:33` |
 | `meeting` | Meeting record — Durable record | `skills/absorb/scripts/distribution.py:131` |
-| `approval` | Row approval — Approval / control | `skills/absorb/SKILL.md:29` |
+| `approval` | Row authority — Approval / control | `skills/absorb/SKILL.md:29` |
 | `absorb` | absorb — Process / command | `skills/absorb/SKILL.md:14` |
 | `absorb-detail` | absorb — Process / command | `skills/absorb/SKILL.md:14` |
 | `targets` | Local destinations — Destination / store | `skills/absorb/SKILL.md:38` |
@@ -111,15 +111,61 @@ Exact checks:
 - `python3 /tmp/hippocampus31-diagram-check.py`: exit 0; XML, 11 legends, 120 actual arrow endpoints, node-role consistency, relative assets/links, source references and protected-path diffs passed. Reproducible checker is included below.
 - `node /tmp/hippocampus31-deck-navigation.cjs`: exit 0; executes the actual deck script against a DOM stub built from its 11 actual IDs. Keyboard forward and Previous counters pass, including first-slide clamping. This is JavaScript logic evidence, not browser layout evidence.
 - `node "$HOME/.codex/skills/archify/bin/archify.mjs" render architecture docs/architecture/runtime.architecture.json /tmp/hippocampus31-architecture-validated.html --quality showcase --repo-root .`: exit 0 on final source. Initial checks caught schema/route/label constraints; corrected them before regenerating the viewer graph. This renderer check is not Archify finalize or isolated evaluator PASS.
-- `uv run --with cairosvg python /tmp/hippocampus31-static-raster.py`: exit 0; static light/dark raster inspection with canonical CSS variables resolved into SVG attributes. The rasterizer cannot execute browser CSS/theme/interaction logic. Both final palette renders were inspected through the image tool; nodes, legend, branches and labels are readable. The first raw CSS raster attempt was transparent; attribute resolution supplied usable static evidence.
+- `uv run --with cairosvg python /tmp/hippocampus31-static-raster.py`: exit 0; static light/dark raster inspection with canonical CSS variables resolved into SVG attributes. The rasterizer cannot execute browser CSS/theme/interaction logic. Both palette renders were inspected through the image tool. That static inspection did not establish diamond text containment; the later Chromium measurement below supersedes its label-fit assessment. The first raw CSS raster attempt was transparent; attribute resolution supplied usable static evidence.
 - Canonical palette prefix equality, current public artifact private-path scan and absence of external deck scripts/styles: passed.
 - `bash tests/test-contracts.sh`: exit 0, including public-path leakage checks.
 - `git diff --check`: exit 0.
 - `shasum -a 256 docs/implementation/review-r1-4692da10a47bae2dd8b9f35e.txt docs/implementation/review-r1-4692da10a47bae2dd8b9f35e-handoff.json`: unchanged `adfab75aeb91cbb5f9ec77b0c668500ff7bd5dee91aeb4d867c3964e46cfca37` and `da76a950a2276b2b5555fd507949eee7988d934b94146c62c64a5aaba30af992`.
 
+## Post-render label correction
+
+Root's actual Chromium rendering of the SVG embedded in HTML on MacBook, light theme at 1280×1500, exposed title boxes crossing the diamond outlines. The normalized corner test `|dx|/(w/2) + |dy|/(h/2)` exceeded 1 for Row authority (1.03685), Compiler authority (1.16715), All rows terminal (1.16209) and Terminal + filing (1.16209). Root's browser-only scoped 13px rule eliminated all four violations. (validated: root's supplied Chromium `getBBox` measurements and screenshot.)
+
+The shared renderer now emits `[data-workflow-role="control"] .wf-label{font-size:13px}` in every generated workflow diagram. This preserves complete titles and accessible labels while changing only control-title size. The model and node inventory use **Row authority** consistently. Node positions, dimensions, polygon shapes, semantic IDs, source references and all 18 edge routes remain unchanged. The earlier edge-label shortening to **approved rows** is preserved; root confirmed it no longer clips in slide 8. Primary evidence, retention, taxonomy and legends are unchanged.
+
+For this narrow correction, regeneration, the existing mechanical arrow/legend checker and regeneration stability were rerun successfully. The checker validates XML, all 11 current diagram legends and 120 marker-end arrow endpoints against true node shapes, including diamond polygons. A comparison against candidate `501a490` confirms unchanged node geometry and edge routes, and verifies the scoped control-title rule in every generated workflow SVG. These are source and geometry checks; final rendered text containment on this regenerated candidate remains root's browser check. No package/runtime checks were rerun because those files and contracts did not change.
+
+Exact continuation checks on MacBook:
+
+- `uv run --with markdown python scripts/render-public-review.py`: exit 0.
+- `python3 /tmp/hippocampus31-diagram-check.py`: exit 0; 22 nodes, 18 edges, 11 legends and 120 marker arrows; protected files unchanged.
+- `node /tmp/hippocampus31-deck-navigation.cjs`: exit 0; 11-slide navigation logic unchanged (DOM stub).
+- `uv run --with markdown python -` with the assertions below: exit 0; only the model title changed, arrow attributes unchanged, scoped rule present exactly once in all 10 workflow SVGs (the eleventh diagram is the wiki relationship illustration), four generated files byte-stable.
+- `git diff --check`: exit 0. Native capture/receipt SHA-256 values remain those listed above.
+
+```python
+from pathlib import Path
+import hashlib, json, re, subprocess, xml.etree.ElementTree as ET
+paths = ['docs/images/question-answer-action.svg', 'docs/presentation.html',
+         'docs/architecture/runtime.html', 'docs/reviews/2026-10-09-public-documentation.html']
+old = json.loads(subprocess.check_output(['git', 'show',
+    '501a490:docs/architecture/runtime.architecture.json'], text=True))
+for node in old['components']:
+    if node['label'] == 'Row approval': node['label'] = 'Row authority'
+assert old == json.loads(Path('docs/architecture/runtime.architecture.json').read_text())
+ns = '{http://www.w3.org/2000/svg}'
+def arrows(svg):
+    return [p.attrib for p in ET.fromstring(svg).iter(ns + 'path') if 'marker-end' in p.attrib]
+assert arrows(subprocess.check_output(['git', 'show', '501a490:' + paths[0]], text=True)) == arrows(Path(paths[0]).read_text())
+count = 0
+for path in paths:
+    content = Path(path).read_text()
+    for svg in ([content] if path.endswith('.svg') else re.findall(r'<svg\b.*?</svg>', content, re.S)):
+        if 'data-workflow-diagram' in svg:
+            css = ET.fromstring(svg).find(ns + 'style').text
+            assert css.count('[data-workflow-role="control"] .wf-label{font-size:13px}') == 1
+            count += 1
+assert count == 10
+before = {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}
+subprocess.run(['python', 'scripts/render-public-review.py'], check=True)
+assert before == {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}
+```
+
 ## Remaining limits and gates
 
-`uv run --with playwright python /tmp/hippocampus31-visual.py` exited 1 on this MacBook: bundled Chromium headless shell was denied its Mach-port bootstrap (`bootstrap_check_in`, Permission denied 1100). No changed-content browser screenshots, browser layout bounds, HTTP loading, responsive document width or real Light/Dark/button interaction PASS is claimed. Responsive CSS and internal scroll boundaries were inspected statically; they still require the orchestrator's real browser check at desktop and 390px. Earlier independent browser evidence applies to the pre-correction candidate and cannot approve this changed artifact. Inspect slides 4–9, all comparison diagrams, theme switching, slide bounds/counters and the architecture viewer after this correction.
+The earlier generator command `uv run --with playwright python /tmp/hippocampus31-visual.py` exited 1 because its sandbox denied Chromium's Mach-port bootstrap (`bootstrap_check_in`, Permission denied 1100). That failure is scoped to the generator sandbox. Root subsequently rendered HTML-embedded SVG successfully on this MacBook; the direct standalone SVG screenshot timed out. Root supplied `/tmp/hippo31-diagram-corrected-light.png`, reported no review JavaScript errors, responsive document width 390/390 and legends on deck slides 7/8. Transitions were disabled only in the QA DOM. (validated: root's supplied browser evidence.)
+
+Root will perform hosted Light/Dark, responsive and full actual browser QA on the final regenerated candidate outside this sandbox. The generator made no further browser launch attempts. Root's successful earlier render established the defects and measured repair; it does not substitute for final-candidate browser verification or maintainer approval.
 
 No native reviewer/evaluator/agent was launched. Independent evaluation remains ESCALATE due the existing transport limitation, not converted to PASS by these root checks. [admin-panel#455](https://github.com/coreyfloyd/admin-panel/issues/455) remains an unapproved separate blocker; [hippocampus#32](https://github.com/coreyfloyd/hippocampus/issues/32) remains a separately filed package-rubric follow-up. Maintainer public-documentation/public-communication approval remains pending. No merge, install, release, publication, live capture/backfill or task write occurred. Other worktrees and historical/native evidence are preserved.
 

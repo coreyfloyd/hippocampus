@@ -166,7 +166,7 @@
     {
       "id": "approval",
       "type": "security",
-      "label": "Row approval",
+      "label": "Row authority",
       "sublabel": "required facts satisfied",
       "pos": [
         805,

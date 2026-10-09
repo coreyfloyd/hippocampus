@@ -8,6 +8,10 @@ root = Path(__file__).resolve().parents[1]
 review = root / 'docs/reviews'
 before = review / '2026-10-09-public-before'
 css = ET.parse(root / 'docs/images/question-answer-action.svg').getroot().find('{http://www.w3.org/2000/svg}style').text
+# Root measured title bounds against the diamond polygon in Chromium.
+control_label_rule = '[data-workflow-role="control"] .wf-label{font-size:13px}'
+if control_label_rule not in css:
+    css += '\n' + control_label_rule + '\n'
 
 import json
 import re
