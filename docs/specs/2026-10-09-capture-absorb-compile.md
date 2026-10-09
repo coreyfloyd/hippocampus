@@ -66,7 +66,7 @@ Runtime/skills rubric: configuration boundaries, source provenance, scoped autho
 
 ## Open questions
 
-- [ ] Independent spec evaluation: run one scoring pass or proceed to approval without it; Corey chooses per dev-plan.
+- [x] Independent spec evaluation: skipped at Corey’s direction on October 9; an independent agent code review of the finished changes is required.
 
 ## Further Notes
 
