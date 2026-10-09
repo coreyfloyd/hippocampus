@@ -2,332 +2,122 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Hippocampus: capture, approved absorption and retention",
+    "title": "Hippocampus workflow contracts: capture, execute, retain",
     "output": "docs/architecture/runtime.html",
     "quality_profile": "showcase",
     "repository": {
       "url": "https://github.com/coreyfloyd/hippocampus.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "b622db65aded3d482bf1558b4c73f0ad401893b2"
+      "revision": "7f47af8eb48bc09cbb8b9492ee9a9a3609f05160"
+    },
+    "viewBox": [
+      1240,
+      1380
+    ],
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "frontend": {
+          "label": "Durable record"
+        },
+        "backend": {
+          "label": "Process / command"
+        },
+        "database": {
+          "label": "Destination / store"
+        },
+        "security": {
+          "label": "Approval / control"
+        },
+        "external": {
+          "label": "Source input"
+        }
+      }
     }
   },
   "components": [
     {
-      "id": "researcher",
+      "id": "research-input",
       "type": "external",
-      "label": "Researcher",
-      "sublabel": "user in an agent session",
+      "label": "Question + sources",
+      "sublabel": "primary sources, not a report",
       "pos": [
-        40,
-        380
+        30,
+        180
       ],
       "size": [
-        140,
-        64
-      ]
-    },
-    {
-      "id": "durable",
-      "type": "backend",
-      "label": "Durable research",
-      "sublabel": "research-sources \u00b7 research-topic",
-      "pos": [
-        280,
-        380
-      ],
-      "size": [
-        350,
-        64
+        200,
+        90
       ],
       "sources": [
         {
           "path": "skills/research-sources/SKILL.md",
-          "line": 12,
-          "end_line": 37,
-          "label": "source research"
+          "line": 8,
+          "label": "implemented workflow contract"
         }
       ]
     },
     {
-      "id": "notebook",
-      "type": "external",
-      "label": "Gemini Notebook",
-      "sublabel": "notebooklm CLI",
+      "id": "research",
+      "type": "backend",
+      "label": "Research capture",
+      "sublabel": "research-topic / research-sources",
       "pos": [
-        290,
-        190
+        275,
+        180
       ],
       "size": [
-        150,
-        60
+        220,
+        90
       ],
       "sources": [
         {
           "path": "skills/research-topic/SKILL.md",
-          "line": 3,
-          "end_line": 13,
-          "label": "grounded notebook"
-        }
-      ]
-    },
-    {
-      "id": "web",
-      "type": "external",
-      "label": "Web pages",
-      "sublabel": "defuddle.md endpoint",
-      "pos": [
-        460,
-        190
-      ],
-      "size": [
-        140,
-        60
-      ],
-      "sources": [
-        {
-          "path": "skills/research-sources/SKILL.md",
-          "line": 28,
-          "end_line": 38,
-          "label": "extract primary text"
-        }
-      ]
-    },
-    {
-      "id": "transcribe",
-      "type": "backend",
-      "label": "transcribe",
-      "sublabel": "Apple Speech, macOS 26+",
-      "pos": [
-        620,
-        190
-      ],
-      "size": [
-        160,
-        60
-      ],
-      "sources": [
-        {
-          "path": "skills/transcribe/SKILL.md",
-          "line": 10,
-          "end_line": 24,
-          "label": "route + local CLI"
-        },
-        {
-          "path": "skills/research-sources/SKILL.md",
           "line": 30,
-          "label": "invoked for media"
+          "label": "implemented workflow contract"
         }
       ]
     },
     {
-      "id": "profile",
-      "type": "security",
-      "label": "Profile gate",
-      "sublabel": "validate_profile.py",
-      "pos": [
-        280,
-        580
-      ],
-      "size": [
-        170,
-        64
-      ],
-      "tag": "~/.config/hippocampus",
-      "sources": [
-        {
-          "path": "scripts/validate_profile.py",
-          "line": 110,
-          "end_line": 135,
-          "label": "validate profile"
-        },
-        {
-          "path": "scripts/validate_profile.py",
-          "line": 77,
-          "end_line": 112,
-          "label": "template and folder"
-        }
-      ]
-    },
-    {
-      "id": "artifact",
-      "type": "database",
-      "label": "Research artifact",
-      "sublabel": "output/ \u00b7 transient",
+      "id": "report",
+      "type": "frontend",
+      "label": "Research report",
+      "sublabel": "output/ \u00b7 proposed rows",
       "pos": [
         540,
-        580
+        180
+      ],
+      "size": [
+        230,
+        90
+      ],
+      "sources": [
+        {
+          "path": "skills/research-topic/SKILL.md",
+          "line": 30,
+          "label": "capture output and proposed plan"
+        }
+      ]
+    },
+    {
+      "id": "meeting-input",
+      "type": "external",
+      "label": "Meeting inputs",
+      "sublabel": "transcript \u00b7 event \u00b7 notes",
+      "pos": [
+        30,
+        325
       ],
       "size": [
         200,
-        64
+        90
       ],
       "sources": [
         {
-          "path": "skills/absorb/references/artifact-contract.md",
-          "line": 13,
-          "end_line": 48,
-          "label": "research artifact shape"
-        }
-      ]
-    },
-    {
-      "id": "absorb",
-      "type": "backend",
-      "label": "absorb",
-      "sublabel": "authorized rows + durable receipts",
-      "pos": [
-        860,
-        380
-      ],
-      "size": [
-        220,
-        64
-      ],
-      "sources": [
-        {
-          "path": "skills/absorb/SKILL.md",
-          "line": 21,
-          "end_line": 61,
-          "label": "approved route ownership"
-        },
-        {
-          "path": "skills/absorb/scripts/distribution.py",
-          "line": 265,
-          "end_line": 355,
-          "label": "durable receipt executor"
-        }
-      ]
-    },
-    {
-      "id": "targets",
-      "type": "database",
-      "label": "Target documents",
-      "sublabel": "briefs, context, repo docs",
-      "pos": [
-        820,
-        190
-      ],
-      "size": [
-        160,
-        60
-      ],
-      "sources": [
-        {
-          "path": "skills/absorb/SKILL.md",
-          "line": 38,
-          "end_line": 46,
-          "label": "target workflow and rules"
-        }
-      ]
-    },
-    {
-      "id": "followup",
-      "type": "external",
-      "label": "Follow-up route",
-      "sublabel": "artifact_followup_destination",
-      "pos": [
-        1000,
-        190
-      ],
-      "size": [
-        180,
-        60
-      ],
-      "sources": [
-        {
-          "path": "skills/absorb/SKILL.md",
-          "line": 42,
-          "end_line": 50,
-          "label": "owned task workflow"
-        }
-      ]
-    },
-    {
-      "id": "raw",
-      "type": "database",
-      "label": "raw/research/",
-      "sublabel": "source text + provenance",
-      "pos": [
-        960,
-        580
-      ],
-      "size": [
-        170,
-        64
-      ],
-      "sources": [
-        {
-          "path": "skills/absorb/SKILL.md",
-          "line": 33,
-          "end_line": 41,
-          "label": "selected primary staging"
-        }
-      ]
-    },
-    {
-      "id": "compile",
-      "type": "backend",
-      "label": "wiki-compile",
-      "sublabel": "curated-subset compiler",
-      "pos": [
-        950,
-        820
-      ],
-      "size": [
-        190,
-        64
-      ],
-      "sources": [
-        {
-          "path": "skills/wiki-compile/SKILL.md",
-          "line": 12,
-          "end_line": 52,
-          "label": "primary subset and scope"
-        }
-      ]
-    },
-    {
-      "id": "wiki",
-      "type": "database",
-      "label": "wiki/",
-      "sublabel": "articles, _index, hot.md",
-      "pos": [
-        960,
-        1080
-      ],
-      "size": [
-        170,
-        64
-      ],
-      "sources": [
-        {
-          "path": "skills/wiki-compile/SKILL.md",
-          "line": 50,
-          "end_line": 62,
-          "label": "wiki indexes and source state"
-        }
-      ]
-    },
-    {
-      "id": "retained",
-      "type": "database",
-      "label": "raw/derived/",
-      "sublabel": "research only \u00b7 excluded reference",
-      "pos": [
-        230,
-        1080
-      ],
-      "size": [
-        310,
-        64
-      ],
-      "sources": [
-        {
-          "path": "skills/absorb/SKILL.md",
-          "line": 63,
-          "end_line": 83,
-          "label": "separate report retention"
+          "path": "skills/knowledge-capture/references/meetings.md",
+          "line": 15,
+          "label": "implemented workflow contract"
         }
       ]
     },
@@ -335,87 +125,377 @@
       "id": "capture",
       "type": "backend",
       "label": "meeting-capture",
-      "sublabel": "independent source adapters",
+      "sublabel": "configured template",
       "pos": [
-        180,
-        820
+        275,
+        325
       ],
       "size": [
         220,
-        70
+        90
       ],
       "sources": [
         {
           "path": "skills/knowledge-capture/references/meetings.md",
           "line": 33,
-          "end_line": 63,
-          "label": "configured in-place record"
+          "label": "implemented workflow contract"
         }
       ]
     },
     {
       "id": "meeting",
-      "type": "database",
+      "type": "frontend",
       "label": "Meeting record",
-      "sublabel": "configured template \u00b7 stays in place",
+      "sublabel": "meetings/ default \u00b7 proposed rows",
       "pos": [
-        560,
-        820
+        540,
+        325
       ],
       "size": [
-        270,
-        70
+        230,
+        90
       ],
       "sources": [
         {
           "path": "skills/absorb/scripts/distribution.py",
-          "line": 130,
-          "end_line": 195,
-          "label": "identity reuse and record writes"
+          "line": 131,
+          "label": "implemented workflow contract"
         }
       ]
     },
     {
-      "id": "writing",
-      "type": "external",
-      "label": "Local writing workflow",
-      "sublabel": "new / enrich / published follow-up",
+      "id": "approval",
+      "type": "security",
+      "label": "Row approval",
+      "sublabel": "required facts satisfied",
       "pos": [
-        820,
-        20
+        805,
+        230
       ],
       "size": [
-        280,
-        80
+        170,
+        130
       ],
       "sources": [
         {
           "path": "skills/absorb/SKILL.md",
-          "line": 46,
-          "end_line": 54,
-          "label": "approved local writing route"
+          "line": 29,
+          "label": "implemented workflow contract"
         }
       ]
     },
     {
-      "id": "source-retained",
-      "type": "database",
-      "label": "Retained transcripts",
-      "sublabel": "policy-defined raw archive",
+      "id": "absorb",
+      "type": "backend",
+      "label": "absorb",
+      "sublabel": "only approved rows",
       "pos": [
-        590,
-        1080
+        1020,
+        250
+      ],
+      "size": [
+        190,
+        90
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 14,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "absorb-detail",
+      "type": "backend",
+      "label": "absorb",
+      "sublabel": "same command as above",
+      "pos": [
+        30,
+        515
+      ],
+      "size": [
+        220,
+        90
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 14,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "targets",
+      "type": "database",
+      "label": "Local destinations",
+      "sublabel": "docs \u00b7 context \u00b7 projects \u00b7 tasks \u00b7 writing",
+      "pos": [
+        340,
+        510
+      ],
+      "size": [
+        520,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 38,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "primary",
+      "type": "external",
+      "label": "Primary raw evidence",
+      "sublabel": "source text + provenance",
+      "pos": [
+        30,
+        685
       ],
       "size": [
         240,
-        70
+        90
+      ],
+      "sources": [
+        {
+          "path": "skills/wiki-compile/SKILL.md",
+          "line": 12,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "direct",
+      "type": "security",
+      "label": "Compiler authority",
+      "sublabel": "direct scope authorized",
+      "pos": [
+        355,
+        760
+      ],
+      "size": [
+        200,
+        130
+      ],
+      "sources": [
+        {
+          "path": "skills/wiki-compile/SKILL.md",
+          "line": 18,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "compile",
+      "type": "backend",
+      "label": "wiki-compile",
+      "sublabel": "wiki enabled \u00b7 selected subset",
+      "pos": [
+        710,
+        680
+      ],
+      "size": [
+        240,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/wiki-compile/SKILL.md",
+          "line": 12,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "wiki",
+      "type": "database",
+      "label": "wiki/",
+      "sublabel": "synthesis + indexes",
+      "pos": [
+        1030,
+        680
+      ],
+      "size": [
+        180,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/wiki-compile/SKILL.md",
+          "line": 50,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "report-retention",
+      "type": "frontend",
+      "label": "Same research report",
+      "sublabel": "still in output/ while pending",
+      "pos": [
+        30,
+        995
+      ],
+      "size": [
+        235,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 65,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "report-terminal",
+      "type": "security",
+      "label": "All rows terminal",
+      "sublabel": "complete or declined",
+      "pos": [
+        340,
+        980
+      ],
+      "size": [
+        190,
+        130
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 375,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "finalize",
+      "type": "backend",
+      "label": "finalize",
+      "sublabel": "retain report + repair links",
+      "pos": [
+        610,
+        995
+      ],
+      "size": [
+        230,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 451,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "derived",
+      "type": "database",
+      "label": "raw/derived/",
+      "sublabel": "excluded research report",
+      "pos": [
+        940,
+        995
+      ],
+      "size": [
+        270,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 459,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "transcript",
+      "type": "external",
+      "label": "Original transcript",
+      "sublabel": "policy-defined raw intake",
+      "pos": [
+        30,
+        1170
+      ],
+      "size": [
+        235,
+        100
       ],
       "sources": [
         {
           "path": "skills/absorb/SKILL.md",
           "line": 72,
-          "end_line": 86,
-          "label": "primary-source filing"
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "filing-authority",
+      "type": "security",
+      "label": "Terminal + filing",
+      "sublabel": "separate authority",
+      "pos": [
+        340,
+        1155
+      ],
+      "size": [
+        190,
+        130
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 75,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "file-source",
+      "type": "backend",
+      "label": "file-source",
+      "sublabel": "preserve bytes + repair links",
+      "pos": [
+        610,
+        1170
+      ],
+      "size": [
+        230,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/scripts/distribution.py",
+          "line": 443,
+          "label": "implemented workflow contract"
+        }
+      ]
+    },
+    {
+      "id": "source-archive",
+      "type": "database",
+      "label": "Raw source archive",
+      "sublabel": "primary transcript \u00b7 local policy",
+      "pos": [
+        940,
+        1170
+      ],
+      "size": [
+        270,
+        100
+      ],
+      "sources": [
+        {
+          "path": "skills/absorb/SKILL.md",
+          "line": 72,
+          "label": "implemented workflow contract"
         }
       ]
     }
@@ -423,163 +503,314 @@
   "boundaries": [],
   "connections": [
     {
-      "id": "ask",
-      "from": "researcher",
-      "to": "durable",
-      "label": "question or sources",
-      "variant": "emphasis"
+      "id": "research-read",
+      "from": "research-input",
+      "to": "research",
+      "label": "read",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        252,
+        213
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "gate",
-      "from": "durable",
-      "to": "profile",
-      "label": "validate first",
-      "variant": "security"
+      "id": "report-create",
+      "from": "research",
+      "to": "report",
+      "label": "create",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        518,
+        213
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "ground",
-      "from": "durable",
-      "to": "notebook",
-      "label": "add + query"
+      "id": "meeting-read",
+      "from": "meeting-input",
+      "to": "capture",
+      "label": "read",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        252,
+        358
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "extract",
-      "from": "durable",
-      "to": "web",
-      "label": "extract",
-      "variant": "dashed"
-    },
-    {
-      "id": "media",
-      "from": "durable",
-      "to": "transcribe",
-      "label": "media",
-      "variant": "dashed"
-    },
-    {
-      "id": "write-artifact",
-      "from": "durable",
-      "to": "artifact",
-      "label": "write artifact"
-    },
-    {
-      "id": "read-plan",
-      "from": "absorb",
-      "to": "artifact",
-      "label": "approved research plan",
-      "variant": "emphasis"
-    },
-    {
-      "id": "update-doc",
-      "from": "absorb",
-      "to": "targets",
-      "label": "update"
-    },
-    {
-      "id": "file-task",
-      "from": "absorb",
-      "to": "followup",
-      "label": "file task",
-      "variant": "dashed"
-    },
-    {
-      "id": "stage",
-      "from": "absorb",
-      "to": "raw",
-      "label": "stage if wiki on"
-    },
-    {
-      "id": "invoke",
-      "from": "absorb",
-      "to": "compile",
-      "label": "invoke if wiki on"
-    },
-    {
-      "id": "read-raw",
-      "from": "compile",
-      "to": "raw",
-      "label": "read subset"
-    },
-    {
-      "id": "write-wiki",
-      "from": "compile",
-      "to": "wiki",
-      "label": "articles + indexes"
-    },
-    {
-      "id": "retain-report",
-      "from": "absorb",
-      "to": "retained",
-      "label": "research terminal: retain",
-      "variant": "dashed"
-    },
-    {
-      "id": "capture-gate",
-      "from": "capture",
-      "to": "profile",
-      "label": "validate first",
-      "variant": "security"
-    },
-    {
-      "id": "write-meeting",
+      "id": "meeting-create",
       "from": "capture",
       "to": "meeting",
-      "label": "create or reuse"
+      "label": "create / reuse",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        518,
+        317
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "meeting-plan",
+      "id": "report-review",
+      "from": "report",
+      "to": "approval",
+      "label": "rows",
+      "via": [
+        [
+          785,
+          225
+        ],
+        [
+          785,
+          295
+        ]
+      ],
+      "variant": "default",
+      "labelAt": [
+        785,
+        247
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "meeting-review",
       "from": "meeting",
+      "to": "approval",
+      "label": "rows",
+      "via": [
+        [
+          785,
+          370
+        ],
+        [
+          785,
+          295
+        ]
+      ],
+      "variant": "default",
+      "labelAt": [
+        785,
+        352
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "approved",
+      "from": "approval",
       "to": "absorb",
-      "label": "approved meeting plan"
+      "label": "authorized",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        994,
+        222
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "writing-route",
-      "from": "absorb",
-      "to": "writing",
-      "label": "approved writing",
-      "variant": "dashed"
+      "id": "local-rows",
+      "from": "absorb-detail",
+      "to": "targets",
+      "label": "approved rows",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        295,
+        492
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     },
     {
-      "id": "retain-source",
-      "from": "absorb",
-      "to": "source-retained",
-      "label": "terminal + link repair",
-      "variant": "dashed"
+      "id": "delegate",
+      "from": "absorb-detail",
+      "to": "compile",
+      "label": "approved wiki row scope",
+      "via": [
+        [
+          285,
+          560
+        ],
+        [
+          285,
+          640
+        ],
+        [
+          830,
+          640
+        ]
+      ],
+      "variant": "dashed",
+      "labelAt": [
+        475,
+        628
+      ],
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "primary-subset",
+      "from": "primary",
+      "to": "compile",
+      "label": "selected PRIMARY evidence",
+      "via": [],
+      "variant": "emphasis",
+      "labelAt": [
+        470,
+        708
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "direct-compile",
+      "from": "direct",
+      "to": "compile",
+      "label": "direct invocation: no report required",
+      "via": [
+        [
+          660,
+          825
+        ],
+        [
+          830,
+          825
+        ]
+      ],
+      "variant": "dashed",
+      "labelAt": [
+        690,
+        855
+      ],
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "wiki-write",
+      "from": "compile",
+      "to": "wiki",
+      "label": "synthesize",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        987,
+        663
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "report-terminal-check",
+      "from": "report-retention",
+      "to": "report-terminal",
+      "label": "check",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        301,
+        1032
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "finalize-report",
+      "from": "report-terminal",
+      "to": "finalize",
+      "label": "terminal",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        570,
+        1032
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "retained-report",
+      "from": "finalize",
+      "to": "derived",
+      "label": "move + exclude",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        890,
+        1032
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "source-terminal-check",
+      "from": "transcript",
+      "to": "filing-authority",
+      "label": "check",
+      "via": [],
+      "variant": "default",
+      "labelAt": [
+        301,
+        1207
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "file-authorized",
+      "from": "filing-authority",
+      "to": "file-source",
+      "label": "authorized",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        570,
+        1207
+      ],
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "source-retained",
+      "from": "file-source",
+      "to": "source-archive",
+      "label": "file original",
+      "via": [],
+      "variant": "dashed",
+      "labelAt": [
+        890,
+        1207
+      ],
+      "fromSide": "right",
+      "toSide": "left"
     }
   ],
   "cards": [
     {
-      "dot": "rose",
-      "title": "Approval and retry",
+      "dot": "slate",
+      "title": "Workflow contract, not deployment status",
       "items": [
-        "Capture proposes; only authorized rows execute. Changed scope or target confirmation stays pending.",
-        "Confirmed receipts prevent repeated tasks or writing additions; uncertain effects require read-back."
-      ]
-    },
-    {
-      "dot": "emerald",
-      "title": "Different retention",
-      "items": [
-        "Meeting record remains at its original path; original transcript follows policy-defined raw intake/archive rules.",
-        "Research report moves from output to raw/derived only after terminal routes; it is excluded primary evidence.",
-        "Compilation ingestion status is distinct from complete capture and absorption."
-      ]
-    },
-    {
-      "dot": "violet",
-      "title": "Local policy and compatibility",
-      "items": [
-        "Profile v4 remains valid; templates, writing storage/workflows, compiler modes and audit coverage are local policy.",
-        "research-absorb, research-to-wiki and vault-compile/vault-audit delegate; direct selected-source compile remains supported."
+        "Colors and shapes identify roles; no node denotes a running command or completed installation.",
+        "Meeting records stay at their original path after processing. Research finalize and transcript file-source are distinct operations."
       ]
     },
     {
       "dot": "slate",
-      "title": "Not shown",
+      "title": "Scope and omitted detail",
       "items": [
-        "Inline research-quick/research-dev and feature/feedback deliverables.",
-        "Read-only opt-in wiki-audit, setup, installation/release and external provider internals.",
-        "This map describes skill/helper contracts; local workflow adapters own live provider permissions and read-back."
+        "Repeated absorb/report nodes are detail views of the same command or object.",
+        "Provider internals, inline research, wrappers, setup, audit, installation and releases are omitted; their behavior is unchanged.",
+        "Source identities, coverage, prior authority, current-context confirmations, authored prose, task dates and confirmed receipts remain authoritative."
       ]
     }
   ]

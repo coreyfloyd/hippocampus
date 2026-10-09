@@ -4,7 +4,7 @@
 
 Whatever the source, getting an answer out of it is only part of the work. You still have to judge the evidence, decide what applies to your situation, and carry the result into your notes, plans, or projects. That last step is easy to skip, and the answer stays behind in an old chat. Hippocampus keeps the evidence attached to the decision it informed, so you can see why you reached a conclusion, what is still uncertain, and what you meant to do next. When you learn more, you can revisit the decision without redoing the research.
 
-![Questions, research sources and meeting inputs become source-linked plans; absorb executes only authorized document, task, writing, wiki and retention routes. Meeting records stay in place; research reports are retained separately.](docs/images/question-answer-action.svg)
+![Research capture creates a report in output and meeting capture creates an in-place record. Both carry proposed rows through authority checks into absorb. Primary evidence feeds wiki-compile separately; terminal report and transcript retention follow distinct rules. The legend encodes workflow roles and line semantics.](docs/images/question-answer-action.svg)
 
 Every piece of research moves through the same three stages:
 
@@ -223,28 +223,34 @@ current conversation
   -> discard | retain output | capture provenance | preserve synthesis | compile
 ```
 
+Legend: arrows show the proposed handoff sequence; approval is the control boundary before authorized dispositions.
+
 Use this path for knowledge created or discussed in the current conversation. Use `absorb` instead when a durable research artifact already exists.
 
 ### Capture meetings
 
 ```text
-transcript source       calendar event       note file or Google Doc
-  configured/supplied    optional source      per-meeting or profile default
-           \                   |                   /
-                  meeting-capture
-                         |
-           configured template -> meetings/record.md (stays here)
-                         |
-                 source-linked approved plan
-                         |
-                       absorb
-                  /      |       \
-         documents     actions   writing opportunities
-                         |
-      selected primary sources -> wiki-compile (when wiki is enabled)
-                         |
-      terminal routes -> original transcript filed in policy-defined raw archive
+INPUT transcript + optional event + optional notes
+  -> COMMAND meeting-capture + configured template
+  -> RECORD in configured meetings folder (default meetings/)
+     sources + coverage + proposed distribution rows
+  -> CONTROL row approval + required facts
+  -> COMMAND absorb
+     -> STORE named docs/context/projects
+     -> STORE owned tasks and local writing targets
+     -> COMMAND wiki-compile scope (when wiki enabled)
+
+INPUT selected PRIMARY raw evidence -> COMMAND wiki-compile -> STORE wiki/
+
+RETENTION, separately after all distribution rows are terminal:
+  RECORD meeting -> same path, with results
+  INPUT original transcript + CONTROL filing authority
+    -> COMMAND file-source -> STORE policy-defined raw source archive
 ```
+
+Legend: uppercase labels identify inputs, commands, durable records, stores and
+approval/control; arrows show handoffs or the stated authorized transition.
+Primary evidence, record synthesis and terminal retention remain distinct.
 
 The three inputs are independent and configurable. `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
 
@@ -273,12 +279,14 @@ does not draft first-person posts or publish. See the [public route examples](do
 ### Compile and audit an existing source collection
 
 ```text
-caller-curated raw subset
+caller-curated PRIMARY raw subset + authorized compiler scope
   -> wiki-compile
   -> wiki articles + indexes + source dispositions + workflow state
   -> wiki-audit (optional, read-only)
   -> ranked audit report in output/
 ```
+
+Legend: arrows show scoped compilation and the optional read-only audit/report sequence. This direct compiler route requires no research/meeting record or absorb call.
 
 Compilation is never a sweep of every uncompiled file in `raw/`. It reads the
 selected raw sources before existing wiki synthesis, drafts claims, then checks
@@ -292,7 +300,10 @@ and meeting capture to shared absorption, local document/task/writing workflows,
 selected-source compilation and separate record/source retention. Its source is
 [`runtime.architecture.json`](docs/architecture/runtime.architecture.json), pinned
 to the implementation commit. Read the relevant map before structural changes,
-confirm against the skills and helper, and regenerate it with Archify. The runtime
+confirm against the skills and helper, and regenerate the shared diagram, deck
+panels and comparison with `uv run --with markdown python scripts/render-public-review.py`.
+The hand-built SVG preserves the existing architecture viewer; its legend
+identifies workflow roles, not deployment status. The runtime
 map leaves out inline research, domain-specific deliverables, setup, installation,
 release and external provider internals. Earlier review artifacts remain dated
 history; this map describes the current candidate.

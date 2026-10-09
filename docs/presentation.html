@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,24 +9,136 @@
 
 
   <style>
-    :root {
-      --bg: #1c2024;
-      --surface: #252b31;
-      --surface-border: #333c46;
-      --surface-hover: #2d343c;
-      --text-main: #f0f2f5;
-      --text-muted: #9ba3af;
-      --text-dim: #606b76;
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-      --cyan: #38bdf8;
-      --cyan-glow: rgba(56, 189, 248, 0.15);
-      --tangerine: #fb923c;
-      --tangerine-glow: rgba(251, 146, 60, 0.15);
-      --emerald: #34d399;
-      --emerald-glow: rgba(52, 211, 153, 0.15);
-      --crimson: #f87171;
-      --crimson-glow: rgba(248, 113, 113, 0.15);
-    }
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+
+
+    :root {--cyan:var(--host);--cyan-glow:transparent;--tangerine:var(--daemon);--tangerine-glow:transparent;--emerald:var(--host);--emerald-glow:transparent;--crimson:var(--hot);--crimson-glow:transparent;}
 
     * {
       box-sizing: border-box;
@@ -34,7 +147,7 @@
     }
 
     body {
-      background: #0f1215;
+      background: var(--bg);
       color: var(--text-main);
       font-family: 'Plus Jakarta Sans', sans-serif;
       overflow: hidden;
@@ -164,6 +277,18 @@
     .deck-nav button:hover {
       background: var(--surface-hover);
     }
+
+    .workflow-slide{gap:12px}.workflow-visual{margin:auto 0;width:100%}
+    .workflow-visual svg{width:100%;max-height:62vh}
+    .workflow-slide .src{margin:0;padding:0;font-size:11px}
+    .workflow-slide h2{font-size:clamp(18px,2.4vw,36px);color:var(--ink)}
+    .workflow-slide p.message{font-size:clamp(12px,1.25vw,19px);color:var(--dim)}
+    .theme-toggle{position:fixed;bottom:20px;left:20px;z-index:100}
+    .theme-toggle button{padding:6px 10px;background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+    @media(max-width:700px){#deck-stage{height:100dvh;max-height:none;max-width:none;overflow-y:auto}.slide{padding:30px 16px 75px;min-height:100dvh;height:max-content}.workflow-visual{overflow-x:auto}.workflow-visual svg{min-width:850px;max-width:none;max-height:none}.workflow-slide .message{max-width:100%}.workflow-slide .src{overflow-wrap:anywhere}.tracker{display:none}}
+
+    :root{--surface:var(--panel);--surface-border:var(--line);--surface-hover:var(--offbg);--text-main:var(--ink);--text-muted:var(--dim);--text-dim:var(--dim)}
+    #deck-stage{background:var(--bg)}body{color:var(--ink)}
   </style>
 </head>
 <body>
@@ -224,297 +349,654 @@
     </div>
 
     <!-- Slide 4: System Model -->
-    <div class="slide" id="slide-4">
-      <div class="tracker"><span>Question</span> | <span>Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>The Question, Answer, Action Lifecycle</h2>
-        <p class="message">Every loop of curiosity must move predictably through these three states to prevent digital clutter.</p>
-      </div>
-      <div style="display: flex; gap: 20px; align-items: center; margin: auto 0;">
-        <div class="blueprint-card" style="flex: 1; border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">STAGE 1</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Question</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">The input: A spark of curiosity or materials you bring to the table.</p>
-        </div>
-        <span style="color: var(--text-dim); font-size: 1.8rem; font-weight: 300;">➔</span>
-        <div class="blueprint-card" style="flex: 1; border-color: var(--tangerine); box-shadow: 0 0 20px var(--tangerine-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--tangerine); font-weight: 600;">STAGE 2</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Answer</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">The processing: Filtering facts, citing evidence, and building a staging summary.</p>
-        </div>
-        <span style="color: var(--text-dim); font-size: 1.8rem; font-weight: 300;">➔</span>
-        <div class="blueprint-card" style="flex: 1; border-color: var(--emerald); box-shadow: 0 0 20px var(--emerald-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--emerald); font-weight: 600;">STAGE 3</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Action</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">Where it lands: Updating notes, queueing real to-dos, and closing the chat.</p>
-        </div>
-      </div>
-      <div></div>
-    </div>
+    <div class="slide workflow-slide" id="slide-4"><div><h2>Capture Creates a Plan, Before Any Execution</h2><p class="message">Research creates a report in output. Meeting capture creates its record directly in the configured folder. Both feed scoped absorption.</p></div><div class="scroll workflow-visual"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 430" role="img" aria-labelledby="slide4-title slide4-desc" data-preset="classic" data-reader-fit="intrinsic-height" data-reader-min-text="11" data-reader-primary-text="16" data-workflow-diagram="capture"><title id="slide4-title">Capture creates both records before approved absorption; primary evidence and retention are separate</title><desc id="slide4-desc">Research reports in output and meeting records in their configured folder carry proposed rows into authority checks and absorb. Wiki compilation reads selected primary evidence and supports direct authorized scope. Terminal research reports are excluded references; separately authorized transcript filing preserves primary sources. Meeting records stay in place.</desc><style >:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
+
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><defs ><marker id="slide4-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="var(--dim)"/></marker></defs><rect width="1240" height="430" fill="var(--bg)" rx="12"></rect><g data-legend="" data-legend-bridge="" aria-label="Workflow role and line legend"><text x="30" y="15" class="wf-note">Legend: workflow roles, not running/completed status</text><g data-legend-kind="backend" data-legend-semantic-kind="backend" data-legend-label="Command" data-legend-x="30" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-process" x="30" y="27" width="30" height="23" rx="12"></rect><text x="70" y="44" class="wf-sub">Command</text></g><g data-legend-kind="frontend" data-legend-semantic-kind="frontend" data-legend-label="Durable record" data-legend-x="255" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-record" d="M255,27 L269,27 L285,43 L285,50 L255,50 Z"></path><path d="M269,27 L269,43 L285,43" class="wf-edge"></path><text x="295" y="44" class="wf-sub">Durable record</text></g><g data-legend-kind="database" data-legend-semantic-kind="database" data-legend-label="Destination / store" data-legend-x="500" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-store" x="500" y="27" width="30" height="23" rx="3"></rect><path d="M507,30 V47 M523,30 V47" class="wf-node wf-store" fill="none"></path><text x="540" y="44" class="wf-sub">Destination / store</text></g><g data-legend-kind="security" data-legend-semantic-kind="security" data-legend-label="Approval / control" data-legend-x="805" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-control" d="M805,38.5 L820.0,27 L835,38.5 L820.0,50 Z"></path><text x="845" y="44" class="wf-sub">Approval / control</text></g><g data-legend-kind="external" data-legend-semantic-kind="external" data-legend-label="Source / input" data-legend-x="1050" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-input" x="1050" y="27" width="30" height="23" rx="20"></rect><text x="1090" y="44" class="wf-sub">Source / input</text></g><text x="30" y="61" class="wf-edge-label">Shapes/colors: violet rounded = command; neutral fold = record; blue double-edge = store; amber diamond = control; neutral pill = input</text><text x="30" y="79" class="wf-note">Solid → record / read / create   ·   Dashed → authorized execution or terminal retention   ·   Dotted → selected PRIMARY evidence</text></g><g transform="translate(0,-30)"><text x="30" y="155" class="wf-heading">1 · Capture output and row authority</text><g data-edge-from="research-input" data-edge-to="research" data-edge-key="research-read"><path d="M229,225.0 L276,225.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="research-input" data-edge-to="research" data-edge-key="research-read"></path><title >read</title></g><text x="232" y="213" class="wf-edge-label">read</text><g data-edge-from="research" data-edge-to="report" data-edge-key="report-create"><path d="M494,225.0 L541,225.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="research" data-edge-to="report" data-edge-key="report-create"></path><title >create</title></g><text x="500" y="213" class="wf-edge-label">create</text><g data-edge-from="meeting-input" data-edge-to="capture" data-edge-key="meeting-read"><path d="M229,370.0 L276,370.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="meeting-input" data-edge-to="capture" data-edge-key="meeting-read"></path><title >read</title></g><text x="232" y="358" class="wf-edge-label">read</text><g data-edge-from="capture" data-edge-to="meeting" data-edge-key="meeting-create"><path d="M494,370.0 L541,370.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="capture" data-edge-to="meeting" data-edge-key="meeting-create"></path><title >create / reuse</title></g><text x="500" y="358" class="wf-edge-label">create</text><g data-edge-from="report" data-edge-to="approval" data-edge-key="report-review"><path d="M769,225.0 L785,225 L785,295 L806,295.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="report" data-edge-to="approval" data-edge-key="report-review"></path><title >rows</title></g><text x="779" y="247" class="wf-edge-label">rows</text><g data-edge-from="meeting" data-edge-to="approval" data-edge-key="meeting-review"><path d="M769,370.0 L785,370 L785,295 L806,295.0" class="wf-edge default" marker-end="url(#slide4-arrow)" data-edge-from="meeting" data-edge-to="approval" data-edge-key="meeting-review"></path><title >rows</title></g><text x="779" y="352" class="wf-edge-label">rows</text><g data-edge-from="approval" data-edge-to="absorb" data-edge-key="approved"><path d="M974,295.0 L1021,295.0" class="wf-edge dashed" marker-end="url(#slide4-arrow)" data-edge-from="approval" data-edge-to="absorb" data-edge-key="approved"></path><title >authorized</title></g><text x="961" y="283" class="wf-edge-label">authorized</text><g id="node-research-input" data-node-id="research-input" data-node-kind="external" data-node-label="Question + sources" data-node-sublabel="primary sources, not a report" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,180,200,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Question + sources; primary sources, not a report" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="180" width="200" height="90" rx="20"></rect><text x="46" y="201" class="wf-tag">SOURCE INPUT</text><text x="46" y="226" class="wf-label">Question + sources</text><text x="46" y="246" class="wf-sub">primary sources, not a</text><text x="46" y="260" class="wf-sub">report</text></g><g id="node-research" data-node-id="research" data-node-kind="backend" data-node-label="Research capture" data-node-sublabel="research-topic / research-sources" data-node-context="COMMAND" data-workflow-role="process" data-bounds="275,180,220,90" tabindex="-1" role="group" aria-label="COMMAND: Research capture; research-topic / research-sources" aria-pressed="false"><rect class="wf-node wf-process" x="275" y="180" width="220" height="90" rx="12"></rect><text x="291" y="201" class="wf-tag">COMMAND</text><text x="291" y="226" class="wf-label">Research capture</text><text x="291" y="246" class="wf-sub">research-topic /</text><text x="291" y="260" class="wf-sub">research-sources</text></g><g id="node-report" data-node-id="report" data-node-kind="frontend" data-node-label="Research report" data-node-sublabel="output/ · proposed rows" data-node-context="RECORD" data-workflow-role="record" data-bounds="540,180,230,90" tabindex="-1" role="group" aria-label="RECORD: Research report; output/ · proposed rows" aria-pressed="false"><path class="wf-node wf-record" d="M540,180 L754,180 L770,196 L770,270 L540,270 Z"></path><path d="M754,180 L754,196 L770,196" class="wf-edge"></path><text x="556" y="201" class="wf-tag">RECORD</text><text x="556" y="226" class="wf-label">Research report</text><text x="556" y="246" class="wf-sub">output/ · proposed rows</text></g><g id="node-meeting-input" data-node-id="meeting-input" data-node-kind="external" data-node-label="Meeting inputs" data-node-sublabel="transcript · event · notes" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,325,200,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Meeting inputs; transcript · event · notes" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="325" width="200" height="90" rx="20"></rect><text x="46" y="346" class="wf-tag">SOURCE INPUT</text><text x="46" y="371" class="wf-label">Meeting inputs</text><text x="46" y="391" class="wf-sub">transcript · event · notes</text></g><g id="node-capture" data-node-id="capture" data-node-kind="backend" data-node-label="meeting-capture" data-node-sublabel="configured template" data-node-context="COMMAND" data-workflow-role="process" data-bounds="275,325,220,90" tabindex="-1" role="group" aria-label="COMMAND: meeting-capture; configured template" aria-pressed="false"><rect class="wf-node wf-process" x="275" y="325" width="220" height="90" rx="12"></rect><text x="291" y="346" class="wf-tag">COMMAND</text><text x="291" y="371" class="wf-label">meeting-capture</text><text x="291" y="391" class="wf-sub">configured template</text></g><g id="node-meeting" data-node-id="meeting" data-node-kind="frontend" data-node-label="Meeting record" data-node-sublabel="meetings/ default · proposed rows" data-node-context="RECORD" data-workflow-role="record" data-bounds="540,325,230,90" tabindex="-1" role="group" aria-label="RECORD: Meeting record; meetings/ default · proposed rows" aria-pressed="false"><path class="wf-node wf-record" d="M540,325 L754,325 L770,341 L770,415 L540,415 Z"></path><path d="M754,325 L754,341 L770,341" class="wf-edge"></path><text x="556" y="346" class="wf-tag">RECORD</text><text x="556" y="371" class="wf-label">Meeting record</text><text x="556" y="391" class="wf-sub">meetings/ default · proposed</text><text x="556" y="405" class="wf-sub">rows</text></g><g id="node-approval" data-node-id="approval" data-node-kind="security" data-node-label="Row approval" data-node-sublabel="required facts satisfied" data-node-context="CONTROL" data-workflow-role="control" data-bounds="805,230,170,130" tabindex="-1" role="group" aria-label="CONTROL: Row approval; required facts satisfied" aria-pressed="false"><path class="wf-node wf-control" d="M805,295.0 L890.0,230 L975,295.0 L890.0,360 Z"></path><text x="890.0" y="265.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="890.0" y="290.0" class="wf-label" text-anchor="middle">Row approval</text><text x="890.0" y="310.0" class="wf-sub" text-anchor="middle">required facts</text><text x="890.0" y="324.0" class="wf-sub" text-anchor="middle">satisfied</text></g><g id="node-absorb" data-node-id="absorb" data-node-kind="backend" data-node-label="absorb" data-node-sublabel="only approved rows" data-node-context="COMMAND" data-workflow-role="process" data-bounds="1020,250,190,90" tabindex="-1" role="group" aria-label="COMMAND: absorb; only approved rows" aria-pressed="false"><rect class="wf-node wf-process" x="1020" y="250" width="190" height="90" rx="12"></rect><text x="1036" y="271" class="wf-tag">COMMAND</text><text x="1036" y="296" class="wf-label">absorb</text><text x="1036" y="316" class="wf-sub">only approved rows</text></g></g></svg></div><p class="src">source: shared distribution contract, absorb, wiki-compile and capture helpers. Workflow contract, not production status.</p></div>
 
     <!-- Slide 5: The Inputs (Visual Multi-Format Flow) -->
-    <div class="slide" id="slide-5">
-      <div class="tracker"><span class="active-stage cyan">Question</span> | <span>Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>Two Paths: Asking Questions vs. Studying Sources</h2>
-        <p class="message">Start with a spontaneous prompt, or bring your own materials in virtually any format to learn from.</p>
-      </div>
+    <div class="slide workflow-slide" id="slide-5"><div><h2>Different Inputs, the Same Approval Boundary</h2><p class="message">A question or supplied research sources and independent meeting inputs create distinct source-linked records. Capture does not authorize target writes.</p></div><div class="scroll workflow-visual"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 430" role="img" aria-labelledby="slide5-title slide5-desc" data-preset="classic" data-reader-fit="intrinsic-height" data-reader-min-text="11" data-reader-primary-text="16" data-workflow-diagram="capture"><title id="slide5-title">Capture creates both records before approved absorption; primary evidence and retention are separate</title><desc id="slide5-desc">Research reports in output and meeting records in their configured folder carry proposed rows into authority checks and absorb. Wiki compilation reads selected primary evidence and supports direct authorized scope. Terminal research reports are excluded references; separately authorized transcript filing preserves primary sources. Meeting records stay in place.</desc><style >:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-      <div style="display: grid; grid-template-columns: 1.15fr 100px 1fr; align-items: center; gap: 14px; margin: auto 0;">
-        <!-- Left: The Two Distinct Input Paths -->
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <!-- Path A: Open Query -->
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 16px 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH A · SPONTANEOUS PROMPT</div>
-            </div>
-            <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 2px;">Ask an Open-Ended Question</div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">"What are the key differences between these two camera bodies?"</p>
-          </div>
-
-          <!-- Path B: Multi-Format Sources -->
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH B · STUDY YOUR SOURCES</div>
-            </div>
-            <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 10px;">Ingest Any Media You Care About</div>
-
-            <!-- Diverse Format Icon Grid -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-              <!-- PDFs & Docs -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">PDFs & Docs</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Specs, meeting notes</div>
-              </div>
-
-              <!-- Web & Articles -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">URLs & Posts</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Reviews, blogs</div>
-              </div>
-
-              <!-- Audio & Podcasts -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                  <line x1="12" y1="19" x2="12" y2="23"></line>
-                  <line x1="8" y1="23" x2="16" y2="23"></line>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">Audio Transcripts</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Podcasts, talks</div>
-              </div>
-
-              <!-- Video / YouTube -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                  <polygon points="10 8 16 12 10 16 10 8"></polygon>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">Video Sources</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Tutorials, guides</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Flow Connector SVG -->
-        <svg viewBox="0 0 100 180" style="width: 100%; height: 160px;">
-          <path d="M 5 35 C 50 35, 55 90, 85 90" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <path d="M 5 145 C 50 145, 55 90, 85 90" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <polygon points="85,85 95,90 85,95" fill="var(--cyan)" />
-        </svg>
-
-        <!-- Right: Convergence Point -->
-        <div class="blueprint-card" style="border-color: var(--cyan); text-align: center; padding: 36px 22px; background: rgba(56, 189, 248, 0.04);">
-          <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background: var(--cyan-glow); color: var(--cyan); font-family: 'JetBrains Mono'; font-size: 0.8rem; margin-bottom: 14px; font-weight: 600;">INPUT CONVERGENCE</div>
-          <h3 style="font-size: 1.35rem; margin-bottom: 8px;">Capture &amp; Research</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.45;">Research sources and meeting inputs retain distinct provenance. Transcript, calendar and notes are independent; missing coverage is visible.</p>
-        </div>
-      </div>
-      <div></div>
-    </div>
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><defs ><marker id="slide5-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="var(--dim)"/></marker></defs><rect width="1240" height="430" fill="var(--bg)" rx="12"></rect><g data-legend="" data-legend-bridge="" aria-label="Workflow role and line legend"><text x="30" y="15" class="wf-note">Legend: workflow roles, not running/completed status</text><g data-legend-kind="backend" data-legend-semantic-kind="backend" data-legend-label="Command" data-legend-x="30" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-process" x="30" y="27" width="30" height="23" rx="12"></rect><text x="70" y="44" class="wf-sub">Command</text></g><g data-legend-kind="frontend" data-legend-semantic-kind="frontend" data-legend-label="Durable record" data-legend-x="255" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-record" d="M255,27 L269,27 L285,43 L285,50 L255,50 Z"></path><path d="M269,27 L269,43 L285,43" class="wf-edge"></path><text x="295" y="44" class="wf-sub">Durable record</text></g><g data-legend-kind="database" data-legend-semantic-kind="database" data-legend-label="Destination / store" data-legend-x="500" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-store" x="500" y="27" width="30" height="23" rx="3"></rect><path d="M507,30 V47 M523,30 V47" class="wf-node wf-store" fill="none"></path><text x="540" y="44" class="wf-sub">Destination / store</text></g><g data-legend-kind="security" data-legend-semantic-kind="security" data-legend-label="Approval / control" data-legend-x="805" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-control" d="M805,38.5 L820.0,27 L835,38.5 L820.0,50 Z"></path><text x="845" y="44" class="wf-sub">Approval / control</text></g><g data-legend-kind="external" data-legend-semantic-kind="external" data-legend-label="Source / input" data-legend-x="1050" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-input" x="1050" y="27" width="30" height="23" rx="20"></rect><text x="1090" y="44" class="wf-sub">Source / input</text></g><text x="30" y="61" class="wf-edge-label">Shapes/colors: violet rounded = command; neutral fold = record; blue double-edge = store; amber diamond = control; neutral pill = input</text><text x="30" y="79" class="wf-note">Solid → record / read / create   ·   Dashed → authorized execution or terminal retention   ·   Dotted → selected PRIMARY evidence</text></g><g transform="translate(0,-30)"><text x="30" y="155" class="wf-heading">1 · Capture output and row authority</text><g data-edge-from="research-input" data-edge-to="research" data-edge-key="research-read"><path d="M229,225.0 L276,225.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="research-input" data-edge-to="research" data-edge-key="research-read"></path><title >read</title></g><text x="232" y="213" class="wf-edge-label">read</text><g data-edge-from="research" data-edge-to="report" data-edge-key="report-create"><path d="M494,225.0 L541,225.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="research" data-edge-to="report" data-edge-key="report-create"></path><title >create</title></g><text x="500" y="213" class="wf-edge-label">create</text><g data-edge-from="meeting-input" data-edge-to="capture" data-edge-key="meeting-read"><path d="M229,370.0 L276,370.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="meeting-input" data-edge-to="capture" data-edge-key="meeting-read"></path><title >read</title></g><text x="232" y="358" class="wf-edge-label">read</text><g data-edge-from="capture" data-edge-to="meeting" data-edge-key="meeting-create"><path d="M494,370.0 L541,370.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="capture" data-edge-to="meeting" data-edge-key="meeting-create"></path><title >create / reuse</title></g><text x="500" y="358" class="wf-edge-label">create</text><g data-edge-from="report" data-edge-to="approval" data-edge-key="report-review"><path d="M769,225.0 L785,225 L785,295 L806,295.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="report" data-edge-to="approval" data-edge-key="report-review"></path><title >rows</title></g><text x="779" y="247" class="wf-edge-label">rows</text><g data-edge-from="meeting" data-edge-to="approval" data-edge-key="meeting-review"><path d="M769,370.0 L785,370 L785,295 L806,295.0" class="wf-edge default" marker-end="url(#slide5-arrow)" data-edge-from="meeting" data-edge-to="approval" data-edge-key="meeting-review"></path><title >rows</title></g><text x="779" y="352" class="wf-edge-label">rows</text><g data-edge-from="approval" data-edge-to="absorb" data-edge-key="approved"><path d="M974,295.0 L1021,295.0" class="wf-edge dashed" marker-end="url(#slide5-arrow)" data-edge-from="approval" data-edge-to="absorb" data-edge-key="approved"></path><title >authorized</title></g><text x="961" y="283" class="wf-edge-label">authorized</text><g id="node-research-input" data-node-id="research-input" data-node-kind="external" data-node-label="Question + sources" data-node-sublabel="primary sources, not a report" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,180,200,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Question + sources; primary sources, not a report" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="180" width="200" height="90" rx="20"></rect><text x="46" y="201" class="wf-tag">SOURCE INPUT</text><text x="46" y="226" class="wf-label">Question + sources</text><text x="46" y="246" class="wf-sub">primary sources, not a</text><text x="46" y="260" class="wf-sub">report</text></g><g id="node-research" data-node-id="research" data-node-kind="backend" data-node-label="Research capture" data-node-sublabel="research-topic / research-sources" data-node-context="COMMAND" data-workflow-role="process" data-bounds="275,180,220,90" tabindex="-1" role="group" aria-label="COMMAND: Research capture; research-topic / research-sources" aria-pressed="false"><rect class="wf-node wf-process" x="275" y="180" width="220" height="90" rx="12"></rect><text x="291" y="201" class="wf-tag">COMMAND</text><text x="291" y="226" class="wf-label">Research capture</text><text x="291" y="246" class="wf-sub">research-topic /</text><text x="291" y="260" class="wf-sub">research-sources</text></g><g id="node-report" data-node-id="report" data-node-kind="frontend" data-node-label="Research report" data-node-sublabel="output/ · proposed rows" data-node-context="RECORD" data-workflow-role="record" data-bounds="540,180,230,90" tabindex="-1" role="group" aria-label="RECORD: Research report; output/ · proposed rows" aria-pressed="false"><path class="wf-node wf-record" d="M540,180 L754,180 L770,196 L770,270 L540,270 Z"></path><path d="M754,180 L754,196 L770,196" class="wf-edge"></path><text x="556" y="201" class="wf-tag">RECORD</text><text x="556" y="226" class="wf-label">Research report</text><text x="556" y="246" class="wf-sub">output/ · proposed rows</text></g><g id="node-meeting-input" data-node-id="meeting-input" data-node-kind="external" data-node-label="Meeting inputs" data-node-sublabel="transcript · event · notes" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,325,200,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Meeting inputs; transcript · event · notes" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="325" width="200" height="90" rx="20"></rect><text x="46" y="346" class="wf-tag">SOURCE INPUT</text><text x="46" y="371" class="wf-label">Meeting inputs</text><text x="46" y="391" class="wf-sub">transcript · event · notes</text></g><g id="node-capture" data-node-id="capture" data-node-kind="backend" data-node-label="meeting-capture" data-node-sublabel="configured template" data-node-context="COMMAND" data-workflow-role="process" data-bounds="275,325,220,90" tabindex="-1" role="group" aria-label="COMMAND: meeting-capture; configured template" aria-pressed="false"><rect class="wf-node wf-process" x="275" y="325" width="220" height="90" rx="12"></rect><text x="291" y="346" class="wf-tag">COMMAND</text><text x="291" y="371" class="wf-label">meeting-capture</text><text x="291" y="391" class="wf-sub">configured template</text></g><g id="node-meeting" data-node-id="meeting" data-node-kind="frontend" data-node-label="Meeting record" data-node-sublabel="meetings/ default · proposed rows" data-node-context="RECORD" data-workflow-role="record" data-bounds="540,325,230,90" tabindex="-1" role="group" aria-label="RECORD: Meeting record; meetings/ default · proposed rows" aria-pressed="false"><path class="wf-node wf-record" d="M540,325 L754,325 L770,341 L770,415 L540,415 Z"></path><path d="M754,325 L754,341 L770,341" class="wf-edge"></path><text x="556" y="346" class="wf-tag">RECORD</text><text x="556" y="371" class="wf-label">Meeting record</text><text x="556" y="391" class="wf-sub">meetings/ default · proposed</text><text x="556" y="405" class="wf-sub">rows</text></g><g id="node-approval" data-node-id="approval" data-node-kind="security" data-node-label="Row approval" data-node-sublabel="required facts satisfied" data-node-context="CONTROL" data-workflow-role="control" data-bounds="805,230,170,130" tabindex="-1" role="group" aria-label="CONTROL: Row approval; required facts satisfied" aria-pressed="false"><path class="wf-node wf-control" d="M805,295.0 L890.0,230 L975,295.0 L890.0,360 Z"></path><text x="890.0" y="265.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="890.0" y="290.0" class="wf-label" text-anchor="middle">Row approval</text><text x="890.0" y="310.0" class="wf-sub" text-anchor="middle">required facts</text><text x="890.0" y="324.0" class="wf-sub" text-anchor="middle">satisfied</text></g><g id="node-absorb" data-node-id="absorb" data-node-kind="backend" data-node-label="absorb" data-node-sublabel="only approved rows" data-node-context="COMMAND" data-workflow-role="process" data-bounds="1020,250,190,90" tabindex="-1" role="group" aria-label="COMMAND: absorb; only approved rows" aria-pressed="false"><rect class="wf-node wf-process" x="1020" y="250" width="190" height="90" rx="12"></rect><text x="1036" y="271" class="wf-tag">COMMAND</text><text x="1036" y="296" class="wf-label">absorb</text><text x="1036" y="316" class="wf-sub">only approved rows</text></g></g></svg></div><p class="src">source: shared distribution contract, absorb, wiki-compile and capture helpers. Workflow contract, not production status.</p></div>
 
     <!-- Slide 6: Funnel Diagram (Enlarged Scale) -->
-    <div class="slide" id="slide-6">
-      <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>What Makes an Answer Truly Good?</h2>
-        <p class="message">It compares claims with selected primary evidence, cites the sources, and makes contradictions and missing coverage visible.</p>
-      </div>
+    <div class="slide workflow-slide" id="slide-6"><div><h2>Primary Evidence Stays Separate from Synthesis</h2><p class="message">Wiki rows delegate selected primary evidence. Direct wiki-compile is also available when its scope is authorized; generated reports are not compiler evidence.</p></div><div class="scroll workflow-visual"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 555" role="img" aria-labelledby="slide6-title slide6-desc" data-preset="classic" data-reader-fit="intrinsic-height" data-reader-min-text="11" data-reader-primary-text="16" data-workflow-diagram="execution"><title id="slide6-title">Capture creates both records before approved absorption; primary evidence and retention are separate</title><desc id="slide6-desc">Research reports in output and meeting records in their configured folder carry proposed rows into authority checks and absorb. Wiki compilation reads selected primary evidence and supports direct authorized scope. Terminal research reports are excluded references; separately authorized transcript filing preserves primary sources. Meeting records stay in place.</desc><style >:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-      <div style="margin: auto 0; display: flex; flex-direction: column; align-items: center; width: 100%;">
-        <svg viewBox="0 0 960 300" style="width: 100%; max-width: 960px; height: 280px; display: block;">
-          <!-- Incoming Information Floating Particles -->
-          <g fill="var(--text-dim)" opacity="0.6">
-            <circle cx="340" cy="18" r="5" /><rect x="420" y="8" width="10" height="10" rx="2" fill="var(--cyan)" opacity="0.7" /><polygon points="530,10 540,24 520,24" />
-            <circle cx="470" cy="22" r="6" /><rect x="375" y="22" width="8" height="8" rx="2" /><circle cx="580" cy="20" r="5" fill="var(--tangerine)" opacity="0.8" />
-            <polygon points="630,12 640,26 620,26" fill="var(--emerald)" opacity="0.7" />
-          </g>
-
-          <!-- Funnel Outer Walls -->
-          <path d="M 230 40 L 730 40 L 590 190 L 370 190 Z" fill="rgba(255,255,255,0.02)" stroke="var(--surface-border)" stroke-width="2.5" />
-          <path d="M 370 190 L 590 190 L 590 220 L 370 220 Z" fill="rgba(255,255,255,0.03)" stroke="var(--surface-border)" stroke-width="2.5" />
-
-          <!-- Filter Stage 1: Grounding -->
-          <line x1="280" y1="105" x2="680" y2="105" stroke="var(--tangerine)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <text x="480" y="90" fill="var(--text-main)" font-size="16" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">1. Grounding in Facts</text>
-          <text x="480" y="130" fill="var(--text-muted)" font-size="13.5" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">Matching claims directly to cited evidence in your sources</text>
-
-          <!-- Filter Stage 2: Judging Claims -->
-          <line x1="325" y1="155" x2="635" y2="155" stroke="var(--tangerine)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <text x="480" y="176" fill="var(--text-main)" font-size="15" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">2. Judging Claims &amp; Biases</text>
-
-          <!-- Output Branch Lines -->
-          <line x1="410" y1="220" x2="410" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="410" y1="250" x2="190" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="190" y1="250" x2="190" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-
-          <line x1="480" y1="220" x2="480" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-
-          <line x1="550" y1="220" x2="550" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="550" y1="250" x2="770" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="770" y1="250" x2="770" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-        </svg>
-
-        <!-- Funnel Output Result Bins -->
-        <div style="display: grid; grid-template-columns: repeat(3, 260px); gap: 30px; margin-top: -8px;">
-          <div style="background: rgba(52, 211, 153, 0.08); border: 2px solid var(--emerald); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--emerald); font-weight: 800; font-size: 1.15rem;">Verified</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Backed directly by source passages</div>
-          </div>
-          <div style="background: rgba(248, 113, 113, 0.08); border: 2px solid var(--crimson); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--crimson); font-weight: 800; font-size: 1.15rem;">Contradicted</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Conflicting or debunked claims</div>
-          </div>
-          <div style="background: rgba(251, 146, 60, 0.08); border: 2px solid var(--tangerine); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--tangerine); font-weight: 800; font-size: 1.15rem;">Unverified / Gaps</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Transparent missing context</div>
-          </div>
-        </div>
-      </div>
-      <div></div>
-    </div>
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><defs ><marker id="slide6-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="var(--dim)"/></marker></defs><rect width="1240" height="555" fill="var(--bg)" rx="12"></rect><g data-legend="" data-legend-bridge="" aria-label="Workflow role and line legend"><text x="30" y="15" class="wf-note">Legend: workflow roles, not running/completed status</text><g data-legend-kind="backend" data-legend-semantic-kind="backend" data-legend-label="Command" data-legend-x="30" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-process" x="30" y="27" width="30" height="23" rx="12"></rect><text x="70" y="44" class="wf-sub">Command</text></g><g data-legend-kind="frontend" data-legend-semantic-kind="frontend" data-legend-label="Durable record" data-legend-x="255" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-record" d="M255,27 L269,27 L285,43 L285,50 L255,50 Z"></path><path d="M269,27 L269,43 L285,43" class="wf-edge"></path><text x="295" y="44" class="wf-sub">Durable record</text></g><g data-legend-kind="database" data-legend-semantic-kind="database" data-legend-label="Destination / store" data-legend-x="500" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-store" x="500" y="27" width="30" height="23" rx="3"></rect><path d="M507,30 V47 M523,30 V47" class="wf-node wf-store" fill="none"></path><text x="540" y="44" class="wf-sub">Destination / store</text></g><g data-legend-kind="security" data-legend-semantic-kind="security" data-legend-label="Approval / control" data-legend-x="805" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-control" d="M805,38.5 L820.0,27 L835,38.5 L820.0,50 Z"></path><text x="845" y="44" class="wf-sub">Approval / control</text></g><g data-legend-kind="external" data-legend-semantic-kind="external" data-legend-label="Source / input" data-legend-x="1050" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-input" x="1050" y="27" width="30" height="23" rx="20"></rect><text x="1090" y="44" class="wf-sub">Source / input</text></g><text x="30" y="61" class="wf-edge-label">Shapes/colors: violet rounded = command; neutral fold = record; blue double-edge = store; amber diamond = control; neutral pill = input</text><text x="30" y="79" class="wf-note">Solid → record / read / create   ·   Dashed → authorized execution or terminal retention   ·   Dotted → selected PRIMARY evidence</text></g><g transform="translate(0,-380)"><text x="30" y="485" class="wf-heading">2 · Approved routes and independent compiler scope</text><g data-edge-from="absorb-detail" data-edge-to="targets" data-edge-key="local-rows"><path d="M249,560.0 L341,560.0" class="wf-edge dashed" marker-end="url(#slide6-arrow)" data-edge-from="absorb-detail" data-edge-to="targets" data-edge-key="local-rows"></path><title >approved rows</title></g><text x="255" y="545" class="wf-edge-label">approved rows</text><g data-edge-from="absorb-detail" data-edge-to="compile" data-edge-key="delegate"><path d="M249,560.0 L285,560 L285,640 L830,640 L830.0,681" class="wf-edge dashed" marker-end="url(#slide6-arrow)" data-edge-from="absorb-detail" data-edge-to="compile" data-edge-key="delegate"></path><title >approved wiki row scope</title></g><text x="380" y="628" class="wf-edge-label">approved wiki row scope</text><g data-edge-from="primary" data-edge-to="compile" data-edge-key="primary-subset"><path d="M269,730.0 L711,730.0" class="wf-edge emphasis" marker-end="url(#slide6-arrow)" data-edge-from="primary" data-edge-to="compile" data-edge-key="primary-subset"></path><title >selected PRIMARY evidence</title></g><text x="375" y="718" class="wf-edge-label">selected PRIMARY evidence</text><g data-edge-from="direct" data-edge-to="compile" data-edge-key="direct-compile"><path d="M554,825.0 L660,825 L830,825 L830.0,779" class="wf-edge dashed" marker-end="url(#slide6-arrow)" data-edge-from="direct" data-edge-to="compile" data-edge-key="direct-compile"></path><title >direct invocation: no report required</title></g><text x="554" y="855" class="wf-edge-label">direct invocation: no report required</text><g data-edge-from="compile" data-edge-to="wiki" data-edge-key="wiki-write"><path d="M949,730.0 L1031,730.0" class="wf-edge dashed" marker-end="url(#slide6-arrow)" data-edge-from="compile" data-edge-to="wiki" data-edge-key="wiki-write"></path><title >synthesize</title></g><text x="963" y="718" class="wf-edge-label">synthesize</text><g id="node-absorb-detail" data-node-id="absorb-detail" data-node-kind="backend" data-node-label="absorb" data-node-sublabel="same command as above" data-node-context="COMMAND" data-workflow-role="process" data-bounds="30,515,220,90" tabindex="-1" role="group" aria-label="COMMAND: absorb; same command as above" aria-pressed="false"><rect class="wf-node wf-process" x="30" y="515" width="220" height="90" rx="12"></rect><text x="46" y="536" class="wf-tag">COMMAND</text><text x="46" y="561" class="wf-label">absorb</text><text x="46" y="581" class="wf-sub">same command as above</text></g><g id="node-targets" data-node-id="targets" data-node-kind="database" data-node-label="Local destinations" data-node-sublabel="docs · context · projects · tasks · writing" data-node-context="STORE" data-workflow-role="store" data-bounds="340,510,520,100" tabindex="-1" role="group" aria-label="STORE: Local destinations; docs · context · projects · tasks · writing" aria-pressed="false"><rect class="wf-node wf-store" x="340" y="510" width="520" height="100" rx="3"></rect><path d="M347,513 V607 M853,513 V607" class="wf-node wf-store" fill="none"></path><text x="356" y="531" class="wf-tag">STORE</text><text x="356" y="556" class="wf-label">Local destinations</text><text x="356" y="576" class="wf-sub">docs · context · projects · tasks · writing</text></g><g id="node-primary" data-node-id="primary" data-node-kind="external" data-node-label="Primary raw evidence" data-node-sublabel="source text + provenance" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,685,240,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Primary raw evidence; source text + provenance" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="685" width="240" height="90" rx="20"></rect><text x="46" y="706" class="wf-tag">SOURCE INPUT</text><text x="46" y="731" class="wf-label">Primary raw evidence</text><text x="46" y="751" class="wf-sub">source text + provenance</text></g><g id="node-direct" data-node-id="direct" data-node-kind="security" data-node-label="Compiler authority" data-node-sublabel="direct scope authorized" data-node-context="CONTROL" data-workflow-role="control" data-bounds="355,760,200,130" tabindex="-1" role="group" aria-label="CONTROL: Compiler authority; direct scope authorized" aria-pressed="false"><path class="wf-node wf-control" d="M355,825.0 L455.0,760 L555,825.0 L455.0,890 Z"></path><text x="455.0" y="795.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="455.0" y="820.0" class="wf-label" text-anchor="middle">Compiler authority</text><text x="455.0" y="840.0" class="wf-sub" text-anchor="middle">direct scope</text><text x="455.0" y="854.0" class="wf-sub" text-anchor="middle">authorized</text></g><g id="node-compile" data-node-id="compile" data-node-kind="backend" data-node-label="wiki-compile" data-node-sublabel="wiki enabled · selected subset" data-node-context="COMMAND" data-workflow-role="process" data-bounds="710,680,240,100" tabindex="-1" role="group" aria-label="COMMAND: wiki-compile; wiki enabled · selected subset" aria-pressed="false"><rect class="wf-node wf-process" x="710" y="680" width="240" height="100" rx="12"></rect><text x="726" y="701" class="wf-tag">COMMAND</text><text x="726" y="726" class="wf-label">wiki-compile</text><text x="726" y="746" class="wf-sub">wiki enabled · selected subset</text></g><g id="node-wiki" data-node-id="wiki" data-node-kind="database" data-node-label="wiki/" data-node-sublabel="synthesis + indexes" data-node-context="STORE" data-workflow-role="store" data-bounds="1030,680,180,100" tabindex="-1" role="group" aria-label="STORE: wiki/; synthesis + indexes" aria-pressed="false"><rect class="wf-node wf-store" x="1030" y="680" width="180" height="100" rx="3"></rect><path d="M1037,683 V777 M1203,683 V777" class="wf-node wf-store" fill="none"></path><text x="1046" y="701" class="wf-tag">STORE</text><text x="1046" y="726" class="wf-label">wiki/</text><text x="1046" y="746" class="wf-sub">synthesis + indexes</text></g></g></svg></div><p class="src">source: shared distribution contract, absorb, wiki-compile and capture helpers. Workflow contract, not production status.</p></div>
 
     <!-- Slide 7: The Staging Ground -->
-    <div class="slide" id="slide-7">
-      <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>Reviewing and Understanding Your Answers</h2>
-        <p class="message">Research reports and configurable meeting records keep sources, decisions and proposed changes together for review.</p>
-      </div>
+    <div class="slide workflow-slide" id="slide-7"><div><h2>Processing Does Not Relocate a Meeting Record</h2><p class="message">Research finalize retains a terminal report as an excluded reference. Separately authorized file-source retains original transcripts under raw policy.</p></div><div class="scroll workflow-visual"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 500" role="img" aria-labelledby="slide7-title slide7-desc" data-preset="classic" data-reader-fit="intrinsic-height" data-reader-min-text="11" data-reader-primary-text="16" data-workflow-diagram="retention"><title id="slide7-title">Capture creates both records before approved absorption; primary evidence and retention are separate</title><desc id="slide7-desc">Research reports in output and meeting records in their configured folder carry proposed rows into authority checks and absorb. Wiki compilation reads selected primary evidence and supports direct authorized scope. Terminal research reports are excluded references; separately authorized transcript filing preserves primary sources. Meeting records stay in place.</desc><style >:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 36px; margin: auto 0; align-items: center;">
-        <div style="background: var(--surface); border: 1px solid var(--surface-border); border-radius: 10px; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; line-height: 1.65; color: var(--text-muted);">
-          <div style="color: var(--text-dim); border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">output/report.md · meetings/record.md</div>
-          <div style="color: var(--cyan); font-weight: 600;">1. # Question &amp; Scope</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">What we are asking.</div>
-
-          <div style="color: var(--tangerine); font-weight: 600;">2. # What the Sources Say</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Cross-source evidence and synthesis.</div>
-
-          <div style="color: var(--crimson); font-weight: 600;">3. # Coverage &amp; Proposed Changes</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Verified facts and missing context.</div>
-
-          <div style="color: var(--emerald); font-weight: 600;">4. # How to Absorb</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim);">Clear next steps for your personal notes.</div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 18px;">
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px;">
-            <div style="font-weight: 700; font-size: 1.05rem;">Know Exactly Where to Look</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Research keeps its documented shape; meeting headings come from your template. Sources and approval state stay visible.</p>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--emerald); padding: 18px;">
-            <div style="font-weight: 700; font-size: 1.05rem;">Built-in Next Steps</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Review concrete document, action, wiki and writing rows; existing authorization carries into absorb.</p>
-          </div>
-        </div>
-      </div>
-      <div></div>
-    </div>
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><defs ><marker id="slide7-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="var(--dim)"/></marker></defs><rect width="1240" height="500" fill="var(--bg)" rx="12"></rect><g data-legend="" data-legend-bridge="" aria-label="Workflow role and line legend"><text x="30" y="15" class="wf-note">Legend: workflow roles, not running/completed status</text><g data-legend-kind="backend" data-legend-semantic-kind="backend" data-legend-label="Command" data-legend-x="30" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-process" x="30" y="27" width="30" height="23" rx="12"></rect><text x="70" y="44" class="wf-sub">Command</text></g><g data-legend-kind="frontend" data-legend-semantic-kind="frontend" data-legend-label="Durable record" data-legend-x="255" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-record" d="M255,27 L269,27 L285,43 L285,50 L255,50 Z"></path><path d="M269,27 L269,43 L285,43" class="wf-edge"></path><text x="295" y="44" class="wf-sub">Durable record</text></g><g data-legend-kind="database" data-legend-semantic-kind="database" data-legend-label="Destination / store" data-legend-x="500" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-store" x="500" y="27" width="30" height="23" rx="3"></rect><path d="M507,30 V47 M523,30 V47" class="wf-node wf-store" fill="none"></path><text x="540" y="44" class="wf-sub">Destination / store</text></g><g data-legend-kind="security" data-legend-semantic-kind="security" data-legend-label="Approval / control" data-legend-x="805" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-control" d="M805,38.5 L820.0,27 L835,38.5 L820.0,50 Z"></path><text x="845" y="44" class="wf-sub">Approval / control</text></g><g data-legend-kind="external" data-legend-semantic-kind="external" data-legend-label="Source / input" data-legend-x="1050" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-input" x="1050" y="27" width="30" height="23" rx="20"></rect><text x="1090" y="44" class="wf-sub">Source / input</text></g><text x="30" y="61" class="wf-edge-label">Shapes/colors: violet rounded = command; neutral fold = record; blue double-edge = store; amber diamond = control; neutral pill = input</text><text x="30" y="79" class="wf-note">Solid → record / read / create   ·   Dashed → authorized execution or terminal retention   ·   Dotted → selected PRIMARY evidence</text></g><g transform="translate(0,-875)"><text x="30" y="965" class="wf-heading">3 · Separate retention transitions after distribution</text><g data-edge-from="report-retention" data-edge-to="report-terminal" data-edge-key="report-terminal-check"><path d="M264,1045.0 L341,1045.0" class="wf-edge default" marker-end="url(#slide7-arrow)" data-edge-from="report-retention" data-edge-to="report-terminal" data-edge-key="report-terminal-check"></path><title >check</title></g><text x="276" y="1032" class="wf-edge-label">check</text><g data-edge-from="report-terminal" data-edge-to="finalize" data-edge-key="finalize-report"><path d="M529,1045.0 L611,1045.0" class="wf-edge dashed" marker-end="url(#slide7-arrow)" data-edge-from="report-terminal" data-edge-to="finalize" data-edge-key="finalize-report"></path><title >terminal</title></g><text x="545" y="1032" class="wf-edge-label">terminal</text><g data-edge-from="finalize" data-edge-to="derived" data-edge-key="retained-report"><path d="M839,1045.0 L941,1045.0" class="wf-edge dashed" marker-end="url(#slide7-arrow)" data-edge-from="finalize" data-edge-to="derived" data-edge-key="retained-report"></path><title >move + exclude</title></g><text x="846" y="1032" class="wf-edge-label">move + exclude</text><g data-edge-from="transcript" data-edge-to="filing-authority" data-edge-key="source-terminal-check"><path d="M264,1220.0 L341,1220.0" class="wf-edge default" marker-end="url(#slide7-arrow)" data-edge-from="transcript" data-edge-to="filing-authority" data-edge-key="source-terminal-check"></path><title >check</title></g><text x="276" y="1207" class="wf-edge-label">check</text><g data-edge-from="filing-authority" data-edge-to="file-source" data-edge-key="file-authorized"><path d="M529,1220.0 L611,1220.0" class="wf-edge dashed" marker-end="url(#slide7-arrow)" data-edge-from="filing-authority" data-edge-to="file-source" data-edge-key="file-authorized"></path><title >authorized</title></g><text x="540" y="1207" class="wf-edge-label">authorized</text><g data-edge-from="file-source" data-edge-to="source-archive" data-edge-key="source-retained"><path d="M839,1220.0 L941,1220.0" class="wf-edge dashed" marker-end="url(#slide7-arrow)" data-edge-from="file-source" data-edge-to="source-archive" data-edge-key="source-retained"></path><title >file original</title></g><text x="853" y="1207" class="wf-edge-label">file original</text><g id="node-report-retention" data-node-id="report-retention" data-node-kind="frontend" data-node-label="Same research report" data-node-sublabel="still in output/ while pending" data-node-context="RECORD" data-workflow-role="record" data-bounds="30,995,235,100" tabindex="-1" role="group" aria-label="RECORD: Same research report; still in output/ while pending" aria-pressed="false"><path class="wf-node wf-record" d="M30,995 L249,995 L265,1011 L265,1095 L30,1095 Z"></path><path d="M249,995 L249,1011 L265,1011" class="wf-edge"></path><text x="46" y="1016" class="wf-tag">RECORD</text><text x="46" y="1041" class="wf-label">Same research report</text><text x="46" y="1061" class="wf-sub">still in output/ while pending</text></g><g id="node-report-terminal" data-node-id="report-terminal" data-node-kind="security" data-node-label="All rows terminal" data-node-sublabel="complete or declined" data-node-context="CONTROL" data-workflow-role="control" data-bounds="340,980,190,130" tabindex="-1" role="group" aria-label="CONTROL: All rows terminal; complete or declined" aria-pressed="false"><path class="wf-node wf-control" d="M340,1045.0 L435.0,980 L530,1045.0 L435.0,1110 Z"></path><text x="435.0" y="1015.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="435.0" y="1040.0" class="wf-label" text-anchor="middle">All rows terminal</text><text x="435.0" y="1060.0" class="wf-sub" text-anchor="middle">complete or</text><text x="435.0" y="1074.0" class="wf-sub" text-anchor="middle">declined</text></g><g id="node-finalize" data-node-id="finalize" data-node-kind="backend" data-node-label="finalize" data-node-sublabel="retain report + repair links" data-node-context="COMMAND" data-workflow-role="process" data-bounds="610,995,230,100" tabindex="-1" role="group" aria-label="COMMAND: finalize; retain report + repair links" aria-pressed="false"><rect class="wf-node wf-process" x="610" y="995" width="230" height="100" rx="12"></rect><text x="626" y="1016" class="wf-tag">COMMAND</text><text x="626" y="1041" class="wf-label">finalize</text><text x="626" y="1061" class="wf-sub">retain report + repair links</text></g><g id="node-derived" data-node-id="derived" data-node-kind="database" data-node-label="raw/derived/" data-node-sublabel="excluded research report" data-node-context="STORE" data-workflow-role="store" data-bounds="940,995,270,100" tabindex="-1" role="group" aria-label="STORE: raw/derived/; excluded research report" aria-pressed="false"><rect class="wf-node wf-store" x="940" y="995" width="270" height="100" rx="3"></rect><path d="M947,998 V1092 M1203,998 V1092" class="wf-node wf-store" fill="none"></path><text x="956" y="1016" class="wf-tag">STORE</text><text x="956" y="1041" class="wf-label">raw/derived/</text><text x="956" y="1061" class="wf-sub">excluded research report</text></g><g id="node-transcript" data-node-id="transcript" data-node-kind="external" data-node-label="Original transcript" data-node-sublabel="policy-defined raw intake" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,1170,235,100" tabindex="-1" role="group" aria-label="SOURCE INPUT: Original transcript; policy-defined raw intake" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="1170" width="235" height="100" rx="20"></rect><text x="46" y="1191" class="wf-tag">SOURCE INPUT</text><text x="46" y="1216" class="wf-label">Original transcript</text><text x="46" y="1236" class="wf-sub">policy-defined raw intake</text></g><g id="node-filing-authority" data-node-id="filing-authority" data-node-kind="security" data-node-label="Terminal + filing" data-node-sublabel="separate authority" data-node-context="CONTROL" data-workflow-role="control" data-bounds="340,1155,190,130" tabindex="-1" role="group" aria-label="CONTROL: Terminal + filing; separate authority" aria-pressed="false"><path class="wf-node wf-control" d="M340,1220.0 L435.0,1155 L530,1220.0 L435.0,1285 Z"></path><text x="435.0" y="1190.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="435.0" y="1215.0" class="wf-label" text-anchor="middle">Terminal + filing</text><text x="435.0" y="1235.0" class="wf-sub" text-anchor="middle">separate authority</text></g><g id="node-file-source" data-node-id="file-source" data-node-kind="backend" data-node-label="file-source" data-node-sublabel="preserve bytes + repair links" data-node-context="COMMAND" data-workflow-role="process" data-bounds="610,1170,230,100" tabindex="-1" role="group" aria-label="COMMAND: file-source; preserve bytes + repair links" aria-pressed="false"><rect class="wf-node wf-process" x="610" y="1170" width="230" height="100" rx="12"></rect><text x="626" y="1191" class="wf-tag">COMMAND</text><text x="626" y="1216" class="wf-label">file-source</text><text x="626" y="1236" class="wf-sub">preserve bytes + repair links</text></g><g id="node-source-archive" data-node-id="source-archive" data-node-kind="database" data-node-label="Raw source archive" data-node-sublabel="primary transcript · local policy" data-node-context="STORE" data-workflow-role="store" data-bounds="940,1170,270,100" tabindex="-1" role="group" aria-label="STORE: Raw source archive; primary transcript · local policy" aria-pressed="false"><rect class="wf-node wf-store" x="940" y="1170" width="270" height="100" rx="3"></rect><path d="M947,1173 V1267 M1203,1173 V1267" class="wf-node wf-store" fill="none"></path><text x="956" y="1191" class="wf-tag">STORE</text><text x="956" y="1216" class="wf-label">Raw source archive</text><text x="956" y="1236" class="wf-sub">primary transcript · local policy</text></g><text x="30" y="1320" class="wf-note">Meeting record: same path after processing. Repeated nodes show the same command/object in a detail panel.</text><text x="30" y="1342" class="wf-note">Primary transcript archive ≠ excluded report archive. Pending rows retain intake/output; ingestion status is separate.</text></g></svg></div><p class="src">source: shared distribution contract, absorb, wiki-compile and capture helpers. Workflow contract, not production status.</p></div>
 
     <!-- Slide 8: The Intersections of Action (Branching Arrows) -->
-    <div class="slide" id="slide-8">
-      <div class="tracker"><span>Question</span> | <span>Answer</span> | <span class="active-stage emerald">Action</span></div>
-      <div>
-        <h2>Acting on What You Found</h2>
-        <p class="message">Absorb executes only approved rows through your local workflows, with confirmed receipts and safe retries.</p>
-      </div>
+    <div class="slide workflow-slide" id="slide-8"><div><h2>Execute Approved Rows Through Their Workflows</h2><p class="message">Named docs, context, projects, owned tasks and writing use local rules. Confirmed receipts support retries; pending routes remain in the record.</p></div><div class="scroll workflow-visual"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 555" role="img" aria-labelledby="slide8-title slide8-desc" data-preset="classic" data-reader-fit="intrinsic-height" data-reader-min-text="11" data-reader-primary-text="16" data-workflow-diagram="execution"><title id="slide8-title">Capture creates both records before approved absorption; primary evidence and retention are separate</title><desc id="slide8-desc">Research reports in output and meeting records in their configured folder carry proposed rows into authority checks and absorb. Wiki compilation reads selected primary evidence and supports direct authorized scope. Terminal research reports are excluded references; separately authorized transcript filing preserves primary sources. Meeting records stay in place.</desc><style >:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-      <div style="display: grid; grid-template-columns: 220px 80px 1fr 260px; gap: 16px; align-items: center; margin: auto 0;">
-        <!-- Origin Report -->
-        <div class="blueprint-card" style="border-style: dashed; border-color: var(--tangerine); text-align: center; padding: 28px 16px;">
-          <div style="font-size: 2.2rem; margin-bottom: 8px;">📄</div>
-          <div style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--tangerine); font-weight: 600; margin-bottom: 4px;">SOURCE-LINKED PLAN</div>
-          <div style="font-weight: 700; font-size: 1.05rem;">Research or Meeting</div>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">Research moves to retained reference; meetings stay in place</p>
-        </div>
-
-        <!-- Branching Arrow SVG -->
-        <svg viewBox="0 0 80 220" style="width: 100%; height: 210px;">
-          <path d="M 5 110 C 40 110, 45 35, 75 35" fill="none" stroke="var(--emerald)" stroke-width="2.5" />
-          <polygon points="73,30 80,35 73,40" fill="var(--emerald)" />
-
-          <path d="M 5 110 L 75 110" fill="none" stroke="var(--cyan)" stroke-width="2.5" />
-          <polygon points="73,105 80,110 73,115" fill="var(--cyan)" />
-
-          <path d="M 5 110 C 40 110, 45 185, 75 185" fill="none" stroke="var(--text-dim)" stroke-width="2.5" />
-          <polygon points="73,180 80,185 73,190" fill="var(--text-dim)" />
-        </svg>
-
-        <!-- Three Destinations -->
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <div class="blueprint-card" style="border-left: 4px solid var(--emerald); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">📝</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">Your Notes &amp; Docs</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Named document changes; wiki-compile reads selected primary sources.</div>
-            </div>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">✅</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">To-Do Lists</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Owned tasks with saved-date read-back; no automatic calendar writes.</div>
-            </div>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--text-dim); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">🗑️</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">Writing &amp; Retention</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">New ideas, enrichment or published follow-ups; explicit no-candidate is valid.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- No Parking Rule Card -->
-        <div class="blueprint-card" style="border: 2px dashed var(--crimson); text-align: center; padding: 28px 18px; position: relative;">
-          <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--crimson); color: #000; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.1em; padding: 2px 10px; border-radius: 10px; text-transform: uppercase;">The Rule</div>
-          <div style="font-size: 2.5rem; margin: 4px 0 10px 0;">🚫 🅿️</div>
-          <h3 style="font-size: 1.15rem; color: var(--crimson); margin-bottom: 6px;">Scoped Approval</h3>
-          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">Pending rows stay pending. Research reports become excluded references; meeting records remain in their folder. Transcript filing is separate.</p>
-        </div>
-      </div>
-      <div></div>
-    </div>
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><defs ><marker id="slide8-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="var(--dim)"/></marker></defs><rect width="1240" height="555" fill="var(--bg)" rx="12"></rect><g data-legend="" data-legend-bridge="" aria-label="Workflow role and line legend"><text x="30" y="15" class="wf-note">Legend: workflow roles, not running/completed status</text><g data-legend-kind="backend" data-legend-semantic-kind="backend" data-legend-label="Command" data-legend-x="30" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-process" x="30" y="27" width="30" height="23" rx="12"></rect><text x="70" y="44" class="wf-sub">Command</text></g><g data-legend-kind="frontend" data-legend-semantic-kind="frontend" data-legend-label="Durable record" data-legend-x="255" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-record" d="M255,27 L269,27 L285,43 L285,50 L255,50 Z"></path><path d="M269,27 L269,43 L285,43" class="wf-edge"></path><text x="295" y="44" class="wf-sub">Durable record</text></g><g data-legend-kind="database" data-legend-semantic-kind="database" data-legend-label="Destination / store" data-legend-x="500" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-store" x="500" y="27" width="30" height="23" rx="3"></rect><path d="M507,30 V47 M523,30 V47" class="wf-node wf-store" fill="none"></path><text x="540" y="44" class="wf-sub">Destination / store</text></g><g data-legend-kind="security" data-legend-semantic-kind="security" data-legend-label="Approval / control" data-legend-x="805" data-legend-baseline="44" data-legend-width="200"><path class="wf-node wf-control" d="M805,38.5 L820.0,27 L835,38.5 L820.0,50 Z"></path><text x="845" y="44" class="wf-sub">Approval / control</text></g><g data-legend-kind="external" data-legend-semantic-kind="external" data-legend-label="Source / input" data-legend-x="1050" data-legend-baseline="44" data-legend-width="200"><rect class="wf-node wf-input" x="1050" y="27" width="30" height="23" rx="20"></rect><text x="1090" y="44" class="wf-sub">Source / input</text></g><text x="30" y="61" class="wf-edge-label">Shapes/colors: violet rounded = command; neutral fold = record; blue double-edge = store; amber diamond = control; neutral pill = input</text><text x="30" y="79" class="wf-note">Solid → record / read / create   ·   Dashed → authorized execution or terminal retention   ·   Dotted → selected PRIMARY evidence</text></g><g transform="translate(0,-380)"><text x="30" y="485" class="wf-heading">2 · Approved routes and independent compiler scope</text><g data-edge-from="absorb-detail" data-edge-to="targets" data-edge-key="local-rows"><path d="M249,560.0 L341,560.0" class="wf-edge dashed" marker-end="url(#slide8-arrow)" data-edge-from="absorb-detail" data-edge-to="targets" data-edge-key="local-rows"></path><title >approved rows</title></g><text x="255" y="545" class="wf-edge-label">approved rows</text><g data-edge-from="absorb-detail" data-edge-to="compile" data-edge-key="delegate"><path d="M249,560.0 L285,560 L285,640 L830,640 L830.0,681" class="wf-edge dashed" marker-end="url(#slide8-arrow)" data-edge-from="absorb-detail" data-edge-to="compile" data-edge-key="delegate"></path><title >approved wiki row scope</title></g><text x="380" y="628" class="wf-edge-label">approved wiki row scope</text><g data-edge-from="primary" data-edge-to="compile" data-edge-key="primary-subset"><path d="M269,730.0 L711,730.0" class="wf-edge emphasis" marker-end="url(#slide8-arrow)" data-edge-from="primary" data-edge-to="compile" data-edge-key="primary-subset"></path><title >selected PRIMARY evidence</title></g><text x="375" y="718" class="wf-edge-label">selected PRIMARY evidence</text><g data-edge-from="direct" data-edge-to="compile" data-edge-key="direct-compile"><path d="M554,825.0 L660,825 L830,825 L830.0,779" class="wf-edge dashed" marker-end="url(#slide8-arrow)" data-edge-from="direct" data-edge-to="compile" data-edge-key="direct-compile"></path><title >direct invocation: no report required</title></g><text x="554" y="855" class="wf-edge-label">direct invocation: no report required</text><g data-edge-from="compile" data-edge-to="wiki" data-edge-key="wiki-write"><path d="M949,730.0 L1031,730.0" class="wf-edge dashed" marker-end="url(#slide8-arrow)" data-edge-from="compile" data-edge-to="wiki" data-edge-key="wiki-write"></path><title >synthesize</title></g><text x="963" y="718" class="wf-edge-label">synthesize</text><g id="node-absorb-detail" data-node-id="absorb-detail" data-node-kind="backend" data-node-label="absorb" data-node-sublabel="same command as above" data-node-context="COMMAND" data-workflow-role="process" data-bounds="30,515,220,90" tabindex="-1" role="group" aria-label="COMMAND: absorb; same command as above" aria-pressed="false"><rect class="wf-node wf-process" x="30" y="515" width="220" height="90" rx="12"></rect><text x="46" y="536" class="wf-tag">COMMAND</text><text x="46" y="561" class="wf-label">absorb</text><text x="46" y="581" class="wf-sub">same command as above</text></g><g id="node-targets" data-node-id="targets" data-node-kind="database" data-node-label="Local destinations" data-node-sublabel="docs · context · projects · tasks · writing" data-node-context="STORE" data-workflow-role="store" data-bounds="340,510,520,100" tabindex="-1" role="group" aria-label="STORE: Local destinations; docs · context · projects · tasks · writing" aria-pressed="false"><rect class="wf-node wf-store" x="340" y="510" width="520" height="100" rx="3"></rect><path d="M347,513 V607 M853,513 V607" class="wf-node wf-store" fill="none"></path><text x="356" y="531" class="wf-tag">STORE</text><text x="356" y="556" class="wf-label">Local destinations</text><text x="356" y="576" class="wf-sub">docs · context · projects · tasks · writing</text></g><g id="node-primary" data-node-id="primary" data-node-kind="external" data-node-label="Primary raw evidence" data-node-sublabel="source text + provenance" data-node-context="SOURCE INPUT" data-workflow-role="input" data-bounds="30,685,240,90" tabindex="-1" role="group" aria-label="SOURCE INPUT: Primary raw evidence; source text + provenance" aria-pressed="false"><rect class="wf-node wf-input" x="30" y="685" width="240" height="90" rx="20"></rect><text x="46" y="706" class="wf-tag">SOURCE INPUT</text><text x="46" y="731" class="wf-label">Primary raw evidence</text><text x="46" y="751" class="wf-sub">source text + provenance</text></g><g id="node-direct" data-node-id="direct" data-node-kind="security" data-node-label="Compiler authority" data-node-sublabel="direct scope authorized" data-node-context="CONTROL" data-workflow-role="control" data-bounds="355,760,200,130" tabindex="-1" role="group" aria-label="CONTROL: Compiler authority; direct scope authorized" aria-pressed="false"><path class="wf-node wf-control" d="M355,825.0 L455.0,760 L555,825.0 L455.0,890 Z"></path><text x="455.0" y="795.0" class="wf-tag" text-anchor="middle">CONTROL</text><text x="455.0" y="820.0" class="wf-label" text-anchor="middle">Compiler authority</text><text x="455.0" y="840.0" class="wf-sub" text-anchor="middle">direct scope</text><text x="455.0" y="854.0" class="wf-sub" text-anchor="middle">authorized</text></g><g id="node-compile" data-node-id="compile" data-node-kind="backend" data-node-label="wiki-compile" data-node-sublabel="wiki enabled · selected subset" data-node-context="COMMAND" data-workflow-role="process" data-bounds="710,680,240,100" tabindex="-1" role="group" aria-label="COMMAND: wiki-compile; wiki enabled · selected subset" aria-pressed="false"><rect class="wf-node wf-process" x="710" y="680" width="240" height="100" rx="12"></rect><text x="726" y="701" class="wf-tag">COMMAND</text><text x="726" y="726" class="wf-label">wiki-compile</text><text x="726" y="746" class="wf-sub">wiki enabled · selected subset</text></g><g id="node-wiki" data-node-id="wiki" data-node-kind="database" data-node-label="wiki/" data-node-sublabel="synthesis + indexes" data-node-context="STORE" data-workflow-role="store" data-bounds="1030,680,180,100" tabindex="-1" role="group" aria-label="STORE: wiki/; synthesis + indexes" aria-pressed="false"><rect class="wf-node wf-store" x="1030" y="680" width="180" height="100" rx="3"></rect><path d="M1037,683 V777 M1203,683 V777" class="wf-node wf-store" fill="none"></path><text x="1046" y="701" class="wf-tag">STORE</text><text x="1046" y="726" class="wf-label">wiki/</text><text x="1046" y="746" class="wf-sub">synthesis + indexes</text></g></g></svg></div><p class="src">source: shared distribution contract, absorb, wiki-compile and capture helpers. Workflow contract, not production status.</p></div>
 
     <!-- Slide 9: Future Leverage (Schematic Wiki Graph) -->
     <div class="slide" id="slide-9">
@@ -527,48 +1009,134 @@
       <div style="display: grid; grid-template-columns: 1.1fr 1.1fr; gap: 36px; align-items: center; margin: auto 0;">
         <!-- Schematic Blueprint Wiki Graph Visual -->
         <div style="background: var(--surface); border: 1px solid var(--surface-border); border-radius: 12px; padding: 20px; position: relative;">
-          <svg viewBox="0 0 460 250" style="width: 100%; height: 230px; display: block;">
-            <!-- Subtle Grid Background -->
-            <defs>
-              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.06)" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
+<svg viewBox="0 0 460 300" role="img" aria-label="Wiki store links compiled records; these are reference links, not execution"><style>:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
 
-            <!-- Connection Rays -->
-            <g stroke="var(--emerald)" stroke-width="1.8" opacity="0.75">
-              <line x1="230" y1="125" x2="90" y2="60" />
-              <line x1="230" y1="125" x2="370" y2="60" />
-              <line x1="230" y1="125" x2="70" y2="190" />
-              <line x1="230" y1="125" x2="390" y2="190" />
-              <line x1="230" y1="125" x2="230" y2="40" stroke-dasharray="3 3" />
-              <!-- Inter-node links -->
-              <line x1="90" y1="60" x2="70" y2="190" stroke="var(--surface-border)" stroke-width="1.5" />
-              <line x1="370" y1="60" x2="390" y2="190" stroke="var(--surface-border)" stroke-width="1.5" />
-            </g>
-
-            <!-- Leaf Document Nodes -->
-            <g font-family="'JetBrains Mono', monospace" font-size="11" fill="var(--text-main)">
-              <circle cx="90" cy="60" r="14" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2" />
-              <text x="90" y="38" text-anchor="middle" fill="var(--text-muted)">tool-reviews.md</text>
-
-              <circle cx="370" cy="60" r="14" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2" />
-              <text x="370" y="38" text-anchor="middle" fill="var(--text-muted)">trip-packing.md</text>
-
-              <circle cx="70" cy="190" r="14" fill="var(--surface)" stroke="var(--emerald)" stroke-width="2" />
-              <text x="70" y="218" text-anchor="middle" fill="var(--text-muted)">decisions.md</text>
-
-              <circle cx="390" cy="190" r="14" fill="var(--surface)" stroke="var(--emerald)" stroke-width="2" />
-              <text x="390" y="218" text-anchor="middle" fill="var(--text-muted)">project-plan.md</text>
-            </g>
-
-            <!-- Central Hub Node -->
-            <circle cx="230" cy="125" r="32" fill="var(--bg)" stroke="var(--emerald)" stroke-width="2.5" />
-            <circle cx="230" cy="125" r="40" fill="none" stroke="var(--emerald-glow)" stroke-width="6" />
-            <text x="230" y="122" fill="var(--emerald)" font-size="13" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">YOUR</text>
-            <text x="230" y="137" fill="var(--text-main)" font-size="11" font-weight="600" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">WIKI</text>
-          </svg>
+/* Static workflow roles: palette hues identify type, never execution status. */
+.wf-node{fill:var(--node);stroke-width:2}
+.wf-process{stroke:var(--sess)}.wf-record,.wf-input{stroke:var(--nodeline)}
+.wf-store{stroke:var(--host)}.wf-control{stroke:var(--daemon)}
+.wf-label{font:600 16px var(--mono);fill:var(--ink)}
+.wf-sub{font-size:12px;fill:var(--dim)}.wf-tag{font:600 10px var(--mono);fill:var(--dim);letter-spacing:1px}
+.wf-heading{font-size:20px;font-weight:700;fill:var(--ink)}.wf-note{font-size:13px;fill:var(--dim)}
+.wf-edge{fill:none;stroke:var(--dim);stroke-width:1.8}.wf-edge.dashed{stroke-dasharray:7 5}.wf-edge.emphasis{stroke-dasharray:2 5}
+.wf-edge-label{font-size:11px;fill:var(--dim)}.wf-divider{stroke:var(--line);stroke-width:1}
+</style><rect class="wf-node wf-store" x="180" y="105" width="110" height="80" rx="3"></rect><path d="M187,108 V182 M283,108 V182" class="wf-node wf-store" fill="none"></path><text x="196" y="129" class="wf-tag">STORE</text><text x="196" y="154" class="wf-label">wiki/</text><line x1="235" y1="145" x2="70" y2="60" class="wf-edge"></line><path class="wf-node wf-record" d="M15,30 L124,30 L140,46 L140,90 L15,90 Z"></path><path d="M124,30 L124,46 L140,46" class="wf-edge"></path><text x="27" y="53" class="wf-tag">RECORD</text><text x="27" y="75" class="wf-sub">topic.md</text><line x1="235" y1="145" x2="375" y2="60" class="wf-edge"></line><path class="wf-node wf-record" d="M320,30 L429,30 L445,46 L445,90 L320,90 Z"></path><path d="M429,30 L429,46 L445,46" class="wf-edge"></path><text x="332" y="53" class="wf-tag">RECORD</text><text x="332" y="75" class="wf-sub">_index.md</text><line x1="235" y1="145" x2="70" y2="230" class="wf-edge"></line><path class="wf-node wf-record" d="M15,200 L124,200 L140,216 L140,260 L15,260 Z"></path><path d="M124,200 L124,216 L140,216" class="wf-edge"></path><text x="27" y="223" class="wf-tag">RECORD</text><text x="27" y="245" class="wf-sub">sources.md</text><line x1="235" y1="145" x2="375" y2="230" class="wf-edge"></line><path class="wf-node wf-record" d="M320,200 L429,200 L445,216 L445,260 L320,260 Z"></path><path d="M429,200 L429,216 L445,216" class="wf-edge"></path><text x="332" y="223" class="wf-tag">RECORD</text><text x="332" y="245" class="wf-sub">hot.md</text><text x="15" y="275" class="wf-sub">Legend: blue double-edge = store; neutral fold = record</text><text x="15" y="291" class="wf-sub">Lines = reference links, not execution; wiki is optional</text></svg>
         </div>
 
         <!-- Explanatory Text Column -->
@@ -623,6 +1191,7 @@
 
   </div>
 
+  <div class="theme-toggle"><button onclick="document.documentElement.dataset.theme='light'">Light</button><button onclick="document.documentElement.dataset.theme='dark'">Dark</button></div>
   <!-- Minimal Nav Controls -->
   <div class="deck-nav">
     <button id="prevBtn" title="Previous (←, PageUp)">‹</button>
