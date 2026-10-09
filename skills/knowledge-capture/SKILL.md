@@ -7,6 +7,10 @@ description: Review sources, synthesized findings, and artifacts from conversati
 
 Turn conversation knowledge into an explicit, complete disposition. Before proposing or performing a persistent capture, run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill) and `~/.config/hippocampus/profile.md`. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback destination. Cross-project work uses `artifact_followup_destination`, not the wiki-maintenance route. This skill owns only knowledge preservation and routing; `record-update` owns work records and `harness-improve` owns lessons about the harness. A durable research artifact is processed by `research-absorb`, not by this session-capture workflow.
 
+## Owning-repository engineering reports
+
+Before the knowledge-root classifications below, identify engineering run reports, implementation triage, release reviews and repository-maintenance reviews with an owning software repository. Route these to that repository under its document conventions, not to the knowledge root’s `output/` or `raw/derived/` by default. Honor the owner’s private/shared boundary: private fleet/session/configuration/wiring stays with its approved private owner; shared repository copies contain only sanitized shared evidence. Do not invent a private destination or duplicate the report in the knowledge root unless the user explicitly requests it. This exception does not change ordinary research-artifact disposition or meeting capture.
+
 ## Meeting inputs
 
 For calls, meetings, supplied transcripts, or connected recordings, read [meeting capture mode](references/meetings.md). It applies the same disposition routes to source-linked people records, coaching/advice observations, existing-document updates, and dated actions. `meeting-capture` is a thin entry point to this same procedure. Honor authorization already present in the user’s request; only unapproved routes or facts needing confirmation require a further question.
