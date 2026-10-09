@@ -41,7 +41,8 @@ Create meeting records directly in a configured meeting folder using a user-sele
 - Both Claude Code and Codex receive the same package skills, templates and contracts through normal installation.
 - research-absorb remains a deprecated wrapper around absorb. Existing research artifact links continue resolving, including the former artifact-contract reference path.
 - No installer overwrites an unowned local skill or custom template; collisions remain explicit. Migration docs explain local compiler/audit policy and wrapper replacement after installing a signed release.
-- README, profile/setup instructions, installation/migration docs, contracts and architecture references agree on names, record shapes, execution and filing.
+- README, public images/diagrams, the existing presentation, profile/setup instructions, installation/migration docs, contracts and architecture references agree on names, record shapes, execution and filing.
+- Render the finished README, images and presentation with an explicit before/after change inventory for the maintainer’s public-communication approval. That approval is a separate delivery gate before publication/release; implementation approval does not supply it.
 - Existing profile version 4 remains valid when the new optional settings are absent. Missing optional settings use the bundled minimal template and documented meeting-folder default; setting meeting defaults never creates files during profile validation.
 
 ### S5 — Feed source-grounded opportunities into writing
@@ -79,6 +80,8 @@ Existing runtime rubric for this pass; a dedicated skills platform and rubric ar
 
 ## Further Notes
 
-Scope reflects Corey’s October 9 directions: personal meeting format approved; record created and retained in meeting folder; configurable template with smaller public example; generic absorb coordinates approved changes; one shared wiki compiler with direct invocation and compatibility aliases. Package implementation authorized in chat; this document is the concrete acceptance contract for the development workflow, pending its formal review.
+Scope reflects Corey’s October 9 directions: personal meeting format approved; record created and retained in meeting folder; configurable template with smaller public example; generic absorb coordinates approved changes; one shared wiki compiler with direct invocation and compatibility aliases. Package implementation authorized in chat; this document is the concrete acceptance contract for the development workflow, approved by Corey on October 9, 2026.
 
 October 9 scope amendment: Corey requested writing-opportunity capture for meetings and research, immediate routing using the existing workflow, future dedicated skills dispatch/evaluation setup, and personal meeting backfill beginning with Kate. Live backfill belongs to the vault capture pass, not this public-package implementation. Independent spec review remains skipped; independent code review remains required.
+
+Approval: Corey approved the amended five-story specification on October 9, 2026, and explicitly required README, public images and presentation updates plus review of those finished public-facing pieces before using them for communication. Independent code review is required. No release or production installation is authorized by this approval.
