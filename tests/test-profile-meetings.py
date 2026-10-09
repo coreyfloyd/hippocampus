@@ -37,7 +37,8 @@ class MeetingProfiles(unittest.TestCase):
     def test_explicit_templates_require_readable_markdown(self):
         template = self.root / 'template.md'
         template.write_text('# {{title}}\nCustom sections\n')
-        for path in ('template.md', str(template)):
+        (self.root / 'internal.md').symlink_to(template)
+        for path in ('template.md', './template.md', 'internal.md', str(template)):
             result = self.validate(f'meeting_record_template: {path}\n')
             self.assertEqual(result.returncode, 0, result.stderr)
         for path in ('missing.md', '', 'disabled'):
@@ -46,6 +47,19 @@ class MeetingProfiles(unittest.TestCase):
         self.assertNotEqual(self.validate('meeting_record_template: template.md\n').returncode, 0)
         template.write_text('# {{unknown}}\n')
         self.assertNotEqual(self.validate('meeting_record_template: template.md\n').returncode, 0)
+
+    def test_relative_templates_cannot_escape_root_but_absolute_can(self):
+        outside = self.root.parent / 'outside.md'
+        outside.write_text('# External template\n')
+        (self.root / 'linked.md').symlink_to(outside)
+        (self.root / 'linked-dir').symlink_to(self.root.parent, target_is_directory=True)
+        for value in ('../outside.md', 'linked.md', 'linked-dir/outside.md'):
+            with self.subTest(value=value):
+                result = self.validate(f'meeting_record_template: {value}\n')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('escapes knowledge_root', result.stderr)
+        self.assertEqual(self.validate(f'meeting_record_template: {outside}\n').returncode, 0)
+        self.assertFalse((self.root / 'meetings').exists())
 
     def test_existing_profile_remains_valid(self):
         self.assertEqual(self.validate().returncode, 0)

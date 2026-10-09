@@ -70,6 +70,90 @@ class CaptureAbsorb(unittest.TestCase):
         with self.assertRaises((ValueError, SystemExit)):
             self.capture()
 
+    def test_template_override_containment_and_absolute_external_template(self):
+        outside = self.root.parent / (self.root.name + '-template.md')
+        outside.write_text('# {{title}}\nExternal template\n')
+        self.addCleanup(outside.unlink)
+        (self.root / 'external.md').symlink_to(outside)
+        for value in ('../' + outside.name, 'external.md'):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, 'escapes knowledge_root'):
+                    self.capture(template=value)
+                self.assertFalse((self.root / 'meetings').exists())
+        record = self.capture(template=str(outside))
+        self.assertIn('External template', record.read_text())
+        self.assertEqual(self.capture(template=str(outside)), record)
+
+    def test_source_filing_resolves_root_relative_and_absolute_raw_paths(self):
+        mod = self.module(); record = self.capture()
+        mod.set_plan(record, [], [], writing_result='none')
+        for form in ('relative', 'absolute'):
+            with self.subTest(form=form):
+                source = self.root / 'raw' / (form + '.md')
+                source.write_text('Original public source\n')
+                state = mod.read_record(record)
+                metadata = mod.sources_for(self.root, [dict(id=form, path=source.relative_to(self.root).as_posix(), primary=True, coverage='partial')])[0]
+                state['sources'].append(metadata); mod.save(record, state)
+                record.write_text(record.read_text() + f'\n[Source](../raw/{source.name})\n')
+                supplied = source.relative_to(self.root) if form == 'relative' else source
+                retained = mod.file_source(self.root, record, supplied, 'raw/archive/reviews', [])
+                self.assertEqual(retained.read_text(), 'Original public source\n')
+                self.assertFalse(source.exists())
+                self.assertIn(f'../raw/archive/reviews/{source.name}', record.read_text())
+                filed = next(s for s in mod.read_record(record)['sources'] if s['id'] == form)
+                self.assertEqual(filed['path'], retained.relative_to(self.root).as_posix())
+                self.assertEqual(filed['sha256'], metadata['sha256'])
+                self.assertEqual(filed['coverage'], 'partial')
+        before = record.read_bytes()
+        outside = self.root / 'output/outside.md'; outside.write_text('Outside raw\n')
+        (self.root / 'raw/escape.md').symlink_to(outside)
+        for value in (Path('output/outside.md'), outside, Path('raw/escape.md'), Path('../outside.md')):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    mod.file_source(self.root, record, value, 'raw/archive/reviews', [])
+                self.assertEqual(record.read_bytes(), before)
+                self.assertTrue(outside.exists())
+        intake = self.root / 'raw/intake.md'; intake.write_text('Public source\n')
+        (self.root / 'raw/linked-folder').symlink_to(self.root / 'output', target_is_directory=True)
+        for folder in ('output', 'raw/linked-folder', '../outside'):
+            with self.subTest(folder=folder):
+                with self.assertRaises(ValueError):
+                    mod.file_source(self.root, record, Path('raw/intake.md'), folder, [])
+                self.assertTrue(intake.exists()); self.assertEqual(record.read_bytes(), before)
+        with self.assertRaisesRegex(ValueError, 'reference repair target unavailable'):
+            mod.file_source(self.root, record, Path('raw/intake.md'), 'raw/archive/reviews', [Path('docs/missing.md')])
+        self.assertTrue(intake.exists()); self.assertEqual(record.read_bytes(), before)
+        self.assertFalse((self.root / 'raw/archive/reviews/intake.md').exists())
+
+    def test_source_filing_cli_keeps_pending_and_colliding_intake_then_deduplicates(self):
+        mod = self.module(); record = self.capture()
+        source = self.root / 'raw/inbox/public.md'
+        source.parent.mkdir(); source.write_text('Public source\n')
+        relative_record = record.relative_to(self.root).as_posix()
+        command = ['python3', str(HELPER), '--profile', str(self.profile),
+                   'file-source', relative_record, '--source', 'raw/inbox/public.md',
+                   '--retained-folder', 'raw/archive/reviews']
+        mod.set_plan(record, ['D1'], [self.row()])
+        before = record.read_bytes()
+        result = subprocess.run(command, capture_output=True, text=True, cwd=self.root / 'docs')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(source.exists()); self.assertEqual(record.read_bytes(), before)
+        mod.set_plan(record, ['D1'], [self.row(authorization='declined')])
+        target = self.root / 'raw/archive/reviews/public.md'
+        target.parent.mkdir(parents=True); target.write_text('Different source\n')
+        result = subprocess.run(command, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('collision', result.stderr)
+        self.assertEqual(target.read_text(), 'Different source\n'); self.assertTrue(source.exists())
+        target.write_bytes(source.read_bytes())
+        result = subprocess.run(command, capture_output=True, text=True, cwd=self.root / 'docs')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()), target)
+        self.assertFalse(source.exists()); self.assertEqual(target.read_text(), 'Public source\n')
+        # Filing an already retained source at its destination is a harmless retry.
+        self.assertEqual(mod.file_source(self.root, record, target.relative_to(self.root),
+                                        'raw/archive/reviews', []), target)
+
     def test_only_approved_rows_run_and_retry_reuses_confirmed_receipts(self):
         mod = self.module(); record = self.capture()
         mod.set_plan(record, ['D1', 'D2'], [self.row(), self.row(id='A2', decision='D2', authorization='pending')])

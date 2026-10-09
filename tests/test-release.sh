@@ -32,6 +32,11 @@ sandbox_repo() {
     git config user.email test@example.invalid
     git config user.name 'Hippocampus test'
     git add -A
+    # Even accidentally tracked runtime artifacts/caches must be export-ignored.
+    mkdir -p skills/absorb/scripts/__pycache__ docs/implementation
+    printf 'test cache\n' > skills/absorb/scripts/__pycache__/distribution.test.pyc
+    printf 'native test capture\n' > docs/implementation/review-r0-package-test.txt
+    git add -f skills/absorb/scripts/__pycache__/distribution.test.pyc docs/implementation/review-r0-package-test.txt
     git commit --quiet -m 'sandbox snapshot'
   )
 }
@@ -78,14 +83,25 @@ case "$ulysses_status" in
   *) echo "archive metadata scan failed (grep exit $ulysses_status)" >&2; exit 1 ;;
 esac
 
+if grep -Eq '(__pycache__|[.]py[co]$|docs/implementation/review-r)' "$ARCHIVE_LIST"; then
+  echo 'release archive contains runtime artifacts or Python caches' >&2
+  exit 1
+fi
+
 # T3: the archive's file entries equal `git ls-files` (minus export-ignored
 # paths), each prefixed with hippocampus/, so untracked files structurally
 # cannot appear.
 EXPECTED_LIST="$TEST_DIR/expected-list.txt"
-(cd "$REPO" && git ls-files) \
-  | grep -vE '(^|/)\.Ulysses-(Settings|Group)\.plist$' \
-  | grep -vE '(^|/)\.DS_Store$' \
-  | sed 's#^#hippocampus/#' | sort > "$EXPECTED_LIST"
+(cd "$REPO" && python3 - <<'PYLIST'
+import subprocess
+files = subprocess.check_output(['git', 'ls-files', '-z'])
+attrs = subprocess.check_output(['git', 'check-attr', '-z', '--stdin', 'export-ignore'], input=files).split(b'\0')
+for offset in range(0, len(attrs) - 1, 3):
+    name, _, value = attrs[offset:offset + 3]
+    if value != b'set':
+        print('hippocampus/' + name.decode())
+PYLIST
+) | sort > "$EXPECTED_LIST"
 ACTUAL_LIST="$TEST_DIR/actual-list.txt"
 grep -v '/$' "$ARCHIVE_LIST" | sort > "$ACTUAL_LIST"
 diff "$EXPECTED_LIST" "$ACTUAL_LIST"

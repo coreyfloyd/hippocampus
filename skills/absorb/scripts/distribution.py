@@ -441,7 +441,7 @@ def file_source(root: Path, record: Path, source: Path, retained_folder: str,
     root = root.resolve(); record = within(root, record)
     with locked(record):
         state = read_record(record); terminal(state)
-        source = within(root / 'raw', source)
+        source = within(root / 'raw', within(root, source))
         folder = within(root / 'raw', root / retained_folder)
         new = folder / source.name
         refs = list(dict.fromkeys([record, *references]))

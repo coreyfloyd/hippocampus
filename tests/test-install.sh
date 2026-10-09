@@ -8,6 +8,9 @@ cp -R "$ROOT" "$SOURCE_ROOT"
 BUILD_SENTINEL="$SOURCE_ROOT/skills/transcribe/tools/apple-speech/.build/hippocampus-test-sentinel"
 mkdir -p "$(dirname "$BUILD_SENTINEL")"
 touch "$BUILD_SENTINEL"
+mkdir -p "$SOURCE_ROOT/skills/absorb/scripts/__pycache__"
+printf 'test cache\n' > "$SOURCE_ROOT/skills/absorb/scripts/__pycache__/distribution.test.pyc"
+printf 'test cache\n' > "$SOURCE_ROOT/skills/absorb/scripts/distribution.test.pyo"
 cleanup() {
   status=$?
   rm -rf "$TEST_HOME" "${COLLISION_HOME:-}" "${PROFILE_HOME:-}" "${CONCURRENT_HOME:-}" "${TAMPER_HOME:-}" "${UPGRADE_HOME:-}" "${BROKEN_HOME:-}" "${CURRENT_DIR_HOME:-}" "${RETIRED_HOME:-}" "${NOPY_HOME:-}" "${MISSINGLINK_HOME:-}" "${REMEDY_HOME:-}" "${DSSTORE_HOME:-}" "${MODIFIED_HOME:-}" "${MIGRATE_HOME:-}" "${DIRTY_HOME:-}" "${JUNK_HOME:-}" "$BUILD_SENTINEL"
@@ -20,7 +23,7 @@ release_manifest() {
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
-    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
+    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
 release_manifest_legacy() {
@@ -33,6 +36,8 @@ release_manifest_legacy() {
   )
 }
 HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/__pycache__"
+test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/distribution.test.pyo"
 if HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify; then
   exit 1
 fi

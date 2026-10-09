@@ -31,7 +31,7 @@ manifest_listing() {
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
-    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
+    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
 manifest_hash() {
@@ -55,7 +55,7 @@ copy_release_tree() {
   mkdir -p "$destination"
   (
     cd "$source"
-    tar --exclude='.build' --exclude='.DS_Store' --exclude='.Ulysses-*' -cf - .
+    tar --exclude='.build' --exclude='.DS_Store' --exclude='.Ulysses-*' --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyo' -cf - .
   ) | (
     cd "$destination"
     tar -xf -

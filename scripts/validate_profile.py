@@ -94,7 +94,11 @@ def meeting_settings(root, values, template_override=None):
             raise ValueError("meeting_record_template must name a Markdown file")
         template = pathlib.Path(selected).expanduser()
         if not template.is_absolute():
-            template = root / template
+            template = (root / template).resolve()
+            try:
+                template.relative_to(root)
+            except ValueError:
+                raise ValueError("meeting_record_template escapes knowledge_root") from None
     try:
         content = template.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
