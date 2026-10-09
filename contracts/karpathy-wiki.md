@@ -20,7 +20,7 @@ is deliberately local configuration, not package content.
 The wiki is optional. `hippocampus-set-up` explains both the wiki and the
 no-wiki alternative in neutral terms, with no default lean, and can enable or
 disable the wiki later without disturbing the rest of an existing
-configuration. `research-to-wiki` and `wiki-audit` gate on the profile
+configuration. `wiki-compile` and `wiki-audit` gate on the profile
 validator's `--require-wiki` option and relay its refusal verbatim; neither
 skill judges wiki state by reading the profile itself. A wiki-disabled profile
 has no `wiki/` directory, no `hot_file`, and no `wiki_followup_destination`,
@@ -80,7 +80,7 @@ It adds its own portable profile, installation, research, and audit contracts.
 
 ## Curated compilation
 
-Humans select a coherent raw-source subset. `research-to-wiki` compiles only
+Humans select a coherent raw-source subset. `wiki-compile` compiles only
 that subset, never a backlog sweep. A selected-subset manifest records each
 source's root-relative path, original provenance, and requested disposition.
 Reports are not raw compiler input. Sources marked `compile_exclude` are
@@ -100,3 +100,26 @@ index, and records the final source disposition only after the result is known.
 `wiki-audit` is read-only. It records its scope and reports missing pages,
 atomicity/collision candidates, link and source coverage, tensions, and gaps.
 It cannot modify articles, raw sources, frontmatter, indexes, or operation logs.
+
+
+## Capture and shared absorption
+
+Meeting capture creates one template-driven Markdown record directly in the
+configured meeting folder (default `meetings/`); completed records stay in place.
+Raw transcripts use a separate local-policy intake/archive lifecycle. Pending
+routes keep intake; complete/declined routes permit filing with content and link
+verification. Ingestion describes compilation, not whole-record completion.
+Research artifacts retain their output-to-raw/derived lifecycle and remain excluded
+from primary compilation. `absorb` owns shared source-linked authorized rows,
+confirmed task/document/writing receipts and retry behavior. Custom headings do
+not remove provenance or approval requirements. See the package's shared
+[distribution contract](../skills/absorb/references/distribution-contract.md).
+
+`research-absorb`, `research-to-wiki`, `vault-compile` and `vault-audit` are
+compatibility entry points to absorb, wiki-compile and wiki-audit. Direct authorized
+compilation remains supported without a generated artifact. Local modes,
+thresholds, taxonomy, page conventions and coverage remain policy inputs.
+Writing capture proposes new/enrich/published-follow-up candidates or explicit
+none; without configured storage they stay in the meeting/research artifact.
+Only authorized local writing workflows file them; authored prose and publication
+remain separate user-controlled actions.

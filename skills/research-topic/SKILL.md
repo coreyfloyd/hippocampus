@@ -27,11 +27,11 @@ Prefer primary sources. Distinguish source-grounded findings from reasonable inf
 
 ## Artifact
 
-Write one durable artifact using [the shared research artifact contract](../research-absorb/references/artifact-contract.md), which defines the artifact's sections. Record the notebook ID and every claim verification in the Evidence Record, and any disagreement between sources in the Source Assessment.
+Write one durable artifact using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. Record the notebook ID and every claim verification in the Evidence Record, and any disagreement between sources in the Source Assessment.
 
 Optional NotebookLM outputs such as reports, tables, or mind maps support the artifact; do not substitute them for it. Store generated files only in canonical `output/`, not scratch.
 
-At completion, report the artifact path and its proposed plan. The caller may invoke `research-absorb`; do not automatically distribute, promote, or archive the artifact.
+At completion, report the artifact path and its proposed plan. The caller may invoke `absorb`; do not automatically distribute, promote, or archive the artifact.
 
 ## Boundaries
 
@@ -39,3 +39,17 @@ At completion, report the artifact path and its proposed plan. The caller may in
 - `research-feature` covers competitor UX and established patterns.
 - `research-feedback` covers lived community experience.
 - This skill does not execute a distribution plan or sweep uncompiled knowledge.
+
+
+## Writing opportunities
+
+Alongside wiki, document and action rows, assess source-grounded writing routes
+using [the shared distribution contract](../absorb/references/distribution-contract.md).
+Search configured ideas, drafts and published records: distinguish a new idea
+from enrichment or published overlap, and record unavailable publication coverage.
+Keep source-author attribution, angle, specific addition, target when known,
+privacy/public-reuse limits and approval/execution state. Use local writing
+policy/templates/scoring; with no writable destination candidates stay in the
+artifact until its normal approved retention transition. An explicit no-candidate
+result is valid. Propose material, never unsolicited first-person drafts or
+publication. `absorb` executes only authorized rows and keeps retry receipts.

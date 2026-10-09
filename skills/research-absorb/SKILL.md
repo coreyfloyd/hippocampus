@@ -1,75 +1,13 @@
 ---
 name: research-absorb
-description: Validate and execute the approved distribution plan in a durable research artifact. Use after research-sources or research-topic; not for research-feature or research-feedback deliverables, capturing a chat session, or routine task closeout.
+description: Deprecated compatibility entry point for an approved research distribution plan; delegates to absorb.
 ---
 
-# Research Absorb
+# Research Absorb (deprecated compatibility)
 
-Process one research artifact through its existing proposed distribution plan.
-The artifact coordinates the work: every row must reach a terminal disposition, then the completed artifact is preserved in `raw/derived/` as a reference record. Read [the artifact contract](references/artifact-contract.md)
-and run `python3` with `../../scripts/validate_profile.py` (resolved
-relative to this skill) and `~/.config/hippocampus/profile.md` before
-acting. If it is missing or invalid, stop and use `hippocampus-set-up`; do not
-mutate or move the artifact. Research-derived tasks
-use `artifact_followup_destination`, never the wiki-maintenance route.
-
-## Interface
-
-Input: a single durable research artifact with a **How to Absorb** section and its execution appendix.
-Output: an approved execution summary that names the final disposition of every
-row and the archived artifact path, then no remaining artifact in `output/`.
-
-Do not use this to extract knowledge from the current conversation; that is
-`knowledge-capture`. Do not perform routine project records, ticket updates, or
-harness/rule maintenance. Do not implement code or document changes that a
-filed follow-up task should own.
-
-## Validate before approval
-
-1. Read the artifact and validate the artifact's scope, source provenance,
-   destinations, and each requested target. Every execution row must derive
-   from an item in the artifact's How to Absorb section; a row with no parent
-   item is invalid. A row whose only outcome is staging a source is invalid —
-   staging is not a terminal disposition. Correct an invalid plan in the
-   artifact only with the caller's direction; do not silently invent a new
-   destination.
-2. Classify each row as ready, blocked, or needing a narrower decision. Present
-   the actual changes, raw source staging, and tasks that execution would make.
-   Inline-rejected candidates need no per-item confirmation — approval of the
-   plan is their explicit discard.
-3. Obtain explicit approval before mutations. In HITL, `research-absorb <file>
-   and apply all` is sufficient approval only after the caller has seen the
-   validated plan. In runtime use, post the artifact link, summary, and its
-   existing plan to the originating thread and wait; do not auto-distribute.
-
-## Execute an approved plan
-
-- Wiki Additions and Document Updates always execute inline during absorption;
-  they never file a task. Only an Action may be filed as a task for another
-  session, and only when its own item says so.
-- For a Wiki Addition, place the selected external source material and
-  provenance in canonical `raw/research/` when it is not already there, then
-  invoke `research-to-wiki` on that curated subset. Source material means the
-  extracted source text: the page-extraction output, the transcript, or the
-  file conversion, under provenance frontmatter. An agent-written summary may
-  sit above the text as its own section but never replaces it, and a
-  NotebookLM source id is a pointer, not a copy. A staged file whose body is
-  only a summary is not staged. Do not send the report itself to the compiler. Wiki Additions apply only when the profile records
-  the wiki as enabled: when it is disabled, the artifact has no Wiki Additions
-  class, and this workflow stages no provenance for compilation and never
-  invokes `research-to-wiki`.
-- Update an explicitly named target document only when the approved row permits
-  it and the target's own rules allow the mutation.
-- File a research-derived follow-up task when the plan calls for future work.
-  File it through `artifact_followup_destination` with its evidence; do not
-  perform the implementation in this workflow.
-- Mark the actual terminal disposition for every row: integrated, target document updated, task filed, or explicitly discarded. If any row remains blocked, keep the artifact in `output/`; archiving never substitutes for completing the approved plan.
-- When every row is terminal, move the artifact to the knowledge root's `raw/derived/`, preserving its filename unless that would collide. Never overwrite a prior record. Preserve the plan, evidence, execution results, and source links; set `status: absorbed`, `use: artifact`, `compile_mode: exclude`, `absorbed_at`, and `archived_from` in its frontmatter. Record the durable archive path in the execution summary. The approved absorption includes this retention step; deletion requires a separate explicit user direction.
-- Update durable path references to the archived artifact and add links to the actual compiled or updated destinations where useful. Wikilinks by unique filename may remain unchanged. A filed task must still carry the evidence and next action its executor needs; the archive link supplements that context rather than replacing it.
-- The archived synthesis is a reference artifact, not fresh primary evidence for another compile. Compile knowledge from the selected extracted sources, not the report. Respect a caller's explicit retention destination when supplied and compatible with the target's rules.
-
-## Runtime seam
-
-The same input and plan work in HITL and future AFK execution. The runtime may
-produce the artifact and post its link and plan, but it must wait for the same
-approval gate. Scheduling or Slack implementation is outside this skill.
+Use [absorb](../absorb/SKILL.md) on the same research artifact and existing
+approved rows. It owns `scripts/validate_profile.py`,
+`~/.config/hippocampus/profile.md`, `hippocampus-set-up`,
+`artifact_followup_destination`, validation, receipts and research retention.
+This wrapper adds no plan, approval gate or execution rules. The former
+[artifact-contract path](references/artifact-contract.md) remains supported.

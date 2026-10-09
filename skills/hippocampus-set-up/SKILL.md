@@ -97,3 +97,23 @@ present-then-approve gate as any other change:
   removing `hot_file` and `wiki_followup_destination` from the profile and
   recording `wiki_enabled: false`. Never delete or modify `wiki/` or anything
   in it — disabling only changes the profile.
+
+
+## Meeting records and writing policy
+
+Explain optional `meeting_record_folder` (defaults to root-relative `meetings`)
+and `meeting_record_template` (defaults to the bundled minimal Markdown template).
+A per-capture template can override the default. Template paths can be relative to
+the root or explicit absolute paths; record folders must stay within the root.
+Custom headings/coaching are optional presentation, while source and approval
+semantics remain shared. Show exact requested settings before changing them.
+Validation checks template validity and containment without creating records or
+folders. Never copy over a user's custom template during install or setup.
+
+Discuss independent transcript intake and retained-source destinations in the local
+policy body, within `raw/`, when meeting filing is requested. Ask about local
+writing storage/workflow, ideas/drafts/published search locations and reuse/privacy
+rules when writing routes are wanted; absent destinations leave candidates in their
+records. Preserve local compiler/audit modes, thresholds, coverage and delegated
+policy files when replacing an owned local wrapper. No automatic backfill,
+whole-library sweep, task creation or publication is part of setup.

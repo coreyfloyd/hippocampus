@@ -73,6 +73,38 @@ for skill in "$ROOT"/skills/*; do
     *) exit 1 ;;
   esac
 done
+# New canonical/wrapper skills and the same bundled template/helper reach both clients.
+for added in absorb wiki-compile vault-compile vault-audit; do
+  test -f "$TEST_HOME/.claude/skills/$added/SKILL.md"
+  test -f "$TEST_HOME/.codex/skills/$added/SKILL.md"
+  cmp "$TEST_HOME/.claude/skills/$added/SKILL.md" "$TEST_HOME/.codex/skills/$added/SKILL.md"
+done
+test -f "$TEST_HOME/.codex/skills/meeting-capture/assets/meeting.md"
+test -f "$TEST_HOME/.claude/skills/absorb/scripts/distribution.py"
+PYTHONDONTWRITEBYTECODE=1 python3 "$TEST_HOME/.codex/skills/absorb/scripts/distribution.py" \
+  --profile "$TEST_HOME/.config/hippocampus/profile.md" --help >/dev/null
+# A root-owned custom template is configuration, never an installer copy target.
+mkdir -p "$TEST_HOME/knowledge/templates"
+cp "$SOURCE_ROOT/skills/meeting-capture/assets/meeting.md" "$TEST_HOME/knowledge/templates/custom.md"
+sed '2a\
+meeting_record_template: templates/custom.md' "$TEST_HOME/.config/hippocampus/profile.md" > "$TEST_HOME/profile-new.md"
+mv "$TEST_HOME/profile-new.md" "$TEST_HOME/.config/hippocampus/profile.md"
+cp "$TEST_HOME/knowledge/templates/custom.md" "$TEST_HOME/custom-before.md"
+HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+cmp "$TEST_HOME/custom-before.md" "$TEST_HOME/knowledge/templates/custom.md"
+HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify
+# Both clients must refuse an unowned compatibility-name collision before activation.
+for client in .claude .codex; do
+  for added in absorb wiki-compile vault-compile vault-audit; do
+    NEW_COLLISION="$TEST_HOME/collision-$client-$added"
+    mkdir -p "$NEW_COLLISION/$client/skills/$added"
+    printf 'local policy\n' > "$NEW_COLLISION/$client/skills/$added/local.md"
+    if HOME="$NEW_COLLISION" CODEX_HOME="$NEW_COLLISION/.codex" bash "$SOURCE_ROOT/install.sh" 2>"$NEW_COLLISION/refusal.log"; then exit 1; fi
+    grep -Fq "collision: $NEW_COLLISION/$client/skills/$added" "$NEW_COLLISION/refusal.log"
+    grep -Fxq 'local policy' "$NEW_COLLISION/$client/skills/$added/local.md"
+    test ! -e "$NEW_COLLISION/.local/share/hippocampus/current"
+  done
+done
 COLLISION_HOME="$(mktemp -d)"
 mkdir -p "$COLLISION_HOME/.claude/skills"
 mkdir -p "$COLLISION_HOME/custom-skill"

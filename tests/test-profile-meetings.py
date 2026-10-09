@@ -22,6 +22,31 @@ class MeetingProfiles(unittest.TestCase):
         profile.write_text(f'---\nprofile_version: 4\nknowledge_root: {self.root}\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n{fields}---\n')
         return subprocess.run(['python3', str(VALIDATOR), str(profile)], capture_output=True, text=True)
 
+    def test_meeting_folder_defaults_validate_without_creating_files(self):
+        result = self.validate('meeting_record_folder: meetings/reviews\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.root / 'meetings').exists())
+
+    def test_record_folder_must_stay_within_root(self):
+        for value in ('../outside', str(self.root.parent / 'outside'), '', '.'):
+            with self.subTest(value=value):
+                self.assertNotEqual(self.validate(f'meeting_record_folder: {value}\n').returncode, 0)
+        (self.root / 'escape').symlink_to(self.root.parent, target_is_directory=True)
+        self.assertNotEqual(self.validate('meeting_record_folder: escape/reviews\n').returncode, 0)
+
+    def test_explicit_templates_require_readable_markdown(self):
+        template = self.root / 'template.md'
+        template.write_text('# {{title}}\nCustom sections\n')
+        for path in ('template.md', str(template)):
+            result = self.validate(f'meeting_record_template: {path}\n')
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for path in ('missing.md', '', 'disabled'):
+            self.assertNotEqual(self.validate(f'meeting_record_template: {path}\n').returncode, 0)
+        template.write_text('')
+        self.assertNotEqual(self.validate('meeting_record_template: template.md\n').returncode, 0)
+        template.write_text('# {{unknown}}\n')
+        self.assertNotEqual(self.validate('meeting_record_template: template.md\n').returncode, 0)
+
     def test_existing_profile_remains_valid(self):
         self.assertEqual(self.validate().returncode, 0)
 

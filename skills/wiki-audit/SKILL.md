@@ -31,7 +31,7 @@ Read the configured session cache and recent operation history. Count articles u
 
 ### 2. Missing-page lint
 
-Find terms mentioned in at least three distinct articles that lack a page. Normalize existing page names, ignore links and code, and distinguish:
+Apply the local mode and coverage policy first. Unless it overrides the threshold, find terms mentioned in at least three distinct articles that lack a page. Normalize existing page names, ignore links and code, and distinguish:
 
 - **Wikilink-only candidate:** a stable referent with congruent mentions; backlinks can implicitly define it.
 - **Stub candidate:** a stable referent that needs brief disambiguation.
@@ -42,7 +42,7 @@ Do not create any candidate page.
 
 ### 3. Collision and hub checks
 
-Inspect sections with links from at least three distinct source articles. A coherent section with that level of fan-in is a split candidate. For pages with at least five inbound links, sample inbound contexts and report whether they cohere with the page's stated domain. A long page alone is not a split signal; length matters only when it combines with high, section-targeted fan-in.
+Use local collision/hub thresholds when supplied; defaults are three distinct source articles for section fan-in and five inbound links for hub checks. Inspect sections meeting that fan-in threshold. A coherent section with that level of fan-in is a split candidate. For pages meeting the hub threshold, sample inbound contexts and report whether they cohere with the page's stated domain. A long page alone is not a split signal; length matters only when it combines with high, section-targeted fan-in.
 
 ### 4. Structural health
 
@@ -64,7 +64,7 @@ Respect local policy for folder taxonomy, entity placement, naming, and atomicit
 
 For `raw/research/` and `raw/archive/`, report sources not referenced from wiki `sources:` metadata, excluding derived material and bookmarks. Sample within-folder clusters and hub neighbors for direct contradictions, scope tensions, and term drift. Aggregate existing `## Tensions` and `## Gaps` sections, then identify dependency, source-implied, and structural gaps.
 
-Document sampling coverage. Do not claim the semantic checks are exhaustive unless every applicable article was evaluated.
+Apply local source-library locations and coverage expectations, including retained meeting transcripts. Document sampling coverage. Do not claim the semantic checks are exhaustive unless every applicable article was evaluated.
 
 ### 6. Report
 

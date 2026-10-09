@@ -10,6 +10,7 @@ TOP_LEVEL_FIELDS = {
     "decision_log_file", "wiki_followup_destination", "artifact_followup_destination",
     "wiki_enabled",
     "meeting_transcript_source", "meeting_event_source", "meeting_note_path",
+    "meeting_record_folder", "meeting_record_template",
 }
 
 
@@ -73,13 +74,41 @@ def contained_file(root, value, label):
     return resolved
 
 
-def main():
-    args = sys.argv[1:]
-    require_wiki = "--require-wiki" in args
-    args = [a for a in args if a != "--require-wiki"]
-    if len(args) != 1:
-        fail("usage: validate_profile.py PROFILE [--require-wiki]")
-    values = parse(pathlib.Path(args[0]))
+def meeting_settings(root, values, template_override=None):
+    folder_value = values.get("meeting_record_folder", "meetings")
+    folder = pathlib.Path(folder_value)
+    if not folder_value or folder.is_absolute():
+        raise ValueError("meeting_record_folder must be a nonempty relative path")
+    folder = (root / folder).resolve()
+    try:
+        folder.relative_to(root)
+    except ValueError:
+        raise ValueError("meeting_record_folder escapes knowledge_root") from None
+    if folder == root or (folder.exists() and not folder.is_dir()):
+        raise ValueError("meeting_record_folder must name a record directory")
+    selected = template_override if template_override is not None else values.get("meeting_record_template")
+    if selected is None:
+        template = pathlib.Path(__file__).resolve().parents[1] / "skills/meeting-capture/assets/meeting.md"
+    else:
+        if not selected:
+            raise ValueError("meeting_record_template must name a Markdown file")
+        template = pathlib.Path(selected).expanduser()
+        if not template.is_absolute():
+            template = root / template
+    try:
+        content = template.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"meeting_record_template is not readable: {exc}") from exc
+    if template.suffix.lower() != ".md" or not content.strip() or "```hippocampus" in content:
+        raise ValueError("meeting_record_template must be nonempty Markdown without a distribution block")
+    allowed = {"title", "date", "record_id", "sources", "coverage", "event_url"}
+    if any(token not in allowed for token in re.findall(r"{{(.*?)}}", content)):
+        raise ValueError("meeting_record_template contains an unknown placeholder")
+    return folder, template, content
+
+
+def validate(path, require_wiki=False):
+    values = parse(pathlib.Path(path))
     if values.get("profile_version") != "4":
         fail("profile_version must be 4")
     root_value = values.get("knowledge_root")
@@ -127,6 +156,11 @@ def main():
                 except ValueError:
                     fail("meeting_note_path escapes knowledge_root")
 
+    try:
+        meeting_settings(root, values)
+    except ValueError as exc:
+        fail(str(exc))
+
     if wiki_enabled:
         contained(root, root / "wiki", "wiki")
         contained_file(root, values.get("hot_file"), "hot_file")
@@ -145,6 +179,16 @@ def main():
                 "wiki is not configured; run hippocampus-set-up to enable it"
             )
 
+    return root, values
+
+
+def main():
+    args = sys.argv[1:]
+    require_wiki = "--require-wiki" in args
+    args = [a for a in args if a != "--require-wiki"]
+    if len(args) != 1:
+        fail("usage: validate_profile.py PROFILE [--require-wiki]")
+    root, _ = validate(args[0], require_wiki)
     print(root)
 
 
