@@ -1,6 +1,6 @@
 ---
 name: research-sources
-description: Investigate supplied sources, improve an insufficient evidence set, or prepare a source-grounded update for an existing artifact. Use when a user provides URLs, documents, audio, video, YouTube, a source collection, or a named target; not for topic-first research without supplied evidence.
+description: Investigate supplied sources, improve an insufficient evidence set, or prepare a source-grounded update for an existing artifact. Use when a user provides URLs, documents, audio, video, YouTube, a source collection (including material already in raw/), or a named target; not for topic-first research without supplied evidence.
 ---
 
 # Research Sources
@@ -8,6 +8,8 @@ description: Investigate supplied sources, improve an insufficient evidence set,
 Turn supplied evidence into a durable, source-grounded research artifact. This skill may analyze a fixed evidence set, improve an incomplete one, or prepare a proposal for an existing target. It does not directly promote knowledge or mutate a target without explicit authorization.
 
 Before selecting an output location, run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill) and `~/.config/hippocampus/profile.md`. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
+
+Choose by the requested work, not the source location: use this skill to understand retained sources, assess applicability, or plan their distribution; use `research-to-wiki` for a direct request to compile an already-selected subset. Reuse retained source text and provenance rather than importing them again solely to run this analysis.
 
 ## Modes
 
