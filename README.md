@@ -237,10 +237,11 @@ transcript source       calendar event       note file or Google Doc
                          |
        people/coaching records + permitted documents + dated actions
                          |
-       complete authorized routes -> retain review in excluded raw archive
+       complete authorized routes -> file transcript in retained source archive
+                                  -> retain review in excluded raw archive
 ```
 
-The three inputs are independent and configurable. `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
+The three inputs are independent and configurable. `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md). Transcript intake and retained-source destinations come from local policy or overrides in the private profile body. Pending authorized work stays in intake; completed captures file originals as primary evidence and repair source links. Installation does not relocate existing material.
 
 ### Compile and audit an existing source collection
 

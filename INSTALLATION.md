@@ -197,3 +197,11 @@ bash tests/test-release.sh
 ## Optional meeting inputs
 
 `meeting-capture` shares the knowledge-capture disposition workflow. Profile version 4 accepts three independent optional inputs: `meeting_transcript_source` and `meeting_event_source` name providers or retrieval instructions; `meeting_note_path` is an optional default local path or HTTPS Google Docs document link. A local path may be fixed, absolute (including outside the knowledge root), or knowledge-root-relative; one `{date}` placeholder is optional. Use unquoted values or `disabled`. A note path or Google Doc link supplied for a particular meeting overrides the default, so no shared notes directory is required. Existing published version-4 profiles need no migration; the unreleased `meeting_daily_note_path` field is renamed to `meeting_note_path`. Absent transcript fields use supplied/available sources; absent event fields skip event lookup; absent note fields still allow explicitly supplied notes. These settings select sources; they do not install connectors or guarantee access. Notes and calendar events are read-only context.
+
+Transcript filing destinations are resolved separately from the three inputs.
+Set intake and retained-source paths in local knowledge-root policy, or override
+them in the profile's free-form policy body. For example, stage new transcripts
+in `raw/inbox/` and file completed captures in `raw/archive/meetings/`.
+No new frontmatter fields or profile migration are required. Installing an
+upgrade does not relocate existing files; a capture or explicitly authorized
+filing pass performs the move and source-link repair.

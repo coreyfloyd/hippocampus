@@ -35,3 +35,10 @@ free-form local policy body after the validated YAML frontmatter. The required
 frontmatter fields configure the portable session cache, operation log,
 decision log, and two independent follow-up destinations; use this body to
 define their local shape.
+
+Meeting filing destinations may be overridden in this free-form local policy body,
+without changing the three meeting input fields. For example: "Stage imported
+meeting transcripts in raw/inbox/; after all authorized capture routes are
+complete or declined, retain original transcripts in raw/archive/meetings/."
+Choose paths that agree with your local source-library policy. Partial capture
+work remains staged; retained transcripts remain primary evidence.
