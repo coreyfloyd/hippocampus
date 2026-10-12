@@ -23,6 +23,10 @@ MIGRATION_MARKER="$SHARE_ROOT/migrated-from-research-tools"
 RELEASE_DIR="$RELEASE_ROOT/$VERSION"
 CLAUDE_DIR="$HOME/.claude/skills"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
+# Skills this package shipped once and has retired, space-separated. An install
+# removes a package-owned link with one of these names; any other package-owned
+# link without a matching skill still stops the install.
+RETIRED_SKILLS="research-tools-set-up"
 
 manifest_listing() {
   manifest_root="${1:-$ROOT}"
@@ -188,14 +192,32 @@ acquire_lock() {
 verify_check() { what="$1" path="$2"; shift 2; "$@" || { echo "verify failed: $what $path" >&2; exit 1; }; }
 for_each_skill() { for name in "$ROOT"/skills/*; do [ -f "$name/SKILL.md" ] && printf '%s\n' "$(basename "$name")"; done; }
 
+is_listed_retired() { case " $RETIRED_SKILLS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+# $1 = "all" rejects every retired package link (verify); "unlisted" lets the
+# install continue past the names it will remove itself.
 reject_retired_links() {
+  mode="${1:-all}"
   for client_dir in "$CLAUDE_DIR" "$CODEX_DIR"; do
     [ -d "$client_dir" ] || continue
     for target in "$client_dir"/*; do
       [ -L "$target" ] || continue
       skill="$(basename "$target")"
       if { is_package_link "$target" "$skill" || is_legacy_package_link "$target" "$skill"; } && [ ! -f "$ROOT/skills/$skill/SKILL.md" ]; then
+        [ "$mode" = "unlisted" ] && is_listed_retired "$skill" && continue
+        if is_listed_retired "$skill"; then
+          echo "retired package skill: $target (re-run install.sh to remove it)" >&2; return 1
+        fi
         echo "retired package skill: $target (move or remove it and re-run install.sh)" >&2; return 1
+      fi
+    done
+  done
+}
+remove_listed_retired_links() {
+  for skill in $RETIRED_SKILLS; do
+    [ ! -f "$ROOT/skills/$skill/SKILL.md" ] || continue
+    for target in "$CLAUDE_DIR/$skill" "$CODEX_DIR/$skill"; do
+      if is_package_link "$target" "$skill" || is_legacy_package_link "$target" "$skill"; then
+        rm "$target"; echo "removed retired package skill link: $target" >&2
       fi
     done
   done
@@ -244,7 +266,7 @@ if [ "${1:-}" = "--verify" ]; then
 fi
 
 mkdir -p "$(dirname "$LOCK_DIR")"; acquire_lock; validate_current_pointer; validate_legacy_current_pointer
-prepare_profile_migration; reject_retired_links
+prepare_profile_migration; reject_retired_links unlisted
 
 # Check every client target before mutating profile, release pointer, or links.
 for skill in $(for_each_skill); do
@@ -309,6 +331,7 @@ for skill in $(for_each_skill); do
     [ "$actual" = "$CURRENT_LINK/skills/$skill" ] || replace_link "$target" "$CURRENT_LINK/skills/$skill" "$actual"
   done
 done
+remove_listed_retired_links
 current_expected="__absent__"; [ ! -L "$CURRENT_LINK" ] || current_expected="$(readlink "$CURRENT_LINK")"
 set_current_release "$RELEASE_DIR" "$current_expected"
 record_profile_migration
