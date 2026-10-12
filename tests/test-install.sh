@@ -363,6 +363,17 @@ test ! -e "$RENAME_HOME/.claude/skills/research-tools-set-up"
 test ! -L "$RENAME_HOME/.claude/skills/research-tools-set-up"
 test ! -e "$RENAME_HOME/.codex/skills/research-tools-set-up"
 test ! -L "$RENAME_HOME/.codex/skills/research-tools-set-up"
+# A user-owned link of a retired name that points outside the package's release
+# roots is not the package's to remove: install leaves it and verify accepts it.
+mkdir -p "$RENAME_HOME/mine/research-tools-set-up"
+printf '%s\n' '---' 'name: research-tools-set-up' 'description: user-owned fixture' '---' > "$RENAME_HOME/mine/research-tools-set-up/SKILL.md"
+ln -s "$RENAME_HOME/mine/research-tools-set-up" "$RENAME_HOME/.claude/skills/research-tools-set-up"
+ln -s "$RENAME_HOME/mine/research-tools-set-up" "$RENAME_HOME/.codex/skills/research-tools-set-up"
+HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$ROOT/install.sh"
+test "$(readlink "$RENAME_HOME/.claude/skills/research-tools-set-up")" = "$RENAME_HOME/mine/research-tools-set-up"
+test "$(readlink "$RENAME_HOME/.codex/skills/research-tools-set-up")" = "$RENAME_HOME/mine/research-tools-set-up"
+HOME="$RENAME_HOME" CODEX_HOME="$RENAME_HOME/.codex" bash "$ROOT/install.sh" --verify
+rm "$RENAME_HOME/.claude/skills/research-tools-set-up" "$RENAME_HOME/.codex/skills/research-tools-set-up"
 cmp "$RENAME_HOME/.config/research-tools/profile.md" "$RENAME_HOME/.config/hippocampus/profile.md"
 test "$(shasum -a 256 "$RENAME_HOME/.config/research-tools/profile.md")" = "$PROFILE_SUM"
 test -d "$RENAME_HOME/.local/share/research-tools/releases/0.7.0"
