@@ -5,9 +5,9 @@ description: "Quick developer research for implementation or bug diagnosis, with
 
 # Dev Research
 
-Fast, inline research for implementation questions and bug diagnosis. No notebooks, no vault writes, no artifact generation — targeted source scraping, synthesis, and solution proposals delivered in the conversation.
+Fast, inline research for implementation questions and bug diagnosis. No new notebooks, no knowledge-store writes, no artifact generation — targeted source scraping, synthesis, and solution proposals delivered in the conversation.
 
-Read `~/.config/hippocampus/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
+If `~/.config/hippocampus/profile.md` exists, read its free-form body for local knowledge search locations and rules. Search only the declared locations relevant to the question and report useful matches; when no locations are declared, skip local search. This optional policy adds no frontmatter fields and does not require setup for an inline response. This skill remains an inline response.
 
 For a supplied recording, conference talk, or video demonstration relevant to the diagnosis, invoke `transcribe` to obtain source text before continuing.
 
@@ -31,7 +31,7 @@ Ask these questions upfront in a single message. Don't proceed until you have en
    - What has already been tried or ruled out
    - Which library or repo is involved (for GitHub issue searches)
 
-3. **Check local knowledge.** If the local profile defines a knowledge preflight, run it and report useful matches before external research.
+3. **Check local knowledge.** Apply any local knowledge search locations and rules declared in the profile body as described above; report useful matches before external research.
 
 4. **Check NotebookLM for existing notebooks when the CLI is installed.** Run `notebooklm list --json` and scan for topic matches. If one exists, query it:
    ```
@@ -90,4 +90,4 @@ List every source scraped with a one-line description of what it contributed. Pr
 - **Error text beats description.** Search with the verbatim error message; paraphrasing misses exact matches.
 - **GitHub Issues first for library bugs.**
 - **Multiple proposals over false certainty.**
-- **No notebook, no vault.** This skill produces a conversation response only. If the user wants to persist findings, they can ask for a durable output separately. A local profile may define checklist-time knowledge capture; this skill does not create a persistence path itself.
+- **No new notebook or knowledge-store output.** This skill produces a conversation response only. If the user wants to persist findings, they can ask for a durable output separately. Reading an existing NotebookLM notebook is optional input lookup, not a new notebook or artifact workflow.

@@ -8,6 +8,9 @@ cp -R "$ROOT" "$SOURCE_ROOT"
 BUILD_SENTINEL="$SOURCE_ROOT/skills/transcribe/tools/apple-speech/.build/hippocampus-test-sentinel"
 mkdir -p "$(dirname "$BUILD_SENTINEL")"
 touch "$BUILD_SENTINEL"
+mkdir -p "$SOURCE_ROOT/skills/absorb/scripts/__pycache__"
+printf 'test cache\n' > "$SOURCE_ROOT/skills/absorb/scripts/__pycache__/distribution.test.pyc"
+printf 'test cache\n' > "$SOURCE_ROOT/skills/absorb/scripts/distribution.test.pyo"
 cleanup() {
   status=$?
   rm -rf "$TEST_HOME" "${COLLISION_HOME:-}" "${PROFILE_HOME:-}" "${CONCURRENT_HOME:-}" "${TAMPER_HOME:-}" "${UPGRADE_HOME:-}" "${BROKEN_HOME:-}" "${CURRENT_DIR_HOME:-}" "${RETIRED_HOME:-}" "${NOPY_HOME:-}" "${MISSINGLINK_HOME:-}" "${REMEDY_HOME:-}" "${DSSTORE_HOME:-}" "${MODIFIED_HOME:-}" "${MIGRATE_HOME:-}" "${DIRTY_HOME:-}" "${JUNK_HOME:-}" "$BUILD_SENTINEL"
@@ -20,7 +23,7 @@ release_manifest() {
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
-    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
+    find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
 release_manifest_legacy() {
@@ -33,6 +36,8 @@ release_manifest_legacy() {
   )
 }
 HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/__pycache__"
+test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/distribution.test.pyo"
 if HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify; then
   exit 1
 fi
@@ -72,6 +77,38 @@ for skill in "$ROOT"/skills/*; do
     "$TEST_HOME/.local/share/hippocampus/current/skills/"*) ;;
     *) exit 1 ;;
   esac
+done
+# New canonical/wrapper skills and the same bundled template/helper reach both clients.
+for added in absorb wiki-compile vault-compile vault-audit; do
+  test -f "$TEST_HOME/.claude/skills/$added/SKILL.md"
+  test -f "$TEST_HOME/.codex/skills/$added/SKILL.md"
+  cmp "$TEST_HOME/.claude/skills/$added/SKILL.md" "$TEST_HOME/.codex/skills/$added/SKILL.md"
+done
+test -f "$TEST_HOME/.codex/skills/meeting-capture/assets/meeting.md"
+test -f "$TEST_HOME/.claude/skills/absorb/scripts/distribution.py"
+PYTHONDONTWRITEBYTECODE=1 python3 "$TEST_HOME/.codex/skills/absorb/scripts/distribution.py" \
+  --profile "$TEST_HOME/.config/hippocampus/profile.md" --help >/dev/null
+# A root-owned custom template is configuration, never an installer copy target.
+mkdir -p "$TEST_HOME/knowledge/templates"
+cp "$SOURCE_ROOT/skills/meeting-capture/assets/meeting.md" "$TEST_HOME/knowledge/templates/custom.md"
+sed '2a\
+meeting_record_template: templates/custom.md' "$TEST_HOME/.config/hippocampus/profile.md" > "$TEST_HOME/profile-new.md"
+mv "$TEST_HOME/profile-new.md" "$TEST_HOME/.config/hippocampus/profile.md"
+cp "$TEST_HOME/knowledge/templates/custom.md" "$TEST_HOME/custom-before.md"
+HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+cmp "$TEST_HOME/custom-before.md" "$TEST_HOME/knowledge/templates/custom.md"
+HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify
+# Both clients must refuse an unowned compatibility-name collision before activation.
+for client in .claude .codex; do
+  for added in absorb wiki-compile vault-compile vault-audit; do
+    NEW_COLLISION="$TEST_HOME/collision-$client-$added"
+    mkdir -p "$NEW_COLLISION/$client/skills/$added"
+    printf 'local policy\n' > "$NEW_COLLISION/$client/skills/$added/local.md"
+    if HOME="$NEW_COLLISION" CODEX_HOME="$NEW_COLLISION/.codex" bash "$SOURCE_ROOT/install.sh" 2>"$NEW_COLLISION/refusal.log"; then exit 1; fi
+    grep -Fq "collision: $NEW_COLLISION/$client/skills/$added" "$NEW_COLLISION/refusal.log"
+    grep -Fxq 'local policy' "$NEW_COLLISION/$client/skills/$added/local.md"
+    test ! -e "$NEW_COLLISION/.local/share/hippocampus/current"
+  done
 done
 COLLISION_HOME="$(mktemp -d)"
 mkdir -p "$COLLISION_HOME/.claude/skills"

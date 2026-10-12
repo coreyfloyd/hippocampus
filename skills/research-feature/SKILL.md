@@ -40,7 +40,7 @@ Before writing the document, run `python3` with `../../scripts/validate_profile.
 Write a design input document. It feeds the feature's design and spec and stays
 with the project: write it into the project repo at the path the caller names,
 beside the requirements it answers. When no project path is named, write it to
-the local profile's destination and say so. It is not absorbed into a knowledge
+`output/YYYY-MM-DD-feature-research-<subject>.md` under the validated knowledge root and say so. A profile-body output naming policy may refine the filename within `output/`. It is not absorbed into a knowledge
 base; `research-absorb` does not apply. Report the path at completion.
 
 ## Artifact body

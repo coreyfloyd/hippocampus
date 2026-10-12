@@ -25,7 +25,7 @@ Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` 
 
 ## Phase 0 — Check local knowledge
 
-If the local profile defines a knowledge preflight, run it before external research. Surface useful matches and ask whether to use them; otherwise proceed silently.
+Read the profile’s free-form body for optional local knowledge search locations and rules. Search only declared locations relevant to the subject, report useful matches with their dates, and still verify current community experience. Without declared locations, skip local search; no extra frontmatter field is required.
 
 ## Phase 1 — Scope (infer; ask at most one question)
 
@@ -80,7 +80,7 @@ Write a decision memo. It exists to be read once and acted on, not absorbed
 into a knowledge base: `research-absorb` does not apply. Placement: when the
 subject is a competitor or the research otherwise serves a project, write the
 memo into that project at the path the caller names; otherwise write it to the
-local profile's destination. After the decision and authorized actions are complete, retain a knowledge-root memo in `raw/derived/` as an excluded reference artifact rather than deleting it. Project memos stay under that project's retention policy.
+validated knowledge root’s `output/YYYY-MM-DD-feedback-<subject>.md`; a profile-body naming policy may refine the filename within `output/`. After the decision and authorized actions are complete, retain a knowledge-root memo in `raw/derived/` as an excluded reference artifact rather than deleting it. Project memos stay under that project's retention policy.
 Report the path at completion.
 
 ```markdown

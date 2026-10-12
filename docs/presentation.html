@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme: dark;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
       --text-main: #f0f2f5;
       --text-muted: #9ba3af;
       --text-dim: #606b76;
-      
+
       --cyan: #38bdf8;
       --cyan-glow: rgba(56, 189, 248, 0.15);
       --tangerine: #fb923c;
@@ -223,365 +223,29 @@
       <div></div>
     </div>
 
-    <!-- Slide 4: System Model -->
+    <!-- Slide 4: Question, Answer, Action -->
     <div class="slide" id="slide-4">
-      <div class="tracker"><span>Question</span> | <span>Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>The Question, Answer, Action Lifecycle</h2>
-        <p class="message">Every loop of curiosity must move predictably through these three states to prevent digital clutter.</p>
-      </div>
-      <div style="display: flex; gap: 20px; align-items: center; margin: auto 0;">
-        <div class="blueprint-card" style="flex: 1; border-color: var(--cyan); box-shadow: 0 0 20px var(--cyan-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">STAGE 1</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Question</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">The input: A spark of curiosity or materials you bring to the table.</p>
-        </div>
-        <span style="color: var(--text-dim); font-size: 1.8rem; font-weight: 300;">➔</span>
-        <div class="blueprint-card" style="flex: 1; border-color: var(--tangerine); box-shadow: 0 0 20px var(--tangerine-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--tangerine); font-weight: 600;">STAGE 2</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Answer</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">The processing: Filtering facts, citing evidence, and building a staging summary.</p>
-        </div>
-        <span style="color: var(--text-dim); font-size: 1.8rem; font-weight: 300;">➔</span>
-        <div class="blueprint-card" style="flex: 1; border-color: var(--emerald); box-shadow: 0 0 20px var(--emerald-glow);">
-          <span style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--emerald); font-weight: 600;">STAGE 3</span>
-          <h3 style="font-size: 1.45rem; margin: 12px 0 6px 0;">Action</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.4;">Where it lands: Updating notes, queueing real to-dos, and closing the chat.</p>
-        </div>
+      <div><h2>Question, Answer, Action</h2><p class="message">Ask or bring sources. Ground the answer, apply approved outcomes, and retain the report as a reference.</p></div>
+      <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:18px 0;">
+        <img src="images/question-answer-action.svg" alt="Question, Answer, Action" style="width:100%;height:100%;object-fit:contain;"/>
       </div>
       <div></div>
     </div>
 
-    <!-- Slide 5: The Inputs (Visual Multi-Format Flow) -->
+    <!-- Slide 5: Capture Meetings -->
     <div class="slide" id="slide-5">
-      <div class="tracker"><span class="active-stage cyan">Question</span> | <span>Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>Two Paths: Asking Questions vs. Studying Sources</h2>
-        <p class="message">Start with a spontaneous prompt, or bring your own materials in virtually any format to learn from.</p>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: 1.15fr 100px 1fr; align-items: center; gap: 14px; margin: auto 0;">
-        <!-- Left: The Two Distinct Input Paths -->
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <!-- Path A: Open Query -->
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 16px 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH A · SPONTANEOUS PROMPT</div>
-            </div>
-            <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 2px;">Ask an Open-Ended Question</div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">"What are the key differences between these two camera bodies?"</p>
-          </div>
-
-          <!-- Path B: Multi-Format Sources -->
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <div style="font-family: 'JetBrains Mono'; font-size: 0.8rem; color: var(--cyan); font-weight: 600;">PATH B · STUDY YOUR SOURCES</div>
-            </div>
-            <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 10px;">Ingest Any Media You Care About</div>
-            
-            <!-- Diverse Format Icon Grid -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-              <!-- PDFs & Docs -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">PDFs & Docs</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Manuals, specs</div>
-              </div>
-
-              <!-- Web & Articles -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">URLs & Posts</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Reviews, blogs</div>
-              </div>
-
-              <!-- Audio & Podcasts -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                  <line x1="12" y1="19" x2="12" y2="23"></line>
-                  <line x1="8" y1="23" x2="16" y2="23"></line>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">Audio Transcripts</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Podcasts, talks</div>
-              </div>
-
-              <!-- Video / YouTube -->
-              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--surface-border); border-radius: 6px; padding: 8px 6px; text-align: center;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 4px auto; display: block;">
-                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                  <polygon points="10 8 16 12 10 16 10 8"></polygon>
-                </svg>
-                <div style="font-size: 0.72rem; color: var(--text-main); font-weight: 600;">Video Sources</div>
-                <div style="font-size: 0.65rem; color: var(--text-dim);">Tutorials, guides</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Flow Connector SVG -->
-        <svg viewBox="0 0 100 180" style="width: 100%; height: 160px;">
-          <path d="M 5 35 C 50 35, 55 90, 85 90" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <path d="M 5 145 C 50 145, 55 90, 85 90" fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <polygon points="85,85 95,90 85,95" fill="var(--cyan)" />
-        </svg>
-
-        <!-- Right: Convergence Point -->
-        <div class="blueprint-card" style="border-color: var(--cyan); text-align: center; padding: 36px 22px; background: rgba(56, 189, 248, 0.04);">
-          <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background: var(--cyan-glow); color: var(--cyan); font-family: 'JetBrains Mono'; font-size: 0.8rem; margin-bottom: 14px; font-weight: 600;">INPUT CONVERGENCE</div>
-          <h3 style="font-size: 1.35rem; margin-bottom: 8px;">The Research Engine</h3>
-          <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.45;">No matter where the info originates—a YouTube breakdown, a product PDF, or raw curiosity—it funnels into the same verified loop.</p>
-        </div>
+      <div><h2>Capture Meetings</h2><p class="message">Bring event, note or transcript inputs into a meeting record. Carry the same approved outcomes forward; the record stays in its folder.</p></div>
+      <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:18px 0;">
+        <img src="images/capture-meetings.svg" alt="Capture Meetings" style="width:100%;height:100%;object-fit:contain;"/>
       </div>
       <div></div>
     </div>
 
-    <!-- Slide 6: Funnel Diagram (Enlarged Scale) -->
-    <div class="slide" id="slide-6">
-      <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>What Makes an Answer Truly Good?</h2>
-        <p class="message">It doesn't guess or hallucinate. It checks itself against your sources, transparently cites its evidence, and honestly points out its own gaps.</p>
-      </div>
-
-      <div style="margin: auto 0; display: flex; flex-direction: column; align-items: center; width: 100%;">
-        <svg viewBox="0 0 960 300" style="width: 100%; max-width: 960px; height: 280px; display: block;">
-          <!-- Incoming Information Floating Particles -->
-          <g fill="var(--text-dim)" opacity="0.6">
-            <circle cx="340" cy="18" r="5" /><rect x="420" y="8" width="10" height="10" rx="2" fill="var(--cyan)" opacity="0.7" /><polygon points="530,10 540,24 520,24" />
-            <circle cx="470" cy="22" r="6" /><rect x="375" y="22" width="8" height="8" rx="2" /><circle cx="580" cy="20" r="5" fill="var(--tangerine)" opacity="0.8" />
-            <polygon points="630,12 640,26 620,26" fill="var(--emerald)" opacity="0.7" />
-          </g>
-
-          <!-- Funnel Outer Walls -->
-          <path d="M 230 40 L 730 40 L 590 190 L 370 190 Z" fill="rgba(255,255,255,0.02)" stroke="var(--surface-border)" stroke-width="2.5" />
-          <path d="M 370 190 L 590 190 L 590 220 L 370 220 Z" fill="rgba(255,255,255,0.03)" stroke="var(--surface-border)" stroke-width="2.5" />
-
-          <!-- Filter Stage 1: Grounding -->
-          <line x1="280" y1="105" x2="680" y2="105" stroke="var(--tangerine)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <text x="480" y="90" fill="var(--text-main)" font-size="16" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">1. Grounding in Facts</text>
-          <text x="480" y="130" fill="var(--text-muted)" font-size="13.5" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">Matching claims directly to cited evidence in your sources</text>
-
-          <!-- Filter Stage 2: Judging Claims -->
-          <line x1="325" y1="155" x2="635" y2="155" stroke="var(--tangerine)" stroke-width="2.5" stroke-dasharray="4 4" />
-          <text x="480" y="176" fill="var(--text-main)" font-size="15" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">2. Judging Claims &amp; Biases</text>
-
-          <!-- Output Branch Lines -->
-          <line x1="410" y1="220" x2="410" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="410" y1="250" x2="190" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="190" y1="250" x2="190" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-
-          <line x1="480" y1="220" x2="480" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-
-          <line x1="550" y1="220" x2="550" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="550" y1="250" x2="770" y2="250" stroke="var(--surface-border)" stroke-width="2" />
-          <line x1="770" y1="250" x2="770" y2="275" stroke="var(--surface-border)" stroke-width="2" />
-        </svg>
-
-        <!-- Funnel Output Result Bins -->
-        <div style="display: grid; grid-template-columns: repeat(3, 260px); gap: 30px; margin-top: -8px;">
-          <div style="background: rgba(52, 211, 153, 0.08); border: 2px solid var(--emerald); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--emerald); font-weight: 800; font-size: 1.15rem;">Verified</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Backed directly by source passages</div>
-          </div>
-          <div style="background: rgba(248, 113, 113, 0.08); border: 2px solid var(--crimson); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--crimson); font-weight: 800; font-size: 1.15rem;">Contradicted</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Conflicting or debunked claims</div>
-          </div>
-          <div style="background: rgba(251, 146, 60, 0.08); border: 2px solid var(--tangerine); border-radius: 10px; padding: 16px; text-align: center;">
-            <div style="color: var(--tangerine); font-weight: 800; font-size: 1.15rem;">Unverified / Gaps</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Transparent missing context</div>
-          </div>
-        </div>
-      </div>
-      <div></div>
-    </div>
-
-    <!-- Slide 7: The Staging Ground -->
-    <div class="slide" id="slide-7">
-      <div class="tracker"><span>Question</span> | <span class="active-stage tangerine">Answer</span> | <span>Action</span></div>
-      <div>
-        <h2>Reviewing and Understanding Your Answers</h2>
-        <p class="message">A standardized shape for every outcome. No more rereading massive chat walls just to figure out what to do.</p>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 36px; margin: auto 0; align-items: center;">
-        <div style="background: var(--surface); border: 1px solid var(--surface-border); border-radius: 10px; padding: 24px; font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; line-height: 1.65; color: var(--text-muted);">
-          <div style="color: var(--text-dim); border-bottom: 1px solid var(--surface-border); padding-bottom: 8px; margin-bottom: 14px; font-size: 0.8rem;">output/report.md</div>
-          <div style="color: var(--cyan); font-weight: 600;">1. # Question &amp; Scope</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">What we are asking.</div>
-          
-          <div style="color: var(--tangerine); font-weight: 600;">2. # What the Sources Say</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Cross-source evidence and synthesis.</div>
-          
-          <div style="color: var(--crimson); font-weight: 600;">3. # Source Integrity &amp; Gaps</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Verified facts and missing context.</div>
-          
-          <div style="color: var(--emerald); font-weight: 600;">4. # How to Absorb</div>
-          <div style="font-size: 0.8rem; color: var(--text-dim);">Clear next steps for your personal notes.</div>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 18px;">
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px;">
-            <div style="font-weight: 700; font-size: 1.05rem;">Know Exactly Where to Look</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Whether you ran the search 5 minutes ago or last week, the structure never changes.</p>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--emerald); padding: 18px;">
-            <div style="font-weight: 700; font-size: 1.05rem;">Built-in Next Steps</div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px;">Section 4 hands you the plan on a platter so you never stall out wondering what to do with the answer.</p>
-          </div>
-        </div>
-      </div>
-      <div></div>
-    </div>
-
-    <!-- Slide 8: The Intersections of Action (Branching Arrows) -->
-    <div class="slide" id="slide-8">
-      <div class="tracker"><span>Question</span> | <span>Answer</span> | <span class="active-stage emerald">Action</span></div>
-      <div>
-        <h2>Acting on What You Found</h2>
-        <p class="message">The "No Parking" rule. Knowledge must move directly into active everyday tools, not sit indefinitely in a saved document.</p>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 220px 80px 1fr 260px; gap: 16px; align-items: center; margin: auto 0;">
-        <!-- Origin Report -->
-        <div class="blueprint-card" style="border-style: dashed; border-color: var(--tangerine); text-align: center; padding: 28px 16px;">
-          <div style="font-size: 2.2rem; margin-bottom: 8px;">📄</div>
-          <div style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--tangerine); font-weight: 600; margin-bottom: 4px;">EPHEMERAL</div>
-          <div style="font-weight: 700; font-size: 1.05rem;">Staging Report</div>
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">Temporary bridge to action</p>
-        </div>
-
-        <!-- Branching Arrow SVG -->
-        <svg viewBox="0 0 80 220" style="width: 100%; height: 210px;">
-          <path d="M 5 110 C 40 110, 45 35, 75 35" fill="none" stroke="var(--emerald)" stroke-width="2.5" />
-          <polygon points="73,30 80,35 73,40" fill="var(--emerald)" />
-          
-          <path d="M 5 110 L 75 110" fill="none" stroke="var(--cyan)" stroke-width="2.5" />
-          <polygon points="73,105 80,110 73,115" fill="var(--cyan)" />
-          
-          <path d="M 5 110 C 40 110, 45 185, 75 185" fill="none" stroke="var(--text-dim)" stroke-width="2.5" />
-          <polygon points="73,180 80,185 73,190" fill="var(--text-dim)" />
-        </svg>
-
-        <!-- Three Destinations -->
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <div class="blueprint-card" style="border-left: 4px solid var(--emerald); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">📝</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">Your Notes &amp; Docs</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Permanently merge verified takeaways into your system.</div>
-            </div>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">✅</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">To-Do Lists</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Turn recommendations into calendar items or quick tasks.</div>
-            </div>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--text-dim); display: flex; align-items: center; gap: 14px; padding: 14px 18px;">
-            <div style="font-size: 1.4rem;">🗑️</div>
-            <div>
-              <div style="font-weight: 700; font-size: 0.95rem;">The Trash Can</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted);">Discard the staging report. Don't let it become clutter.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- No Parking Rule Card -->
-        <div class="blueprint-card" style="border: 2px dashed var(--crimson); text-align: center; padding: 28px 18px; position: relative;">
-          <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: var(--crimson); color: #000; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.1em; padding: 2px 10px; border-radius: 10px; text-transform: uppercase;">The Rule</div>
-          <div style="font-size: 2.5rem; margin: 4px 0 10px 0;">🚫 🅿️</div>
-          <h3 style="font-size: 1.15rem; color: var(--crimson); margin-bottom: 6px;">No Parking</h3>
-          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.45;">Reports are temporary vehicles, not permanent homes. If you aren't filing it today, drop it.</p>
-        </div>
-      </div>
-      <div></div>
-    </div>
-
-    <!-- Slide 9: Future Leverage (Schematic Wiki Graph) -->
+    <!-- Slide 9: Retained References -->
     <div class="slide" id="slide-9">
-      <div class="tracker"><span>Question</span> | <span>Answer</span> | <span class="active-stage emerald">Action</span></div>
-      <div>
-        <h2>Future Leverage: Making You and Your AI Smarter</h2>
-        <p class="message">This is not a passive archive. It builds long-term leverage, organizing knowledge so both you and your future AI helpers can effortlessly retrieve and use it.</p>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1.1fr 1.1fr; gap: 36px; align-items: center; margin: auto 0;">
-        <!-- Schematic Blueprint Wiki Graph Visual -->
-        <div style="background: var(--surface); border: 1px solid var(--surface-border); border-radius: 12px; padding: 20px; position: relative;">
-          <svg viewBox="0 0 460 250" style="width: 100%; height: 230px; display: block;">
-            <!-- Subtle Grid Background -->
-            <defs>
-              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="1" fill="rgba(255,255,255,0.06)" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-
-            <!-- Connection Rays -->
-            <g stroke="var(--emerald)" stroke-width="1.8" opacity="0.75">
-              <line x1="230" y1="125" x2="90" y2="60" />
-              <line x1="230" y1="125" x2="370" y2="60" />
-              <line x1="230" y1="125" x2="70" y2="190" />
-              <line x1="230" y1="125" x2="390" y2="190" />
-              <line x1="230" y1="125" x2="230" y2="40" stroke-dasharray="3 3" />
-              <!-- Inter-node links -->
-              <line x1="90" y1="60" x2="70" y2="190" stroke="var(--surface-border)" stroke-width="1.5" />
-              <line x1="370" y1="60" x2="390" y2="190" stroke="var(--surface-border)" stroke-width="1.5" />
-            </g>
-
-            <!-- Leaf Document Nodes -->
-            <g font-family="'JetBrains Mono', monospace" font-size="11" fill="var(--text-main)">
-              <circle cx="90" cy="60" r="14" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2" />
-              <text x="90" y="38" text-anchor="middle" fill="var(--text-muted)">tool-reviews.md</text>
-
-              <circle cx="370" cy="60" r="14" fill="var(--surface)" stroke="var(--cyan)" stroke-width="2" />
-              <text x="370" y="38" text-anchor="middle" fill="var(--text-muted)">trip-packing.md</text>
-
-              <circle cx="70" cy="190" r="14" fill="var(--surface)" stroke="var(--emerald)" stroke-width="2" />
-              <text x="70" y="218" text-anchor="middle" fill="var(--text-muted)">decisions.md</text>
-
-              <circle cx="390" cy="190" r="14" fill="var(--surface)" stroke="var(--emerald)" stroke-width="2" />
-              <text x="390" y="218" text-anchor="middle" fill="var(--text-muted)">project-plan.md</text>
-            </g>
-
-            <!-- Central Hub Node -->
-            <circle cx="230" cy="125" r="32" fill="var(--bg)" stroke="var(--emerald)" stroke-width="2.5" />
-            <circle cx="230" cy="125" r="40" fill="none" stroke="var(--emerald-glow)" stroke-width="6" />
-            <text x="230" y="122" fill="var(--emerald)" font-size="13" font-weight="700" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">YOUR</text>
-            <text x="230" y="137" fill="var(--text-main)" font-size="11" font-weight="600" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif">WIKI</text>
-          </svg>
-        </div>
-
-        <!-- Explanatory Text Column -->
-        <div style="display: flex; flex-direction: column; gap: 16px;">
-          <div class="blueprint-card" style="border-left: 4px solid var(--emerald); padding: 18px;">
-            <h3 style="font-size: 1.15rem; margin-bottom: 6px; color: var(--emerald);">Your Personal Knowledge Network</h3>
-            <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.5;">Every cleanly resolved chat adds another interconnected leaf to your personal library, not a forgotten cloud history.</p>
-          </div>
-          <div class="blueprint-card" style="border-left: 4px solid var(--cyan); padding: 18px;">
-            <h3 style="font-size: 1.15rem; margin-bottom: 6px; color: var(--cyan);">Instant Context for Future AI</h3>
-            <p style="font-size: 0.95rem; color: var(--text-muted); line-height: 1.5;">Future assistants can read your curated facts directly—saving you from repeating context from scratch.</p>
-          </div>
-        </div>
+      <div><h2>Keep the Evidence and the Reference</h2><p class="message">Decline individual proposals when appropriate. Retain the completed research report as a reference you can return to.</p></div>
+      <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:18px 0;">
+        <img src="images/question-answer-action.svg" alt="Research outcomes and retained reference report" style="width:100%;height:100%;object-fit:contain;"/>
       </div>
       <div></div>
     </div>
@@ -626,7 +290,7 @@
   <!-- Minimal Nav Controls -->
   <div class="deck-nav">
     <button id="prevBtn" title="Previous (←, PageUp)">‹</button>
-    <span id="slideCounter">1 / 11</span>
+    <span id="slideCounter">1 / 8</span>
     <button id="nextBtn" title="Next (→, Space, PageDown)">›</button>
   </div>
 
@@ -638,11 +302,11 @@
     function showSlide(index) {
       if (index < 0) index = 0;
       if (index >= slides.length) index = slides.length - 1;
-      
+
       slides[current].classList.remove('active');
       current = index;
       slides[current].classList.add('active');
-      
+
       counter.textContent = `${current + 1} / ${slides.length}`;
     }
 

@@ -7,7 +7,7 @@ description: "Fast inline research on non-development topics—products, places,
 
 Inline research for non-dev questions: check configured local knowledge first, then Reddit plus domain-appropriate authoritative sources, and synthesize in the conversation. No notebooks, no files written.
 
-Read `~/.config/hippocampus/profile.md` before checking local knowledge; use only the local-preflight policy it provides. This skill remains an inline response.
+If `~/.config/hippocampus/profile.md` exists, read its free-form body for local knowledge search locations and rules. Search only the declared locations relevant to the question and report useful matches; when no locations are declared, skip local search. This optional policy adds no frontmatter fields and does not require setup for an inline response. This skill remains an inline response.
 
 If a supplied audio or video source is needed as evidence, invoke `transcribe` to acquire its text first. The transcript is input evidence; the response stays inline.
 
@@ -21,21 +21,21 @@ Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` 
 
 ## Phase 0 — Check local knowledge
 
-If the local profile defines a knowledge preflight, run it before web search. Surface useful matches and ask whether to use them before searching externally. Without a profile, proceed directly to source planning.
+Before web search, apply any local knowledge search locations and rules declared in the profile body as described above. Report useful matches and their dates; they do not replace current external verification. Without a profile or declared locations, proceed directly to source planning.
 
 ## Phase 1 — Source Planning
 
 ### Domain Classification (infer from query, don't ask)
 
-| Domain | Signals in query | Sources to add |
+| Domain | Signals in query | Sources to consult |
 |--------|-----------------|----------------|
-| **Product/gear** | "should I buy", "best X", "X vs Y", "worth it", "review" | Wirecutter, RTINGS, Ars Technica, YouTube reviews |
+| **Product/gear facts** | "specifications", "dimensions", "compatibility", "how does X work" | Manufacturer documentation, official compatibility lists, independent measurements |
 | **Place/travel** | city name, "visit", "trip", "restaurant", "hotel", "neighborhood" | TripAdvisor, Atlas Obscura, local subreddits |
 | **Health/wellness** | symptom, medication, diet, supplement, "is X safe" | Mayo Clinic, Examine.com, NIH/PubMed (via search) |
 | **Finance/money** | investing, savings, budget, mortgage, tax, crypto | Investopedia, NerdWallet, Bogleheads |
 | **Current events** | recent dates, news topics, "what happened with" | Google News, AP, Reuters |
 | **Concept/topic** | "what is", "how does", "explain", abstract nouns | Wikipedia, relevant subreddits |
-| **Service/company** | brand name, app name, subscription, "is X legit" | Trustpilot, BBB, Reddit |
+| **Service/company facts** | brand name, app name, subscription features | Official service documentation and published terms |
 | **General/unclear** | anything else | Wikipedia + 2 general web searches |
 
 If the domain is genuinely ambiguous and the wrong source set would waste the search, ask one short question up front: "What kind of angle are you looking for — [option A] or [option B]?" Then go.
@@ -85,4 +85,4 @@ Deliver inline in the conversation. No files, no notebooks.
 
 If sources agree, consolidate rather than repeating the same finding with multiple URLs. If they conflict, surface the conflict explicitly. Skip sections that don't apply.
 
-If a local profile defines a checklist-time knowledge-capture policy, that policy may review this research later; this skill itself writes nothing.
+Persistence is a separate caller decision; this inline workflow writes nothing.

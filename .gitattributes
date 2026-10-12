@@ -1,3 +1,12 @@
 .Ulysses-Settings.plist export-ignore
 .Ulysses-Group.plist export-ignore
 .DS_Store export-ignore
+
+# Runtime review evidence and Python caches are not public release content.
+**/__pycache__ export-ignore
+**/__pycache__/** export-ignore
+*.pyc export-ignore
+*.pyo export-ignore
+docs/implementation/review-r*-* export-ignore
+docs/implementation/.review-r*-*.guard export-ignore
+docs/implementation/*-review-response-brief.md export-ignore

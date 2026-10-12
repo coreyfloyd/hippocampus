@@ -1,6 +1,6 @@
 ---
 name: research-sources
-description: Investigate supplied sources, improve an insufficient evidence set, or prepare a source-grounded update for an existing artifact. Use when a user provides URLs, documents, audio, video, YouTube, a source collection (including material already in raw/), or a named target; not for topic-first research without supplied evidence.
+description: Investigate supplied sources, improve an insufficient evidence set, or prepare a source-grounded update for an existing artifact. Use when a user provides URLs, documents, audio, video, YouTube, a source collection (including material already in raw/), or a named target to understand, assess applicability, or plan distribution; direct compilation of an already-selected subset goes to wiki-compile, and topic-first research goes to research-topic.
 ---
 
 # Research Sources
@@ -9,7 +9,7 @@ Turn supplied evidence into a durable, source-grounded research artifact. This s
 
 Before selecting an output location, run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill) and `~/.config/hippocampus/profile.md`. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback output path. Any proposed follow-up task in the artifact uses `artifact_followup_destination`, never the wiki-maintenance route.
 
-Choose by the requested work, not the source location: use this skill to understand retained sources, assess applicability, or plan their distribution; use `research-to-wiki` for a direct request to compile an already-selected subset. Reuse retained source text and provenance rather than importing them again solely to run this analysis.
+Choose by the requested work, not the source location: use this skill to understand retained sources, assess applicability, or plan their distribution; use `wiki-compile` (or its `research-to-wiki` compatibility entry point) for a direct request to compile an already-selected subset. Reuse retained source text and provenance rather than importing them again solely to run this analysis.
 
 ## Modes
 
@@ -33,10 +33,24 @@ For supplied audio or video, invoke `transcribe` to choose the input route. Pref
 
 ## Research artifact
 
-Write one durable output using [the shared research artifact contract](../research-absorb/references/artifact-contract.md), which defines the artifact's sections. If evidence was improved, record every added source and the precise gap it closed.
+Write one durable output using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. If evidence was improved, record every added source and the precise gap it closed.
 
 Before writing How to Absorb, apply the contract's evidence-sufficiency check: when a decision asks whether to adopt or act on supplied third-party work, the supplied source alone cannot answer it — use **Improve evidence** to gather real-world usage, sentiment, and maintenance signals, bounded to what would change the choice. This is not a topic search; it is the smallest evidence set that makes the decision choosable.
 
 When the current runtime is blocked from a channel the evidence needs (a community forum, a login-walled site), first ask whether the **content** is reachable elsewhere rather than whether the channel is. A post on a blocked platform is often the author syndicating something they published on their own site, newsletter, or blog; search by title and author before treating the channel as the blocker, because a first-party copy beats both an alternate route and a third-party summary. Only when the content exists nowhere else, check the profile's local policy for a blocked-channel route — an alternate retrieval path, such as delegating the read to another agent runtime that has access — before accepting reduced coverage. Record the channel, the route taken or skipped, and why in the artifact's Evidence Record.
 
-At completion, report the artifact path and its proposed plan. The caller may then invoke `research-absorb`; do not invoke it automatically or treat the artifact as raw wiki input.
+At completion, report the artifact path and its proposed plan. The caller may then invoke `absorb`; do not invoke it automatically or treat the artifact as raw wiki input.
+
+
+## Writing opportunities
+
+Alongside wiki, document and action rows, assess source-grounded writing routes
+using [the shared distribution contract](../absorb/references/distribution-contract.md).
+Search configured ideas, drafts and published records: distinguish a new idea
+from enrichment or published overlap, and record unavailable publication coverage.
+Keep source-author attribution, angle, specific addition, target when known,
+privacy/public-reuse limits and approval/execution state. Use local writing
+policy/templates/scoring; with no writable destination candidates stay in the
+artifact until its normal approved retention transition. An explicit no-candidate
+result is valid. Propose material, never unsolicited first-person drafts or
+publication. `absorb` executes only authorized rows and keeps retry receipts.

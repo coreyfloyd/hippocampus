@@ -1,39 +1,46 @@
 # Hippocampus
 
-`Hippocampus` is an opinionated research and knowledge system for Claude Code and Codex. It is a set of Agent Skills that cover quick in-chat research, durable research reports, updates to existing documentation, and an optional curated wiki in the style of Karpathy's LLM wiki. It works from documents, websites, videos, or audio such as podcasts.
+`Hippocampus` is a research and meeting-capture system for Claude Code and Codex.
+Its Agent Skills turn questions, supplied sources and meetings into evidence-linked
+records, then carry approved outcomes into people and documents, follow-up work,
+writing opportunities and an optional wiki. Completed research reports are retained
+as references; meeting records stay in their meeting folder, and original transcripts
+are filed after approved routes complete. Individual proposed changes can be declined.
 
-Whatever the source, getting an answer out of it is only part of the work. You still have to judge the evidence, decide what applies to your situation, and carry the result into your notes, plans, or projects. That last step is easy to skip, and the answer stays behind in an old chat. Hippocampus keeps the evidence attached to the decision it informed, so you can see why you reached a conclusion, what is still uncertain, and what you meant to do next. When you learn more, you can revisit the decision without redoing the research.
+## Research
 
-![A broad question or selected sources move through Question, Answer, and Action, then into documents, follow-up work, an optional wiki, or a deliberate discard.](docs/images/question-answer-action.svg)
+![Ask or bring sources, set a question, produce an evidence-grounded research report, then apply approved outcomes and retain the report as a reference.](docs/images/question-answer-action.svg)
 
-Every piece of research moves through the same three stages:
+**Ask** a broad question with `research-topic`, or **bring** selected sources with
+`research-sources`. Both establish the **question**: what you want to understand or
+decide, the scope, and the evidence needed. They produce an **answer** in a research
+report, with citations, source assessment and open gaps.
 
-1. **Question** names the decision and scope, and identifies any evidence you
-   are starting with.
-2. **Answer** grounds the result in cited evidence, assesses the sources, and
-   makes gaps visible.
-3. **Action** gives the result a terminal disposition: use it, integrate it into
-   documents, file follow-up work, compile selected sources into an optional
-   wiki, or discard it and close the loop.
+Review the report’s proposed outcomes, then use `absorb` for the approved **action**:
+update people and documents, file follow-up work, preserve writing ideas or additions,
+and compile selected primary evidence into an optional wiki through `wiki-compile`.
+Decline individual proposals when appropriate. Once approved routes are complete or
+explicitly declined, the report is retained in `raw/derived/` as a reference record;
+it is not primary compiler evidence. The detailed report structure and distribution
+rules appear below in [Durable research and distribution](#durable-research-and-distribution).
 
-**Everything the system stores is plain Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are `.md` files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. There is no database and no proprietary format. You can read and edit the files in any editor or on a Git host, version-control them, and keep them after the conversation that produced them is gone. Following the links between wiki articles needs a client that understands `[[wikilinks]]`, such as [Obsidian][7]. The same files are the AI's working set and yours.
+## Meetings
 
-I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.
+![Calendar event, note and transcript inputs feed a meeting record in its folder, then the same approved destinations as research. The original transcript is filed last, after approved routes complete.](docs/images/capture-meetings.svg)
 
-Substantial research is grounded in **Gemini Notebook** (Google's product
-formerly named NotebookLM). This is a deliberate design choice, not just a
-convenience. Gemini Notebook answers only from the sources you give it and cites
-the exact passage behind every claim, instead of blending in a chat model's
-training data or opinions. Analyzing your evidence there keeps the synthesis
-tied to what your sources actually say, with far less outside influence and far
-less room for confident invention. `research-sources` and `research-topic` build
-their artifacts on top of that grounded layer.
+Bring a **calendar event**, a **note** or a **transcript** into `meeting-capture`.
+These inputs are independent: event context establishes schedule and agenda, notes
+preserve observations, and the transcript records what was said. Available coverage
+and missing inputs stay explicit; notes may be a local file or collaborative document.
 
-After installation, start with `hippocampus-set-up`. It walks you through the
-knowledge-store structure, local policy, and follow-up routing, then shows the
-complete proposed configuration before creating or changing anything.
-
-The system stands on excellent tools others built — [Gemini Notebook][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Defuddle][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle guarantees that ensure nothing you research is lost, orphaned, or left half-filed. The tools gather and ground the evidence; this system determines what happens to it.
+The skill creates a source-linked **meeting record** directly in its configured
+folder (default `meetings/`), using a bundled or user-selected template. The record
+stays there through review and completed absorption. `absorb` carries approved
+outcomes to the same people/document, follow-up, writing and optional wiki destinations
+as research. The original transcript is filed separately after those routes complete;
+the meeting record remains a reference in its folder. See [meeting configuration and
+source handling](#meeting-configuration-and-source-handling) for the input settings,
+record/template paths, identity-safe retries and retained-source rules.
 
 ## Research skills
 
@@ -42,8 +49,8 @@ There are three general-purpose skills to get most research questions started:
 | Skill              | Use it when                                                                                         | Result and next step                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `research-quick`   | You need a cited answer to a general question.                                                      | Returns findings inline. No notebook or artifact workflow.                                                      |
-| `research-sources` | You already have URLs, files, media, a source collection, or a named target to analyze.             | Produces a source-grounded artifact ending in the decisions it raises. Review them, then use `research-absorb`.   |
-| `research-topic`   | You need substantial topic-first research, persistent sources, gap filling, and claim verification. | Produces a Gemini Notebook-backed artifact ending in the decisions it raises. Review them, then use `research-absorb`. |
+| `research-sources` | You already have URLs, files, media, a source collection, or a named target to analyze.             | Produces a source-grounded artifact ending in the decisions it raises. Review them, then use `absorb`.   |
+| `research-topic`   | You need substantial topic-first research, persistent sources, gap filling, and claim verification. | Produces a NotebookLM-backed artifact ending in the decisions it raises. Review them, then use `absorb`. |
 
 
 In addition, there are three research skills for specific domains:
@@ -61,21 +68,41 @@ These skills help you get research filed where it belongs.
 
 | Skill               | Use it when                                                                                             | Result and next step                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Archives complete available sources, compiles dated people records, routes approved document changes and actionable dated tasks, and retains absorbed review artifacts. |
-| `research-absorb`   | You created a research artifact and you are ready to move the knowledge into permanent locations.       | Executes the approved plan, records a terminal disposition for every row, then archives the completed artifact in raw/derived.                           |
-| `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, asks for approval, then performs only the approved captures. It does not process research artifacts. |
+| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes, actions and writing opportunities. Approved rows go through absorb; the record stays in place. |
+| `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts move to raw/derived as excluded references.                           |
+| `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, reuses existing authorization, asks about uncovered decisions, then performs approved captures. It does not process research artifacts. |
 
 ## Personal Knowledge Curation skills
 
 | Skill              | Use it when                                                              | Result and next step                                                                             |
 | ------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `research-to-wiki` | A coherent, caller-selected subset of raw sources is ready to compile.   | Creates or updates atomic wiki articles, source status, indexes, and approved workflow records.  |
+| `wiki-compile` | A coherent, caller-selected subset of raw sources is ready to compile.   | Creates or updates atomic wiki articles, source status, indexes, and approved workflow records.  |
 | `wiki-audit`       | You want a structural and source-coverage review of the configured wiki. | Writes a ranked report in `output/` without changing articles, sources, indexes, logs, or tasks. |
+
+## Background
+
+**Durable research and knowledge records are Markdown on your disk.** Research artifacts, wiki articles, indexes, and operation logs are `.md` files in one folder you choose. Markdown is a format AI reads and writes well, and plain files keep your work on your own computer instead of in someone else's service. The knowledge store requires no database. Records may include a fenced JSON block for distribution state; transcription also offers optional JSON output and retains original media or source formats. You can read and edit the files in any editor or on a Git host, version-control them, and keep them after the conversation that produced them is gone. Following the links between wiki articles needs a client that understands `[[wikilinks]]`, such as [Obsidian][7]. The same files are the AI's working set and yours.
+
+I built Hippocampus for my own research, mostly to learn about AI and improve the AI systems I run. One of my favorite ways to use it is after a YouTube video or a podcast. Rather than take notes while I listen, I hand it the URL afterward and ask it to dig into the ideas that caught my attention and help me work out how they might apply to what I'm building.
+
+Substantial research is grounded in **NotebookLM** (Google's source-grounded notebook product). This is a deliberate design choice, not just a
+convenience. NotebookLM uses selected sources and supplies citations so you can check
+the evidence behind an answer. Source-grounded synthesis still requires
+verification; citations do not guarantee that every claim is correct. Analyzing your evidence there keeps the synthesis
+tied to what your sources actually say, with far less outside influence and far
+less room for confident invention. `research-sources` and `research-topic` build
+their artifacts on top of that grounded layer.
+
+After installation, start with `hippocampus-set-up`. It walks you through the
+knowledge-store structure, local policy, and follow-up routing, then shows the
+complete proposed configuration before creating or changing anything.
+
+The system stands on excellent tools others built — [NotebookLM][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Defuddle][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle rules that preserve source identity, keep unfinished work visible, and record completed distribution. The tools gather and ground the evidence; this system determines what happens to it.
 
 ## Knowledge store
 
-The wiki is optional. The system always creates three directories, plus a
-fourth for the compiled knowledge base when `hippocampus-set-up` configures
+The wiki is optional. A configured root contains three canonical directories,
+plus a fourth for compiled knowledge when `hippocampus-set-up` configures
 the wiki as enabled:
 
 ```text
@@ -89,12 +116,18 @@ the wiki as enabled:
 `raw/`, `output/`, and `docs/` are always present. `wiki/` and its two
 profile fields exist only when the wiki is enabled; declining it at setup
 skips the wiki folder, its profile fields, wiki routing in absorption plans
-and knowledge captures, and the `research-to-wiki` / `wiki-audit` skills,
+and knowledge captures, and the `wiki-compile` / `wiki-audit` skills,
 which refuse to run without it. The wiki can be turned on or off later
 through `hippocampus-set-up` alone. The directory names are part of the
 public [Karpathy-wiki contract][2]. The organization of the `wiki/`is
 customizable, but relies on internal wikilinks for traversal by AI and
 wikilink-aware tools.
+
+The `raw/` subfolders express roles: `raw/research/` is the default for extracted
+external evidence; `raw/derived/` retains excluded generated reports/synthesis.
+Transcript intake and retained-source destinations follow local policy (for
+example `raw/inbox/` and `raw/archive/meetings/`). These optional subfolders are
+not new required topology; retained transcripts remain primary evidence.
 
 ### Index files (wiki enabled)
 
@@ -133,7 +166,7 @@ capture task.
 
 ### Durable research and distribution
 
-These two skills share the [research artifact contract][3]. Every artifact
+`research-sources` and `research-topic` share the [research artifact contract][3]. Every artifact
 is one Markdown file in `output/` with the same documented structure:
 
 ```text
@@ -146,19 +179,28 @@ output/2026-08-28-example.md
 ├── How to Absorb        # what the report exists to enable (below)
 ├── Evidence Record      # one entry per source, plus what was searched and skipped
 ├── Evidence Gaps        # what remains unanswered, and the follow-up that closes it
-└── Execution Appendix   # machine-actionable rows for research-absorb
+└── Execution Appendix   # machine-actionable rows for absorb
 ```
 
 The Answer is the first thing a reader judges and must stand without the
 later sections. A complete artifact in this shape, sanitized from a real
 session, is at [docs/examples/2026-09-03-fable-5-1-model-routing.md][10],
-and the [public Gemini Notebook][11] it was grounded in is open for inspection.
+and the [public NotebookLM][11] it was grounded in is open for inspection.
+
+Before destinations are proposed, **How to Absorb** inventories the user’s
+intended outcomes and marks each satisfied with evidence, proposed, deferred
+with an outstanding decision, or declined. Cover personal application/actions,
+maintained documents, wiki knowledge and writing when the objective calls for
+them. Compilation alone does not satisfy an application request; preserve
+remaining outcomes when only part of a broader goal is approved.
 
 The summary and assessment sections feed the absorption plan, whose items are
 split by what the result touches: **Actions** — anything that is not a document,
 such as installing a skill or changing a workflow; **Wiki Additions** — the
 compiled knowledge base only; and **Document Updates** — context files, project
-briefs, standing documents, repository docs. Every item states what exists now,
+briefs, standing documents, repository docs. **Writing Opportunities** form a
+separate route for public ideas and enrichment; retention/discard decisions
+use their explicit shared row kinds. Every item states what exists now,
 the change, why it matters, and how much to trust it, with options and a
 recommendation when a genuine choice exists. Nothing may be merely staged:
 absorb it or discard it. Adoption decisions about third-party work require
@@ -166,9 +208,10 @@ real-world usage and sentiment evidence, not just the source itself.
 The artifact is durable enough to support review and execution, but it is
 coordination material while pending; completed absorption preserves it in `raw/derived/` as an excluded reference record.
 
-If an approved row belongs in the wiki, `research-absorb` stages the selected
-external sources and their provenance under `raw/research/`, then invokes
-`research-to-wiki` on that curated subset. A staged source is the extracted
+If an approved row belongs in the wiki, `absorb` reuses already-retained
+primary source text and provenance, or stages new selected external evidence
+under `raw/research/`, then invokes
+`wiki-compile` on that curated subset. A staged source is the extracted
 source text under provenance frontmatter; a summary alone or a NotebookLM
 source id is not a staged source. The research report itself is never raw
 compiler input.
@@ -176,7 +219,7 @@ compiler input.
 ### Deliverables that are not absorbed
 
 `research-feature` and `research-feedback` sit outside that lifecycle. Neither
-uses the artifact contract and neither goes through `research-absorb`; each
+uses the artifact contract and neither goes through `absorb`; each
 writes a document with its own structure, defined in its own SKILL.md.
 
 `research-feature` produces a **design input document**. It feeds the feature's
@@ -223,35 +266,63 @@ current conversation
   -> discard | retain output | capture provenance | preserve synthesis | compile
 ```
 
-Use this path for knowledge created or discussed in the current conversation. Use `research-absorb` instead when a durable research artifact already exists.
+Legend: arrows show the proposed handoff sequence; approval is the control boundary before authorized dispositions.
 
-### Capture meetings
+Use this path for knowledge created or discussed in the current conversation. Use `absorb` instead when a durable research artifact already exists.
 
-```text
-transcript source       calendar event       note file or Google Doc
-  configured/supplied    optional source      per-meeting or profile default
-           \                   |                   /
-                  meeting-capture
-                         |
-          shared knowledge-capture disposition
-                         |
-       people/coaching records + permitted documents + dated actions
-                         |
-       complete authorized routes -> file transcript in retained source archive
-                                  -> retain review in excluded raw archive
-```
+### Meeting configuration and source handling
 
-The three inputs are independent and configurable. `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md). Transcript intake and retained-source destinations come from local policy or overrides in the private profile body. Pending authorized work stays in intake; completed captures file originals as primary evidence and repair source links. Installation does not relocate existing material.
+The three inputs are independent and configurable: `meeting_transcript_source`
+selects a transcript provider or retrieval route, `meeting_event_source` selects
+optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
+
+Transcript intake and retained-source destinations come from local policy or overrides in the profile body. Pending authorized work stays in intake; completed captures retain originals as primary evidence and repair source links. Installation does not relocate existing material.
+
+`meeting_record_folder` selects a folder within the knowledge root; its default
+is `meetings/`. `meeting_record_template` selects a Markdown template; its default
+is the bundled [minimal example](skills/meeting-capture/assets/meeting.md).
+Override the template for one capture when needed. Relative template paths resolve
+from the knowledge root and absolute template paths are accepted. Explicitly
+missing or invalid templates fail clearly. Validation creates no folders or records.
+Repeated capture finds the meeting by source identity and preserves its path, user
+edits and prior receipts. Coaching sections are optional.
+
+New meeting records use a date plus a meaningful meeting title, person or
+subject (for example, `2026-10-09-public-contract-review.md`). Provider names
+and kind suffixes such as `-transcript` belong in source provenance metadata,
+not automatic title decoration. Retained transcripts use a meaningful subject;
+a transcript and its record may share a filename in different folders.
+Identity lookup reuses existing records and preserves user edits and paths,
+even when a title changes on retry. Different meetings with the same title get
+a stable identity suffix; filing refuses to overwrite different source content.
+
+A capture report distinguishes writing opportunities, maintained document/project
+updates, wiki updates (when enabled), and actions. Curriculum and working-playbook
+changes use document/project routes. Writing means public blog, social, article
+or podcast opportunities; capture can propose a seed without drafting a post.
+Publishing stage, intended format and subject categories are separate, actual
+publication needs release evidence, and professional adoption is a separate
+outcome. Targets and folder names come from the profile.
+
+### Writing opportunities from meetings and research
+
+Capture can propose a new idea, enrich an existing idea, or identify a follow-up
+to published material. It searches configured ideas, drafts and published records
+and reports missing coverage rather than asserting novelty. Candidates retain
+source pointers, speaker/author attribution, an angle, a specific proposed
+addition, privacy limits and approval state. No useful opportunity is a valid result.
+
+Local policy supplies storage, templates, scoring and the writing workflow.
+Without a writable destination, the candidate remains in its record. `absorb`
+files only approved rows and preserves authored drafts and published text. Capture
+does not draft first-person posts or publish. See the [public route examples](docs/examples/capture-writing.md).
 
 ### Compile and audit an existing source collection
 
-```text
-caller-curated raw subset
-  -> research-to-wiki
-  -> wiki articles + indexes + source dispositions + workflow state
-  -> wiki-audit (optional, read-only)
-  -> ranked audit report in output/
-```
+Choose a coherent subset of primary sources and authorize its compilation.
+`wiki-compile` creates or updates articles, indexes and source dispositions.
+An optional `wiki-audit` then writes a ranked report without changing the wiki.
+This direct route needs no generated meeting record or research artifact.
 
 Compilation is never a sweep of every uncompiled file in `raw/`. It reads the
 selected raw sources before existing wiki synthesis, drafts claims, then checks
@@ -260,7 +331,18 @@ incompatible assertions.
 
 ## Architecture
 
-[`docs/architecture/runtime.html`](docs/architecture/runtime.html) is an interactive map of how a research request moves through these skills to durable outputs: the research skills, NotebookLM and source extraction, the profile gate, the research artifact, `research-absorb`, and the knowledge root (`raw/research/`, retained reference reports in `raw/derived/`, and `wiki/`). Each box links to the file and lines it came from. [`runtime.architecture.json`](docs/architecture/runtime.architecture.json) is its source, pinned to one commit. Agents should read it before structural changes, confirm against the code, and regenerate it with the [Archify](https://github.com/tt-a1i/archify) skill when a change moves a box or an edge.
+[`docs/architecture/runtime.html`](docs/architecture/runtime.html) maps research
+and meeting capture to shared absorption, local document/task/writing workflows,
+selected-source compilation and separate record/source retention. Its source is
+[`runtime.architecture.json`](docs/architecture/runtime.architecture.json), pinned
+to the implementation commit. Read the relevant map before structural changes,
+confirm against the skills and helper, and regenerate the architecture viewer
+and public comparison with `uv run --with markdown python scripts/render-public-review.py`.
+The architecture SVG preserves the existing viewer; its legend
+identifies workflow roles, not deployment status. The runtime
+map includes approved setup and its profile; it leaves out inline research, domain-specific deliverables, installation,
+release and external provider internals. Earlier review artifacts remain dated
+history; this map describes the current candidate.
 
 ## Example requests
 
@@ -281,18 +363,17 @@ interaction before we design it.
 Use research-feedback to determine whether users consider this release stable
 enough to adopt and identify the communities worth following.
 
-Run research-absorb on output/2026-08-27-example.md. Validate and show me its
+Run absorb on output/2026-08-27-example.md. Validate and show me its
 existing plan before applying anything.
 
-Use research-to-wiki on these three selected files under raw/research/.
+Use wiki-compile on these three selected files under raw/research/.
 
 Audit the configured wiki with wiki-audit. Do not modify it.
 ```
 
 ## External and optional integrations
 
-- **Gemini Notebook** (formerly **NotebookLM** — Google renamed it in July 2026;
-  the CLI and skill below still carry the old name) is the persistent source and
+- **NotebookLM** is the persistent source and
   synthesis layer used by `research-sources` and `research-topic`. Its
   source-grounded answers and inline citations are what keep this system's
   analysis tied to your evidence rather than a model's training data. Agent
@@ -303,8 +384,8 @@ Audit the configured wiki with wiki-audit. Do not modify it.
 - **YouTube library search** is an optional upstream source-discovery step. A
   separate `youtube` Agent Skill can use the third-party [yt-dlp][5] CLI to
   inspect public playlists or retrieve subtitles, then hand selected URLs to
-  Gemini Notebook. Neither that skill nor `yt-dlp` is bundled or required by this
-  package; Gemini Notebook can index a supplied YouTube URL directly.
+  NotebookLM. Neither that skill nor `yt-dlp` is bundled or required by this
+  package; NotebookLM can index a supplied YouTube URL directly.
 - **Defuddle** is optional and detected at runtime. Relevant skills extract
   supplied pages through its hosted endpoint, which needs no install or API key,
   and fall back to native web tools when it is unavailable or a page is blocked.
@@ -313,8 +394,10 @@ Audit the configured wiki with wiki-audit. Do not modify it.
   The local route requires macOS 26 or later; otherwise the calling workflow
   must use another input route.
 - Full Reddit-thread reading used by `research-quick` and `research-feedback`
-  requires an interactive macOS session with Safari signed into Reddit. Other
-  sources continue through the available web tools.
+  follows the authorized browser route in local policy. The bundled Safari helper
+  requires an interactive macOS session signed into Reddit; other configured
+  browser tools are valid. Without a route, report snippet-only coverage. Other
+  sources continue through available web tools.
 - **Obsidian** is not required to run the system or to read the wiki, but it
   is the practical way for a person to browse it. Wiki articles link to each
   other with `[[wikilinks]]`, which GitHub, VS Code, and most Markdown viewers
@@ -330,7 +413,7 @@ commands.
 
 [1]:	https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 [2]:	contracts/karpathy-wiki.md
-[3]:	skills/research-absorb/references/artifact-contract.md
+[3]:	skills/absorb/references/artifact-contract.md
 [4]:	https://github.com/teng-lin/notebooklm-py
 [5]:	https://github.com/yt-dlp/yt-dlp
 [6]:	INSTALLATION.md
@@ -339,3 +422,23 @@ commands.
 [11]:	https://notebook.google.com/notebook/6df011dc-7391-4399-919f-345b6067e29f
 [8]:	https://notebooklm.google.com
 [9]:	https://defuddle.md
+
+
+## Compatibility and candidate review
+
+`research-absorb` delegates to `absorb`; `research-to-wiki` and `vault-compile`
+delegate to `wiki-compile`; `vault-audit` delegates to opt-in, read-only
+`wiki-audit`. Existing artifact-contract links and version-4 profiles continue to
+work. Direct authorized compilation still accepts a selected primary subset
+without a meeting or research artifact. Local compiler/audit policy remains intact.
+
+The installer provides the same contracts, helpers and templates to Claude Code
+and Codex. It refuses unowned local skill collisions and never overwrites custom
+templates. See [migration](MIGRATION.md) before replacing a local compiler/audit
+wrapper after installing a signed release.
+
+This development candidate includes updated README, diagrams and presentation.
+The [before/after inventory](docs/reviews/2026-10-09-public-documentation.md)
+and rendered review accompany it. Maintainer approval of those finished materials
+is still required before public communication or release; implementation approval
+is not that sign-off.

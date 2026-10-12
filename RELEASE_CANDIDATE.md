@@ -1,37 +1,80 @@
-# Release candidate: 0.9.1
+# Release candidate: 0.10.0
 
 ## Scope
 
-Completed meeting transcripts are filed from local intake into a retained primary-source archive after every authorized capture route is completed or explicitly declined. The shared knowledge-capture meeting procedure handles filing, reference repair, identity deduplication across both locations, collision checks, and pending capture work for both Claude Code and Codex. Compilation status remains separate from capture completion. Generated absorbed reviews remain excluded reference artifacts.
+This candidate covers the changes since v0.9.0:
 
-Resolve filing destinations from local policy with optional overrides in the private profile body. The three meeting input fields and profile version 4 are unchanged. Installation does not move existing sources or activate unsigned development skills.
+- Retire the old setup compatibility skill; `hippocampus-set-up` is the setup entry point ([hippocampus#24](https://github.com/coreyfloyd/hippocampus/issues/24)).
+- File original meeting transcripts from policy-defined intake into retained primary-source storage only after every authorized capture route completes or is explicitly declined, repairing source references ([hippocampus#29](https://github.com/coreyfloyd/hippocampus/issues/29)).
+- Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile`, and propose source-grounded writing opportunities ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
+- Route retained-source understanding, applicability assessment and distribution planning through `research-sources`; inventory intended outcomes before proposing distribution ([hippocampus#36](https://github.com/coreyfloyd/hippocampus/issues/36)).
+- Reconcile skill boundaries, meeting action/document routes, optional profile fields, raw metadata, inline research, compiler/audit guidance and public documentation ([hippocampus#39](https://github.com/coreyfloyd/hippocampus/issues/39)).
 
-This patch also carries the already-landed meeting-purpose clarification: confirm the user's purpose and preserve core versus ancillary outcomes before planning, reusing an existing explicit confirmation.
+Research reports stay in output while work is pending, then retain their excluded
+reference lifecycle under `raw/derived/`. Meeting records stay at their original
+path. Transcript ingestion, completed absorption and retention are distinct.
+Writing proposes new seeds, enrichments or published follow-ups with evidence,
+attribution and reuse limits; authored drafting and actual publication remain
+separate. Curriculum/playbook changes use maintained document/project routes.
 
-Tracking: [hippocampus#29](https://github.com/coreyfloyd/hippocampus/issues/29).
-Previous publication evidence: [0.9.0](docs/releases/0.9.0.md).
+## Compatibility
+
+Profile version remains 4. Existing published profiles need no new fields.
+Optional `meeting_record_folder` and `meeting_record_template` default to
+`meetings/` and the bundled minimal Markdown template. The three independent
+meeting inputs remain optional. The unreleased `meeting_daily_note_path` name
+became `meeting_note_path`; published profiles need no migration for it.
+
+`research-absorb` delegates to `absorb`; `research-to-wiki` and `vault-compile`
+delegate to `wiki-compile`; `vault-audit` delegates to `wiki-audit`. Existing
+artifact-contract links remain supported. Direct authorized compilation accepts
+selected primary sources without requiring a research or meeting record.
+The retired setup compatibility command is removed only when package-owned.
+Unowned skill collisions block installation; custom templates and local policy
+remain user-owned. Installation neither relocates existing sources nor performs
+live captures. Both Claude Code and Codex receive the same package.
 
 ## Verification
 
-Verification passed on the MacBook; see [filing verification](docs/releases/0.9.1-verification.md). Record the exact candidate in the tracking issue before signing:
+Run the exact candidate checks in `RELEASING.md`, including
+`python3 tests/test-capture-absorb.py`, the documentation sweeps and the public
+commit-range scan. Generator evidence and finding dispositions accompany this
+candidate; independent review and evaluation belong to the orchestrator.
 
-- `python3 tests/test-profile-meetings.py`
-- `bash tests/test-contracts.sh`
-- `bash tests/test-install.sh`
-- `bash tests/test-release.sh`
-- `git diff --check`
-- Check completed, pending, repeated, partial, and collision filing scenarios against the shared procedure.
+Release blocker: the required merge includes earlier candidate commits with
+private references. A clean final document tree does not sanitize that commit
+history. The public range scan must pass before any push or publication;
+resolving the merge/history conflict requires a maintainer decision.
 
-## Release notes
+Previous publication evidence: [0.9.0](docs/releases/0.9.0.md).
+Public comparison: [before/after inventory](docs/reviews/2026-10-09-public-documentation.md).
 
-Hippocampus v0.9.1 completes meeting filing: new transcripts stage in local intake; completed captures retain originals in the configured source archive and repair source links. Pending document or task writes keep a capture staged. Original transcripts remain primary evidence, while generated reviews remain excluded references. Filing destinations use local policy or the private profile body; existing profile version 4 remains compatible. Meeting purpose is confirmed before planning so ancillary outcomes do not displace the user's core goal.
+## Release-note draft
+
+Hippocampus v0.10.0 unifies approved research and meeting distribution through
+`absorb` and selected primary-source compilation through `wiki-compile`.
+Template-driven meeting records start and stay in their configured folder,
+use meaningful subjects for new filenames, and preserve existing paths, edits
+and confirmed receipts on retries. Original transcripts follow a separate
+policy-defined intake/archive lifecycle with verified content and source links.
+Completed research reports remain excluded reference artifacts.
+
+Capture and durable research can propose source-grounded writing ideas,
+enrichment and published follow-ups through local workflows. Intended outcomes
+are explicitly accounted for, and retained-source analysis reuses existing
+primary evidence. Optional meeting settings and public routing/metadata guidance
+are documented consistently. Existing profile version 4 and compiler/absorption
+compatibility entry points remain supported; use `hippocampus-set-up` instead
+of the retired setup compatibility command. Both supported clients receive the
+same package, and installation preserves unowned skills, templates and sources.
 
 ## Publication checklist
 
-- [ ] Verify and commit the candidate.
-- [ ] Merge the reviewed candidate and tag its exact commit as `v0.9.1`.
+- [ ] Verify and commit the candidate; resolve the public commit-history scan.
+- [ ] Complete independent review, evaluation and public-communication approval.
+- [ ] Merge the reviewed candidate and tag its exact commit as `v0.10.0`.
 - [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
 - [ ] Verify signed assets, publish, and independently verify downloaded assets.
 - [ ] Install and verify the signed release in both supported clients.
 
-No v0.9.1 publication or live installation has occurred.
+No v0.10.0 publication or live installation has occurred in this generator pass.

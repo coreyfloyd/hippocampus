@@ -25,8 +25,8 @@ Before asking for any wiki-specific value, describe the wiki and its alternative
 
 - **With a wiki**: a `wiki/` folder holds compiled, atomic articles connected
   by Obsidian-style wikilinks, plus `wiki/hot.md` as the recent-context entry
-  point. `research-absorb` and `knowledge-capture` can route selected findings
-  into it, and `research-to-wiki` and `wiki-audit` compile and audit it.
+  point. `absorb` and `knowledge-capture` can route selected findings
+  into it, and `wiki-compile` and `wiki-audit` compile and audit it.
   Wikilinks are a portable Markdown convention either way; Obsidian is an
   optional client for browsing the result.
 - **Without a wiki**: no `wiki/` folder, no wiki-only profile fields, no wiki
@@ -54,7 +54,7 @@ Ask only for choices that cannot be inferred safely, and explain each before req
 
 1. The absolute knowledge-root location.
 2. When the wiki is enabled, the route for wiki-maintenance follow-ups.
-3. The independent route for research findings that require work in another project.
+3. The independent task route for source-derived actions, including meeting tasks and research findings that require work in another project.
 4. Any local policy the agents should follow: taxonomy, source-library routing, output naming, operation/decision log formats, and local boundaries.
 5. Optional meeting inputs: `meeting_transcript_source` (provider or retrieval instructions), `meeting_event_source` (calendar provider or retrieval instructions), and `meeting_note_path` (optional default local path or Google Docs link; `{date}` is optional for local paths). Each independently accepts `disabled`. Explain that notes and events are read-only context, connectors must actually be available, and omitted event/note fields skip those lookups. Do not require meeting configuration for users who do not capture meetings.
 6. When the wiki is enabled, whether the user plans to use Obsidian or another wikilink-aware client. This changes the usage guidance, not the profile schema.
@@ -97,3 +97,23 @@ present-then-approve gate as any other change:
   removing `hot_file` and `wiki_followup_destination` from the profile and
   recording `wiki_enabled: false`. Never delete or modify `wiki/` or anything
   in it — disabling only changes the profile.
+
+
+## Meeting records and writing policy
+
+Explain optional `meeting_record_folder` (defaults to root-relative `meetings`)
+and `meeting_record_template` (defaults to the bundled minimal Markdown template).
+A per-capture template can override the default. Template paths can be relative to
+the root or explicit absolute paths; record folders must stay within the root.
+Custom headings/coaching are optional presentation, while source and approval
+semantics remain shared. Show exact requested settings before changing them.
+Validation checks template validity and containment without creating records or
+folders. Never copy over a user's custom template during install or setup.
+
+Discuss independent transcript intake and retained-source destinations in the local
+policy body, within `raw/`, when meeting filing is requested. Ask about local
+writing storage/workflow, ideas/drafts/published search locations and reuse/privacy
+rules when writing routes are wanted; absent destinations leave candidates in their
+records. Preserve local compiler/audit modes, thresholds, coverage and delegated
+policy files when replacing an owned local wrapper. No automatic backfill,
+whole-library sweep, task creation or publication is part of setup.

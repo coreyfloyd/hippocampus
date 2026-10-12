@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
-  <title id="title">Question, Answer, Action lifecycle</title>
-  <desc id="desc">A broad question or selected sources become a question, then an evidence-grounded answer, then an action that updates documents, files follow-up work, compiles an optional wiki, or discards the result and closes the loop.</desc>
-  <style>
+  <title id="title">Question, Answer, Action research lifecycle</title>
+  <desc id="desc">Ask through research-topic or bring sources through research-sources. Set a question and produce an evidence-grounded research report. Absorb executes approved document, people, follow-up, writing and optional wiki outcomes; the completed report is retained in raw/derived/ as a reference. Individual proposals may be declined.</desc>
+<style>
     :root {
       --bg: #f7f8fa;
       --panel: #ffffff;
@@ -69,7 +69,6 @@
     .stage { fill: var(--panel); stroke-width: 2.5; }
     .input { fill: var(--question-bg); stroke: var(--question); stroke-width: 1.6; }
     .outcome { fill: var(--action-bg); stroke: var(--action); stroke-width: 1.4; }
-    .discard { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.4; }
     .label { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1.4px; }
     .heading { fill: var(--ink); font-family: var(--sans); font-size: 23px; font-weight: 750; }
     .stage-heading { fill: var(--ink); font-family: var(--sans); font-size: 19px; font-weight: 750; }
@@ -77,8 +76,9 @@
     .small { fill: var(--dim); font-family: var(--sans); font-size: 11.5px; }
     .edge { fill: none; stroke: var(--line); stroke-width: 2.2; marker-end: url(#arrow); }
     .branch { fill: none; stroke: var(--action); stroke-width: 1.8; marker-end: url(#action-arrow); }
+    .skill { fill: var(--dim); font-family: var(--mono); font-size: 12px; }
   </style>
-  <defs>
+<defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
       <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--line)"/>
     </marker>
@@ -86,49 +86,59 @@
       <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--action)"/>
     </marker>
   </defs>
-
   <rect width="1200" height="520" rx="20" fill="var(--bg)"/>
   <text x="40" y="48" class="heading">Close the loop from curiosity to use</text>
-  <text x="40" y="75" class="copy">Two kinds of input move through one predictable lifecycle.</text>
+  <text data-diagram-key="true" x="40" y="75" class="copy">blue: what you bring · orange: what Hippocampus writes · green: where outcomes land</text>
+  <rect data-thing="input" x="40" y="142" width="210" height="82" rx="12" class="input"/>
+  <text x="58" y="171" class="label" fill="var(--question)">ASK</text>
+  <text x="58" y="194" class="copy">a broad question</text>
 
-  <rect x="40" y="142" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="174" class="label" fill="var(--question)">ASK</text>
-  <text x="58" y="201" class="copy">a broad question</text>
+  <rect data-thing="input" x="40" y="292" width="210" height="82" rx="12" class="input"/>
+  <text x="58" y="321" class="label" fill="var(--question)">BRING</text>
+  <text x="58" y="344" class="copy">selected sources</text>
 
-  <rect x="40" y="292" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="324" class="label" fill="var(--question)">BRING</text>
-  <text x="58" y="351" class="copy">selected sources</text>
-
-  <rect x="330" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--question)"/>
-  <text x="350" y="237" class="label" fill="var(--question)">QUESTION</text>
-  <text x="350" y="268" class="stage-heading">Set the target</text>
+  <rect data-thing="record" x="330" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--answer)"/>
+  <text x="350" y="237" class="label" fill="var(--answer)">QUESTION</text>
+  <text x="350" y="268" class="stage-heading">Framed question</text>
   <text x="350" y="293" class="small">scope · decision · evidence</text>
 
-  <rect x="600" y="204" width="210" height="112" rx="14" class="stage" stroke="var(--answer)"/>
-  <text x="620" y="237" class="label" fill="var(--answer)">ANSWER</text>
-  <text x="620" y="268" class="stage-heading">Ground the result</text>
-  <text x="620" y="293" class="small">citations · assessment · gaps</text>
+  <rect data-thing="record" x="580" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--answer)"/>
+  <text x="600" y="237" class="label" fill="var(--answer)">ANSWER</text>
+  <text x="600" y="268" class="stage-heading">Research report</text>
+  <text x="600" y="293" class="small">citations · assessment · gaps</text>
+  <rect data-thing="destinations" data-outcome-panel="true" x="820" y="108" width="340" height="392" rx="16" fill="var(--panel)" stroke="var(--action)" stroke-width="2.5"/>
+  <text x="842" y="140" class="label" fill="var(--action)">ACTION</text>
+  <text x="842" y="182" class="copy">Approved destinations.</text>
+  <circle cx="842" cy="207" r="3" fill="var(--action)"/>
+  <text data-outcome-label="documents" x="856" y="212" class="copy">People &amp; documents</text>
+  <text x="856" y="228" class="small">named updates and people records</text>
+  <circle cx="842" cy="253" r="3" fill="var(--action)"/>
+  <text data-outcome-label="actions" x="856" y="258" class="copy">Follow-up work</text>
+  <text x="856" y="274" class="small">ownership, timing and next steps</text>
+  <circle cx="842" cy="299" r="3" fill="var(--action)"/>
+  <text data-outcome-label="writing" x="856" y="304" class="copy">Writing opportunities</text>
+  <text x="856" y="320" class="small">ideas or additions, with attribution</text>
+  <circle cx="842" cy="345" r="3" fill="var(--action)"/>
+  <text data-outcome-label="wiki" x="856" y="350" class="copy">Optional wiki</text>
+  <text x="856" y="366" class="skill" data-skill="wiki-compile">wiki-compile</text>
+  <circle cx="842" cy="391" r="3" fill="var(--action)"/>
+  <text data-outcome-label="reference" x="856" y="396" class="copy">Retained reference record</text>
+  <text x="856" y="412" class="small">record kept with sources and results</text>
+  <text x="842" y="486" class="small">Individual proposals may be declined.</text>
 
-  <rect x="890" y="108" width="270" height="344" rx="16" fill="var(--panel)" stroke="var(--action)" stroke-width="2.5"/>
-  <text x="912" y="140" class="label" fill="var(--action)">ACTION</text>
-  <text x="912" y="169" class="copy">Give the answer a destination.</text>
-
-  <circle cx="925" cy="279" r="11" fill="var(--action)"/>
-  <rect x="966" y="195" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="224" class="copy">notes &amp; documents</text>
-  <rect x="966" y="255" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="284" class="copy">follow-up work</text>
-  <rect x="966" y="315" width="166" height="48" rx="9" class="outcome"/>
-  <text x="982" y="344" class="copy">optional wiki</text>
-  <rect x="966" y="375" width="166" height="48" rx="9" class="discard"/>
-  <text x="982" y="404" class="copy">discard &amp; close</text>
-
-  <path d="M250,183 C285,183 292,232 330,244" class="edge"/>
-  <path d="M250,333 C285,333 292,288 330,276" class="edge"/>
-  <path d="M520,260 L600,260" class="edge"/>
-  <path d="M810,260 L890,260" class="edge"/>
-  <path d="M925,279 C944,279 944,219 966,219" class="branch"/>
-  <path d="M925,279 L966,279" class="branch"/>
-  <path d="M925,279 C944,279 944,339 966,339" class="branch"/>
-  <path d="M925,279 C944,279 944,399 966,399" class="branch"/>
+  <g data-operation="ask-question">
+    <path d="M250,183 C285,183 292,232 330,244" class="edge"/>
+    <text x="265" y="175" class="skill" data-skill="research-topic">research-topic</text>
+  </g>
+  <g data-operation="bring-question">
+    <path d="M250,333 C285,333 292,288 330,276" class="edge"/>
+    <text x="265" y="350" class="skill" data-skill="research-sources">research-sources</text>
+  </g>
+  <g data-operation="question-answer">
+    <path d="M520,260 L580,260" class="edge"/>
+  </g>
+  <g data-operation="answer-action">
+    <path d="M770,260 L820,260" class="edge"/>
+    <text x="795" y="196" text-anchor="middle" class="skill" data-skill="absorb">absorb</text>
+  </g>
 </svg>

@@ -24,7 +24,8 @@ test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
 test -f "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'valid research-tools installation' "$ROOT/MIGRATION.md"
+grep -Fq 'Use `hippocampus-set-up`' "$ROOT/MIGRATION.md"
+test ! -d "$ROOT/skills/research-tools-set-up"
 grep -Fq 'old release directory in place for recovery' "$ROOT/MIGRATION.md"
 grep -Fq 'never a backlog sweep' "$CONTRACT"
 grep -Fq 'Reports are not raw compiler input' "$CONTRACT"
@@ -163,7 +164,9 @@ for skill in research-feature research-feedback; do
 done
 grep -Fq '## Sources' "$ROOT/skills/research-feature/SKILL.md"
 grep -Fq '## Communities to watch' "$ROOT/skills/research-feedback/SKILL.md"
-if grep -Fq 'research-feature, or research-feedback' "$ROOT/skills/research-absorb/SKILL.md"; then exit 1; fi
+grep -Fq 'For research artifacts also read' "$ROOT/skills/absorb/SKILL.md"
+grep -Fq 'research-feature' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq 'research-feedback' "$ROOT/skills/absorb/references/artifact-contract.md"
 for skill in research-to-wiki wiki-audit; do
   grep -Fq 'wiki_followup_destination' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
@@ -204,8 +207,9 @@ done
 
 # A wiki-disabled artifact has no Wiki Additions class, and research-absorb
 # neither stages provenance nor invokes the compiler.
-grep -Fq 'exists only for wiki-enabled profiles' "$ROOT/skills/research-absorb/references/artifact-contract.md"
-grep -Fq 'never invokes `research-to-wiki`' "$ROOT/skills/research-absorb/references/artifact-contract.md"
+grep -Fq 'exists only for wiki-enabled profiles' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq 'never invokes `wiki-compile`' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq '../../absorb/references/artifact-contract.md' "$ROOT/skills/research-absorb/references/artifact-contract.md"
 
 # knowledge-capture offers no wiki classification when the wiki is disabled.
 grep -Fq 'offers no wiki classification' "$ROOT/skills/knowledge-capture/SKILL.md"
@@ -226,3 +230,16 @@ grep -Fq 'Existing version-4 profiles need no change' "$ROOT/MIGRATION.md"
 
 scan 'private vault vocabulary' -rnE 'unified Obsidian vault|AI-vault|writing-corpus|R-004|wiki/people/' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
 scan 'private paths and names' -rnE --exclude='*.swift' 'claude-dotfiles|research-skills|~/Obsidian|Corey|~/[.]claude/skills|~/Development|wiki/CLAUDE[.]md|wiki/AGENTS[.]md' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
+
+# Meeting input/schema and retention doctrine must remain in shipped text.
+for field in meeting_transcript_source meeting_event_source meeting_note_path meeting_record_folder meeting_record_template; do
+  grep -Fq "$field" "$PROFILE"
+  grep -Fq "$field" "$CONTRACT"
+  grep -Fq "$field" "$ROOT/INSTALLATION.md"
+done
+grep -Fq 'Ask only when a missing or ambiguous purpose' "$ROOT/skills/knowledge-capture/references/meetings.md"
+grep -Fq 'compile_mode: exclude' "$CONTRACT"
+grep -Fq 'compile_mode: exclude' "$ROOT/skills/absorb/SKILL.md"
+grep -Fq 'compile_mode: exclude' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq 'meeting folder' "$ROOT/skills/knowledge-capture/references/meetings.md"
+grep -Fq 'raw/derived' "$ROOT/INSTALLATION.md"

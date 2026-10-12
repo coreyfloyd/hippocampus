@@ -79,7 +79,7 @@ integrity and configuration-readiness check.
 
 ## Install from this checkout
 
-This checkout is a development candidate rather than a published release. Use the verified signed-release route for normal live upgrades. An agent must obtain explicit authorization before activating a development checkout in the user's live skill directories; candidate tests use temporary homes. If intentionally installing the development checkout:
+A source checkout may contain changes beyond the latest signed release. Use the verified signed-release route for normal live upgrades. An agent must obtain explicit authorization before activating a development checkout in the user's live skill directories; candidate tests use temporary homes. If intentionally installing the development checkout:
 
 ```bash
 bash install.sh
@@ -107,14 +107,14 @@ the same contract manually, replace the example path with the root you want the
 skills to use:
 
 ```bash
-RESEARCH_KNOWLEDGE_ROOT=/absolute/path/to/knowledge
-mkdir -p "$RESEARCH_KNOWLEDGE_ROOT"/{raw,output,docs}
-touch "$RESEARCH_KNOWLEDGE_ROOT/docs/log.md"
-touch "$RESEARCH_KNOWLEDGE_ROOT/docs/DECISIONS.md"
+HIPPOCAMPUS_KNOWLEDGE_ROOT=/absolute/path/to/knowledge
+mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT"/{raw,output,docs}
+touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/log.md"
+touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/DECISIONS.md"
 
 # Only when using the wiki, which is enabled by default:
-mkdir -p "$RESEARCH_KNOWLEDGE_ROOT/wiki"
-touch "$RESEARCH_KNOWLEDGE_ROOT/wiki/hot.md"
+mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki"
+touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki/hot.md"
 
 mkdir -p ~/.config/hippocampus
 cp ~/.local/share/hippocampus/current/profiles/karpathy-wiki.example.md \
@@ -126,14 +126,14 @@ Edit `~/.config/hippocampus/profile.md` and set:
 - `knowledge_root` to the existing absolute root;
 - `operation_log_file` and `decision_log_file` to existing files relative to
   that root;
-- `artifact_followup_destination` to the route for research findings that
-  require work elsewhere.
+- `artifact_followup_destination` to the task route for source-derived actions,
+  including meeting tasks and research follow-ups.
 
 The wiki is enabled by default. To use it, also set `hot_file` to an existing
 file relative to the root and `wiki_followup_destination` to the route for
 knowledge-base maintenance. To skip the wiki, add `wiki_enabled: false` to the
 profile and omit both wiki fields; the `wiki/` directory is then neither
-required nor created, and `research-to-wiki` and `wiki-audit` refuse to run.
+required nor created, and `wiki-compile`, its compatibility commands and `wiki-audit` refuse to run.
 
 The follow-up destinations are intentionally independent. Replace the
 instructional placeholders with routes another agent can actually follow. The
@@ -143,7 +143,7 @@ The validated frontmatter schema is currently `profile_version: 4`.
 
 ## Install a published release
 
-Each published GitHub Release will provide six matching assets: the versioned
+Published GitHub Releases under the current release contract include six matching assets: the versioned
 archive, its SHA-256 file, a detached signature for that checksum file, the
 maintainer public key, and the `install-release.sh` and `verify-release.sh`
 scripts themselves. The scripts are published unmodified so that a release can
@@ -188,6 +188,7 @@ then test the optional Apple Speech package:
 
 ```bash
 python3 tests/test-profile-meetings.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test-capture-absorb.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
 bash tests/test-release.sh
@@ -205,3 +206,40 @@ in `raw/inbox/` and file completed captures in `raw/archive/meetings/`.
 No new frontmatter fields or profile migration are required. Installing an
 upgrade does not relocate existing files; a capture or explicitly authorized
 filing pass performs the move and source-link repair.
+
+
+## Meeting records, retention and writing
+
+Optional `meeting_record_folder` defaults to `meetings/` within the knowledge
+root; it may name a not-yet-created relative folder but cannot escape via a symlink.
+Optional `meeting_record_template` defaults to the packaged
+`skills/meeting-capture/assets/meeting.md`. Choose an existing nonempty Markdown
+file relative to the knowledge root or by explicit absolute path. Supported
+placeholders are `{{title}}`, `{{date}}`, `{{record_id}}`, `{{sources}}`,
+`{{coverage}}` and `{{event_url}}`; custom headings need not match the example.
+An unknown placeholder or unreadable selected template fails clearly. Profile
+validation never creates a meeting folder or record. A per-capture override does
+not alter the profile or copy over a custom template.
+
+New meeting records use a date plus a meaningful meeting title, person or
+subject (for example, `2026-10-09-public-contract-review.md`). Provider names
+and kind suffixes such as `-transcript` belong in source provenance metadata,
+not automatic title decoration. Retained transcripts use a meaningful subject;
+a transcript and its record may share a filename in different folders.
+Identity lookup reuses existing records and preserves user edits and paths,
+even when a title changes on retry. Different meetings with the same title get
+a stable identity suffix; filing refuses to overwrite different source content.
+
+The profile body can name transcript intake/archive folders within raw, separate
+from the meeting-record folder. All approved routes must be terminal before
+transcript retention filing; verify repaired references and preserve primary
+source metadata. The generated meeting record stays in place. Completed research
+reports retain their output-to-raw/derived transition and compilation exclusion.
+
+Writing policy may supply ideas/drafts/published search locations, a writable
+destination, local workflow, templates, scoring and privacy rules. With none
+configured, candidates stay in their meeting/research records. Setup does not
+invent an ideas directory or create tasks, drafts, backfills or publications.
+The helper is installed inside `skills/absorb/scripts/`; no persistent service or
+separate skills platform is required. Local adapters own destination confirmations,
+external permissions, deduplication and read-back.

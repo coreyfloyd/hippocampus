@@ -3,3 +3,12 @@ dist/
 .worktrees/
 .DS_Store
 .vscode/
+
+# Python test/import caches and orchestrator-owned native review captures.
+__pycache__/
+*.pyc
+*.pyo
+docs/implementation/review-r*-*.txt*
+docs/implementation/review-r*-*-handoff.json
+docs/implementation/.review-r*-*.guard
+docs/implementation/*-review-response-brief.md

@@ -1,6 +1,6 @@
 # Hippocampus rename rollout
 
-Approved by Corey on 2026-09-10: complete repository/product rename with installation migration. Tracking: [research-tools issue 17](https://github.com/coreyfloyd/research-tools/issues/17).
+Approved by the maintainer on 2026-09-10: complete repository/product rename with installation migration. Tracking: [research-tools issue 17](https://github.com/coreyfloyd/research-tools/issues/17).
 
 ## Candidate and verification
 
@@ -16,7 +16,7 @@ Before landing, verify fresh installation, upgrade from the actual published v0.
 2. Land the evaluated public rename candidate. Preserve old tags, old signed release assets, and signing-key bytes/fingerprint.
 3. Rename the existing GitHub repository to `coreyfloyd/hippocampus`, update clone remotes, and check the canonical URL plus old repository/issue redirects. Never create a replacement repository under the old name.
 4. Finish all active linked-worktree operations before moving the MacBook checkout from `~/Development/research-tools` to `~/Development/hippocampus`. Repair linked-worktree metadata if any retained worktrees require it. Update the Codex project trust entry and current operator path references with the actual resulting path.
-5. Follow `RELEASING.md` for the new version. Corey runs the real build-and-sign command from an interactive terminal; agents must not run the signing operation. Verify and publish the resulting assets, then download and verify the public assets again.
+5. Follow `RELEASING.md` for the new version. the maintainer runs the real build-and-sign command from an interactive terminal; agents must not run the signing operation. Verify and publish the resulting assets, then download and verify the public assets again.
 6. Install the verified new release on the MacBook, verify both clients' links and the migrated profile, and record the actual result. Schedule other machines using their documented host routes and deployment procedures; do not infer fleet deployment from a MacBook check.
 7. Refresh current vault release/context references and the skill catalog after the name and installed skill actually change. Preserve historical release descriptions and the old signing-key UID as history/identity.
 8. Announce only after the new release's documented installation path has passed verification. Announcement messaging needs its own explicit authorization.

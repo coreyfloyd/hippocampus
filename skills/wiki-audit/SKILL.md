@@ -5,7 +5,7 @@ description: Read-only structural audit of a configured Karpathy-wiki knowledge 
 
 # Wiki Audit
 
-Run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill), `~/.config/hippocampus/profile.md`, and `--require-wiki`; read the [public Karpathy-wiki contract](../../contracts/karpathy-wiki.md) before auditing. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not audit another root or choose a fallback report path. If the validator refuses with `--require-wiki` because the wiki is not configured, stop and relay its message verbatim — hippocampus-set-up enables it; this is not a judgment to make by reading the profile yourself. Run only against the configured `knowledge_root`, applying any free-form local policy body only within that root. Produce a ranked report in canonical `output/`; modify nothing.
+Run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill), `~/.config/hippocampus/profile.md`, and `--require-wiki`; read the [public Karpathy-wiki contract](../../contracts/karpathy-wiki.md) before auditing. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not audit another root or choose a fallback report path. If the validator refuses with `--require-wiki` because the wiki is not configured, stop and relay its message verbatim — hippocampus-set-up enables it; this is not a judgment to make by reading the profile yourself. Run only against the configured `knowledge_root`, applying any free-form local policy body only within that root. Write only its ranked report in canonical `output/`; leave the audited knowledge base and workflow records unchanged.
 
 ## When to use
 
@@ -31,7 +31,7 @@ Read the configured session cache and recent operation history. Count articles u
 
 ### 2. Missing-page lint
 
-Find terms mentioned in at least three distinct articles that lack a page. Normalize existing page names, ignore links and code, and distinguish:
+Apply the local mode and coverage policy first. Unless it overrides the threshold, find terms mentioned in at least three distinct articles that lack a page. Normalize existing page names, ignore links and code, and distinguish:
 
 - **Wikilink-only candidate:** a stable referent with congruent mentions; backlinks can implicitly define it.
 - **Stub candidate:** a stable referent that needs brief disambiguation.
@@ -42,7 +42,7 @@ Do not create any candidate page.
 
 ### 3. Collision and hub checks
 
-Inspect sections with links from at least three distinct source articles. A coherent section with that level of fan-in is a split candidate. For pages with at least five inbound links, sample inbound contexts and report whether they cohere with the page's stated domain. A long page alone is not a split signal; length matters only when it combines with high, section-targeted fan-in.
+Use local collision/hub thresholds when supplied; defaults are three distinct source articles for section fan-in and five inbound links for hub checks. Inspect sections meeting that fan-in threshold. A coherent section with that level of fan-in is a split candidate. For pages meeting the hub threshold, sample inbound contexts and report whether they cohere with the page's stated domain. A long page alone is not a split signal; length matters only when it combines with high, section-targeted fan-in.
 
 ### 4. Structural health
 
@@ -64,7 +64,7 @@ Respect local policy for folder taxonomy, entity placement, naming, and atomicit
 
 For `raw/research/` and `raw/archive/`, report sources not referenced from wiki `sources:` metadata, excluding derived material and bookmarks. Sample within-folder clusters and hub neighbors for direct contradictions, scope tensions, and term drift. Aggregate existing `## Tensions` and `## Gaps` sections, then identify dependency, source-implied, and structural gaps.
 
-Document sampling coverage. Do not claim the semantic checks are exhaustive unless every applicable article was evaluated.
+Apply local source-library locations and coverage expectations, including retained meeting transcripts. Document sampling coverage. Do not claim the semantic checks are exhaustive unless every applicable article was evaluated.
 
 ### 6. Report
 

@@ -7,4 +7,17 @@ description: Capture calls or meetings into source-linked people records, docume
 
 Use `knowledge-capture` in meeting mode. Read [the shared meeting procedure](../knowledge-capture/references/meetings.md) and apply it to the supplied meetings, people, date range, and authorized destinations. This is a convenient entry point, not a second routing or approval workflow.
 
-Carry the user’s existing authorization into the disposition table: compile requested people records, apply permitted document changes, route explicitly requested todos with dates, and retain absorbed reviews. Ask only for uncovered decisions or target-required confirmations. The shared procedure owns source pagination, coaching attribution, task deduplication/read-back, and archival; do not restate or alter it here.
+Carry the user’s existing authorization into the disposition table: compile requested people records, apply permitted document changes, route explicitly requested todos with dates, and retain absorbed reviews. Ask only for uncovered decisions or target-required confirmations. The shared procedure owns source pagination, coaching attribution, task deduplication/read-back, and separate transcript retention; do not restate or alter it here.
+
+Create the record directly from the configured template in its meeting folder.
+`absorb` owns execution; records remain in place. See the bundled
+[minimal template](assets/meeting.md), not a required personal coaching format.
+
+New meeting records use a date plus a meaningful meeting title, person or
+subject (for example, `2026-10-09-public-contract-review.md`). Provider names
+and kind suffixes such as `-transcript` belong in source provenance metadata,
+not automatic title decoration. Retained transcripts use a meaningful subject;
+a transcript and its record may share a filename in different folders.
+Identity lookup reuses existing records and preserves user edits and paths,
+even when a title changes on retry. Different meetings with the same title get
+a stable identity suffix; filing refuses to overwrite different source content.
