@@ -61,6 +61,8 @@ Evidence Record, not a section.
 
 Before proposing destinations, inventory the user's intended outcomes from the request and subsequent decisions. Give each an explicit disposition: already satisfied (with evidence), proposed below, deferred (with reason and the outstanding decision), or declined. Check personal application/actions, wiki knowledge, maintained documents, and writing opportunities when the objective calls for them; do not manufacture an item merely to fill a category. A request to understand or apply material is not satisfied by compilation alone. If the approved work covers only part of a broader objective, state that boundary and preserve the remaining outcome in the plan or a named follow-up artifact. Proposed application is not adoption, and a writing opportunity is a Document Update candidate, not permission to draft in the user's voice.
 
+Before proposing personal application, compare the source with existing practice; record no change when it is already covered, and keep research-process repairs separate from content-derived actions.
+
 Three classes, split by what the result touches. Every actionable result belongs
 to exactly one.
 
