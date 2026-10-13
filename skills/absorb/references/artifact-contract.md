@@ -24,8 +24,12 @@ For a worked artifact in a source checkout, see the [public example](https://git
      without opening any later section.
 2. **Source Summary** — what the sources actually say. The claims, frameworks,
    lists, and arguments themselves, in enough detail that every later section
-   can be read and judged without opening a source. This section carries
-   content, not commentary about content.
+   can be read and judged without opening a source. Apply
+   [Insights & Highlights](insights-highlights.md) here to preserve high-value
+   specifics alongside general conclusions, with provenance, uncertainty and
+   dispositions linked to the existing plan. Use a compact subsection/table only
+   when it adds visibility; do not duplicate content already legible. This
+   section carries content, not commentary about content.
 3. **Source Assessment** — whether those sources can be trusted: reliability,
    method, material contradictions between them, confidence, and provenance
    caveats. It says nothing about the user's systems.

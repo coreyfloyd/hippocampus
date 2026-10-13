@@ -27,7 +27,7 @@ Prefer primary sources. Distinguish source-grounded findings from reasonable inf
 
 ## Artifact
 
-Write one durable artifact using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. Record the notebook ID and every claim verification in the Evidence Record, and any disagreement between sources in the Source Assessment.
+Write one durable artifact using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. Record the notebook ID and every claim verification in the Evidence Record, and any disagreement between sources in the Source Assessment. Preserve the contract's Insights & Highlights: useful specifics, interpretations and their selection should remain visible in the artifact, not only in a chat summary. Link proposed uses to existing absorption items; a thing to try is not automatically an Action.
 
 Optional NotebookLM outputs such as reports, tables, or mind maps support the artifact; do not substitute them for it. Store generated files only in canonical `output/`, not scratch.
 

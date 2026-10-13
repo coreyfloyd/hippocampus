@@ -33,7 +33,7 @@ For supplied audio or video, invoke `transcribe` to choose the input route. Pref
 
 ## Research artifact
 
-Write one durable output using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. If evidence was improved, record every added source and the precise gap it closed.
+Write one durable output using [the shared research artifact contract](../absorb/references/artifact-contract.md), which defines the artifact's sections. If evidence was improved, record every added source and the precise gap it closed. Preserve the contract's Insights & Highlights: useful specifics, interpretations and their selection should remain visible in the artifact, not only in a chat summary. Link proposed uses to existing absorption items; a thing to try is not automatically an Action.
 
 Before writing How to Absorb, apply the contract's evidence-sufficiency check: when a decision asks whether to adopt or act on supplied third-party work, the supplied source alone cannot answer it — use **Improve evidence** to gather real-world usage, sentiment, and maintenance signals, bounded to what would change the choice. This is not a topic search; it is the smallest evidence set that makes the decision choosable.
 

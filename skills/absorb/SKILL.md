@@ -48,7 +48,13 @@ confirmation; no second generic approval after a caller approved the concrete ro
    the authorized seed/addition; preserve attribution and reuse limits. Never
    rewrite an authored draft, publish, or create an invented ideas folder.
    With no available writable route, keep the candidate in the record.
-7. Retention/discard rows use their explicitly approved destination/action.
+7. Read back the named destinations and verify accepted
+   [Insights & Highlights](references/insights-highlights.md) actually landed,
+   including material caveats and tentative status. Record the location or the
+   specific coverage gap beside the linked row; a successful parent-document
+   update alone is insufficient. An incomplete accepted row stays pending under
+   the retention rule below.
+8. Retention/discard rows use their explicitly approved destination/action.
    Default completed research retention is already part of absorption; deleting
    a source or artifact requires an explicit discard direction for that object.
 

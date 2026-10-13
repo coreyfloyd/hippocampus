@@ -274,7 +274,7 @@ Use this path for knowledge created or discussed in the current conversation. Us
 
 The three inputs are independent and configurable: `meeting_transcript_source`
 selects a transcript provider or retrieval route, `meeting_event_source` selects
-optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
+optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share [Insights & Highlights](skills/absorb/references/insights-highlights.md): selected useful specifics with provenance, dispositions and verified landing. Knowledge, document, action and writing uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
 
 Transcript intake and retained-source destinations come from local policy or overrides in the profile body. Pending authorized work stays in intake; completed captures retain originals as primary evidence and repair source links. Installation does not relocate existing material.
 

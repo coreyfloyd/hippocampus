@@ -66,6 +66,12 @@ Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.
 
+## Insights & Highlights
+
+Apply the shared [Insights & Highlights definition](../../absorb/references/insights-highlights.md) to the meeting's confirmed purpose. Preserve meaningful observations, specific practices, mechanisms, examples, rationale, caveats, surprising details and tentative ideas that would otherwise disappear from a broad summary. Include who said it and a timestamp when reliable; otherwise use the meeting/source identifier and a section or turn reference. Never invent speaker attribution or timing. Distinguish direct statements, observed behavior, the user's later confirmation, coaching interpretation and proposed application. Retain sensitive details only when relevant to the authorized purpose.
+
+Keep this compact within the existing review. Link to decisions and action rows rather than duplicate them; do not turn discussion, another participant's promise or a thing to try into the user's commitment. Give useful details a disposition and reason, including retained source context or a pending decision where no application is approved. Consider knowledge, existing documents, actions and writing as optional uses, never required outputs.
+
 ## Capture and disposition
 
 Resolve separate transcript intake and retained-source destinations from the knowledge root's local policy, honoring explicit meeting destination overrides in the private profile body. These are output destinations, independent of the three source adapters. Do not assume other users share a folder taxonomy; if either destination is unresolved or conflicts with local policy, ask before filing. Keep both destinations within the configured raw source library. A local policy may use `raw/inbox/` for intake and `raw/archive/meetings/` for retained transcripts.
@@ -85,7 +91,8 @@ Build one disposition inventory distinguishing four executable routes: writing o
   Another speaker's idea is not the user's idea. Use local templates/scoring and
   writing workflows; without a configured writable destination keep candidates
   in this meeting record. An explicit “no useful opportunity” is valid. Capture
-  neither drafts first-person prose nor publishes material.
+  neither drafts first-person prose nor publishes material. Link relevant
+  highlights rather than duplicate them.
 - **Open questions:** Preserve uncertain identities, one-sided assessments, tentative opportunities, and unverified claims. Do not infer consent, a contract, diagnosis, or completed outcome from a conversation.
 
 Public blog/social/article/podcast seeds or enrichments use the writing route. Curriculum and working-playbook changes use maintained document/project routes, even when locally stored beside writing. Capture may propose a seed without invoking a separate post-drafting skill. Keep publishing stage, intended format and subject categories separate; claim publication only with release evidence, and distinguish professional adoption from publication. Resolve targets and local folder names from the profile.
@@ -113,6 +120,10 @@ finished. Source filing and failed link repair remain pending until verified.
 Update the meeting record's results in place throughout review, partial execution
 and completed absorption. It stays in its meeting folder; research's
 output-to-raw/derived retention rule does not apply to it. Verify attribution,
-coverage, source links, saved task dates/targets and writing receipts; report
+coverage, source links, saved task dates/targets and writing receipts. Read back
+the named destinations for accepted Insights & Highlights and record their actual
+location or remaining coverage gap; a compiled person record or updated document
+does not by itself prove all accepted details were preserved, so keep an
+incomplete approved route pending before archival. Report
 pending confirmations and distinct source/record paths. Use local Git and
 delivery rules. This skill does not schedule imports or create an automation.
