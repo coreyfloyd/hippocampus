@@ -26,7 +26,7 @@ rules appear below in [Durable research and distribution](#durable-research-and-
 
 ## Meetings
 
-![Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record, and the original transcript is filed after approved routes complete.](docs/images/capture-meetings.svg)
+![Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents (including the original transcript, filed after approved routes complete), follow-up work, the wiki and a retained reference record.](docs/images/capture-meetings.svg)
 
 Bring a **calendar event**, a **note** or a **transcript** into `meeting-capture`.
 These inputs are independent: event context establishes schedule and agenda, notes

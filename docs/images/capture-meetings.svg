@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="meeting-title meeting-desc">
   <title id="meeting-title">Meeting capture and approved outcomes</title>
-  <desc id="meeting-desc">Bring a calendar event, note or transcript into a meeting record through meeting-capture. Absorb executes the approved destinations: people, documents, follow-up work, the wiki, and the retained reference record; the original transcript is filed after approved routes complete. Individual proposals may be declined.</desc>
+  <desc id="meeting-desc">Bring a calendar event, note or transcript into a meeting record through meeting-capture. Absorb executes the approved destinations: people, documents, follow-up work, the wiki, and the retained reference record; documents include the original transcript, filed after approved routes complete. Individual proposals may be declined.</desc>
 <style>
     :root {
       --bg: #f7f8fa;
@@ -79,6 +79,8 @@
     .skill { fill: var(--dim); font-family: var(--mono); font-size: 12px; }
     .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
   </style>
 <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
@@ -109,7 +111,7 @@
   <text x="836" y="154" class="small">people records you keep</text>
   <rect data-thing="destination" data-meeting-node="action" data-outcome="documents" x="820" y="178" width="340" height="56" rx="12" class="outcome"/>
   <text data-outcome-label="documents" x="836" y="202" class="outcome-title">Documents</text>
-  <text x="836" y="220" class="small">named updates to what you maintain</text>
+  <text x="836" y="220" class="small">named updates; the original transcript, filed last</text>
   <rect data-thing="destination" data-meeting-node="action" data-outcome="actions" x="820" y="244" width="340" height="56" rx="12" class="outcome"/>
   <text data-outcome-label="actions" x="836" y="268" class="outcome-title">Follow-up work</text>
   <text x="836" y="286" class="small">ownership, timing and next steps</text>
@@ -119,16 +121,12 @@
   <rect data-thing="destination" data-meeting-node="action" data-outcome="reference" x="820" y="376" width="340" height="56" rx="12" class="outcome"/>
   <text data-outcome-label="reference" x="836" y="400" class="outcome-title">Retained reference record</text>
   <text x="836" y="418" class="small">kept with its sources and results</text>
-  <rect data-thing="destination" data-meeting-node="action" data-outcome="transcript" x="820" y="442" width="340" height="56" rx="12" class="outcome"/>
-  <text data-outcome-label="transcript" x="836" y="466" class="outcome-title">Original transcript filed</text>
-  <text x="836" y="484" class="small">after approved routes complete</text>
-  <path d="M790,140.0 L790,470.0" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+  <path d="M790,140.0 L790,404.0" fill="none" stroke="var(--line)" stroke-width="2.2"/>
   <path d="M790,140.0 L820,140.0" class="edge"/>
   <path d="M790,206.0 L820,206.0" class="edge"/>
   <path d="M790,272.0 L820,272.0" class="edge"/>
   <path d="M790,338.0 L820,338.0" class="edge"/>
   <path d="M790,404.0 L820,404.0" class="edge"/>
-  <path d="M790,470.0 L820,470.0" class="edge"/>
   <g data-operation="inputs-record">
     <path d="M270,153 C320,153 320,283.0 370,283.0" class="edge"/>
     <path d="M270,283 C320,283 320,283.0 370,283.0" class="edge"/>

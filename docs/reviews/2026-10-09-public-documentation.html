@@ -78,6 +78,8 @@
     .skill { fill: var(--dim); font-family: var(--mono); font-size: 12px; }
     .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}
 .wrap{max-width:1180px;margin:auto;padding:28px 20px 80px}section{margin:24px 0;padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
 article{max-width:1040px;margin:auto;padding:18px}img{display:block;max-width:100%;height:auto}article img{width:100%}
@@ -87,7 +89,7 @@ iframe{width:100%;height:720px;border:1px solid var(--line);border-radius:12px;b
 button{padding:8px 16px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px}
 :root[data-theme="dark"]{color-scheme:dark}:root[data-theme="light"]{color-scheme:light}
 </style></head>
-<body><main class="wrap"><h1>Research, meetings and writing</h1>
+<body><main class="wrap"><h1>Research, meetings and distribution</h1>
 <p class="notice">Candidate review · Public-communication approval pending. No release or publication approved.</p>
 <button onclick="document.documentElement.dataset.theme='light'">Light</button>
 <button onclick="document.documentElement.dataset.theme='dark'">Dark</button>
@@ -164,12 +166,12 @@ opening it. Detailed exact-command evidence is in the accompanying generator rep
 <h2>Diagram conventions</h2>
 <p>Boxes are things: blue inputs you bring, one orange record Hippocampus writes, and green destination boxes where approved outcomes land. Every box uses the same two-line style (a title and a one-line description); the record box carries a monospace label above its title. Column headers name the stage in monospace, in the column's color: QUESTION, ANSWER, ACTION for research (Ask and Bring together are the question), MEETING, RECORD, ACTION for meetings. The subtitle states the three-color key in words.</p>
 <p>Skills label arrows in monospace, once per operation: research-topic from Ask and research-sources from Bring into the research report; the three meeting inputs merge onto one meeting-capture arrow into the meeting record; absorb from the record into the ACTION column, which fans into each destination. No skills appear in or under boxes, except wiki-compile as the description line of the Wiki destination.</p>
-<p>Both diagrams use the same destination boxes in the same order, position and wording: People, Documents, Follow-up work, Wiki, Retained reference record; meetings add Original transcript filed, after approved routes complete, as the last box. "Individual proposals may be declined" sits at the bottom left. Both SVGs are generated from one template so their styles stay identical; keep this grammar in the deck and architecture overview by referencing the same SVGs.</p></section>
+<p>Both diagrams use the same five destination boxes in the same order, position and wording: People, Documents, Follow-up work, Wiki, Retained reference record. The Documents description names the original transcript, filed last after approved routes complete. "Individual proposals may be declined" sits at the bottom left. Both SVGs are generated from one template so their styles stay identical; keep this grammar in the deck and architecture overview by referencing the same SVGs.</p></section>
 <section><h2>README comparison</h2><details open><summary>After: full current README</summary><article><h1>Hippocampus</h1>
 <p><code>Hippocampus</code> is a research and meeting-capture system for Claude Code and Codex.
 Its Agent Skills turn questions, supplied sources and meetings into evidence-linked
-records, then carry approved outcomes into people and documents, follow-up work,
-writing opportunities and a wiki. Completed research reports are retained
+records, then carry approved outcomes into people and documents, follow-up work
+and an optional wiki. Completed research reports are retained
 as references; meeting records stay in their meeting folder, and original transcripts
 are filed after approved routes complete. Individual proposed changes can be declined.</p>
 <h2>Research</h2>
@@ -179,14 +181,14 @@ are filed after approved routes complete. Individual proposed changes can be dec
 decide, the scope, and the evidence needed. They produce an <strong>answer</strong> in a research
 report, with citations, source assessment and open gaps.</p>
 <p>Review the report’s proposed outcomes, then use <code>absorb</code> for the approved <strong>action</strong>:
-update people and documents, file follow-up work, preserve writing ideas or additions,
-and compile selected primary evidence into the wiki through <code>wiki-compile</code>.
+update people and documents, file follow-up work,
+and compile selected primary evidence into an optional wiki through <code>wiki-compile</code>.
 Decline individual proposals when appropriate. Once approved routes are complete or
 explicitly declined, the report is retained in your knowledge folder as a reference record;
 it is not primary compiler evidence. The detailed report structure and distribution
 rules appear below in <a href="#durable-research-and-distribution">Durable research and distribution</a>.</p>
 <h2>Meetings</h2>
-<p><img alt="Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record, and the original transcript is filed after approved routes complete." src="docs/images/capture-meetings.svg" /></p>
+<p><img alt="Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents (including the original transcript, filed after approved routes complete), follow-up work, the wiki and a retained reference record." src="docs/images/capture-meetings.svg" /></p>
 <p>Bring a <strong>calendar event</strong>, a <strong>note</strong> or a <strong>transcript</strong> into <code>meeting-capture</code>.
 These inputs are independent: event context establishes schedule and agenda, notes
 preserve observations, and the transcript records what was said. Available coverage
@@ -194,7 +196,7 @@ and missing inputs stay explicit; notes may be a local file or collaborative doc
 <p>The skill creates a source-linked <strong>meeting record</strong> directly in its configured
 folder (default <code>meetings/</code>), using a bundled or user-selected template. The record
 stays there through review and completed absorption. <code>absorb</code> carries approved
-outcomes to the same people, document, follow-up, writing and wiki destinations
+outcomes to the same people/document, follow-up and optional wiki destinations
 as research. The original transcript is filed separately after those routes complete;
 the meeting record remains a reference in its folder. See <a href="#meeting-configuration-and-source-handling">meeting configuration and
 source handling</a> for the input settings,
@@ -268,7 +270,7 @@ record/template paths, identity-safe retries and retained-source rules.</p>
 <tr>
 <td><code>meeting-capture</code></td>
 <td>Review calls or meetings and preserve records, document updates, and follow-ups.</td>
-<td>Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes, actions and writing opportunities. Approved rows go through absorb; the record stays in place.</td>
+<td>Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes and actions. Approved rows go through absorb; the record stays in place.</td>
 </tr>
 <tr>
 <td><code>absorb</code></td>
@@ -388,15 +390,14 @@ and the <a href="https://notebook.google.com/notebook/6df011dc-7391-4399-919f-34
 <p>Before destinations are proposed, <strong>How to Absorb</strong> inventories the user’s
 intended outcomes and marks each satisfied with evidence, proposed, deferred
 with an outstanding decision, or declined. Cover personal application/actions,
-maintained documents, wiki knowledge and writing when the objective calls for
+maintained documents, wiki knowledge when the objective calls for
 them. Compilation alone does not satisfy an application request; preserve
 remaining outcomes when only part of a broader goal is approved.</p>
 <p>The summary and assessment sections feed the absorption plan, whose items are
 split by what the result touches: <strong>Actions</strong> — anything that is not a document,
 such as installing a skill or changing a workflow; <strong>Wiki Additions</strong> — the
 compiled knowledge base only; and <strong>Document Updates</strong> — context files, project
-briefs, standing documents, repository docs. <strong>Writing Opportunities</strong> form a
-separate route for public ideas and enrichment; retention/discard decisions
+briefs, standing documents, repository docs. Retention/discard decisions
 use their explicit shared row kinds. Every item states what exists now,
 the change, why it matters, and how much to trust it, with options and a
 recommendation when a genuine choice exists. Nothing may be merely staged:
@@ -453,7 +454,7 @@ surfacing the right venues is a primary output rather than a footnote.</p>
 <h3>Meeting configuration and source handling</h3>
 <p>The three inputs are independent and configurable: <code>meeting_transcript_source</code>
 selects a transcript provider or retrieval route, <code>meeting_event_source</code> selects
-optional calendar context, and <code>meeting_note_path</code> is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. <code>{date}</code> is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share <a href="skills/absorb/references/insights-highlights.md">Insights &amp; Highlights</a>: selected useful specifics with provenance, dispositions and verified landing. Knowledge, document, action and writing uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See <a href="skills/meeting-capture/SKILL.md">meeting capture</a>.</p>
+optional calendar context, and <code>meeting_note_path</code> is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. <code>{date}</code> is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share <a href="skills/absorb/references/insights-highlights.md">Insights &amp; Highlights</a>: selected useful specifics with provenance, dispositions and verified landing. Knowledge, document and action uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See <a href="skills/meeting-capture/SKILL.md">meeting capture</a>.</p>
 <p>Transcript intake and retained-source destinations come from local policy or overrides in the profile body. Pending authorized work stays in intake; completed captures retain originals as primary evidence and repair source links. Installation does not relocate existing material.</p>
 <p><code>meeting_record_folder</code> selects a folder within the knowledge root; its default
 is <code>meetings/</code>. <code>meeting_record_template</code> selects a Markdown template; its default
@@ -471,23 +472,11 @@ a transcript and its record may share a filename in different folders.
 Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.</p>
-<p>A capture report distinguishes writing opportunities, maintained document/project
-updates, wiki updates (when enabled), and actions. Curriculum and working-playbook
-changes use document/project routes. Writing means public blog, social, article
-or podcast opportunities; capture can propose a seed without drafting a post.
-Publishing stage, intended format and subject categories are separate, actual
-publication needs release evidence, and professional adoption is a separate
-outcome. Targets and folder names come from the profile.</p>
-<h3>Writing opportunities from meetings and research</h3>
-<p>Capture can propose a new idea, enrich an existing idea, or identify a follow-up
-to published material. It searches configured ideas, drafts and published records
-and reports missing coverage rather than asserting novelty. Candidates retain
-source pointers, speaker/author attribution, an angle, a specific proposed
-addition, privacy limits and approval state. No useful opportunity is a valid result.</p>
-<p>Local policy supplies storage, templates, scoring and the writing workflow.
-Without a writable destination, the candidate remains in its record. <code>absorb</code>
-files only approved rows and preserves authored drafts and published text. Capture
-does not draft first-person posts or publish. See the <a href="docs/examples/capture-writing.md">public route examples</a>.</p>
+<p>A capture report distinguishes maintained document/project updates, wiki updates
+(when enabled), and actions. Targets and folder names come from the profile.
+Local policy can add <strong>custom classes</strong> with declared searches, required fields
+and execution routes under the same approval and receipt rules; see the
+<a href="docs/examples/capture-writing.md">opt-in worked example</a>.</p>
 <h3>Compile and audit an existing source collection</h3>
 <p>Choose a coherent subset of primary sources and authorize its compilation.
 <code>wiki-compile</code> creates or updates articles, indexes and source dispositions.
@@ -499,7 +488,7 @@ nearby articles for real tensions and gaps instead of silently blending
 incompatible assertions.</p>
 <h2>Architecture</h2>
 <p><a href="docs/architecture/runtime.html"><code>docs/architecture/runtime.html</code></a> maps research
-and meeting capture to shared absorption, local document/task/writing workflows,
+and meeting capture to shared absorption, local document/task workflows,
 selected-source compilation and separate record/source retention. Its source is
 <a href="docs/architecture/runtime.architecture.json"><code>runtime.architecture.json</code></a>, pinned
 to the implementation commit. Read the relevant map before structural changes,

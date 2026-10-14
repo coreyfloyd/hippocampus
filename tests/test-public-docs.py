@@ -59,7 +59,7 @@ class PublicDocs(unittest.TestCase):
         self.assertEqual({node.get('data-meeting-node') for node in nodes},
                          {'event', 'note', 'transcript', 'record', 'action'})
         visible = ' '.join(' '.join(node.itertext()) for node in svg.iter(NS + 'text'))
-        for outcome in ('People', 'Documents', 'Wiki', 'Follow-up work', 'routes complete'):
+        for outcome in ('People', 'Documents', 'Wiki', 'Follow-up work', 'transcript, filed'):
             self.assertIn(outcome, visible)
         for internal in ('row authority', 'Legend:', 'Writing opportunities', 'Optional wiki'):
             self.assertNotIn(internal.casefold(), visible.casefold())
@@ -82,7 +82,7 @@ class PublicDocs(unittest.TestCase):
         research_boxes, research_labels = destinations(research)
         meeting_boxes, meeting_labels = destinations(meeting)
         self.assertEqual([node.text for node in research_labels], expected)
-        self.assertEqual([node.text for node in meeting_labels], expected + ['Original transcript filed'])
+        self.assertEqual([node.text for node in meeting_labels], expected)
         for box in research_boxes + meeting_boxes:
             self.assertEqual(box.get('class'), 'outcome')
         # shared destination boxes sit at identical positions with identical wording in both diagrams
@@ -152,7 +152,7 @@ class PublicDocs(unittest.TestCase):
             kinds = [box.get('data-thing') for box in boxes]
             self.assertEqual(kinds.count('record'), 1)
             self.assertEqual(kinds.count('input'), 2 if name == 'question-answer-action' else 3)
-            self.assertEqual(kinds.count('destination'), 5 if name == 'question-answer-action' else 6)
+            self.assertEqual(kinds.count('destination'), 5)
             inputs = [box for box in boxes if box.get('data-thing') == 'input']
             self.assertEqual({box.get('width') for box in inputs}, {inputs[0].get('width')}, 'one blue box style')
             for box in boxes:
