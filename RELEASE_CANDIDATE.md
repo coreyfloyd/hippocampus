@@ -9,6 +9,7 @@ This candidate covers the changes since v0.9.0:
 - Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile`, and propose source-grounded writing opportunities ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
 - Route retained-source understanding, applicability assessment and distribution planning through `research-sources`; inventory intended outcomes before proposing distribution ([hippocampus#36](https://github.com/coreyfloyd/hippocampus/issues/36)).
 - Reconcile skill boundaries, meeting action/document routes, optional profile fields, raw metadata, inline research, compiler/audit guidance and public documentation ([hippocampus#39](https://github.com/coreyfloyd/hippocampus/issues/39)).
+- Preserve Insights & Highlights in research artifacts and meeting reviews: useful specifics with provenance, dispositions linked to existing rows, and read-back of accepted details before archival (shared definition in `skills/absorb/references/insights-highlights.md`).
 
 Research reports stay in output while work is pending, then retain their excluded
 reference lifecycle under `raw/derived/`. Meeting records stay at their original
@@ -41,10 +42,10 @@ Run the exact candidate checks in `RELEASING.md`, including
 commit-range scan. Generator evidence and finding dispositions accompany this
 candidate; independent review and evaluation belong to the orchestrator.
 
-Release blocker: the required merge includes earlier candidate commits with
-private references. A clean final document tree does not sanitize that commit
-history. The public range scan must pass before any push or publication;
-resolving the merge/history conflict requires a maintainer decision.
+The reviewed candidate landed as one squash commit so that earlier candidate
+commits carrying private references stay out of the published history; the
+public range scan passed on the pushed range. The Insights & Highlights change
+was reconciled onto the squash and verified with the same suites.
 
 Previous publication evidence: [0.9.0](docs/releases/0.9.0.md).
 Public comparison: [before/after inventory](docs/reviews/2026-10-09-public-documentation.md).
@@ -57,7 +58,10 @@ Template-driven meeting records start and stay in their configured folder,
 use meaningful subjects for new filenames, and preserve existing paths, edits
 and confirmed receipts on retries. Original transcripts follow a separate
 policy-defined intake/archive lifecycle with verified content and source links.
-Completed research reports remain excluded reference artifacts.
+Completed research reports remain excluded reference artifacts. Research
+summaries and meeting reviews preserve Insights & Highlights, the useful
+specifics with their provenance and dispositions, and verify that accepted
+details actually landed before archival.
 
 Capture and durable research can propose source-grounded writing ideas,
 enrichment and published follow-ups through local workflows. Intended outcomes
@@ -70,8 +74,8 @@ same package, and installation preserves unowned skills, templates and sources.
 
 ## Publication checklist
 
-- [ ] Verify and commit the candidate; resolve the public commit-history scan.
-- [ ] Complete independent review, evaluation and public-communication approval.
+- [x] Verify and commit the candidate; resolve the public commit-history scan.
+- [x] Complete independent review, evaluation and public-communication approval.
 - [ ] Merge the reviewed candidate and tag its exact commit as `v0.10.0`.
 - [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
 - [ ] Verify signed assets, publish, and independently verify downloaded assets.
