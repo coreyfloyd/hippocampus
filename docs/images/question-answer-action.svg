@@ -81,6 +81,8 @@
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
     .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
   </style>
 <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
@@ -108,7 +110,7 @@
   <text x="836" y="154" class="small">people records you keep</text>
   <rect data-thing="destination" data-outcome="documents" x="820" y="178" width="340" height="56" rx="12" class="outcome"/>
   <text data-outcome-label="documents" x="836" y="202" class="outcome-title">Documents</text>
-  <text x="836" y="220" class="small">named updates; the original transcript, filed last</text>
+  <text x="836" y="220" class="small">named updates to what you maintain</text>
   <rect data-thing="destination" data-outcome="actions" x="820" y="244" width="340" height="56" rx="12" class="outcome"/>
   <text data-outcome-label="actions" x="836" y="268" class="outcome-title">Follow-up work</text>
   <text x="836" y="286" class="small">ownership, timing and next steps</text>

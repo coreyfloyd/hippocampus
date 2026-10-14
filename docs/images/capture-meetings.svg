@@ -81,6 +81,8 @@
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
     .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
     .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
   </style>
 <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">

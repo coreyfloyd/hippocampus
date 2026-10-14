@@ -93,8 +93,11 @@ class PublicDocs(unittest.TestCase):
                     if float(node.get('x')) > left and node.get('data-column') is None]
         research_copy = panel_copy(research, research_boxes)
         meeting_copy = panel_copy(meeting, meeting_boxes)
-        self.assertEqual(meeting_copy[:len(research_copy)], research_copy,
-                         'all shared destination wording and positions must match, including sublabels')
+        differing = [(a, b) for a, b in zip(research_copy, meeting_copy) if a != b]
+        # Only the Documents description may differ: meetings name the filed transcript there.
+        self.assertEqual(len(research_copy), len(meeting_copy))
+        self.assertEqual([(a[0], a[1], a[2]) for a, b in differing], [(b[0], b[1], b[2]) for a, b in differing])
+        self.assertEqual([b[3] for a, b in differing], ['named updates; the original transcript, filed last'])
         for a, b in zip(research_boxes, meeting_boxes):
             for attribute in ('x', 'y', 'width', 'height', 'rx'):
                 self.assertEqual(a.get(attribute), b.get(attribute))
