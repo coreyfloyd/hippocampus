@@ -99,7 +99,7 @@ present-then-approve gate as any other change:
   in it — disabling only changes the profile.
 
 
-## Meeting records and writing policy
+## Meeting records and custom proposal policy
 
 Explain optional `meeting_record_folder` (defaults to root-relative `meetings`)
 and `meeting_record_template` (defaults to the bundled minimal Markdown template).
@@ -111,9 +111,10 @@ Validation checks template validity and containment without creating records or
 folders. Never copy over a user's custom template during install or setup.
 
 Discuss independent transcript intake and retained-source destinations in the local
-policy body, within `raw/`, when meeting filing is requested. Ask about local
-writing storage/workflow, ideas/drafts/published search locations and reuse/privacy
-rules when writing routes are wanted; absent destinations leave candidates in their
-records. Preserve local compiler/audit modes, thresholds, coverage and delegated
+policy body, within `raw/`, when meeting filing is requested. When custom classes are requested, explain the profile body's optional
+`hippocampus-classes` JSON block from the shared distribution contract. Ask for
+class names, searches, required fields and workflow or destination, with attribution
+and reuse rules. None are enabled by default; absent writable routes leave
+candidates in their records. Preserve local compiler/audit modes, thresholds, coverage and delegated
 policy files when replacing an owned local wrapper. No automatic backfill,
 whole-library sweep, task creation or publication is part of setup.

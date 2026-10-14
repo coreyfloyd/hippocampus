@@ -50,7 +50,7 @@ sections, preserving user edits and every prior execution result. If evidence
 changed, renew affected row authorization before executing. Never stage this
 record in output or replace it with an archived transcript. Coaching content is
 optional user template content; the bundled example carries identity/date,
-sources/coverage, summary, decisions, actions, writing opportunities, proposed
+sources/coverage, summary, decisions, actions, proposed
 changes, questions and execution results.
 
 Read [the shared distribution contract](../../absorb/references/distribution-contract.md)
@@ -70,7 +70,7 @@ a stable identity suffix; filing refuses to overwrite different source content.
 
 Apply the shared [Insights & Highlights definition](../../absorb/references/insights-highlights.md) to the meeting's confirmed purpose. Preserve meaningful observations, specific practices, mechanisms, examples, rationale, caveats, surprising details and tentative ideas that would otherwise disappear from a broad summary. Include who said it and a timestamp when reliable; otherwise use the meeting/source identifier and a section or turn reference. Never invent speaker attribution or timing. Distinguish direct statements, observed behavior, the user's later confirmation, coaching interpretation and proposed application. Retain sensitive details only when relevant to the authorized purpose.
 
-Keep this compact within the existing review. Link to decisions and action rows rather than duplicate them; do not turn discussion, another participant's promise or a thing to try into the user's commitment. Give useful details a disposition and reason, including retained source context or a pending decision where no application is approved. Consider knowledge, existing documents, actions and writing as optional uses, never required outputs.
+Keep this compact within the existing review. Link to decisions and action rows rather than duplicate them; do not turn discussion, another participant's promise or a thing to try into the user's commitment. Give useful details a disposition and reason, including retained source context or a pending decision where no application is approved. Consider knowledge, existing documents, actions and declared custom classes as optional uses, never required outputs.
 
 ## Capture and disposition
 
@@ -78,24 +78,22 @@ Resolve separate transcript intake and retained-source destinations from the kno
 
 Stage new source material in the resolved intake with source link, meeting date/timezone, meeting ID, sensitivity, and ingestion tracking. Deduplicate across intake and retained sources by meeting ID or supplied source identity; reuse the existing canonical source on repeat capture. Preserve private material and paraphrase it in derived notes according to local policy. Preserve available partial transcripts with an explicit coverage gap; do not label them complete.
 
-Build one disposition inventory distinguishing four executable routes: writing opportunities, maintained document/project updates, wiki updates (only when enabled), and actions. People/coaching records use the configured document route or an authorized wiki row; open questions remain pending record content. State empty routes without manufacturing work:
+Build one disposition inventory distinguishing maintained document/project updates, wiki updates (only when enabled), actions, and any declared custom proposal classes. People/coaching records use the configured document route or an authorized wiki row; open questions remain pending record content. State empty routes without manufacturing work:
 
 - **People and knowledge (document or wiki route):** Resolve people and coaching destinations from the profile body and existing entity/project rules. Keep observations in the meeting record if no destination is configured; external updates stay pending until a named target is authorized. Do not assume a people folder or create one.  Current source-grounded biography plus dated conversation records. Include purpose/summary, coaching or advice actually delivered, the person's response, decisions, follow-up ownership, unknowns, and source references. Distinguish coaching, teaching, advice, referrals, and peer exchange. Strategies are observed actions; theoretical framework matches and causal explanations are interpretations. In-call intent is not later success. Preserve old records and compare changes before updating a biography. Resolve existing entities before proposing new ones. Match names, nicknames, and spelling against supplied context and known entities; never expand a shortened transcript name into an invented full name. If unresolved, preserve the source spelling and ask or mark the identity unknown.
 - **Existing documents:** Identify project, context, content, or other files affected by the meeting. Apply only requested and rule-permitted updates. Record historical facts as dated history; ask for confirmation before treating old preferences or plans as current user context when local rules require it. Do not silently reword authored prose. Route project records through their existing workflow.
 - **Actions:** Extract owner, next action, commitment versus suggestion, timing, dependencies, and supporting source. Keep separate contacts and next actions separate unless they share the same joint next step. Another participant's promise is not automatically the user's task; a relevant user task may be to check back. Conditional promises get a readiness check rather than an invented completion deadline. Dates belong to specific actions, not people records. Assign a date only when the user requests dates or a supported commitment or scheduling policy supplies one. When dates are requested but unstated, choose reasonable future planning dates, label them as internal follow-up targets, and explain each rationale while distinguishing source timing from discretionary scheduling; stale deadlines become current status checks. Do not create calendar events or send messages unless explicitly requested.
-- **Writing opportunities:** Search configured ideas, drafts and published
-  records before proposing new ideas, enrichment or published follow-ups. Report
-  unavailable publication coverage instead of claiming novelty. Preserve source
-  pointers/timestamps, speaker attribution, proposed angle, specific addition,
-  target when known, privacy/public-reuse limits and approval/execution state.
-  Another speaker's idea is not the user's idea. Use local templates/scoring and
-  writing workflows; without a configured writable destination keep candidates
-  in this meeting record. An explicit “no useful opportunity” is valid. Capture
-  neither drafts first-person prose nor publishes material. Link relevant
-  highlights rather than duplicate them.
+- **Custom proposal classes:** Propose only classes declared in the profile's local
+  policy; when none is declared, propose none. Search each declared location,
+  report unavailable coverage, and include required fields, source pointers,
+  speaker attribution, reuse limits and approval state. Use only the declared
+  workflow or destination. Without a writable route, keep candidates in the
+  record. An explicit no-candidate result is valid. Link relevant highlights.
 - **Open questions:** Preserve uncertain identities, one-sided assessments, tentative opportunities, and unverified claims. Do not infer consent, a contract, diagnosis, or completed outcome from a conversation.
 
-Public blog/social/article/podcast seeds or enrichments use the writing route. Curriculum and working-playbook changes use maintained document/project routes, even when locally stored beside writing. Capture may propose a seed without invoking a separate post-drafting skill. Keep publishing stage, intended format and subject categories separate; claim publication only with release evidence, and distinguish professional adoption from publication. Resolve targets and local folder names from the profile.
+Maintained curriculum and working-playbook changes use document/project routes.
+Resolve targets and local folder names from the profile; a custom class never
+implies permission to draft in the user's voice or publish.
 
 Propose any route requiring approval as a concrete change. Existing authorization governs the covered rows; only uncovered decisions stay pending.
 
@@ -103,10 +101,10 @@ Propose any route requiring approval as a concrete change. Existing authorizatio
 
 Pass the record and existing row authorization to `absorb`; it owns scoped
 execution, `wiki-compile`, current-context confirmation, project/document rules,
-task deduplication/read-back, writing workflows and durable receipts. Do not
+task deduplication/read-back, custom-class workflows and durable receipts. Do not
 maintain a second executor here. Only confirmed results complete rows; pending
 facts or unavailable targets stay in the record. A repeat capture never creates
-already-confirmed tasks, seeds or source records.
+already-confirmed tasks, custom outcomes or source records.
 
 Resolve source identity across intake and retained-source storage before staging
 or filing. Once all authorized routes complete or are explicitly declined,
@@ -120,7 +118,7 @@ finished. Source filing and failed link repair remain pending until verified.
 Update the meeting record's results in place throughout review, partial execution
 and completed absorption. It stays in its meeting folder; research's
 output-to-raw/derived retention rule does not apply to it. Verify attribution,
-coverage, source links, saved task dates/targets and writing receipts. Read back
+coverage, source links, saved task dates/targets and custom-class receipts. Read back
 the named destinations for accepted Insights & Highlights and record their actual
 location or remaining coverage gap; a compiled person record or updated document
 does not by itself prove all accepted details were preserved, so keep an

@@ -1,11 +1,68 @@
-# Public writing-route examples
+# Example custom class: writing opportunities
 
 These are illustrative route shapes using the package's public
 [wiki contract](../../contracts/karpathy-wiki.md), not measured meeting outcomes
 or private transcript excerpts. For a meeting, the source can be a supplied
 contract-review note; for research it can be the selected public document.
 Candidates live in the in-place meeting record or research artifact and use the
-same shared rows. A configured writing workflow supplies actual storage/targets.
+same shared rows. This is an opt-in user-declared custom class, not a built-in
+package capability. Without the local declaration, capture proposes none.
+A configured workflow supplies actual storage/targets.
+
+## Declare the class in local policy
+
+Add this optional block after the profile's YAML frontmatter (also shown in the
+[example profile](../../profiles/karpathy-wiki.example.md)). The search names
+refer to locations your policy supplies; they are not package-owned folders.
+
+```hippocampus-classes
+[
+  {
+    "name": "writing",
+    "search_before_proposing": ["ideas", "drafts", "published"],
+    "required_fields": ["opportunity", "author", "angle", "addition", "privacy"],
+    "workflow": "local-writing"
+  }
+]
+```
+
+Local policy defines new/enrich/published-followup as its opportunity taxonomy;
+the generic helper checks presence of required fields and search coverage, not
+this user-owned taxonomy. It rejects undeclared new classes. For example, a row
+in the contract-review record can carry the following fields, with D1 and the
+`contract` source already present in that record:
+
+```json
+{
+  "id": "W0",
+  "decision": "D1",
+  "kind": "writing",
+  "evidence": ["contract"],
+  "change": "Retain a source-linked explanation of scoped compilation",
+  "opportunity": "new",
+  "author": "contract author",
+  "angle": "Explain scoped compilation",
+  "addition": "Add a source-linked note about the selected subset",
+  "privacy": "public contract only",
+  "search": {"ideas": "searched", "drafts": "searched", "published": "unavailable"},
+  "target": "docs/writing-seeds.json",
+  "workflow": "local-writing",
+  "authorization": "pending",
+  "preconditions": []
+}
+```
+
+This is illustrative proposal data, not a measured search result or authorization.
+Before approval, record the actual search boundaries, matches and evidence passage.
+Pass the reviewed plan through `plan` with the same profile. For execution, supply
+an authorized argv adapter under the `local-writing` workflow-map key; it must
+perform deduplication and read-back before returning a target-matching receipt.
+A destination-only declaration may instead constrain `target` and dispatch via
+the class-name key. Policy changes require replanning and renewed approval.
+Legacy `writing` rows remain readable without rewriting IDs or prose; a pending
+legacy row needs a current declaration before it can execute.
+
+## Example proposals
 
 | Route | Meeting-record proposal | Research-artifact proposal | Scope and evidence |
 |---|---|---|---|

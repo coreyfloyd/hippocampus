@@ -2,14 +2,14 @@
 
 `Hippocampus` is a research and meeting-capture system for Claude Code and Codex.
 Its Agent Skills turn questions, supplied sources and meetings into evidence-linked
-records, then carry approved outcomes into people and documents, follow-up work,
-writing opportunities and an optional wiki. Completed research reports are retained
+records, then carry approved outcomes into people and documents, follow-up work
+and an optional wiki. Completed research reports are retained
 as references; meeting records stay in their meeting folder, and original transcripts
 are filed after approved routes complete. Individual proposed changes can be declined.
 
 ## Research
 
-![Ask or bring sources, set a question, produce an evidence-grounded research report, then apply approved outcomes and retain the report as a reference.](docs/images/question-answer-action.svg)
+![Ask a broad question or bring selected sources; Hippocampus writes a research report; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record.](docs/images/question-answer-action.svg)
 
 **Ask** a broad question with `research-topic`, or **bring** selected sources with
 `research-sources`. Both establish the **question**: what you want to understand or
@@ -17,16 +17,16 @@ decide, the scope, and the evidence needed. They produce an **answer** in a rese
 report, with citations, source assessment and open gaps.
 
 Review the report’s proposed outcomes, then use `absorb` for the approved **action**:
-update people and documents, file follow-up work, preserve writing ideas or additions,
+update people and documents, file follow-up work,
 and compile selected primary evidence into an optional wiki through `wiki-compile`.
 Decline individual proposals when appropriate. Once approved routes are complete or
-explicitly declined, the report is retained in `raw/derived/` as a reference record;
+explicitly declined, the report is retained in your knowledge folder as a reference record;
 it is not primary compiler evidence. The detailed report structure and distribution
 rules appear below in [Durable research and distribution](#durable-research-and-distribution).
 
 ## Meetings
 
-![Calendar event, note and transcript inputs feed a meeting record in its folder, then the same approved destinations as research. The original transcript is filed last, after approved routes complete.](docs/images/capture-meetings.svg)
+![Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents (including the original transcript, filed after approved routes complete), follow-up work, the wiki and a retained reference record.](docs/images/capture-meetings.svg)
 
 Bring a **calendar event**, a **note** or a **transcript** into `meeting-capture`.
 These inputs are independent: event context establishes schedule and agenda, notes
@@ -36,7 +36,7 @@ and missing inputs stay explicit; notes may be a local file or collaborative doc
 The skill creates a source-linked **meeting record** directly in its configured
 folder (default `meetings/`), using a bundled or user-selected template. The record
 stays there through review and completed absorption. `absorb` carries approved
-outcomes to the same people/document, follow-up, writing and optional wiki destinations
+outcomes to the same people/document, follow-up and optional wiki destinations
 as research. The original transcript is filed separately after those routes complete;
 the meeting record remains a reference in its folder. See [meeting configuration and
 source handling](#meeting-configuration-and-source-handling) for the input settings,
@@ -48,7 +48,7 @@ There are three general-purpose skills to get most research questions started:
 
 | Skill              | Use it when                                                                                         | Result and next step                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `research-quick`   | You need a cited answer to a general question.                                                      | Returns findings inline. No notebook or artifact workflow.                                                      |
+| `quick-research`   | You need a cited answer to a general question.                                                      | Returns findings inline. No notebook or artifact workflow.                                                      |
 | `research-sources` | You already have URLs, files, media, a source collection, or a named target to analyze.             | Produces a source-grounded artifact ending in the decisions it raises. Review them, then use `absorb`.   |
 | `research-topic`   | You need substantial topic-first research, persistent sources, gap filling, and claim verification. | Produces a NotebookLM-backed artifact ending in the decisions it raises. Review them, then use `absorb`. |
 
@@ -57,9 +57,9 @@ In addition, there are three research skills for specific domains:
 
 | Skill               | Use it when                                                                                                     | Result and next step                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `research-feature`  | You need competitor UX, established patterns, user expectations, or platform conventions before feature design. | Produces a design input document filed with the project, beside the requirements it answers. Not absorbed. |
-| `research-feedback` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed. |
-| `research-dev`      | You are investigating a bug, API behavior, library, or implementation approach.                                 | Returns diagnoses, competing explanations, and sources inline.                                           |
+| `feature-research`  | You need competitor UX, established patterns, user expectations, or platform conventions before feature design. | Produces a design input document filed with the project, beside the requirements it answers. Not absorbed. |
+| `feedback-research` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed. |
+| `dev-research`      | You are investigating a bug, API behavior, library, or implementation approach.                                 | Returns diagnoses, competing explanations, and sources inline.                                           |
 
 
 ## Knowledge Distribution & Follow Up skills
@@ -68,8 +68,8 @@ These skills help you get research filed where it belongs.
 
 | Skill               | Use it when                                                                                             | Result and next step                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes, actions and writing opportunities. Approved rows go through absorb; the record stays in place. |
-| `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts move to raw/derived as excluded references.                           |
+| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes and actions. Approved rows go through absorb; the record stays in place. |
+| `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts are retained as excluded references.                           |
 | `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, reuses existing authorization, asks about uncovered decisions, then performs approved captures. It does not process research artifacts. |
 
 ## Personal Knowledge Curation skills
@@ -157,7 +157,7 @@ The installer validates this structure but does not create it.
 
 ```text
 question
-  -> research-quick or research-dev
+  -> quick-research or dev-research
   -> cited answer in the conversation
 ```
 
@@ -190,7 +190,7 @@ and the [public NotebookLM][11] it was grounded in is open for inspection.
 Before destinations are proposed, **How to Absorb** inventories the user’s
 intended outcomes and marks each satisfied with evidence, proposed, deferred
 with an outstanding decision, or declined. Cover personal application/actions,
-maintained documents, wiki knowledge and writing when the objective calls for
+maintained documents, wiki knowledge when the objective calls for
 them. Compilation alone does not satisfy an application request; preserve
 remaining outcomes when only part of a broader goal is approved.
 
@@ -198,15 +198,14 @@ The summary and assessment sections feed the absorption plan, whose items are
 split by what the result touches: **Actions** — anything that is not a document,
 such as installing a skill or changing a workflow; **Wiki Additions** — the
 compiled knowledge base only; and **Document Updates** — context files, project
-briefs, standing documents, repository docs. **Writing Opportunities** form a
-separate route for public ideas and enrichment; retention/discard decisions
+briefs, standing documents, repository docs. Retention/discard decisions
 use their explicit shared row kinds. Every item states what exists now,
 the change, why it matters, and how much to trust it, with options and a
 recommendation when a genuine choice exists. Nothing may be merely staged:
 absorb it or discard it. Adoption decisions about third-party work require
 real-world usage and sentiment evidence, not just the source itself.
 The artifact is durable enough to support review and execution, but it is
-coordination material while pending; completed absorption preserves it in `raw/derived/` as an excluded reference record.
+coordination material while pending; completed absorption retains it as an excluded reference record.
 
 If an approved row belongs in the wiki, `absorb` reuses already-retained
 primary source text and provenance, or stages new selected external evidence
@@ -218,11 +217,11 @@ compiler input.
 
 ### Deliverables that are not absorbed
 
-`research-feature` and `research-feedback` sit outside that lifecycle. Neither
+`feature-research` and `feedback-research` sit outside that lifecycle. Neither
 uses the artifact contract and neither goes through `absorb`; each
 writes a document with its own structure, defined in its own SKILL.md.
 
-`research-feature` produces a **design input document**. It feeds the feature's
+`feature-research` produces a **design input document**. It feeds the feature's
 design and spec, and is written into the project repo beside the requirements
 it answers:
 
@@ -240,7 +239,7 @@ it answers:
 
 Every claim cites a source row by ID.
 
-`research-feedback` produces a **decision memo**. It answers one adopt, buy,
+`feedback-research` produces a **decision memo**. It answers one adopt, buy,
 upgrade, switch, or wait question, and is read once and then retained as a reference, or filed
 with the project it serves:
 
@@ -274,7 +273,7 @@ Use this path for knowledge created or discussed in the current conversation. Us
 
 The three inputs are independent and configurable: `meeting_transcript_source`
 selects a transcript provider or retrieval route, `meeting_event_source` selects
-optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share [Insights & Highlights](skills/absorb/references/insights-highlights.md): selected useful specifics with provenance, dispositions and verified landing. Knowledge, document, action and writing uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
+optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share [Insights & Highlights](skills/absorb/references/insights-highlights.md): selected useful specifics with provenance, dispositions and verified landing. Knowledge, document and action uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
 
 Transcript intake and retained-source destinations come from local policy or overrides in the profile body. Pending authorized work stays in intake; completed captures retain originals as primary evidence and repair source links. Installation does not relocate existing material.
 
@@ -296,26 +295,11 @@ Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.
 
-A capture report distinguishes writing opportunities, maintained document/project
-updates, wiki updates (when enabled), and actions. Curriculum and working-playbook
-changes use document/project routes. Writing means public blog, social, article
-or podcast opportunities; capture can propose a seed without drafting a post.
-Publishing stage, intended format and subject categories are separate, actual
-publication needs release evidence, and professional adoption is a separate
-outcome. Targets and folder names come from the profile.
-
-### Writing opportunities from meetings and research
-
-Capture can propose a new idea, enrich an existing idea, or identify a follow-up
-to published material. It searches configured ideas, drafts and published records
-and reports missing coverage rather than asserting novelty. Candidates retain
-source pointers, speaker/author attribution, an angle, a specific proposed
-addition, privacy limits and approval state. No useful opportunity is a valid result.
-
-Local policy supplies storage, templates, scoring and the writing workflow.
-Without a writable destination, the candidate remains in its record. `absorb`
-files only approved rows and preserves authored drafts and published text. Capture
-does not draft first-person posts or publish. See the [public route examples](docs/examples/capture-writing.md).
+A capture report distinguishes maintained document/project updates, wiki updates
+(when enabled), and actions. Targets and folder names come from the profile.
+Local policy can add **custom classes** with declared searches, required fields
+and execution routes under the same approval and receipt rules; see the
+[opt-in worked example](docs/examples/capture-writing.md).
 
 ### Compile and audit an existing source collection
 
@@ -332,7 +316,7 @@ incompatible assertions.
 ## Architecture
 
 [`docs/architecture/runtime.html`](docs/architecture/runtime.html) maps research
-and meeting capture to shared absorption, local document/task/writing workflows,
+and meeting capture to shared absorption, local document/task workflows,
 selected-source compilation and separate record/source retention. Its source is
 [`runtime.architecture.json`](docs/architecture/runtime.architecture.json), pinned
 to the implementation commit. Read the relevant map before structural changes,
@@ -349,7 +333,7 @@ history; this map describes the current candidate.
 Natural-language requests work across Agent Skills-compatible clients:
 
 ```text
-Use research-quick to compare these two services and cite current sources.
+Use quick-research to compare these two services and cite current sources.
 
 Use research-sources to analyze these URLs, identify evidence gaps, and write
 the durable artifact proposed by the skill.
@@ -357,10 +341,10 @@ the durable artifact proposed by the skill.
 Use research-topic to investigate this question deeply, verify the major
 claims, and end with the decisions the evidence raises.
 
-Use research-feature to compare how established podcast apps handle this
+Use feature-research to compare how established podcast apps handle this
 interaction before we design it.
 
-Use research-feedback to determine whether users consider this release stable
+Use feedback-research to determine whether users consider this release stable
 enough to adopt and identify the communities worth following.
 
 Run absorb on output/2026-08-27-example.md. Validate and show me its
@@ -378,7 +362,7 @@ Audit the configured wiki with wiki-audit. Do not modify it.
   source-grounded answers and inline citations are what keep this system's
   analysis tied to your evidence rather than a model's training data. Agent
   access is provided by the third-party [notebooklm-py][4] CLI and its
-  `notebooklm` Agent Skill, not by Google or this package. `research-dev` also
+  `notebooklm` Agent Skill, not by Google or this package. `dev-research` also
   uses that CLI when it is available. This package does not install it,
   authenticate it, or validate the integration.
 - **YouTube library search** is an optional upstream source-discovery step. A
@@ -393,7 +377,7 @@ Audit the configured wiki with wiki-audit. Do not modify it.
 - **Apple Speech** source is bundled under the `transcribe` skill and built on demand.
   The local route requires macOS 26 or later; otherwise the calling workflow
   must use another input route.
-- Full Reddit-thread reading used by `research-quick` and `research-feedback`
+- Full Reddit-thread reading used by `quick-research` and `feedback-research`
   follows the authorized browser route in local policy. The bundled Safari helper
   requires an interactive macOS session signed into Reddit; other configured
   browser tools are valid. Without a route, report snippet-only coverage. Other

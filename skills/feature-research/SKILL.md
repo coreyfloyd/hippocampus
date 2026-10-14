@@ -1,5 +1,5 @@
 ---
-name: research-feature
+name: feature-research
 description: "Research competitor UX and established patterns before feature design, producing a design input document filed with the project. Use for 'how do other apps handle X?' or standard-pattern research."
 ---
 
@@ -98,6 +98,6 @@ Novel approaches, and Table stakes cites a Sources row by ID.
 
 ## When NOT to Use
 
-- General non-dev research → `research-quick`
-- Implementation/bug research (libraries, APIs, diagnosis) → `research-dev`
+- General non-dev research → `quick-research`
+- Implementation/bug research (libraries, APIs, diagnosis) → `dev-research`
 - Deep topic research with persistent notebooks → `research-topic`

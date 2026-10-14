@@ -12,8 +12,8 @@
 # text. The tab we opened is closed afterward, so it reads invisibly and leaves
 # no tab litter. Requires: macOS, Safari, user signed into Reddit in Safari.
 #
-# Prints cleaned thread text to stdout. Canonical home: research-quick skill;
-# also used by research-feedback.
+# Prints cleaned thread text to stdout. Canonical home: quick-research skill;
+# also used by feedback-research.
 set -uo pipefail
 
 url="${1:?usage: reddit-read.sh <reddit-thread-url>}"

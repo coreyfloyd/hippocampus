@@ -43,11 +43,12 @@ confirmation; no second generic approval after a caller approved the concrete ro
    action, dependencies and source timing or explained planning dates. Search
    existing tasks, enrich exact matches without losing notes, then read back
    target, content and saved dates. Only confirmed writes complete a row.
-6. Writing rows use the configured local writing workflow and writable target.
-   Search ideas, drafts and published records again before writing. Apply only
-   the authorized seed/addition; preserve attribution and reuse limits. Never
-   rewrite an authored draft, publish, or create an invented ideas folder.
-   With no available writable route, keep the candidate in the record.
+6. Custom-class rows require a current local policy declaration. Search the
+   declared locations again, validate required fields and execute only through
+   the declared workflow or destination. Preserve source attribution, reuse limits
+   and authored prose. With no available writable route, keep the candidate in
+   the record. Policy changes require replanning and renewed approval. Legacy
+   undeclared rows stay readable and pending; never infer an execution route.
 7. Read back the named destinations and verify accepted
    [Insights & Highlights](references/insights-highlights.md) actually landed,
    including material caveats and tentative status. Record the location or the
@@ -60,7 +61,7 @@ confirmation; no second generic approval after a caller approved the concrete ro
 
 Use [the deterministic helper](scripts/distribution.py) for capture/plan/receipts,
 scoped workflow dispatch and filing. It invokes only caller-supplied workflow
-argv; it supplies no task, document, writing or wiki integration of its own.
+argv; it supplies no task, document, custom-class or wiki integration of its own.
 If a destination has only agent tools, follow the same durable protocol from
 [the helper interface](references/distribution-contract.md#helper-interface):
 persist an inflight identity before writing, read back, then reconcile its receipt.
@@ -86,7 +87,7 @@ A different destination source is a collision, never an overwrite. On failed
 filing or link repair, report pending, keep intake available, and reconcile before
 retrying. The transcript remains primary evidence; the meeting record stays in place.
 
-Report confirmed task dates/targets, compiled or updated documents, writing receipts,
+Report confirmed task dates/targets, compiled or updated documents, custom-class receipts,
 pending confirmations, source coverage and separate record/source retention paths.
 Persist using the knowledge store's own Git and delivery rules. No scheduling,
 messages, release or publication is authorized by this skill.

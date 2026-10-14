@@ -1,5 +1,5 @@
 ---
-name: research-quick
+name: quick-research
 description: "Fast inline research on non-development topics—products, places, current events, decisions, health, finance, or travel—with cited findings in conversation. Use for general lookups; no notebook or artifact workflow."
 ---
 
@@ -15,9 +15,9 @@ Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` 
 
 ## When NOT to Use
 
-- Code, bugs, library questions → `research-dev`
+- Code, bugs, library questions → `dev-research`
 - Deep research needing persistent notebooks and a durable artifact → `research-topic`
-- Community sentiment for an adopt/buy/wait decision → `research-feedback`
+- Community sentiment for an adopt/buy/wait decision → `feedback-research`
 
 ## Phase 0 — Check local knowledge
 

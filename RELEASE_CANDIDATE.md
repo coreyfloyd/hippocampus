@@ -4,21 +4,29 @@
 
 This candidate covers the changes since v0.9.0:
 
+- Rename four research commands to `dev-research`, `feature-research`, `feedback-research` and `quick-research` ([hippocampus#34](https://github.com/coreyfloyd/hippocampus/issues/34)); `absorb` and its compatibility entry point keep their names.
+
 - Retire the old setup compatibility skill; `hippocampus-set-up` is the setup entry point ([hippocampus#24](https://github.com/coreyfloyd/hippocampus/issues/24)).
 - File original meeting transcripts from policy-defined intake into retained primary-source storage only after every authorized capture route completes or is explicitly declined, repairing source references ([hippocampus#29](https://github.com/coreyfloyd/hippocampus/issues/29)).
-- Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile`, and propose source-grounded writing opportunities ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
+- Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile` ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
 - Route retained-source understanding, applicability assessment and distribution planning through `research-sources`; inventory intended outcomes before proposing distribution ([hippocampus#36](https://github.com/coreyfloyd/hippocampus/issues/36)).
 - Reconcile skill boundaries, meeting action/document routes, optional profile fields, raw metadata, inline research, compiler/audit guidance and public documentation ([hippocampus#39](https://github.com/coreyfloyd/hippocampus/issues/39)).
+- Add opt-in custom proposal classes declared in local policy; writing opportunities become a user-declared worked example, with legacy records preserved ([hippocampus#40](https://github.com/coreyfloyd/hippocampus/issues/40)).
 - Preserve Insights & Highlights in research artifacts and meeting reviews: useful specifics with provenance, dispositions linked to existing rows, and read-back of accepted details before archival (shared definition in `skills/absorb/references/insights-highlights.md`).
 
 Research reports stay in output while work is pending, then retain their excluded
 reference lifecycle under `raw/derived/`. Meeting records stay at their original
 path. Transcript ingestion, completed absorption and retention are distinct.
-Writing proposes new seeds, enrichments or published follow-ups with evidence,
-attribution and reuse limits; authored drafting and actual publication remain
-separate. Curriculum/playbook changes use maintained document/project routes.
+Custom classes declare searches, required fields and execution workflows or
+destinations in the profile body; undeclared classes cannot be proposed.
+Source evidence, attribution, approval, receipts and read-back remain required. Curriculum/playbook changes use maintained document/project routes.
 
 ## Compatibility
+
+The four renamed commands install only under their new names in both clients.
+Update profiles and habits that invoke the old commands. Installation removes
+package-owned old links and preserves user-owned directories or links with a
+message; it does not rewrite local profiles.
 
 Profile version remains 4. Existing published profiles need no new fields.
 Optional `meeting_record_folder` and `meeting_record_template` default to
@@ -52,6 +60,8 @@ Public comparison: [before/after inventory](docs/reviews/2026-10-09-public-docum
 
 ## Release-note draft
 
+Command renames: `research-dev` → `dev-research`, `research-feature` → `feature-research`, `research-feedback` → `feedback-research`, `research-quick` → `quick-research`. Update profiles and command habits; old names no longer install.
+
 Hippocampus v0.10.0 unifies approved research and meeting distribution through
 `absorb` and selected primary-source compilation through `wiki-compile`.
 Template-driven meeting records start and stay in their configured folder,
@@ -63,8 +73,10 @@ summaries and meeting reviews preserve Insights & Highlights, the useful
 specifics with their provenance and dispositions, and verify that accepted
 details actually landed before archival.
 
-Capture and durable research can propose source-grounded writing ideas,
-enrichment and published follow-ups through local workflows. Intended outcomes
+Capture and durable research support user-declared custom proposal classes through
+local policy, with constrained execution and verified receipts. Writing opportunities
+are an opt-in worked example rather than a built-in class. Existing legacy rows
+remain readable; new custom rows require a declaration. Intended outcomes
 are explicitly accounted for, and retained-source analysis reuses existing
 primary evidence. Optional meeting settings and public routing/metadata guidance
 are documented consistently. Existing profile version 4 and compiler/absorption

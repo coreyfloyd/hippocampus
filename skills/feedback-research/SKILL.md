@@ -1,6 +1,6 @@
 ---
-name: research-feedback
-description: "Research lived community experience before adopting, upgrading, buying, or committing to something, including which forums or user groups to follow. Use for stability and wait-or-adopt decisions; use research-quick for general fact-finding."
+name: feedback-research
+description: "Research lived community experience before adopting, upgrading, buying, or committing to something, including which forums or user groups to follow. Use for stability and wait-or-adopt decisions; use quick-research for general fact-finding."
 ---
 
 # Research Feedback
@@ -15,10 +15,10 @@ Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` 
 
 ## When to Use vs. Not
 
-| Use `research-feedback` | Use something else |
+| Use `feedback-research` | Use something else |
 |---|---|
-| "What's the real-world experience of running X?" | Authoritative facts/specs/how-to → `research-quick` |
-| "Is the new beta/release stable enough to adopt?" | Code/library/bug diagnosis → `research-dev` |
+| "What's the real-world experience of running X?" | Authoritative facts/specs/how-to → `quick-research` |
+| "Is the new beta/release stable enough to adopt?" | Code/library/bug diagnosis → `dev-research` |
 | "What are people complaining about with X before I commit?" | Deep, persistent, cited report → `research-topic` |
 | Decision gated on peer/community lived experience | Pure fact lookup with one right answer |
 | The user wants to know **which communities** to follow on a topic | |
@@ -62,9 +62,9 @@ Run searches in parallel.
 3. **Official source for hard constraints** when the decision has a factual gate (system requirements, compatibility, pricing). Sentiment can't override a hard requirement.
 4. **Read full Reddit threads** through the user's signed-in browser session — comment bodies are the lived-experience signal this skill exists for. Use the browser route named in the profile's local policy; the bundled Safari reference implementation is:
    ```bash
-   ../research-quick/reddit-read.sh "<thread-url>"
+   ../quick-research/reddit-read.sh "<thread-url>"
    ```
-   Run it on the 3-5 most relevant threads. See `research-quick` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to another agent runtime with access) before settling for snippet-level coverage. Extract non-Reddit forums with `curl https://defuddle.md/<url>` as normal.
+   Run it on the 3-5 most relevant threads. See `quick-research` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to another agent runtime with access) before settling for snippet-level coverage. Extract non-Reddit forums with `curl https://defuddle.md/<url>` as normal.
 
 ## Phase 4 — Synthesize (sentiment-weighted)
 

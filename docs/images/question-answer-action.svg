@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
   <title id="title">Question, Answer, Action research lifecycle</title>
-  <desc id="desc">Ask through research-topic or bring sources through research-sources. Set a question and produce an evidence-grounded research report. Absorb executes approved document, people, follow-up, writing and optional wiki outcomes; the completed report is retained in raw/derived/ as a reference. Individual proposals may be declined.</desc>
+  <desc id="desc">Ask a broad question through research-topic or bring selected sources through research-sources. Hippocampus writes a research report with citations, assessment and gaps. Absorb executes the approved destinations: people, documents, follow-up work, the wiki, and the retained reference record. Individual proposals may be declined.</desc>
 <style>
     :root {
       --bg: #f7f8fa;
@@ -77,68 +77,66 @@
     .edge { fill: none; stroke: var(--line); stroke-width: 2.2; marker-end: url(#arrow); }
     .branch { fill: none; stroke: var(--action); stroke-width: 1.8; marker-end: url(#action-arrow); }
     .skill { fill: var(--dim); font-family: var(--mono); font-size: 12px; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
   </style>
 <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
       <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--line)"/>
     </marker>
-    <marker id="action-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
-      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--action)"/>
-    </marker>
   </defs>
   <rect width="1200" height="520" rx="20" fill="var(--bg)"/>
   <text x="40" y="48" class="heading">Close the loop from curiosity to use</text>
   <text data-diagram-key="true" x="40" y="75" class="copy">blue: what you bring · orange: what Hippocampus writes · green: where outcomes land</text>
-  <rect data-thing="input" x="40" y="142" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="171" class="label" fill="var(--question)">ASK</text>
-  <text x="58" y="194" class="copy">a broad question</text>
-
-  <rect data-thing="input" x="40" y="292" width="210" height="82" rx="12" class="input"/>
-  <text x="58" y="321" class="label" fill="var(--question)">BRING</text>
-  <text x="58" y="344" class="copy">selected sources</text>
-
-  <rect data-thing="record" x="330" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--answer)"/>
-  <text x="350" y="237" class="label" fill="var(--answer)">QUESTION</text>
-  <text x="350" y="268" class="stage-heading">Framed question</text>
-  <text x="350" y="293" class="small">scope · decision · evidence</text>
-
-  <rect data-thing="record" x="580" y="204" width="190" height="112" rx="14" class="stage" stroke="var(--answer)"/>
-  <text x="600" y="237" class="label" fill="var(--answer)">ANSWER</text>
-  <text x="600" y="268" class="stage-heading">Research report</text>
-  <text x="600" y="293" class="small">citations · assessment · gaps</text>
-  <rect data-thing="destinations" data-outcome-panel="true" x="820" y="108" width="340" height="392" rx="16" fill="var(--panel)" stroke="var(--action)" stroke-width="2.5"/>
-  <text x="842" y="140" class="label" fill="var(--action)">ACTION</text>
-  <text x="842" y="182" class="copy">Approved destinations.</text>
-  <circle cx="842" cy="207" r="3" fill="var(--action)"/>
-  <text data-outcome-label="documents" x="856" y="212" class="copy">People &amp; documents</text>
-  <text x="856" y="228" class="small">named updates and people records</text>
-  <circle cx="842" cy="253" r="3" fill="var(--action)"/>
-  <text data-outcome-label="actions" x="856" y="258" class="copy">Follow-up work</text>
-  <text x="856" y="274" class="small">ownership, timing and next steps</text>
-  <circle cx="842" cy="299" r="3" fill="var(--action)"/>
-  <text data-outcome-label="writing" x="856" y="304" class="copy">Writing opportunities</text>
-  <text x="856" y="320" class="small">ideas or additions, with attribution</text>
-  <circle cx="842" cy="345" r="3" fill="var(--action)"/>
-  <text data-outcome-label="wiki" x="856" y="350" class="copy">Optional wiki</text>
-  <text x="856" y="366" class="skill" data-skill="wiki-compile">wiki-compile</text>
-  <circle cx="842" cy="391" r="3" fill="var(--action)"/>
-  <text data-outcome-label="reference" x="856" y="396" class="copy">Retained reference record</text>
-  <text x="856" y="412" class="small">record kept with sources and results</text>
-  <text x="842" y="486" class="small">Individual proposals may be declined.</text>
-
-  <g data-operation="ask-question">
-    <path d="M250,183 C285,183 292,232 330,244" class="edge"/>
-    <text x="265" y="175" class="skill" data-skill="research-topic">research-topic</text>
+  <text data-column="question" x="40" y="104" class="column" fill="var(--question)">QUESTION</text>
+  <text data-column="answer" x="370" y="104" class="column" fill="var(--answer)">ANSWER</text>
+  <text data-column="action" x="820" y="104" class="column" fill="var(--action)">ACTION</text>
+  <rect data-thing="input" x="40" y="142" width="230" height="82" rx="12" class="input"/>
+  <text x="58" y="174" class="stage-heading">Ask</text>
+  <text x="58" y="201" class="copy">a broad question</text>
+  <rect data-thing="input" x="40" y="292" width="230" height="82" rx="12" class="input"/>
+  <text x="58" y="324" class="stage-heading">Bring</text>
+  <text x="58" y="351" class="copy">selected sources</text>
+  <rect data-thing="record" x="370" y="227" width="270" height="112" rx="14" class="stage" stroke="var(--answer)"/>
+  <text x="390" y="260" class="label" fill="var(--answer)">RESEARCH REPORT</text>
+  <text x="390" y="291" class="stage-heading">In your output folder</text>
+  <text x="390" y="316" class="small">answer · citations · assessment · gaps</text>
+  <rect data-thing="destination" data-outcome="people" x="820" y="112" width="340" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="people" x="836" y="136" class="outcome-title">People</text>
+  <text x="836" y="154" class="small">people records you keep</text>
+  <rect data-thing="destination" data-outcome="documents" x="820" y="178" width="340" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="documents" x="836" y="202" class="outcome-title">Documents</text>
+  <text x="836" y="220" class="small">named updates to what you maintain</text>
+  <rect data-thing="destination" data-outcome="actions" x="820" y="244" width="340" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="actions" x="836" y="268" class="outcome-title">Follow-up work</text>
+  <text x="836" y="286" class="small">ownership, timing and next steps</text>
+  <rect data-thing="destination" data-outcome="wiki" x="820" y="310" width="340" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="wiki" x="836" y="334" class="outcome-title">Wiki</text>
+  <text x="836" y="352" class="skill" data-skill="wiki-compile">wiki-compile</text>
+  <rect data-thing="destination" data-outcome="reference" x="820" y="376" width="340" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="reference" x="836" y="400" class="outcome-title">Retained reference record</text>
+  <text x="836" y="418" class="small">kept with its sources and results</text>
+  <path d="M790,140.0 L790,404.0" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+  <path d="M790,140.0 L820,140.0" class="edge"/>
+  <path d="M790,206.0 L820,206.0" class="edge"/>
+  <path d="M790,272.0 L820,272.0" class="edge"/>
+  <path d="M790,338.0 L820,338.0" class="edge"/>
+  <path d="M790,404.0 L820,404.0" class="edge"/>
+  <g data-operation="ask-report">
+    <path d="M270,183 C320,183 320,283.0 370,283.0" class="edge"/>
+    <text x="282" y="174" class="skill" data-skill="research-topic">research-topic</text>
   </g>
-  <g data-operation="bring-question">
-    <path d="M250,333 C285,333 292,288 330,276" class="edge"/>
-    <text x="265" y="350" class="skill" data-skill="research-sources">research-sources</text>
+  <g data-operation="bring-report">
+    <path d="M270,333 C320,333 320,283.0 370,283.0" class="edge"/>
+    <text x="282" y="348" class="skill" data-skill="research-sources">research-sources</text>
   </g>
-  <g data-operation="question-answer">
-    <path d="M520,260 L580,260" class="edge"/>
+  <g data-operation="report-action">
+    <path d="M640,283.0 L790,283.0" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+    <text x="715.0" y="271.0" text-anchor="middle" class="skill" data-skill="absorb">absorb</text>
   </g>
-  <g data-operation="answer-action">
-    <path d="M770,260 L820,260" class="edge"/>
-    <text x="795" y="196" text-anchor="middle" class="skill" data-skill="absorb">absorb</text>
-  </g>
+  <text x="40" y="500" class="small">Individual proposals may be declined.</text>
 </svg>

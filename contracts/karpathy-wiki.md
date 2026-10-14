@@ -112,7 +112,7 @@ routes keep intake; complete/declined routes permit filing with content and link
 verification. Ingestion describes compilation, not whole-record completion.
 Research artifacts retain their output-to-raw/derived lifecycle and remain excluded
 from primary compilation. `absorb` owns shared source-linked authorized rows,
-confirmed task/document/writing receipts and retry behavior. Custom headings do
+confirmed task/document/custom-class receipts and retry behavior. Custom headings do
 not remove provenance or approval requirements. See the package's shared
 [distribution contract](../skills/absorb/references/distribution-contract.md).
 
@@ -120,10 +120,12 @@ not remove provenance or approval requirements. See the package's shared
 compatibility entry points to absorb, wiki-compile and wiki-audit. Direct authorized
 compilation remains supported without a generated artifact. Local modes,
 thresholds, taxonomy, page conventions and coverage remain policy inputs.
-Writing capture proposes new/enrich/published-follow-up candidates or explicit
-none; without configured storage they stay in the meeting/research artifact.
-Only authorized local writing workflows file them; authored prose and publication
-remain separate user-controlled actions.
+Custom proposal classes are opt-in local policy declarations with a name,
+searches, required fields and workflow or destination. When none is declared,
+propose none. Apply the same source attribution, reuse limits, authorization,
+receipts and read-back as built-in routes. Missing writable routes keep candidates
+in the meeting/research artifact; authored prose and publication remain separate
+user-controlled actions.
 
 ## Optional meeting profile fields
 

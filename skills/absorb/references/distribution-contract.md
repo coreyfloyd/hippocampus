@@ -1,7 +1,7 @@
 # Shared distribution contract
 
 Capture proposes; absorb validates and executes; wiki-compile synthesizes selected
-primary evidence. Local policy owns taxonomy, task/document/writing adapters and
+primary evidence. Local policy owns taxonomy, task/document/custom-class adapters and
 transcript retention destinations. Markdown presentation and source provenance
 are separate: a custom template may use any headings.
 
@@ -18,7 +18,7 @@ a stable identity suffix; filing refuses to overwrite different source content.
 
 One fenced `hippocampus` JSON block in the record holds `version: 1`, `kind`
 (`meeting` or `research`), stable `record_id`, `sources`, parent `decisions`,
-`rows`, `history`, `status`, and `writing_result`. Meeting identity comes from
+`rows`, `history`, `status`, and optional `class_results`. Meeting identity comes from
 the primary meeting/provider ID or supplied source identity, never a display
 name. Source entries hold a stable `id`, root-relative `path` or original `url`,
 `primary`, explicit `coverage` (complete/partial/unavailable), attribution and
@@ -30,7 +30,7 @@ Rows carry:
 | Field | Meaning |
 |---|---|
 | `id`, `decision` | Stable operation identity and parent reviewed decision ID |
-| `kind` | wiki, document, action, writing, retain or discard |
+| `kind` | wiki, document, action, retain, discard or a declared custom name |
 | `evidence` | Selected source IDs; wiki evidence must be primary raw content |
 | `target`, `change` | Named destination and concrete approved change |
 | `authorization` | approved, pending or declined, reflecting actual caller authority |
@@ -39,22 +39,42 @@ Rows carry:
 | `state`, `receipt`, `inflight` | pending/complete/declined, confirmed result, uncertain-effect identity |
 | `scope` | Helper-computed digest; changed scope invalidates carried authorization |
 
-Writing rows also require `opportunity` (new/enrich/published-followup), `author`
-(speaker/source author, never inferred user ownership), `angle`, `addition`,
-`privacy` (reuse limits), and `coverage` with ideas/drafts/published search status
-(searched/unavailable). Include exact evidence passages or timestamp pointers,
-existing target matches and the search boundaries in the prose proposal. No useful
-candidate is an explicit `writing_result` with its basis. A missing writing target
-or workflow leaves approved candidates pending in the artifact; availability is
-not novelty and private speech is not public-reuse consent.
+## Local custom-class declarations
 
-Writing means potential public blog, social, article or podcast material, including
-new seeds or additions to an existing piece. Curriculum and working-playbook
-changes are document/project rows even when stored beside writing locally.
-Keep publishing stage, intended format and subject categories separate; require
-release evidence for actual publication and distinguish professional adoption.
-Targets, folder names, templates and scoring come from local policy. A capture
-may propose a writing seed without invoking a separate first-person drafting skill.
+In the profile body after YAML frontmatter, optionally add one fenced
+`hippocampus-classes` JSON array. The public profile and
+[worked example](../../../docs/examples/capture-writing.md) illustrate the shape.
+No declarations means no custom proposals. This does not add a frontmatter field.
+If the profile names another policy document, read it for local instructions and
+place its executable class declarations in this profile block; the helper does
+not follow arbitrary Markdown links or load executable code from declarations.
+
+Each declaration has a unique `name` (lowercase letter followed by lowercase
+letters, digits, underscores or hyphens; built-in names cannot be overridden),
+nonempty unique `search_before_proposing` locations and `required_fields` names,
+and a nonempty `workflow` name or `destination` string (or both). Row fields
+listed in `required_fields` must be present and nonempty. A row's `search` maps
+every declared location to `searched` or `unavailable`; prose records boundaries,
+actual matches and uncertainty. Every custom proposal preserves source evidence,
+author attribution, privacy/reuse limits, explicit approval and stable identity.
+Store optional no-candidate assessments by class in `class_results`.
+
+A workflow declaration selects that exact key in the caller-supplied workflow
+map; the row's `workflow` must match. A destination declaration constrains the
+row's `target` exactly; when no workflow is declared, the workflow map uses the
+class name. If both are declared, both constraints apply. A concrete nonempty
+row target is always needed for read-back. Unavailable adapters, missing targets
+or route mismatches leave candidates pending. Capture and absorb must not invent
+writable destinations or execute through a different route.
+
+The helper binds each new custom row to the declaration's digest (`class_policy`)
+inside its approved scope. Changed declarations require replanning and renewed
+approval. Removed declarations block pending execution. Existing version-1 rows,
+including legacy `writing` rows and `writing_result`, remain readable without
+rewriting prose or IDs. An unchanged existing row may be normalized without a
+declaration, but a new or changed undeclared row is rejected. Legacy pending rows
+require an explicit declaration and replanning before execution; completed
+receipts remain readable. There is no built-in legacy execution adapter.
 
 A row cannot complete by staging alone. Wiki/doc rows run inline in their target
 workflow; only an Action with that route becomes a follow-up task. Every confirmed
@@ -78,7 +98,7 @@ It does not generate prose, search external systems or grant approval.
   the selected template even on retry; no silent fallback.
 - `prepare-research RECORD --input sources.json`: add shared mechanics to a
   validated legacy artifact, preserving its prose and original execution table.
-- `plan RECORD --input plan.json`: `decisions`, `rows`, optional `writing_result`.
+- `plan RECORD --input plan.json`: `decisions`, `rows`, optional `class_results` (class-name to assessment map); `writing_result` remains a legacy input.
   Normalize only a plan the caller has seen. For a legacy research artifact, optional `legacy_results` maps row IDs to previously confirmed, target-matching read-back receipts; preserve the original table and adopt those results without reexecuting them. Uncertain writes still require reconciliation, and changed scope cannot inherit a legacy receipt. Changed existing rows become pending;
   a subsequent plan update records renewed authorization after approval. Existing
   receipts remain; pending removed rows must first be explicitly declined.

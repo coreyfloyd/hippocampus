@@ -41,6 +41,42 @@ test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/s
 if HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify; then
   exit 1
 fi
+# The four renamed commands install identically for both clients.
+for name in dev-research feature-research feedback-research quick-research; do
+  for client in .claude .codex; do
+    test -f "$TEST_HOME/$client/skills/$name/SKILL.md"
+    grep -Fxq "name: $name" "$TEST_HOME/$client/skills/$name/SKILL.md"
+  done
+done
+# Package-owned old links (current, direct release, and legacy roots) retire;
+# local directories and external symlinks at those names remain user-owned.
+for old in research-dev research-feature research-feedback research-quick; do
+  for client in .claude .codex; do
+    old_target="$TEST_HOME/$client/skills/$old"
+    for root in "$TEST_HOME/.local/share/hippocampus/current" \
+                "$TEST_HOME/.local/share/hippocampus/releases/0.0.9" \
+                "$TEST_HOME/.local/share/research-tools/current" \
+                "$TEST_HOME/.local/share/research-tools/releases/0.7.0"; do
+      ln -s "$root/skills/$old" "$old_target"
+      HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+      test ! -e "$old_target"
+      test ! -L "$old_target"
+    done
+    mkdir -p "$old_target"
+    printf 'local skill\n' > "$old_target/local.md"
+    HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" 2>"$TEST_HOME/preserved.log"
+    grep -Fq "preserved user-owned retired skill: $old_target" "$TEST_HOME/preserved.log"
+    grep -Fxq 'local skill' "$old_target/local.md"
+    rm "$old_target/local.md"
+    rmdir "$old_target"
+    mkdir -p "$TEST_HOME/mine/$old"
+    ln -s "$TEST_HOME/mine/$old" "$old_target"
+    HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" 2>"$TEST_HOME/preserved.log"
+    grep -Fq "preserved user-owned retired skill: $old_target" "$TEST_HOME/preserved.log"
+    test "$(readlink "$old_target")" = "$TEST_HOME/mine/$old"
+    rm "$old_target"
+  done
+done
 test ! -e "$TEST_HOME/.config/hippocampus/profile.md"
 test -L "$TEST_HOME/.local/share/hippocampus/current"
 test -L "$TEST_HOME/.claude/skills/hippocampus-set-up"
@@ -62,7 +98,7 @@ test "$(readlink "$TEST_HOME/.local/share/hippocampus/current")" = "$TEST_HOME/.
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/contracts/karpathy-wiki.md"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/profiles/karpathy-wiki.example.md"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/validate_profile.py"
-test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/research-quick/reddit-read.sh"
+test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/quick-research/reddit-read.sh"
 test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/run-transcribe.sh"
 test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/.build/hippocampus-test-sentinel"
 grep -Fq 'Karpathy-wiki contract' "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/research-to-wiki/SKILL.md"
@@ -237,7 +273,7 @@ mkdir -p "$MISSINGLINK_HOME/.config/hippocampus" "$MISSINGLINK_HOME/knowledge/ra
 touch "$MISSINGLINK_HOME/knowledge/wiki/hot.md" "$MISSINGLINK_HOME/knowledge/docs/log.md" "$MISSINGLINK_HOME/knowledge/docs/DECISIONS.md"
 sed "s|/absolute/path/to/knowledge|$MISSINGLINK_HOME/knowledge|" "$SOURCE_ROOT/profiles/karpathy-wiki.example.md" > "$MISSINGLINK_HOME/.config/hippocampus/profile.md"
 HOME="$MISSINGLINK_HOME" CODEX_HOME="$MISSINGLINK_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
-MISSINGLINK_PATH="$MISSINGLINK_HOME/.claude/skills/research-quick"
+MISSINGLINK_PATH="$MISSINGLINK_HOME/.claude/skills/quick-research"
 rm -f "$MISSINGLINK_PATH"
 MISSINGLINK_STDERR="$MISSINGLINK_HOME/stderr.log"
 if HOME="$MISSINGLINK_HOME" CODEX_HOME="$MISSINGLINK_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify 2>"$MISSINGLINK_STDERR"; then
@@ -247,12 +283,12 @@ grep -Fq "$MISSINGLINK_PATH" "$MISSINGLINK_STDERR"
 
 # F7: refusal messages must carry a remedy.
 REMEDY_HOME="$(mktemp -d)"
-mkdir -p "$REMEDY_HOME/.claude/skills/research-quick"
+mkdir -p "$REMEDY_HOME/.claude/skills/quick-research"
 REMEDY_STDERR="$REMEDY_HOME/stderr.log"
 if HOME="$REMEDY_HOME" CODEX_HOME="$REMEDY_HOME/.codex" bash "$SOURCE_ROOT/install.sh" 2>"$REMEDY_STDERR"; then
   exit 1
 fi
-grep -Fq "collision: $REMEDY_HOME/.claude/skills/research-quick" "$REMEDY_STDERR"
+grep -Fq "collision: $REMEDY_HOME/.claude/skills/quick-research" "$REMEDY_STDERR"
 grep -Fq "move or remove it and re-run install.sh" "$REMEDY_STDERR"
 
 # F1: Finder droppings in the source tree must not change the manifest.
@@ -262,7 +298,7 @@ cp -R "$SOURCE_ROOT" "$DSSTORE_SOURCE"
 HOME="$DSSTORE_HOME" CODEX_HOME="$DSSTORE_HOME/.codex" bash "$DSSTORE_SOURCE/install.sh"
 DSSTORE_MANIFEST_BEFORE="$(cat "$DSSTORE_HOME/.local/share/hippocampus/releases/$VERSION/manifest")"
 touch "$DSSTORE_SOURCE/skills/.DS_Store"
-touch "$DSSTORE_SOURCE/skills/research-quick/.Ulysses-Group.plist"
+touch "$DSSTORE_SOURCE/skills/quick-research/.Ulysses-Group.plist"
 HOME="$DSSTORE_HOME" CODEX_HOME="$DSSTORE_HOME/.codex" bash "$DSSTORE_SOURCE/install.sh"
 DSSTORE_MANIFEST_AFTER="$(cat "$DSSTORE_HOME/.local/share/hippocampus/releases/$VERSION/manifest")"
 test "$DSSTORE_MANIFEST_BEFORE" = "$DSSTORE_MANIFEST_AFTER"
@@ -328,7 +364,7 @@ rm -rf "$MIGRATE_HOME"
 DIRTY_HOME="$(mktemp -d)"
 DIRTY_SOURCE="$DIRTY_HOME/source"
 cp -R "$SOURCE_ROOT" "$DIRTY_SOURCE"
-touch "$DIRTY_SOURCE/skills/.DS_Store" "$DIRTY_SOURCE/skills/research-quick/.Ulysses-Group.plist"
+touch "$DIRTY_SOURCE/skills/.DS_Store" "$DIRTY_SOURCE/skills/quick-research/.Ulysses-Group.plist"
 mkdir -p "$DIRTY_HOME/.config/hippocampus" "$DIRTY_HOME/knowledge/raw" "$DIRTY_HOME/knowledge/wiki" "$DIRTY_HOME/knowledge/output" "$DIRTY_HOME/knowledge/docs"
 touch "$DIRTY_HOME/knowledge/wiki/hot.md" "$DIRTY_HOME/knowledge/docs/log.md" "$DIRTY_HOME/knowledge/docs/DECISIONS.md"
 sed "s|/absolute/path/to/knowledge|$DIRTY_HOME/knowledge|" "$DIRTY_SOURCE/profiles/karpathy-wiki.example.md" > "$DIRTY_HOME/.config/hippocampus/profile.md"

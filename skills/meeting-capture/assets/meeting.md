@@ -27,12 +27,6 @@ Source-linked decisions and their owners.
 
 Owner, next action, source timing or explained planning target, and approval state.
 
-## Writing opportunities
-
-New idea, enrichment, or published follow-up with attribution, evidence, angle,
-proposed addition, search coverage, privacy limits, and execution state.
-“No useful opportunity” is a valid explicit result.
-
 ## Proposed changes
 
 Concrete named targets, changes, evidence, existing authorization, and prerequisites.

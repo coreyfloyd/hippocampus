@@ -1,5 +1,5 @@
 ---
-name: research-dev
+name: dev-research
 description: "Quick developer research for implementation or bug diagnosis, with targeted sources, competing explanations, and inline recommendations. Use to research a bug, API behavior, or implementation approach."
 ---
 
@@ -16,7 +16,7 @@ Web search uses the runtime's built-in `WebSearch` tool; pass `allowed_domains` 
 ## When NOT to Use
 
 - Deep research requiring persistent notebooks and a durable artifact → `research-topic`
-- Non-development questions → `research-quick`
+- Non-development questions → `quick-research`
 - Questions answerable from model knowledge alone (no sources needed)
 
 ## Phase 1 — Scope
