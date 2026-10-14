@@ -35,9 +35,9 @@ At completion, report the artifact path and its proposed plan. The caller may in
 
 ## Boundaries
 
-- `research-quick` and `research-dev` remain inline research paths.
-- `research-feature` covers competitor UX and established patterns.
-- `research-feedback` covers lived community experience.
+- `quick-research` and `dev-research` remain inline research paths.
+- `feature-research` covers competitor UX and established patterns.
+- `feedback-research` covers lived community experience.
 - This skill does not execute a distribution plan or sweep uncompiled knowledge.
 
 

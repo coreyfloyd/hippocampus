@@ -26,7 +26,7 @@ CODEX_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
 # Skills this package shipped once and has retired, space-separated. An install
 # removes a package-owned link with one of these names; any other package-owned
 # link without a matching skill still stops the install.
-RETIRED_SKILLS="research-tools-set-up"
+RETIRED_SKILLS="research-tools-set-up research-dev research-feature research-feedback research-quick"
 
 manifest_listing() {
   manifest_root="${1:-$ROOT}"
@@ -218,6 +218,8 @@ remove_listed_retired_links() {
     for target in "$CLAUDE_DIR/$skill" "$CODEX_DIR/$skill"; do
       if is_package_link "$target" "$skill" || is_legacy_package_link "$target" "$skill"; then
         rm "$target"; echo "removed retired package skill link: $target" >&2
+      elif [ -e "$target" ] || [ -L "$target" ]; then
+        echo "preserved user-owned retired skill: $target (new commands install separately; update local references)" >&2
       fi
     done
   done

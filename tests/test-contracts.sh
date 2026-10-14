@@ -152,29 +152,29 @@ grep -Fq 'must not infer' "$CONTRACT"
 grep -Fq 'Andrej Karpathy' "$CONTRACT"
 grep -Fq 'canonical directories' "$CONTRACT"
 grep -Fq 'runtime-detected optional integrations' "$CONTRACT"
-for skill in research-sources research-topic research-feature research-feedback research-absorb; do
+for skill in research-sources research-topic feature-research feedback-research research-absorb; do
   grep -Fq 'artifact_followup_destination' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
 grep -Fq 'artifact_followup_destination' "$ROOT/skills/knowledge-capture/SKILL.md"
-# research-feature and research-feedback produce deliverables, not absorb handoffs.
-for skill in research-feature research-feedback; do
+# feature-research and feedback-research produce deliverables, not absorb handoffs.
+for skill in feature-research feedback-research; do
   grep -Fq 'research-absorb` does not apply' "$ROOT/skills/$skill/SKILL.md" || exit 1
   if grep -Fq 'artifact-contract.md' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
   if grep -Fq 'Findings format' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
 done
-grep -Fq '## Sources' "$ROOT/skills/research-feature/SKILL.md"
-grep -Fq '## Communities to watch' "$ROOT/skills/research-feedback/SKILL.md"
+grep -Fq '## Sources' "$ROOT/skills/feature-research/SKILL.md"
+grep -Fq '## Communities to watch' "$ROOT/skills/feedback-research/SKILL.md"
 grep -Fq 'For research artifacts also read' "$ROOT/skills/absorb/SKILL.md"
-grep -Fq 'research-feature' "$ROOT/skills/absorb/references/artifact-contract.md"
-grep -Fq 'research-feedback' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq 'feature-research' "$ROOT/skills/absorb/references/artifact-contract.md"
+grep -Fq 'feedback-research' "$ROOT/skills/absorb/references/artifact-contract.md"
 for skill in research-to-wiki wiki-audit; do
   grep -Fq 'wiki_followup_destination' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
-for skill in research-sources research-topic research-feature research-feedback research-dev research-quick; do
+for skill in research-sources research-topic feature-research feedback-research dev-research quick-research; do
   grep -Fq 'runtime-detected' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
 grep -Fq 'runtime-detected' "$ROOT/skills/transcribe/SKILL.md"
-for skill in research-sources research-topic research-feature research-feedback research-absorb knowledge-capture research-to-wiki wiki-audit; do
+for skill in research-sources research-topic feature-research feedback-research research-absorb knowledge-capture research-to-wiki wiki-audit; do
   grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/$skill/SKILL.md" || exit 1
   grep -Fq 'hippocampus-set-up' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done

@@ -48,7 +48,7 @@ There are three general-purpose skills to get most research questions started:
 
 | Skill              | Use it when                                                                                         | Result and next step                                                                                            |
 | ------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `research-quick`   | You need a cited answer to a general question.                                                      | Returns findings inline. No notebook or artifact workflow.                                                      |
+| `quick-research`   | You need a cited answer to a general question.                                                      | Returns findings inline. No notebook or artifact workflow.                                                      |
 | `research-sources` | You already have URLs, files, media, a source collection, or a named target to analyze.             | Produces a source-grounded artifact ending in the decisions it raises. Review them, then use `absorb`.   |
 | `research-topic`   | You need substantial topic-first research, persistent sources, gap filling, and claim verification. | Produces a NotebookLM-backed artifact ending in the decisions it raises. Review them, then use `absorb`. |
 
@@ -57,9 +57,9 @@ In addition, there are three research skills for specific domains:
 
 | Skill               | Use it when                                                                                                     | Result and next step                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `research-feature`  | You need competitor UX, established patterns, user expectations, or platform conventions before feature design. | Produces a design input document filed with the project, beside the requirements it answers. Not absorbed. |
-| `research-feedback` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed. |
-| `research-dev`      | You are investigating a bug, API behavior, library, or implementation approach.                                 | Returns diagnoses, competing explanations, and sources inline.                                           |
+| `feature-research`  | You need competitor UX, established patterns, user expectations, or platform conventions before feature design. | Produces a design input document filed with the project, beside the requirements it answers. Not absorbed. |
+| `feedback-research` | An adoption, purchase, upgrade, or wait decision depends on current community experience.                       | Produces a decision memo with communities to watch. Read it, act, then retain it as an excluded raw reference (or file it with the project it serves). Not absorbed. |
+| `dev-research`      | You are investigating a bug, API behavior, library, or implementation approach.                                 | Returns diagnoses, competing explanations, and sources inline.                                           |
 
 
 ## Knowledge Distribution & Follow Up skills
@@ -157,7 +157,7 @@ The installer validates this structure but does not create it.
 
 ```text
 question
-  -> research-quick or research-dev
+  -> quick-research or dev-research
   -> cited answer in the conversation
 ```
 
@@ -217,11 +217,11 @@ compiler input.
 
 ### Deliverables that are not absorbed
 
-`research-feature` and `research-feedback` sit outside that lifecycle. Neither
+`feature-research` and `feedback-research` sit outside that lifecycle. Neither
 uses the artifact contract and neither goes through `absorb`; each
 writes a document with its own structure, defined in its own SKILL.md.
 
-`research-feature` produces a **design input document**. It feeds the feature's
+`feature-research` produces a **design input document**. It feeds the feature's
 design and spec, and is written into the project repo beside the requirements
 it answers:
 
@@ -239,7 +239,7 @@ it answers:
 
 Every claim cites a source row by ID.
 
-`research-feedback` produces a **decision memo**. It answers one adopt, buy,
+`feedback-research` produces a **decision memo**. It answers one adopt, buy,
 upgrade, switch, or wait question, and is read once and then retained as a reference, or filed
 with the project it serves:
 
@@ -333,7 +333,7 @@ history; this map describes the current candidate.
 Natural-language requests work across Agent Skills-compatible clients:
 
 ```text
-Use research-quick to compare these two services and cite current sources.
+Use quick-research to compare these two services and cite current sources.
 
 Use research-sources to analyze these URLs, identify evidence gaps, and write
 the durable artifact proposed by the skill.
@@ -341,10 +341,10 @@ the durable artifact proposed by the skill.
 Use research-topic to investigate this question deeply, verify the major
 claims, and end with the decisions the evidence raises.
 
-Use research-feature to compare how established podcast apps handle this
+Use feature-research to compare how established podcast apps handle this
 interaction before we design it.
 
-Use research-feedback to determine whether users consider this release stable
+Use feedback-research to determine whether users consider this release stable
 enough to adopt and identify the communities worth following.
 
 Run absorb on output/2026-08-27-example.md. Validate and show me its
@@ -362,7 +362,7 @@ Audit the configured wiki with wiki-audit. Do not modify it.
   source-grounded answers and inline citations are what keep this system's
   analysis tied to your evidence rather than a model's training data. Agent
   access is provided by the third-party [notebooklm-py][4] CLI and its
-  `notebooklm` Agent Skill, not by Google or this package. `research-dev` also
+  `notebooklm` Agent Skill, not by Google or this package. `dev-research` also
   uses that CLI when it is available. This package does not install it,
   authenticate it, or validate the integration.
 - **YouTube library search** is an optional upstream source-discovery step. A
@@ -377,7 +377,7 @@ Audit the configured wiki with wiki-audit. Do not modify it.
 - **Apple Speech** source is bundled under the `transcribe` skill and built on demand.
   The local route requires macOS 26 or later; otherwise the calling workflow
   must use another input route.
-- Full Reddit-thread reading used by `research-quick` and `research-feedback`
+- Full Reddit-thread reading used by `quick-research` and `feedback-research`
   follows the authorized browser route in local policy. The bundled Safari helper
   requires an interactive macOS session signed into Reddit; other configured
   browser tools are valid. Without a route, report snippet-only coverage. Other

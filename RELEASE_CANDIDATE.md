@@ -4,6 +4,8 @@
 
 This candidate covers the changes since v0.9.0:
 
+- Rename four research commands to `dev-research`, `feature-research`, `feedback-research` and `quick-research` ([hippocampus#34](https://github.com/coreyfloyd/hippocampus/issues/34)); `absorb` and its compatibility entry point keep their names.
+
 - Retire the old setup compatibility skill; `hippocampus-set-up` is the setup entry point ([hippocampus#24](https://github.com/coreyfloyd/hippocampus/issues/24)).
 - File original meeting transcripts from policy-defined intake into retained primary-source storage only after every authorized capture route completes or is explicitly declined, repairing source references ([hippocampus#29](https://github.com/coreyfloyd/hippocampus/issues/29)).
 - Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile` ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
@@ -20,6 +22,11 @@ destinations in the profile body; undeclared classes cannot be proposed.
 Source evidence, attribution, approval, receipts and read-back remain required. Curriculum/playbook changes use maintained document/project routes.
 
 ## Compatibility
+
+The four renamed commands install only under their new names in both clients.
+Update profiles and habits that invoke the old commands. Installation removes
+package-owned old links and preserves user-owned directories or links with a
+message; it does not rewrite local profiles.
 
 Profile version remains 4. Existing published profiles need no new fields.
 Optional `meeting_record_folder` and `meeting_record_template` default to
@@ -52,6 +59,8 @@ Previous publication evidence: [0.9.0](docs/releases/0.9.0.md).
 Public comparison: [before/after inventory](docs/reviews/2026-10-09-public-documentation.md).
 
 ## Release-note draft
+
+Command renames: `research-dev` → `dev-research`, `research-feature` → `feature-research`, `research-feedback` → `feedback-research`, `research-quick` → `quick-research`. Update profiles and command habits; old names no longer install.
 
 Hippocampus v0.10.0 unifies approved research and meeting distribution through
 `absorb` and selected primary-source compilation through `wiki-compile`.
