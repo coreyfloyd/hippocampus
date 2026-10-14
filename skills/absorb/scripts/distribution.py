@@ -267,10 +267,11 @@ def validate_rows(state: dict, classes: dict | None = None, existing_rows: list 
         if row.get('decision') not in state['decisions']:
             raise ValueError('row has no parent decision')
         kind = row.get('kind')
+        old = existing.get(row['id'])
+        unchanged_complete = old is not None and old.get('state') == 'complete' and row_scope(old) == row_scope(row)
         if not row.get('change'):
             raise ValueError('row requires a concrete change')
         if kind not in KINDS and kind not in classes:
-            old = existing.get(row['id'])
             if old is None or row_scope(old) != row_scope(row):
                 raise ValueError('row has an undeclared proposal class')
         if row.get('authorization') not in {'approved', 'pending', 'declined'}:
@@ -282,7 +283,7 @@ def validate_rows(state: dict, classes: dict | None = None, existing_rows: list 
             raise ValueError('wiki compilation requires primary evidence')
         if row['kind'] == 'action' and not row.get('owner'):
             raise ValueError('action requires an owner')
-        if kind in classes:
+        if kind in classes and not unchanged_complete:
             declaration = classes[kind]
             if any(not row.get(field) for field in declaration['required_fields']):
                 raise ValueError('custom class row is missing required fields')
@@ -306,15 +307,26 @@ def set_plan(path: Path, decisions: list[str], rows: list[dict],
         state = read_record(path)
         classes = proposal_classes(profile)
         rows = [dict(row) for row in rows]
+        previous = {r['id']: r for r in state['rows']}
         for row in rows:
             if row.get('kind') in classes:
-                row['class_policy'] = digest(classes[row['kind']])
+                policy = digest(classes[row['kind']])
+                old = previous.get(row.get('id'))
+                # Completed work retains the policy under which it ran. Only
+                # an actual scope change creates new work under current policy.
+                if (old and old.get('state') == 'complete' and
+                        row_scope(dict(old, class_policy=policy)) == row_scope(dict(row, class_policy=policy))):
+                    if 'class_policy' in old:
+                        row['class_policy'] = old['class_policy']
+                    else:
+                        row.pop('class_policy', None)
+                else:
+                    row['class_policy'] = policy
         proposed = dict(state, decisions=decisions, rows=rows)
         validate_rows(proposed, classes, state['rows'])
         legacy_results = legacy_results or {}
         if legacy_results and (state['kind'] != 'research' or set(legacy_results) - {r['id'] for r in rows}):
             raise ValueError('legacy receipts must belong to normalized research rows')
-        previous = {r['id']: r for r in state['rows']}
         new_rows = []
         for raw in rows:
             row = {k: v for k, v in raw.items() if k not in VOLATILE}

@@ -401,6 +401,59 @@ class CaptureAbsorb(unittest.TestCase):
         self.assertEqual(saved['state'], 'complete')
         self.assertEqual(saved['receipt']['receipt'], 'saved-review')
 
+    def test_replanning_completed_custom_row_preserves_receipt_after_policy_changes(self):
+        for saved_input in (False, True):
+            for policy in (dict(workflow='changed-workflow'),
+                           dict(required_fields=['author', 'addition', 'privacy']),
+                           dict(search_before_proposing=['new review index'])):
+                with self.subTest(saved_input=saved_input, policy=policy):
+                    mod = self.module()
+                    self.declare_class()
+                    record = mod.capture(self.profile, 'replan-' + str(saved_input) + str(policy),
+                        '2026-10-09', 'Public contract review',
+                        [dict(id='contract', path='raw/research/contract.md',
+                              primary=True, coverage='complete')])
+                    row = self.row(kind='review', author='author', addition='addition',
+                                   search={'existing reviews': 'searched'}, workflow='review-workflow')
+                    mod.set_plan(record, ['D1'], [row], profile=self.profile)
+                    calls = []
+                    def workflow(req):
+                        calls.append(req)
+                        return dict(confirmed=True, receipt='saved-review', target=req['row']['target'])
+                    mod.execute(self.profile, record, {'review-workflow': workflow})
+                    before = mod.read_record(record)
+                    completed = before['rows'][0]
+                    self.declare_class(**policy)
+                    submitted = completed if saved_input else row
+                    mod.set_plan(record, ['D1'], [submitted], profile=self.profile)
+                    replanned = mod.read_record(record)
+                    self.assertEqual(replanned['rows'], [completed])
+                    self.assertEqual(replanned['history'], before['history'])
+                    mod.terminal(replanned)
+                    mod.execute(self.profile, record, {'review-workflow': workflow,
+                                                       'changed-workflow': workflow})
+                    self.assertEqual(len(calls), 1, 'completed work must not execute twice')
+                    self.assertEqual(mod.read_record(record)['rows'], [completed])
+
+    def test_completed_custom_row_with_changed_work_still_requires_renewed_approval(self):
+        mod = self.module(); record = self.capture()
+        self.declare_class()
+        row = self.row(kind='review', author='author', addition='addition',
+                       search={'existing reviews': 'searched'}, workflow='review-workflow')
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        mod.execute(self.profile, record, {'review-workflow': lambda req:
+            dict(confirmed=True, receipt='saved-review', target=req['row']['target'])})
+        completed = mod.read_record(record)['rows'][0]
+        self.declare_class(workflow='changed-workflow')
+        changed = dict(row, addition='different addition', workflow='changed-workflow')
+        mod.set_plan(record, ['D1'], [changed], profile=self.profile)
+        state = mod.read_record(record)
+        self.assertEqual(state['rows'][0]['state'], 'pending')
+        self.assertEqual(state['rows'][0]['authorization'], 'pending')
+        self.assertNotIn('receipt', state['rows'][0])
+        self.assertEqual(state['history'], [completed])
+        self.assertEqual(state['rows'][0]['class_policy'], mod.digest(mod.proposal_classes(self.profile)['review']))
+
     def test_destination_only_class_cli_and_uncertain_readback(self):
         mod = self.module(); record = self.capture()
         declaration = self.declare_class(destination='docs/review.md')
