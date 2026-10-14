@@ -15,6 +15,21 @@ ROOT = Path(__file__).resolve().parents[1]
 NS = '{http://www.w3.org/2000/svg}'
 
 class PublicDocs(unittest.TestCase):
+    def test_custom_classes_are_opt_in_and_readme_links_example_once(self):
+        readme = (ROOT / 'README.md').read_text()
+        self.assertNotIn('writing opportunities', readme.casefold())
+        self.assertEqual(readme.casefold().count('custom classes'), 1)
+        self.assertEqual(readme.count('(docs/examples/capture-writing.md)'), 1)
+        for relative in ('knowledge-capture/SKILL.md', 'meeting-capture/SKILL.md',
+                         'research-topic/SKILL.md', 'research-sources/SKILL.md',
+                         'absorb/references/artifact-contract.md'):
+            text = (ROOT / 'skills' / relative).read_text().casefold()
+            self.assertIn('custom', text)
+            self.assertIn('none', text)
+        example = (ROOT / 'profiles/karpathy-wiki.example.md').read_text()
+        self.assertIn('```hippocampus-classes', example)
+        self.assertIn('example', example.casefold())
+
     def test_research_diagram_is_simple_and_contains_no_shared_internals(self):
         svg = ET.parse(ROOT / 'docs/images/question-answer-action.svg').getroot()
         visible = ' '.join(' '.join(node.itertext()) for node in svg.iter(NS + 'text'))
@@ -190,7 +205,7 @@ class PublicDocs(unittest.TestCase):
             if more == reached:
                 break
             reached = more
-        self.assertIn('targets', reached, 'approved document/action/writing rows carry source evidence')
+        self.assertIn('targets', reached, 'approved document/action/custom-class rows carry source evidence')
         node = next(node for node in model['components'] if node['id'] == 'primary')
         self.assertTrue(any(ref['path'] == 'skills/absorb/references/distribution-contract.md'
                             for ref in node['sources']))

@@ -2,8 +2,8 @@
 
 `Hippocampus` is a research and meeting-capture system for Claude Code and Codex.
 Its Agent Skills turn questions, supplied sources and meetings into evidence-linked
-records, then carry approved outcomes into people and documents, follow-up work,
-writing opportunities and an optional wiki. Completed research reports are retained
+records, then carry approved outcomes into people and documents, follow-up work
+and an optional wiki. Completed research reports are retained
 as references; meeting records stay in their meeting folder, and original transcripts
 are filed after approved routes complete. Individual proposed changes can be declined.
 
@@ -17,7 +17,7 @@ decide, the scope, and the evidence needed. They produce an **answer** in a rese
 report, with citations, source assessment and open gaps.
 
 Review the report’s proposed outcomes, then use `absorb` for the approved **action**:
-update people and documents, file follow-up work, preserve writing ideas or additions,
+update people and documents, file follow-up work,
 and compile selected primary evidence into an optional wiki through `wiki-compile`.
 Decline individual proposals when appropriate. Once approved routes are complete or
 explicitly declined, the report is retained in `raw/derived/` as a reference record;
@@ -36,7 +36,7 @@ and missing inputs stay explicit; notes may be a local file or collaborative doc
 The skill creates a source-linked **meeting record** directly in its configured
 folder (default `meetings/`), using a bundled or user-selected template. The record
 stays there through review and completed absorption. `absorb` carries approved
-outcomes to the same people/document, follow-up, writing and optional wiki destinations
+outcomes to the same people/document, follow-up and optional wiki destinations
 as research. The original transcript is filed separately after those routes complete;
 the meeting record remains a reference in its folder. See [meeting configuration and
 source handling](#meeting-configuration-and-source-handling) for the input settings,
@@ -68,7 +68,7 @@ These skills help you get research filed where it belongs.
 
 | Skill               | Use it when                                                                                             | Result and next step                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes, actions and writing opportunities. Approved rows go through absorb; the record stays in place. |
+| `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes and actions. Approved rows go through absorb; the record stays in place. |
 | `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts move to raw/derived as excluded references.                           |
 | `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, reuses existing authorization, asks about uncovered decisions, then performs approved captures. It does not process research artifacts. |
 
@@ -190,7 +190,7 @@ and the [public NotebookLM][11] it was grounded in is open for inspection.
 Before destinations are proposed, **How to Absorb** inventories the user’s
 intended outcomes and marks each satisfied with evidence, proposed, deferred
 with an outstanding decision, or declined. Cover personal application/actions,
-maintained documents, wiki knowledge and writing when the objective calls for
+maintained documents, wiki knowledge when the objective calls for
 them. Compilation alone does not satisfy an application request; preserve
 remaining outcomes when only part of a broader goal is approved.
 
@@ -198,8 +198,7 @@ The summary and assessment sections feed the absorption plan, whose items are
 split by what the result touches: **Actions** — anything that is not a document,
 such as installing a skill or changing a workflow; **Wiki Additions** — the
 compiled knowledge base only; and **Document Updates** — context files, project
-briefs, standing documents, repository docs. **Writing Opportunities** form a
-separate route for public ideas and enrichment; retention/discard decisions
+briefs, standing documents, repository docs. Retention/discard decisions
 use their explicit shared row kinds. Every item states what exists now,
 the change, why it matters, and how much to trust it, with options and a
 recommendation when a genuine choice exists. Nothing may be merely staged:
@@ -274,7 +273,7 @@ Use this path for knowledge created or discussed in the current conversation. Us
 
 The three inputs are independent and configurable: `meeting_transcript_source`
 selects a transcript provider or retrieval route, `meeting_event_source` selects
-optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share [Insights & Highlights](skills/absorb/references/insights-highlights.md): selected useful specifics with provenance, dispositions and verified landing. Knowledge, document, action and writing uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
+optional calendar context, and `meeting_note_path` is an optional default local path or Google Docs link; a supplied note path/link overrides it for that meeting. `{date}` is optional, and notes need not share a directory. The capture distinguishes source evidence from coaching interpretation and participant intent from later outcomes. Research and meeting reviews share [Insights & Highlights](skills/absorb/references/insights-highlights.md): selected useful specifics with provenance, dispositions and verified landing. Knowledge, document and action uses remain optional. Calendar events and notes are read-only context; unavailable inputs are reported. See [meeting capture](skills/meeting-capture/SKILL.md).
 
 Transcript intake and retained-source destinations come from local policy or overrides in the profile body. Pending authorized work stays in intake; completed captures retain originals as primary evidence and repair source links. Installation does not relocate existing material.
 
@@ -296,26 +295,11 @@ Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.
 
-A capture report distinguishes writing opportunities, maintained document/project
-updates, wiki updates (when enabled), and actions. Curriculum and working-playbook
-changes use document/project routes. Writing means public blog, social, article
-or podcast opportunities; capture can propose a seed without drafting a post.
-Publishing stage, intended format and subject categories are separate, actual
-publication needs release evidence, and professional adoption is a separate
-outcome. Targets and folder names come from the profile.
-
-### Writing opportunities from meetings and research
-
-Capture can propose a new idea, enrich an existing idea, or identify a follow-up
-to published material. It searches configured ideas, drafts and published records
-and reports missing coverage rather than asserting novelty. Candidates retain
-source pointers, speaker/author attribution, an angle, a specific proposed
-addition, privacy limits and approval state. No useful opportunity is a valid result.
-
-Local policy supplies storage, templates, scoring and the writing workflow.
-Without a writable destination, the candidate remains in its record. `absorb`
-files only approved rows and preserves authored drafts and published text. Capture
-does not draft first-person posts or publish. See the [public route examples](docs/examples/capture-writing.md).
+A capture report distinguishes maintained document/project updates, wiki updates
+(when enabled), and actions. Targets and folder names come from the profile.
+Local policy can add **custom classes** with declared searches, required fields
+and execution routes under the same approval and receipt rules; see the
+[opt-in worked example](docs/examples/capture-writing.md).
 
 ### Compile and audit an existing source collection
 
@@ -332,7 +316,7 @@ incompatible assertions.
 ## Architecture
 
 [`docs/architecture/runtime.html`](docs/architecture/runtime.html) maps research
-and meeting capture to shared absorption, local document/task/writing workflows,
+and meeting capture to shared absorption, local document/task workflows,
 selected-source compilation and separate record/source retention. Its source is
 [`runtime.architecture.json`](docs/architecture/runtime.architecture.json), pinned
 to the implementation commit. Read the relevant map before structural changes,

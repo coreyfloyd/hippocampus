@@ -62,13 +62,13 @@ Evidence Record, not a section.
 
 ## How to Absorb
 
-Before proposing destinations, inventory the user's intended outcomes from the request and subsequent decisions. Give each an explicit disposition: already satisfied (with evidence), proposed below, deferred (with reason and the outstanding decision), or declined. Check personal application/actions, wiki knowledge, maintained documents, and writing opportunities when the objective calls for them; do not manufacture an item merely to fill a category. A request to understand or apply material is not satisfied by compilation alone. If the approved work covers only part of a broader objective, state that boundary and preserve the remaining outcome in the plan or a named follow-up artifact. Proposed application is not adoption, and a writing opportunity uses the shared writing route, not permission to draft in the user's voice.
+Before proposing destinations, inventory the user's intended outcomes from the request and subsequent decisions. Give each an explicit disposition: already satisfied (with evidence), proposed below, deferred (with reason and the outstanding decision), or declined. Check personal application/actions, wiki knowledge, maintained documents, and declared custom classes when the objective calls for them; do not manufacture an item merely to fill a category. A request to understand or apply material is not satisfied by compilation alone. If the approved work covers only part of a broader objective, state that boundary and preserve the remaining outcome in the plan or a named follow-up artifact. Proposed application is not adoption, and a custom class follows local policy without authorizing first-person drafting.
 
 Before proposing personal application, compare the source with existing practice; record no change when it is already covered, and keep research-process repairs separate from content-derived actions.
 
 Core research outcomes use three existing classes, split by what the result
-touches. Each core outcome belongs to one class. Writing opportunities form a
-separate route, and explicit retention/discard decisions use the shared
+touches. Each core outcome belongs to one class. Locally declared custom classes add
+optional routes, and explicit retention/discard decisions use the shared
 distribution kinds described below.
 
 - **Actions** — anything that is not a document: installing or updating a skill,
@@ -100,7 +100,7 @@ the work that consumes it.
 
 ### Item shape
 
-Every proposed outcome, including a writing candidate, states in order:
+Every proposed outcome, including a custom-class candidate, states in order:
 
 | Field | Contents |
 |---|---|
@@ -222,19 +222,18 @@ parent item is invalid.
 - When the profile records the wiki as disabled, `absorb` does not stage source provenance into `raw/research/` for compilation and never invokes `wiki-compile`.
 
 
-## Shared distribution and writing opportunities
+## Shared distribution and custom proposal classes
 
 Read [the shared distribution contract](distribution-contract.md) for stable
-row identities, source evidence, authorization, writing candidates, receipts
-and retry semantics. The existing research sections and execution table remain
-valid. Add a **Writing Opportunities** subsection to How to Absorb: offer new
-ideas, enrichment of an existing idea, or published follow-ups after searching
-configured ideas/drafts/published records. Report unavailable publication
-coverage; do not assert novelty from a missing search. An explicit “no useful
-opportunity” with its basis is valid. Each candidate carries attribution,
-source pointers, angle, target when known, a specific addition, reuse/privacy
-limits, approval and execution state. No writable local destination means the
-candidate stays here. Never draft first-person prose or publish during capture.
+row identities, source evidence, authorization, custom declarations, receipts
+and retry semantics. Preserve the existing research sections and execution table.
+Propose custom classes only when declared in local policy; when none is declared,
+propose none. Search the declared locations before proposing, report coverage
+and matches, and include required fields, source pointers, attribution, reuse
+limits and approval state. An explicit no-candidate result with its basis is valid.
+A missing writable destination leaves the candidate here. `absorb` uses only the
+declared workflow or destination and confirms receipts through read-back.
+Never draft first-person prose or publish during capture.
 
 The prose plan stays the review surface. Its execution table can be normalized
 into the shared fenced JSON block by absorb after reading and validating the

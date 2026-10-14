@@ -51,9 +51,8 @@ work remains staged; retained transcripts remain primary evidence.
 
 
 Local policy may also name transcript intake/archive destinations within `raw/`,
-a writing workflow and writable destinations, templates/scoring, and the locations
-to search for existing ideas, drafts and published material. No writing destination
-is assumed. Local compile/audit modes, thresholds and coverage remain policy, not
+custom proposal classes with explicit searches, required fields and workflows
+or writable destinations. No custom class is enabled by default. Local compile/audit modes, thresholds and coverage remain policy, not
 new frontmatter fields. Missing optional meeting settings use the bundled minimal
 template and `meetings/`; set up record defaults only when requested.
 
@@ -65,3 +64,28 @@ a transcript and its record may share a filename in different folders.
 Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.
+
+## Example custom class: writing opportunities (opt-in)
+
+This is a user-declared example, not a built-in capability. Remove this block
+unless you want this class, and replace its locations/workflow with your local
+policy. See [the worked example](../docs/examples/capture-writing.md).
+
+```hippocampus-classes
+[
+  {
+    "name": "writing",
+    "search_before_proposing": ["ideas", "drafts", "published"],
+    "required_fields": ["opportunity", "author", "angle", "addition", "privacy"],
+    "workflow": "local-writing"
+  }
+]
+```
+
+For this example only, local policy defines `opportunity` as new, enrich or
+published-followup; keep publication stage, intended format and subject separate.
+Search configured ideas/drafts/published locations; never claim novelty when
+coverage is unavailable. Attribute source ideas and retain reuse limits. A
+candidate may be retained without a writable target. The `local-writing` workflow
+must be supplied explicitly and must preserve authored prose, deduplicate,
+read back and return receipts; drafting and publication require separate authority.

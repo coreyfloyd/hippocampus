@@ -138,7 +138,7 @@ button{padding:8px 16px;background:var(--panel);color:var(--ink);border:1px soli
 page = '''<meta charset="utf-8">
 <!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="../../"><title>Research and meeting capture: public documentation candidate</title><style>'''+research_css+extra+'''</style></head>
-<body><main class="wrap"><h1>Research, meetings and writing</h1>
+<body><main class="wrap"><h1>Research, meetings and distribution</h1>
 <p class="notice">Candidate review · Public-communication approval pending. No release or publication approved.</p>
 <button onclick="document.documentElement.dataset.theme='light'">Light</button>
 <button onclick="document.documentElement.dataset.theme='dark'">Dark</button>

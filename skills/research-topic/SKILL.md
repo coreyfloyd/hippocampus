@@ -41,15 +41,15 @@ At completion, report the artifact path and its proposed plan. The caller may in
 - This skill does not execute a distribution plan or sweep uncompiled knowledge.
 
 
-## Writing opportunities
+## Custom proposal classes
 
-Alongside wiki, document and action rows, assess source-grounded writing routes
-using [the shared distribution contract](../absorb/references/distribution-contract.md).
-Search configured ideas, drafts and published records: distinguish a new idea
-from enrichment or published overlap, and record unavailable publication coverage.
-Keep source-author attribution, angle, specific addition, target when known,
-privacy/public-reuse limits and approval/execution state. Use local writing
-policy/templates/scoring; with no writable destination candidates stay in the
-artifact until its normal approved retention transition. An explicit no-candidate
-result is valid. Propose material, never unsolicited first-person drafts or
-publication. `absorb` executes only authorized rows and keeps retry receipts.
+Read local policy in the profile body for declarations in the
+[shared distribution contract](../absorb/references/distribution-contract.md).
+Propose custom classes only when declared; when none is declared, propose none.
+Before proposing, search every declared location and record searched/unavailable
+coverage and actual matches. Include all declared required fields, selected source
+pointers, source-author attribution, privacy/reuse limits, a concrete change and
+explicit authorization. A missing writable workflow or destination leaves the
+candidate in the record. An explicit no-candidate result with its basis is valid.
+`absorb` executes only approved rows through declared routes, with receipts and
+read-back. Capture does not authorize first-person drafting or publication.

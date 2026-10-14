@@ -21,3 +21,8 @@ a transcript and its record may share a filename in different folders.
 Identity lookup reuses existing records and preserves user edits and paths,
 even when a title changes on retry. Different meetings with the same title get
 a stable identity suffix; filing refuses to overwrite different source content.
+
+Propose custom classes only when declared in local policy; when none is declared,
+propose none. Search declared locations before proposing, include required fields,
+source attribution and reuse limits, and pass only approved rows to `absorb`
+for declared-workflow execution, receipts and read-back.
