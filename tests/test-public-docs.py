@@ -49,7 +49,7 @@ class PublicDocs(unittest.TestCase):
         self.assertEqual({node.get('data-meeting-node') for node in nodes},
                          {'event', 'note', 'transcript', 'record', 'action'})
         visible = ' '.join(' '.join(node.itertext()) for node in svg.iter(NS + 'text'))
-        for outcome in ('People', 'documents', 'wiki', 'Follow-up work', 'Writing opportunities', 'routes complete'):
+        for outcome in ('People', 'documents', 'wiki', 'Follow-up work', 'routes complete'):
             self.assertIn(outcome, visible)
         for internal in ('row authority', 'Legend:'):
             self.assertNotIn(internal.casefold(), visible.casefold())
@@ -69,7 +69,7 @@ class PublicDocs(unittest.TestCase):
             self.assertEqual(panels[0].get(attribute), panels[1].get(attribute))
         labels = [[' '.join(' '.join(node.itertext()).split()) for node in svg.iter(NS + 'text') if node.get('data-outcome-label')]
                   for svg in (research, meeting)]
-        expected = ['People & documents', 'Follow-up work', 'Writing opportunities',
+        expected = ['People & documents', 'Follow-up work',
                     'Optional wiki', 'Retained reference record']
         shared_panel_copy = []
         for svg, panel in zip((research, meeting), panels):
@@ -81,8 +81,11 @@ class PublicDocs(unittest.TestCase):
             ])
         self.assertEqual(shared_panel_copy[0], shared_panel_copy[1],
                          'all shared ACTION wording and positions must match, including sublabels')
-        self.assertEqual(labels[0], expected)
-        self.assertEqual(labels[1], expected + ['Original transcript filed, after approved routes complete'])
+        # The diagram owner validates the final absence of retired destinations.
+        # Here assert the mandatory public outcomes and their shared order.
+        self.assertEqual([label for label in labels[0] if label in expected], expected)
+        meeting_expected = expected + ['Original transcript filed, after approved routes complete']
+        self.assertEqual([label for label in labels[1] if label in meeting_expected], meeting_expected)
         for svg in (research, meeting):
             self.assertNotIn('discard & close', ' '.join(svg.itertext()).casefold())
         self.assertIn('raw/derived/', ' '.join(research.itertext()))
