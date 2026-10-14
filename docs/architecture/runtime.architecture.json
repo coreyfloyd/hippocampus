@@ -236,7 +236,7 @@
       "id": "targets",
       "type": "database",
       "label": "Local destinations",
-      "sublabel": "docs \u00b7 context \u00b7 projects \u00b7 tasks \u00b7 writing",
+      "sublabel": "docs \u00b7 context \u00b7 projects \u00b7 tasks \u00b7 declared classes",
       "pos": [
         340,
         510

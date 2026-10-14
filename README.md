@@ -9,7 +9,7 @@ are filed after approved routes complete. Individual proposed changes can be dec
 
 ## Research
 
-![Ask or bring sources, set a question, produce an evidence-grounded research report, then apply approved outcomes and retain the report as a reference.](docs/images/question-answer-action.svg)
+![Ask a broad question or bring selected sources; Hippocampus writes a research report; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record.](docs/images/question-answer-action.svg)
 
 **Ask** a broad question with `research-topic`, or **bring** selected sources with
 `research-sources`. Both establish the **question**: what you want to understand or
@@ -20,13 +20,13 @@ Review the report’s proposed outcomes, then use `absorb` for the approved **ac
 update people and documents, file follow-up work,
 and compile selected primary evidence into an optional wiki through `wiki-compile`.
 Decline individual proposals when appropriate. Once approved routes are complete or
-explicitly declined, the report is retained in `raw/derived/` as a reference record;
+explicitly declined, the report is retained in your knowledge folder as a reference record;
 it is not primary compiler evidence. The detailed report structure and distribution
 rules appear below in [Durable research and distribution](#durable-research-and-distribution).
 
 ## Meetings
 
-![Calendar event, note and transcript inputs feed a meeting record in its folder, then the same approved destinations as research. The original transcript is filed last, after approved routes complete.](docs/images/capture-meetings.svg)
+![Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record, and the original transcript is filed after approved routes complete.](docs/images/capture-meetings.svg)
 
 Bring a **calendar event**, a **note** or a **transcript** into `meeting-capture`.
 These inputs are independent: event context establishes schedule and agenda, notes
@@ -69,7 +69,7 @@ These skills help you get research filed where it belongs.
 | Skill               | Use it when                                                                                             | Result and next step                                                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `meeting-capture` | Review calls or meetings and preserve records, document updates, and follow-ups. | Creates a configurable Markdown record directly in its meeting folder; proposes source-linked changes and actions. Approved rows go through absorb; the record stays in place. |
-| `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts move to raw/derived as excluded references.                           |
+| `absorb`   | A research artifact or meeting record has concrete approved changes ready to execute.       | Executes authorized rows through local workflows with confirmed receipts. Meeting records stay in place; completed research artifacts are retained as excluded references.                           |
 | `knowledge-capture` | Useful sources or synthesis exist in the current conversation and need a complete disposition proposal. | Inventories conversation knowledge, reuses existing authorization, asks about uncovered decisions, then performs approved captures. It does not process research artifacts. |
 
 ## Personal Knowledge Curation skills
@@ -205,7 +205,7 @@ recommendation when a genuine choice exists. Nothing may be merely staged:
 absorb it or discard it. Adoption decisions about third-party work require
 real-world usage and sentiment evidence, not just the source itself.
 The artifact is durable enough to support review and execution, but it is
-coordination material while pending; completed absorption preserves it in `raw/derived/` as an excluded reference record.
+coordination material while pending; completed absorption retains it as an excluded reference record.
 
 If an approved row belongs in the wiki, `absorb` reuses already-retained
 primary source text and provenance, or stages new selected external evidence
