@@ -3,7 +3,7 @@
 
 Synthesis and approvals belong to the invoking skills. External effects belong
 only to explicitly supplied local workflows; this helper has no built-in task,
-writing, document, or compiler integration.
+custom-class, document, or compiler integration.
 """
 from __future__ import annotations
 
@@ -27,7 +27,8 @@ sys.path.insert(0, str(PACKAGE / 'scripts'))
 import validate_profile as profile_schema
 
 BLOCK = re.compile(r'^```hippocampus\n(.*?)\n```[ \t]*$', re.M | re.S)
-KINDS = {'wiki', 'document', 'action', 'writing', 'retain', 'discard'}
+KINDS = {'wiki', 'document', 'action', 'retain', 'discard'}
+CLASS_BLOCK = re.compile(r'^```hippocampus-classes\n(.*?)\n```[ \t]*$', re.M | re.S)
 VOLATILE = {'state', 'authorization', 'receipt', 'inflight', 'error', 'scope'}
 
 
@@ -123,8 +124,7 @@ def sources_for(root: Path, sources: list[dict]) -> list[dict]:
 
 def initial(kind: str, identity: str, sources: list[dict]) -> dict:
     return dict(version=1, kind=kind, record_id=identity, sources=sources,
-                decisions=[], rows=[], history=[], status='captured',
-                writing_result='not yet assessed')
+                decisions=[], rows=[], history=[], status='captured', class_results={})
 
 
 def meaningful_title(title: str, sources: list[dict]) -> str:
@@ -221,7 +221,43 @@ def initialize_research(path: Path, sources: list[dict]) -> None:
         save(path, initial('research', digest(path.name), sources))
 
 
-def validate_rows(state: dict) -> None:
+def proposal_classes(profile: Path | None) -> dict:
+    """Read opt-in declarations from the profile's local policy body only."""
+    if profile is None:
+        return {}
+    profile_schema.validate(profile)
+    body = profile.read_text(encoding='utf-8').split('\n---', 1)[1]
+    blocks = list(CLASS_BLOCK.finditer(body))
+    if not blocks:
+        return {}
+    if len(blocks) != 1:
+        raise ValueError('local policy requires at most one class declaration block')
+    declarations = json.loads(blocks[0].group(1))
+    if not isinstance(declarations, list):
+        raise ValueError('class declarations must be a JSON array')
+    classes = {}
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            raise ValueError('class declaration must be an object')
+        name = declaration.get('name')
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z][a-z0-9_-]*', name) or name in KINDS or name in classes:
+            raise ValueError('class name must be unique and must not replace a built-in kind')
+        for field in ('search_before_proposing', 'required_fields'):
+            items = declaration.get(field)
+            if not isinstance(items, list) or not items or any(not isinstance(i, str) or not i.strip() for i in items) or len(set(items)) != len(items):
+                raise ValueError(f'class requires nonempty unique {field}')
+        for field in ('workflow', 'destination'):
+            if field in declaration and (not isinstance(declaration[field], str) or not declaration[field].strip()):
+                raise ValueError(f'class {field} must be nonempty text')
+        if not declaration.get('workflow') and not declaration.get('destination'):
+            raise ValueError('class requires a workflow or destination')
+        classes[name] = declaration
+    return classes
+
+
+def validate_rows(state: dict, classes: dict | None = None, existing_rows: list | None = None) -> None:
+    classes = classes or {}
+    existing = {r['id']: r for r in (existing_rows or [])}
     sources = {s['id']: s for s in state['sources']}
     identities = set()
     for row in state['rows']:
@@ -230,8 +266,13 @@ def validate_rows(state: dict) -> None:
         identities.add(row['id'])
         if row.get('decision') not in state['decisions']:
             raise ValueError('row has no parent decision')
-        if row.get('kind') not in KINDS or not row.get('change'):
-            raise ValueError('row requires a supported kind and concrete change')
+        kind = row.get('kind')
+        if not row.get('change'):
+            raise ValueError('row requires a concrete change')
+        if kind not in KINDS and kind not in classes:
+            old = existing.get(row['id'])
+            if old is None or row_scope(old) != row_scope(row):
+                raise ValueError('row has an undeclared proposal class')
         if row.get('authorization') not in {'approved', 'pending', 'declined'}:
             raise ValueError('row authorization must be explicit')
         evidence = row.get('evidence')
@@ -241,14 +282,14 @@ def validate_rows(state: dict) -> None:
             raise ValueError('wiki compilation requires primary evidence')
         if row['kind'] == 'action' and not row.get('owner'):
             raise ValueError('action requires an owner')
-        if row['kind'] == 'writing':
-            if row.get('opportunity') not in {'new', 'enrich', 'published-followup'}:
-                raise ValueError('unsupported writing opportunity')
-            if any(not row.get(k) for k in ('author', 'angle', 'addition', 'privacy')):
-                raise ValueError('writing requires attribution, angle, addition, and reuse limits')
-            coverage = row.get('coverage', {})
-            if any(coverage.get(k) not in {'searched', 'unavailable'} for k in ('ideas', 'drafts', 'published')):
-                raise ValueError('writing requires ideas/drafts/publication search coverage')
+        if kind in classes:
+            declaration = classes[kind]
+            if any(not row.get(field) for field in declaration['required_fields']):
+                raise ValueError('custom class row is missing required fields')
+            search = row.get('search')
+            if not isinstance(search, dict) or any(search.get(location) not in {'searched', 'unavailable'}
+                    for location in declaration['search_before_proposing']):
+                raise ValueError('custom class row requires declared search coverage')
         if not isinstance(row.get('preconditions', []), list):
             raise ValueError('preconditions must be a list of unresolved confirmations')
 
@@ -259,11 +300,17 @@ def row_scope(row: dict) -> str:
 
 def set_plan(path: Path, decisions: list[str], rows: list[dict],
              writing_result: str | None = None,
-             legacy_results: dict[str, dict] | None = None) -> None:
+             legacy_results: dict[str, dict] | None = None,
+             profile: Path | None = None, class_results: dict | None = None) -> None:
     with locked(path):
         state = read_record(path)
+        classes = proposal_classes(profile)
+        rows = [dict(row) for row in rows]
+        for row in rows:
+            if row.get('kind') in classes:
+                row['class_policy'] = digest(classes[row['kind']])
         proposed = dict(state, decisions=decisions, rows=rows)
-        validate_rows(proposed)
+        validate_rows(proposed, classes, state['rows'])
         legacy_results = legacy_results or {}
         if legacy_results and (state['kind'] != 'research' or set(legacy_results) - {r['id'] for r in rows}):
             raise ValueError('legacy receipts must belong to normalized research rows')
@@ -303,6 +350,8 @@ def set_plan(path: Path, decisions: list[str], rows: list[dict],
         state.update(decisions=decisions, rows=new_rows, status='pending')
         if writing_result is not None:
             state['writing_result'] = writing_result
+        if class_results is not None:
+            state['class_results'] = class_results
         save(path, state)
 
 
@@ -311,8 +360,10 @@ def execute(profile: Path, path: Path, workflows: dict[str, Callable[[dict], dic
     path = within(root, path)
     with locked(path):
         state = read_record(path)
-        validate_rows(state)
+        classes = proposal_classes(profile)
+        validate_rows(state, existing_rows=state['rows'])
         for row in state['rows']:
+            declaration = classes.get(row['kind'])
             if row.get('scope') != row_scope(row):
                 state['history'].append(dict(row))
                 row.update(authorization='pending', state='pending', receipt=None,
@@ -320,6 +371,10 @@ def execute(profile: Path, path: Path, workflows: dict[str, Callable[[dict], dic
                 save(path, state)
                 continue
             if row.get('state') in {'complete', 'declined'}:
+                continue
+            if declaration and row.get('class_policy') != digest(declaration):
+                row.update(authorization='pending', error='class policy changed; replan and renew approval')
+                save(path, state)
                 continue
             row['error'] = None
             if row['authorization'] != 'approved' or row.get('preconditions'):
@@ -331,10 +386,17 @@ def execute(profile: Path, path: Path, workflows: dict[str, Callable[[dict], dic
             if row['kind'] == 'wiki' and values.get('wiki_enabled') == 'false':
                 row['error'] = 'wiki disabled; route requires a new approved destination'
                 continue
-            if row['kind'] == 'writing' and (not row.get('target') or not row.get('workflow')):
-                row['error'] = 'no configured writable writing destination/workflow'
-                continue
-            workflow = workflows.get(row['kind'])
+            if row['kind'] not in KINDS:
+                if declaration is None:
+                    row['error'] = 'undeclared proposal class; candidate retained'
+                    continue
+                validate_rows(dict(state, rows=[row]), classes)
+                if (not row.get('target') or
+                        (declaration.get('destination') and row['target'] != declaration['destination']) or
+                        (declaration.get('workflow') and row.get('workflow') != declaration['workflow'])):
+                    row['error'] = 'no configured writable custom-class destination/workflow'
+                    continue
+            workflow = workflows.get(declaration.get('workflow', row['kind']) if declaration else row['kind'])
             if workflow is None:
                 row['error'] = 'configured destination workflow unavailable'
                 continue
@@ -406,7 +468,7 @@ def reconcile(path: Path, row_id: str, result: dict) -> None:
 
 
 def terminal(state: dict) -> None:
-    validate_rows(state)
+    validate_rows(state, existing_rows=state['rows'])
     if any(r.get('inflight') or r.get('scope') != row_scope(r) or r.get('state') not in {'complete', 'declined'} for r in state['rows']):
         raise ValueError('pending routes prevent retention filing')
 
@@ -568,7 +630,7 @@ def main() -> None:
     elif args.command == 'prepare-research':
         initialize_research(path, sources_for(root, json.loads(args.input.read_text())))
     elif args.command == 'plan':
-        set_plan(path, **json.loads(args.input.read_text()))
+        set_plan(path, profile=args.profile, **json.loads(args.input.read_text()))
     elif args.command == 'execute':
         workflows = {kind: command_workflow(argv) for kind, argv in json.loads(args.workflows.read_text()).items()}
         print(json.dumps(execute(args.profile, path, workflows), indent=2))

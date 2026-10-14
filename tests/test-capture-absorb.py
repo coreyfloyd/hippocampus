@@ -337,16 +337,139 @@ class CaptureAbsorb(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.set_plan(record, [], [self.row()])
 
+    def declare_class(self, **overrides):
+        declaration = dict(name='review', search_before_proposing=['existing reviews'],
+                           required_fields=['author', 'addition'], workflow='review-workflow')
+        declaration.update(overrides)
+        self.profile.write_text(self.profile.read_text().split('```hippocampus-classes')[0] +
+            '\n```hippocampus-classes\n' + json.dumps([declaration]) + '\n```\n')
+        return declaration
+
+    def test_custom_class_validation_and_declared_workflow(self):
+        mod = self.module(); record = self.capture()
+        self.assertIn('profile', mod.set_plan.__code__.co_varnames, 'planning must validate locally declared classes')
+        row = self.row(kind='review', author='document author', addition='source-linked note',
+                       search={'existing reviews': 'searched'}, workflow='review-workflow')
+        with self.assertRaisesRegex(ValueError, 'undeclared'):
+            mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        self.declare_class()
+        for field in ('author', 'addition', 'search'):
+            missing = dict(row); missing.pop(field)
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                mod.set_plan(record, ['D1'], [missing], profile=self.profile)
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        calls = []
+        def workflow(req):
+            calls.append(req)
+            return dict(confirmed=True, receipt='read-back-review', target=req['row']['target'])
+        mod.execute(self.profile, record, {'review': lambda req: self.fail('undeclared workflow'),
+                                           'review-workflow': workflow})
+        mod.execute(self.profile, record, {'review-workflow': workflow})
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(mod.read_record(record)['rows'][0]['receipt']['receipt'], 'read-back-review')
+
+    def test_custom_destination_and_policy_change_require_renewed_approval(self):
+        mod = self.module(); record = self.capture()
+        self.declare_class(destination='docs/review.md')
+        row = self.row(kind='review', author='author', addition='addition',
+                       search={'existing reviews': 'unavailable'}, workflow='wrong', target='docs/other.md')
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        calls = []
+        mod.execute(self.profile, record, {'review-workflow': lambda req: calls.append(req)})
+        self.assertEqual(calls, [])
+        self.assertEqual(mod.read_record(record)['rows'][0]['state'], 'pending')
+        row.update(workflow='review-workflow', target='docs/review.md')
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        self.declare_class(destination='docs/review.md', required_fields=['author', 'addition', 'privacy'])
+        mod.execute(self.profile, record, {'review-workflow': lambda req: calls.append(req)})
+        self.assertEqual(calls, [])
+        self.assertEqual(mod.read_record(record)['rows'][0]['authorization'], 'pending')
+
+    def test_completed_custom_receipt_survives_policy_change(self):
+        mod = self.module(); record = self.capture()
+        self.declare_class()
+        row = self.row(kind='review', author='author', addition='addition',
+                       search={'existing reviews': 'searched'}, workflow='review-workflow')
+        mod.set_plan(record, ['D1'], [row], profile=self.profile)
+        mod.execute(self.profile, record, {'review-workflow': lambda req:
+            dict(confirmed=True, receipt='saved-review', target=req['row']['target'])})
+        self.declare_class(workflow='changed-workflow')
+        mod.execute(self.profile, record, {})
+        saved = mod.read_record(record)['rows'][0]
+        self.assertEqual(saved['authorization'], 'approved')
+        self.assertEqual(saved['state'], 'complete')
+        self.assertEqual(saved['receipt']['receipt'], 'saved-review')
+
+    def test_destination_only_class_cli_and_uncertain_readback(self):
+        mod = self.module(); record = self.capture()
+        declaration = self.declare_class(destination='docs/review.md')
+        declaration.pop('workflow')
+        self.profile.write_text(self.profile.read_text().split('```hippocampus-classes')[0] +
+            '```hippocampus-classes\n' + json.dumps([declaration]) + '\n```\n')
+        row = self.row(kind='review', target='docs/review.md', author='author', addition='addition',
+                       search={'existing reviews': 'searched'})
+        plan = self.root / 'plan.json'; plan.write_text(json.dumps(dict(decisions=['D1'], rows=[row], class_results={'review': 'candidate'})))
+        result = subprocess.run(['python3', str(HELPER), '--profile', str(self.profile), 'plan', str(record), '--input', str(plan)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = []
+        def uncertain(req):
+            calls.append(req)
+            return dict(confirmed=True, receipt='wrong-target', target='docs/other.md')
+        mod.execute(self.profile, record, {'review': uncertain})
+        mod.execute(self.profile, record, {'review': uncertain})
+        self.assertEqual(len(calls), 1)
+        self.assertIsNotNone(mod.read_record(record)['rows'][0]['inflight'])
+        mod.reconcile(record, 'A1', dict(confirmed=True, receipt='read-back', target='docs/review.md'))
+        self.assertEqual(mod.read_record(record)['rows'][0]['state'], 'complete')
+        self.assertEqual(mod.read_record(record)['class_results'], {'review': 'candidate'})
+
+    def test_invalid_class_declarations_rejected_and_public_example_parses(self):
+        mod = self.module()
+        for overrides in (dict(name='action'), dict(name='Bad name'), dict(required_fields=[]),
+                          dict(search_before_proposing=[]), dict(workflow='')):
+            self.declare_class(**overrides)
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                mod.proposal_classes(self.profile)
+        self.profile.write_text(self.profile.read_text().split('```hippocampus-classes')[0] +
+            (REPO / 'profiles/karpathy-wiki.example.md').read_text().split('## Example custom class:', 1)[1])
+        self.assertEqual(set(mod.proposal_classes(self.profile)), {'writing'})
+
+    def test_legacy_writing_record_remains_readable_without_declaration(self):
+        # Existing contract-review fixture shape retained from the original route test.
+        mod = self.module(); record = self.capture()
+        state = mod.read_record(record)
+        row = self.row(id='W0', kind='writing', opportunity='new',
+            author='contract author', angle='Explain scoped compilation',
+            addition='Add a source-linked note about the selected subset', privacy='public contract only',
+            coverage={'ideas': 'searched', 'drafts': 'searched', 'published': 'unavailable'},
+            search={'ideas': 'searched', 'drafts': 'searched', 'published': 'unavailable'},
+            target='docs/writing-seeds.json', workflow='local writing workflow')
+        row.update(scope=mod.row_scope(row))
+        state.update(decisions=['D1'], rows=[row], writing_result='candidate retained')
+        mod.save(record, state)
+        prose = record.read_text().split('```hippocampus')[0]
+        mod.set_plan(record, ['D1'], [row])
+        self.assertEqual(mod.read_record(record)['rows'][0]['id'], 'W0')
+        mod.execute(self.profile, record, {'writing': lambda req: self.fail('undeclared legacy execution')})
+        self.assertEqual(mod.read_record(record)['rows'][0]['kind'], 'writing')
+        self.assertEqual(record.read_text().split('```hippocampus')[0], prose)
+        with self.assertRaises(ValueError):
+            mod.set_plan(record, ['D1'], [dict(row, id='W-new')])
+
     def test_writing_routes_and_no_destination_preserve_authored_prose(self):
         mod = self.module(); record = self.capture()
+        self.declare_class(name='writing', search_before_proposing=['ideas', 'drafts', 'published'],
+            required_fields=['opportunity', 'author', 'angle', 'addition', 'privacy'], workflow='local writing workflow')
         authored = self.root / 'docs/draft.md'; authored.write_text('Authored draft unchanged.\n')
         rows = [self.row(id=f'W{i}', kind='writing', opportunity=kind,
             author='contract author', angle='Explain scoped compilation',
             addition='Add a source-linked note about the selected subset', privacy='public contract only',
             coverage={'ideas': 'searched', 'drafts': 'searched', 'published': 'unavailable'},
+            search={'ideas': 'searched', 'drafts': 'searched', 'published': 'unavailable'},
             target='docs/writing-seeds.json', workflow='local writing workflow')
             for i, kind in enumerate(('new', 'enrich', 'published-followup'))]
-        mod.set_plan(record, ['D1'], rows)
+        mod.set_plan(record, ['D1'], rows, profile=self.profile)
         seen = []
         def writing(req):
             seen.append(req['row']['opportunity'])
@@ -357,18 +480,18 @@ class CaptureAbsorb(unittest.TestCase):
                               'addition': req['row']['addition'], 'author': req['row']['author']})
                 destination.write_text(json.dumps(seeds))
             return dict(confirmed=True, receipt='writing:' + req['idempotency_key'], target=req['row']['target'])
-        mod.execute(self.profile, record, {'writing': writing})
-        mod.execute(self.profile, record, {'writing': writing})
+        mod.execute(self.profile, record, {'local writing workflow': writing})
+        mod.execute(self.profile, record, {'local writing workflow': writing})
         self.assertEqual(seen, ['new', 'enrich', 'published-followup'])
         self.assertEqual(len(json.loads((self.root / 'docs/writing-seeds.json').read_text())), 3)
         self.assertEqual(authored.read_text(), 'Authored draft unchanged.\n')
         rows[0]['id'] = 'W4'; rows[0]['target'] = ''; rows[0]['workflow'] = ''
-        mod.set_plan(record, ['D1'], [rows[0]])
-        mod.execute(self.profile, record, {'writing': writing})
+        mod.set_plan(record, ['D1'], [rows[0]], profile=self.profile)
+        mod.execute(self.profile, record, {'local writing workflow': writing})
         self.assertEqual(len(seen), 3)
         self.assertEqual(mod.read_record(record)['rows'][0]['state'], 'pending')
         rows[0]['authorization'] = 'declined'
-        mod.set_plan(record, ['D1'], [rows[0]])
+        mod.set_plan(record, ['D1'], [rows[0]], profile=self.profile)
         mod.set_plan(record, [], [], writing_result='none: no useful opportunity')
         self.assertIn('no useful opportunity', mod.read_record(record)['writing_result'])
 
