@@ -32,8 +32,8 @@ Public docs correction 2: symmetric ACTION panels now show people/documents, fol
 
 ## Diagram conventions
 
-Boxes are things: blue inputs, orange records Hippocampus writes, and the green ACTION destinations panel. The subtitle states this three-color key in words. ASK and BRING are inputs; QUESTION and ANSWER are records.
+Boxes are things: blue inputs you bring, one orange record Hippocampus writes, and green destination boxes where approved outcomes land. Every box uses the same two-line style (a title and a one-line description); the record box carries a monospace label above its title. Column headers name the stage in monospace, in the column's color: QUESTION, ANSWER, ACTION for research (Ask and Bring together are the question), MEETING, RECORD, ACTION for meetings. The subtitle states the three-color key in words.
 
-Skills label arrows in monospace, once per operation: research-topic from ASK, research-sources from BRING, no skill on QUESTION → ANSWER, and absorb into ACTION. Meeting inputs merge onto one meeting-capture arrow; the record reaches ACTION through absorb. No skills appear in or under boxes, except wiki-compile beside Optional wiki.
+Skills label arrows in monospace, once per operation: research-topic from Ask and research-sources from Bring into the research report; the three meeting inputs merge onto one meeting-capture arrow into the meeting record; absorb from the record into the ACTION column, which fans into each destination. No skills appear in or under boxes, except wiki-compile as the description line of the Wiki destination.
 
-Both ACTION panels use identical wording, order and position; meetings add “Original transcript filed, after approved routes complete” last inside the panel. Individual proposals may be declined. Keep this simple per-section grammar in the deck and architecture overview by referencing the same SVGs.
+Both diagrams use the same destination boxes in the same order, position and wording: People, Documents, Follow-up work, Wiki, Retained reference record; meetings add Original transcript filed, after approved routes complete, as the last box. "Individual proposals may be declined" sits at the bottom left. Both SVGs are generated from one template so their styles stay identical; keep this grammar in the deck and architecture overview by referencing the same SVGs.
