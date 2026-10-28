@@ -7,13 +7,14 @@ has approved its complete mutation list.  Tests pass fake tool homes; callers
 without an explicit mapping receive the user's conventional tool homes.
 """
 import argparse
+import copy
+import re
+import tomllib
 import hashlib
 import importlib.util
 import json
-import os
 import pathlib
 import shutil
-import subprocess
 import sys
 import tempfile
 
@@ -49,39 +50,43 @@ def dump_json(path, value):
 
 
 def toml_value(path, section, key):
-    """Read one simple TOML value without parsing or rewriting unrelated TOML."""
     if not path.exists():
         return None
-    active = None
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            active = stripped[1:-1].strip()
-        elif active == section and "=" in stripped:
-            candidate, value = stripped.split("=", 1)
-            if candidate.strip() == key:
-                return value.strip().strip('"').strip("'")
-    return None
+    return nested(tomllib.loads(path.read_text(encoding="utf-8")), *section.split("."), key)
 
 
 def replace_toml_value(path, section, key, value):
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    replacement = f"{key} = {str(value).lower()}" if isinstance(value, bool) else f'{key} = "{value}"'
-    active = None
-    for index, line in enumerate(lines):
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            active = stripped[1:-1].strip()
-        elif active == section and "=" in stripped and stripped.split("=", 1)[0].strip() == key:
-            lines[index] = replacement
-            break
-    else:
-        if lines and lines[-1]:
-            lines.append("")
-        lines.append(f"[{section}]")
-        lines.append(replacement)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """Change a boolean token only if TOML parsing proves the exact semantic edit.
+
+    This supports dotted keys, quoted keys, inline tables and comments without
+    reserializing or discarding any unrelated configuration.
+    """
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    data = tomllib.loads(text)
+    current = nested(data, *section.split("."), key)
+    if current == value:
+        return
+    if isinstance(current, bool) and isinstance(value, bool):
+        expected = copy.deepcopy(data)
+        set_nested(expected, (*section.split("."), key), value)
+        for match in re.finditer(r"\b(?:true|false)\b", text):
+            candidate = text[:match.start()] + str(value).lower() + text[match.end():]
+            try:
+                if tomllib.loads(candidate) == expected:
+                    path.write_text(candidate, encoding="utf-8")
+                    return
+            except tomllib.TOMLDecodeError:
+                continue
+        raise ValueError(f"cannot safely update {section}.{key} in {path}")
+    # Only used to build isolated fixtures when the key is absent.
+    if current is None:
+        literal = str(value).lower() if isinstance(value, bool) else json.dumps(value)
+        candidate = text + f"\n[{section}]\n{key} = {literal}\n"
+        tomllib.loads(candidate)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(candidate, encoding="utf-8")
+        return
+    raise ValueError(f"customized TOML setting {section}.{key} in {path}")
 
 
 def nested(mapping, *keys):
@@ -147,9 +152,9 @@ def codex_memory(home):
     config_path = home / "config.toml"
     value = toml_value(config_path, "features", "memories")
     store = home / "memories"
-    if value and value not in {"true", "false"}:
+    if value is not None and not isinstance(value, bool):
         return "customized", config_path, store, []
-    state = "on" if value == "true" else "off"
+    state = "on" if value is True else "off"
     mutations = [] if state == "off" else [{
         "file": str(config_path), "setting": "features.memories", "current": value, "proposed": False,
     }]
@@ -165,7 +170,7 @@ def openclaw_memory(home):
         workspace = home / workspace
     default_workspace = home / "workspace"
     if workspace != default_workspace:
-        return "customized", config_path, workspace / "memory", []
+        return "customized", config_path, workspace, []
     flush = nested(config, "agents", "defaults", "compaction", "memoryFlush", "enabled")
     dreaming = nested(config, "plugins", "entries", "memory-core", "config", "dreaming", "enabled")
     state = "off" if flush is False and dreaming is False else "on"
@@ -173,7 +178,7 @@ def openclaw_memory(home):
         {"file": str(config_path), "setting": "agents.defaults.compaction.memoryFlush.enabled", "current": flush, "proposed": False},
         {"file": str(config_path), "setting": "plugins.entries.memory-core.config.dreaming.enabled", "current": dreaming, "proposed": False},
     ]
-    return state, config_path, workspace / "memory", mutations
+    return state, config_path, workspace, [m for m in mutations if m["current"] is not False]
 
 
 def inspect_tools(homes=None):
@@ -192,11 +197,21 @@ def inspect_tools(homes=None):
             state, settings, store, mutations = claude_memory(home)
         else:
             state, settings, store, mutations = codex_memory(home)
+        if tool == "claude-code" and state != "customized":
+            locations = sorted((home / "projects").glob("*/memory"))
+            file_count = sum(count_files(location) for location in locations)
+        elif tool == "openclaw":
+            locations = [store / "MEMORY.md", store / "memory"]
+            file_count = int(locations[0].is_file()) + count_files(locations[1])
+        else:
+            locations = [store]
+            file_count = count_files(store)
         rows.append({
             "tool": tool,
+            "home": str(home),
             "installed": installed(tool, home),
             "target": {"file": str(target), "exists": target.exists(), "ownership": "composer-owned" if composer_owned(target) else "user-owned"},
-            "memory": {"state": state, "settings_file": str(settings), "store": {"location": str(store), "file_count": count_files(store), "empty": count_files(store) == 0}},
+            "memory": {"state": state, "settings_file": str(settings), "store": {"location": str(store), "file_count": file_count, "empty": file_count == 0, "locations": [str(location) for location in locations]}},
             "off_mutations": mutations,
         })
     return rows
@@ -214,6 +229,7 @@ def approval_payload(plan_value):
             "memory_mutations": row["memory_mutations"],
         } for row in plan_value["tools"]],
         "mutation_list": plan_value["mutation_list"],
+        "file_states": plan_value.get("file_states", {}),
     }
 
 
@@ -226,7 +242,11 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
     if preset not in {"standard", "thin"}:
         raise ValueError("preset must be standard or thin")
     overrides = overrides or {}
+    if profile:
+        values = profile_reader().parse(pathlib.Path(profile))
+        development_root = development_root or values.get("rules", {}).get("development_root")
     result = {"preset": preset, "development_root": str(development_root) if development_root else None, "tools": [], "mutation_list": [], "context_guidance": ["context/devices.md", "context/file-locations.md", "context/people.md", "context/preferences.md"]}
+    result["homes"] = {row["tool"]: row["home"] for row in rows}
     for row in rows:
         if not row["installed"]:
             continue
@@ -244,8 +264,6 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
             delivery = "directory walk from the development root" if tool == "claude-code" else "repository block"
         proposed = {"tool": tool, "rules_target": rules_target, "memory": memory, "memory_mutations": mutations, "memory_change_count": len(row["off_mutations"]), "flagged": flagged, "development_delivery": delivery}
         result["tools"].append(proposed)
-        if rules_target != "none" and (not row["target"]["exists"] or row["target"]["ownership"] == "user-owned"):
-            result["mutation_list"].append({"kind": "rule target", "file": rules_target, "current": "existing" if row["target"]["exists"] else "absent", "proposed": "compose from context/rules.md"})
         result["mutation_list"].extend({"kind": "memory setting", **mutation} for mutation in mutations)
     if profile:
         profile = pathlib.Path(profile)
@@ -262,6 +280,36 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
             expected["development_root"] = result["development_root"]
         if current != expected:
             result["mutation_list"].append({"kind": "profile", "file": str(profile), "current": "rules section present" if current else "rules section absent", "proposed": "record approved rules and memory choices"})
+    if profile:
+        root = pathlib.Path(values["knowledge_root"]).resolve()
+        composer, writes = target_plan(result, root)
+        directories = set()
+        for item in writes:
+            if item.original == item.desired:
+                continue
+            parent = item.target.path.parent
+            while not parent.exists():
+                directories.add(parent)
+                parent = parent.parent
+            result["mutation_list"].append({
+                "kind": "rule target", "file": str(item.target.path),
+                "current": digest(item.original), "proposed": digest(item.desired),
+                "desired_contents": item.desired.decode("utf-8"),
+            })
+        for mutation in result["mutation_list"]:
+            if mutation["kind"] == "memory setting":
+                parent = pathlib.Path(mutation["file"]).parent
+                while not parent.exists():
+                    directories.add(parent)
+                    parent = parent.parent
+        result["mutation_list"][0:0] = [
+            {"kind": "directory", "file": str(path), "current": "absent", "proposed": "create directory"}
+            for path in sorted(directories, key=lambda p: (len(p.parts), str(p)))
+        ]
+        files = {pathlib.Path(m["file"]) for m in result["mutation_list"] if m["kind"] != "directory"}
+        files.update(item.target.path for item in writes)
+        files.add(pathlib.Path(profile))
+        result["file_states"] = {str(path): digest(path.read_bytes() if path.exists() else None) for path in sorted(files)}
     result["approval_fingerprint"] = plan_fingerprint(result)
     return result
 
@@ -275,7 +323,8 @@ def write_memory_state(home, tool, state):
             settings["autoMemoryEnabled"] = state == "on"
         dump_json(home / "settings.json", settings)
     elif tool == "codex":
-        replace_toml_value(home / "config.toml", "features", "memories", {"on": True, "off": False, "customized": "external"}[state])
+        value = {"on": "true", "off": "false", "customized": '"external"'}[state]
+        (home / "config.toml").write_text(f"[features]\nmemories = {value}\n", encoding="utf-8")
     else:
         config = {} if state != "customized" else {"agents": {"defaults": {"workspace": str(home / "other-workspace")}}}
         if state != "customized":
@@ -332,34 +381,37 @@ def replace_rules_section(profile, plan_value):
     return "".join([lines[0], *rewritten, *replacement, *lines[end:]])
 
 
-def compose_targets(plan_value, knowledge_root):
+def digest(content):
+    return "absent" if content is None else hashlib.sha256(content).hexdigest()
+
+
+def target_plan(plan_value, knowledge_root):
+    path = pathlib.Path(__file__).with_name("compose_rules.py")
+    spec = importlib.util.spec_from_file_location("hippocampus_composer", path)
+    composer = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = composer
+    spec.loader.exec_module(composer)
     targets = []
     tool_names = {"claude-code": "claude", "codex": "codex", "openclaw": "openclaw"}
     for row in plan_value["tools"]:
         if row["rules_target"] != "none":
-            targets.append({
-                "tool": tool_names[row["tool"]],
-                "scope": "user",
-                "file": row["rules_target"],
-                "sources": ["context/rules.md"],
-            })
+            targets.append({"tool": tool_names[row["tool"]], "scope": "user",
+                            "file": row["rules_target"], "sources": ["context/rules.md"]})
+    if plan_value["development_root"]:
+        dev = pathlib.Path(plan_value["development_root"])
+        for tool, filename in (("claude", "CLAUDE.md"), ("codex", "AGENTS.md")):
+            targets.append({"tool": tool, "scope": "development", "file": str(dev / filename),
+                            "sources": ["context/development-rules.md"]})
     if not targets:
-        return
-    config = {"knowledge_root": str(knowledge_root), "targets": targets}
-    descriptor, name = tempfile.mkstemp(prefix="hippocampus-rules-setup-", suffix=".json")
-    os.close(descriptor)
-    config_path = pathlib.Path(name)
-    try:
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-        result = subprocess.run(
-            [sys.executable, str(pathlib.Path(__file__).with_name("compose_rules.py")), "compose", "--config", str(config_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode:
-            raise ValueError(result.stderr.strip() or "rules composer failed")
-    finally:
-        config_path.unlink(missing_ok=True)
+        return composer, []
+    with tempfile.TemporaryDirectory(prefix="hippocampus-rules-plan-") as temporary:
+        config = pathlib.Path(temporary) / "targets.json"
+        config.write_text(json.dumps({"knowledge_root": str(knowledge_root), "targets": targets}))
+        try:
+            _, parsed = composer.load_config(config)
+            return composer, composer.plan(parsed, allow_missing_parents=True)
+        except composer.ComposeError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fingerprint=None):
@@ -374,30 +426,68 @@ def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fin
     root = pathlib.Path(knowledge_root or values["knowledge_root"]).resolve()
     if root != pathlib.Path(values["knowledge_root"]).resolve():
         raise ValueError("knowledge_root does not match the profile")
-    compose_targets(plan_value, root)
-    for mutation in plan_value["mutation_list"]:
-        if mutation["kind"] != "memory setting":
-            continue
-        path = pathlib.Path(mutation["file"])
-        setting = mutation["setting"]
-        if path.suffix == ".json":
-            data = json_file(path)
-            set_nested(data, tuple(setting.split(".")), mutation["proposed"])
-            dump_json(path, data)
-        else:
-            section, key = setting.rsplit(".", 1)
-            replace_toml_value(path, section, key, mutation["proposed"])
-    replacement = replace_rules_section(profile, plan_value)
-    descriptor, name = tempfile.mkstemp(prefix="hippocampus-profile-", suffix=".md", dir=profile.parent)
-    os.close(descriptor)
-    candidate = pathlib.Path(name)
+    homes = plan_value.get("homes")
+    if not homes:
+        raise ValueError("apply requires a profile-backed plan")
+    overrides = {row["tool"]: {"rules_target": row["rules_target"], "memory": row["memory"]} for row in plan_value["tools"]}
+    fresh = plan(inspect_tools(homes), plan_value["preset"], plan_value["development_root"], overrides, profile)
+    if plan_fingerprint(fresh) != approval_fingerprint:
+        raise ValueError("approved mutation list changed; rerun plan and approve the new fingerprint")
+    composer, writes = target_plan(fresh, root)
+    actual_targets = {str(item.target.path): (digest(item.original), digest(item.desired))
+                      for item in writes if item.original != item.desired}
+    approved_targets = {m["file"]: (m["current"], m["proposed"])
+                        for m in fresh["mutation_list"] if m["kind"] == "rule target"}
+    if actual_targets != approved_targets:
+        raise ValueError("approved mutation list changed; rerun plan and approve the new fingerprint")
+    extra_files = {}
+    for mutation in fresh["mutation_list"]:
+        if mutation["kind"] == "memory setting":
+            extra_files.setdefault(pathlib.Path(mutation["file"]), []).append(mutation)
+    # Render and validate every settings/profile update before touching targets.
+    with tempfile.TemporaryDirectory(prefix="hippocampus-rules-settings-") as temporary:
+        for index, (path, mutations) in enumerate(extra_files.items()):
+            scratch = pathlib.Path(temporary) / (str(index) + path.suffix)
+            if path.exists():
+                scratch.write_bytes(path.read_bytes())
+            for mutation in mutations:
+                if path.suffix == ".json":
+                    data = json_file(scratch)
+                    set_nested(data, tuple(mutation["setting"].split(".")), mutation["proposed"])
+                    dump_json(scratch, data)
+                else:
+                    section, key = mutation["setting"].rsplit(".", 1)
+                    replace_toml_value(scratch, section, key, mutation["proposed"])
+            target = composer.Target("codex", "settings", path, [])
+            original, mode = composer.preflight_target(target, allow_missing_parents=True)
+            writes.append(composer.PlannedWrite(target, original, mode, scratch.read_bytes(), "settings"))
+        if any(m["kind"] == "profile" for m in fresh["mutation_list"]):
+            candidate = pathlib.Path(temporary) / "profile.md"
+            candidate.write_text(replace_rules_section(profile, fresh), encoding="utf-8")
+            reader.validate(candidate)
+            target = composer.Target("codex", "profile", profile, [])
+            original, mode = composer.preflight_target(target)
+            writes.append(composer.PlannedWrite(target, original, mode, candidate.read_bytes(), "profile"))
+    paths = [item.target.path for item in writes]
+    if len(set(paths)) != len(paths):
+        raise ValueError("target overlaps profile or memory settings")
+    for path, expected in fresh["file_states"].items():
+        path = pathlib.Path(path)
+        if digest(path.read_bytes() if path.exists() else None) != expected:
+            raise ValueError("approved mutation list changed; rerun plan and approve the new fingerprint")
+    created = []
     try:
-        candidate.write_text(replacement, encoding="utf-8")
-        reader.validate(candidate)
-        candidate.replace(profile)
-    finally:
-        candidate.unlink(missing_ok=True)
-    return plan_value
+        for mutation in fresh["mutation_list"]:
+            if mutation["kind"] == "directory":
+                path = pathlib.Path(mutation["file"])
+                path.mkdir()
+                created.append(path)
+        composer.write_all(writes)
+    except (OSError, composer.ComposeError) as exc:
+        for path in reversed(created):
+            path.rmdir()
+        raise ValueError(str(exc)) from exc
+    return fresh
 
 
 def main():

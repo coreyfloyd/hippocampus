@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
@@ -23,12 +24,116 @@ class RulesSetupTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = pathlib.Path(self.temp.name)
+        self.base = pathlib.Path(self.temp.name).resolve()
         self.homes = {name: self.base / name for name in ("claude-code", "codex", "openclaw")}
         for name, home in self.homes.items():
             (home / "bin").mkdir(parents=True)
             executable = {"claude-code": "claude", "codex": "codex", "openclaw": "openclaw"}[name]
             (home / "bin" / executable).touch()
+
+    def configured_profile(self):
+        root = self.base / "configured-knowledge"
+        for name in ("context", "raw", "output", "docs"):
+            (root / name).mkdir(parents=True, exist_ok=True)
+        for name in ("log.md", "DECISIONS.md"):
+            (root / "docs" / name).touch()
+        (root / "context" / "rules.md").write_text("shared rule\n")
+        (root / "context" / "development-rules.md").write_text("development rule\n")
+        profile = self.base / "configured-profile.md"
+        profile.write_text("---\nprofile_version: 4\nknowledge_root: " + str(root) + "\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n---\npolicy\n")
+        return root, profile
+
+    def test_rules_changes_and_selected_override_are_reviewed(self):
+        helper = load_helper()
+        root, profile = self.configured_profile()
+        first = helper.plan(self.describe(), "thin", profile=profile)
+        helper.apply(first, profile, approved=True, approval_fingerprint=first["approval_fingerprint"])
+        clean = helper.plan(self.describe(), "thin", profile=profile)
+        (root / "context" / "rules.md").write_text("updated shared rule\n")
+        changed = helper.plan(self.describe(), "thin", profile=profile)
+        self.assertNotEqual(clean["approval_fingerprint"], changed["approval_fingerprint"])
+        self.assertIn(str(self.homes["codex"] / "AGENTS.md"), [m["file"] for m in changed["mutation_list"]])
+        before = (self.homes["codex"] / "AGENTS.md").read_bytes()
+        with self.assertRaisesRegex(ValueError, "approved mutation list changed"):
+            helper.apply(clean, profile, approved=True, approval_fingerprint=clean["approval_fingerprint"])
+        self.assertEqual((self.homes["codex"] / "AGENTS.md").read_bytes(), before)
+        for exists in (False, True):
+            override = self.base / ("existing.md" if exists else "absent.md")
+            if exists:
+                override.write_text("user rules\n")
+            value = helper.plan(self.describe(), "thin", overrides={"codex": {"rules_target": str(override)}}, profile=profile)
+            self.assertIn(str(override), [m["file"] for m in value["mutation_list"]])
+
+    def test_development_root_inherited_from_profile_and_composed(self):
+        helper = load_helper()
+        root, profile = self.configured_profile()
+        dev = self.base / "development"
+        initial = helper.plan(self.describe(), "thin", development_root=dev, profile=profile)
+        helper.apply(initial, profile, approved=True, approval_fingerprint=initial["approval_fingerprint"])
+        inherited = helper.plan(self.describe(), "thin", profile=profile)
+        self.assertEqual(inherited["development_root"], str(dev))
+        self.assertIn("@" + str(root / "context" / "development-rules.md"), (dev / "CLAUDE.md").read_text())
+        self.assertIn("development rule", (dev / "AGENTS.md").read_text())
+        self.assertNotIn("shared rule", (dev / "AGENTS.md").read_text())
+        self.assertEqual(inherited["mutation_list"], [])
+        self.assertTrue(all(row["development_delivery"] for row in inherited["tools"]))
+
+    def test_codex_valid_toml_forms_disable_only_memories(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        config = self.homes["codex"] / "config.toml"
+        for text in ('[features]\nmemories = true # enabled\nother = true\n',
+                     'features.memories = true\nfeatures.other = true\n',
+                     'features = { memories = true, other = true }\n',
+                     '["features"]\n"memories" = true\nother = true\n'):
+            with self.subTest(text=text):
+                config.write_text(text)
+                value = helper.plan(self.describe(), "thin", profile=profile)
+                row = next(row for row in value["tools"] if row["tool"] == "codex")
+                self.assertEqual(row["memory_mutations"], [{"file": str(config), "setting": "features.memories", "current": True, "proposed": False}])
+                helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+                expected = tomllib.loads(text)
+                expected["features"]["memories"] = False
+                self.assertEqual(tomllib.loads(config.read_text()), expected)
+
+    def test_memory_inventory_counts_only_memory_content(self):
+        project = self.homes["claude-code"] / "projects" / "sample"
+        project.mkdir(parents=True)
+        (project / "session.jsonl").write_text("transcript\n")
+        workspace = self.homes["openclaw"] / "workspace"
+        workspace.mkdir()
+        (workspace / "MEMORY.md").write_text("durable fact\n")
+        rows = {r["tool"]: r for r in self.describe()}
+        self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 0)
+        self.assertEqual(rows["openclaw"]["memory"]["store"]["file_count"], 1)
+        (project / "memory").mkdir()
+        (project / "memory" / "fact.md").write_text("fact\n")
+        (workspace / "memory").mkdir()
+        (workspace / "memory" / "daily.md").write_text("daily\n")
+        rows = {r["tool"]: r for r in self.describe()}
+        self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 1)
+        self.assertEqual(rows["openclaw"]["memory"]["store"]["file_count"], 2)
+
+    def test_fresh_workspace_is_an_explicit_approved_directory(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        workspace = self.homes["openclaw"] / "workspace"
+        value = helper.plan(self.describe(), "thin", profile=profile)
+        self.assertIn({"kind": "directory", "file": str(workspace), "current": "absent", "proposed": "create directory"}, value["mutation_list"])
+        self.assertFalse(workspace.exists())
+        helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+        self.assertTrue((workspace / "AGENTS.md").is_file())
+
+    def test_mixed_openclaw_settings_propose_only_changed_values(self):
+        helper = load_helper()
+        for flush, dreaming in ((False, True), (True, False)):
+            config = {}
+            helper.set_nested(config, ("agents", "defaults", "compaction", "memoryFlush", "enabled"), flush)
+            helper.set_nested(config, ("plugins", "entries", "memory-core", "config", "dreaming", "enabled"), dreaming)
+            helper.dump_json(self.homes["openclaw"] / "openclaw.json", config)
+            row = next(r for r in self.describe() if r["tool"] == "openclaw")
+            self.assertEqual(len(row["off_mutations"]), 1)
+            self.assertIs(row["off_mutations"][0]["current"], True)
 
     def describe(self):
         helper = load_helper()
@@ -51,21 +156,35 @@ class RulesSetupTests(unittest.TestCase):
 
     def test_memory_matrix_proposes_only_non_off_non_customized_states(self):
         helper = load_helper()
+        settings = {
+            "claude-code": ("settings.json", {"autoMemoryEnabled": True}),
+            "codex": ("config.toml", {"features.memories": True}),
+            "openclaw": ("openclaw.json", {
+                "agents.defaults.compaction.memoryFlush.enabled": True,
+                "plugins.entries.memory-core.config.dreaming.enabled": True,
+            }),
+        }
         for tool in self.homes:
             for state in ("off", "on", "customized"):
-                with self.subTest(tool=tool, state=state, chosen="native"):
-                    helper.write_memory_state(self.homes[tool], tool, state)
-                    plan = helper.plan(self.describe(), "standard")
-                    row = next(row for row in plan["tools"] if row["tool"] == tool)
-                    self.assertEqual(row["memory"], "native")
-                    self.assertEqual(row["memory_mutations"], [])
-                with self.subTest(tool=tool, state=state, chosen="off"):
-                    helper.write_memory_state(self.homes[tool], tool, state)
-                    plan = helper.plan(self.describe(), "thin")
-                    row = next(row for row in plan["tools"] if row["tool"] == tool)
-                    expected = 0 if state in {"off", "customized"} else row["memory_change_count"]
-                    self.assertEqual(len(row["memory_mutations"]), expected)
-                    self.assertEqual(row["flagged"], state == "customized")
+                for chosen in ("native", "off"):
+                    with self.subTest(tool=tool, state=state, chosen=chosen):
+                        _, profile = self.configured_profile()
+                        helper.write_memory_state(self.homes[tool], tool, state)
+                        overrides = {name: {"rules_target": "none", "memory": chosen if name == tool else "native"} for name in self.homes}
+                        value = helper.plan(self.describe(), "standard", overrides=overrides, profile=profile)
+                        row = next(row for row in value["tools"] if row["tool"] == tool)
+                        filename, entries = settings[tool]
+                        expected = [{"file": str(self.homes[tool] / filename), "setting": key, "current": current, "proposed": False}
+                                    for key, current in entries.items()] if chosen == "off" and state == "on" else []
+                        self.assertEqual(row["memory_mutations"], expected)
+                        self.assertEqual(row["flagged"], chosen == "off" and state == "customized")
+                        path = self.homes[tool] / filename
+                        before = path.read_bytes()
+                        helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+                        if not expected:
+                            self.assertEqual(path.read_bytes(), before)
+                        again = helper.plan(self.describe(), "standard", overrides=overrides, profile=profile)
+                        self.assertEqual(again["mutation_list"], [])
 
     def test_thin_plan_targets_installed_tools_and_names_development_delivery(self):
         helper = load_helper()
@@ -103,10 +222,9 @@ class RulesSetupTests(unittest.TestCase):
         (root / "docs" / "DECISIONS.md").touch()
         (root / "context" / "rules.md").write_text("shared rule\n")
         (root / "context" / "development-rules.md").write_text("development rule\n")
-        (self.homes["openclaw"] / "workspace").mkdir()
         profile = self.base / "profile.md"
         profile.write_text("---\nprofile_version: 4\nknowledge_root: " + str(root) + "\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n---\npolicy\n")
-        plan = helper.plan(self.describe(), "thin")
+        plan = helper.plan(self.describe(), "thin", profile=profile)
         helper.apply(
             plan,
             profile,
@@ -129,7 +247,6 @@ class RulesSetupTests(unittest.TestCase):
         (root / "docs" / "DECISIONS.md").touch()
         (root / "context" / "rules.md").write_text("shared rule\n")
         (root / "context" / "development-rules.md").write_text("development rule\n")
-        (self.homes["openclaw"] / "workspace").mkdir()
         profile = self.base / "profile.md"
         profile.write_text("---\nprofile_version: 4\nknowledge_root: " + str(root) + "\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n---\npolicy\n")
         reviewed = helper.plan(self.describe(), "thin", profile=profile)
