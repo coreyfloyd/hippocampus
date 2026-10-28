@@ -118,6 +118,11 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
                 source = root / source
             sources.append(source.absolute())
         targets.append(Target(tool=tool, scope=scope, path=destination, sources=sources))
+    for target in targets:
+        for source in target.sources:
+            resolved_source = source.resolve(strict=False)
+            if resolved_source in seen:
+                fail(f"configuration: target {resolved_source} overlaps source {source}")
     return root, targets
 
 

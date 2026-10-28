@@ -108,6 +108,42 @@ class ComposerTests(unittest.TestCase):
         self.assertIn("duplicate target", result.stderr)
         self.assertFalse(target.exists())
 
+    def test_source_target_overlaps_are_rejected_before_any_write(self):
+        before = self.seed_targets()
+        self.cross.write_text("revised rule requiring target updates\n")
+        alias = self.base / "source-alias.md"
+        alias.symlink_to(self.openclaw)
+        sources = [
+            self.openclaw,
+            self.targets / ".." / "targets" / "openclaw.md",
+            alias,
+            pathlib.Path("..") / "targets" / "openclaw.md",
+        ]
+        for source in sources:
+            for field in ("sources", "extras"):
+                for source_owner in (1, 2):
+                    for command in ("compose", "refresh"):
+                        with self.subTest(source=source, field=field, owner=source_owner, command=command):
+                            for path, content in before.items():
+                                path.write_bytes(content)
+                            targets = [
+                                self.target("claude", self.claude),
+                                self.target("codex", self.codex),
+                                self.target("openclaw", self.openclaw),
+                            ]
+                            targets[source_owner][field] = [str(source)]
+                            self.write_config(targets)
+                            result = self.compose(command)
+                            self.assert_unchanged(before)
+                            self.assertNotEqual(result.returncode, 0)
+                            self.assertIn("configuration:", result.stderr)
+                            self.assertIn(f"target {self.openclaw.resolve()}", result.stderr)
+                            absolute_source = source if source.is_absolute() else self.root / source
+                            self.assertIn(f"source {absolute_source}", result.stderr)
+                            self.assertIn("overlaps", result.stderr)
+                            self.assertEqual(result.stdout, "")
+                            self.assertEqual(list(self.targets.glob(".hippocampus-rules-*")), [])
+
     def test_user_owned_block_preserves_everything_else_and_refreshes(self):
         start, end = self.block_markers(self.codex)
         self.codex.write_text(f"before\n{start}\nold body\n{end}\nafter\n")
