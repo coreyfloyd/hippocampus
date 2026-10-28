@@ -136,6 +136,7 @@ test -L "$INSTALL_HOME/.codex/skills/research-topic"
 test -L "$INSTALL_HOME/.claude/skills/hippocampus-set-up"
 test -f "$INSTALL_HOME/.local/share/hippocampus/current/profiles/karpathy-wiki.example.md"
 test -f "$INSTALL_HOME/.local/share/hippocampus/current/scripts/validate_profile.py"
+test -f "$INSTALL_HOME/.local/share/hippocampus/current/scripts/compose_rules.py"
 if HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" bash "$ROOT/install.sh" --verify; then
   exit 1
 fi
@@ -159,6 +160,7 @@ PUBLISHED_INSTALL_HOME="$TEST_DIR/published-install-home"
 )
 test -L "$PUBLISHED_INSTALL_HOME/.claude/skills/research-topic"
 test -f "$PUBLISHED_INSTALL_HOME/.local/share/hippocampus/current/scripts/validate_profile.py"
+test -f "$PUBLISHED_INSTALL_HOME/.local/share/hippocampus/current/scripts/compose_rules.py"
 
 printf x >> "$ARCHIVE"
 if bash "$ROOT/scripts/verify-release.sh" "$ARCHIVE" "$TEST_DIR/public.asc" "$KEY"; then
