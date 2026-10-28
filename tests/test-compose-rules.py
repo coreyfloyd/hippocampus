@@ -231,19 +231,71 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("more rules", self.codex.read_text())
 
-    def test_user_owned_block_round_trips_source_with_its_exact_markers(self):
-        start, end = self.block_markers(self.codex)
-        self.cross.write_text(f"rule documentation\n{start}\nmarker example\n{end}\nmore rules\n")
-        self.codex.write_text("user instruction\n")
-        self.write_config([self.target("codex", self.codex)])
+    def test_malformed_delimiters_prevent_every_write_for_each_tool(self):
+        before = self.seed_targets()
+        self.cross.write_text("revised rule requiring every target to change\n")
+        for tool, target in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw)):
+            start, end = self.block_markers(target)
+            variant_start = start.replace(" -->", "-1 -->")
+            variant_end = end.replace(" -->", "-1 -->")
+            header = ("<!-- hippocampus-rules: generated; do not hand-edit -->\n"
+                      if tool == "claude" else self.generated_header([self.cross, self.development, self.extra]))
+            valid = f"{start}\n{header}stale rule\n{end}\n"
+            shapes = {
+                "two blocks": valid + valid,
+                "start without end": f"{start}\nunterminated\n",
+                "end without start": f"orphan\n{end}\n",
+                "reversed": f"{end}\n{start}\n",
+                "nested": f"{start}\n{valid}{end}\n",
+                "variant block": valid + f"{variant_start}\nignored rule\n{variant_end}\n",
+                "variant start": valid + f"{variant_start}\nunterminated\n",
+                "variant end": valid + f"{variant_end}\n",
+                "only variant block": f"{variant_start}\nold rule\n{variant_end}\n",
+            }
+            for shape, content in shapes.items():
+                for command in ("compose", "refresh"):
+                    with self.subTest(tool=tool, shape=shape, command=command):
+                        for path, original in before.items():
+                            path.write_bytes(original)
+                        target.write_text("user instructions\n" + content)
+                        snapshot = self.snapshot()
+                        # The bad target comes last so earlier planned writes must be withheld.
+                        targets = [self.target("codex", path) for path in before if path != target]
+                        self.write_config([*targets, self.target(tool, target)])
+                        result = self.compose(command)
+                        self.assert_unchanged(snapshot)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(f"malformed marked block in target {target.resolve()}", result.stderr)
+                        self.assertIn("marker", result.stderr)
+                        self.assertEqual(result.stdout, "")
+                        self.assertEqual(list(self.targets.glob(".hippocampus-rules-*")), [])
 
-        initial = self.compose()
-        self.assertEqual(initial.returncode, 0, initial.stderr)
-        before = self.codex.read_bytes()
-        refresh = self.compose("refresh")
-        self.assertEqual(refresh.returncode, 0, refresh.stderr)
-        self.assertEqual(self.codex.read_bytes(), before)
-        self.assertIn(self.cross.read_text(), self.codex.read_text())
+    def test_source_delimiters_prevent_every_write_for_rules_and_extras(self):
+        before = self.seed_targets()
+        for tool, target in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw)):
+            for marker_target in before:
+                for delimiter in self.block_markers(marker_target):
+                    for source in (self.cross, self.extra):
+                        for command in ("compose", "refresh"):
+                            with self.subTest(tool=tool, delimiter=delimiter, source=source, command=command):
+                                for path, original in before.items():
+                                    path.write_bytes(original)
+                                self.cross.write_text("revised rule\n")
+                                self.extra.write_text("revised extra\n")
+                                source.write_text(f"rule text\n{delimiter}\nmore rules\n")
+                                # Even an import-only target must validate its source text.
+                                self.write_config([
+                                    *[self.target("codex", path, [self.development], [self.development])
+                                      for path in before if path != target],
+                                    self.target(tool, target),
+                                ])
+                                result = self.compose(command)
+                                self.assert_unchanged(before)
+                                self.assertNotEqual(result.returncode, 0)
+                                self.assertIn(f"source document {source}", result.stderr)
+                                self.assertIn("delimiter line", result.stderr)
+                                self.assertEqual(result.stdout, "")
+                                self.assertEqual(list(self.targets.glob(".hippocampus-rules-*")), [])
 
     def test_replacement_preserves_existing_mode_and_new_target_uses_default_mode(self):
         self.write_config([self.target("codex", self.codex)])
