@@ -13,6 +13,7 @@ import tomllib
 import hashlib
 import importlib.util
 import json
+import os
 import pathlib
 import shutil
 import sys
@@ -30,7 +31,7 @@ def default_homes():
     home = pathlib.Path.home()
     return {
         "claude-code": home / ".claude",
-        "codex": home / ".codex",
+        "codex": pathlib.Path(os.environ.get("CODEX_HOME") or home / ".codex").expanduser(),
         "openclaw": home / ".openclaw",
     }
 
@@ -129,7 +130,8 @@ def composer_owned(path):
 
 
 def installed(tool, home):
-    return (home / "bin" / TOOLS[tool]["binary"]).exists() or bool(shutil.which(TOOLS[tool]["binary"])) or home.exists()
+    binary = home / "bin" / TOOLS[tool]["binary"]
+    return (binary.is_file() and os.access(binary, os.X_OK)) or bool(shutil.which(TOOLS[tool]["binary"]))
 
 
 def claude_memory(home):
@@ -186,6 +188,9 @@ def inspect_tools(homes=None):
     rows = []
     for tool in TOOLS:
         home = homes[tool]
+        if not installed(tool, home):
+            rows.append({"tool": tool, "home": str(home), "installed": False})
+            continue
         target = home / TOOLS[tool]["target"]
         if tool == "openclaw":
             config = json_file(home / "openclaw.json")
@@ -209,7 +214,7 @@ def inspect_tools(homes=None):
         rows.append({
             "tool": tool,
             "home": str(home),
-            "installed": installed(tool, home),
+            "installed": True,
             "target": {"file": str(target), "exists": target.exists(), "ownership": "composer-owned" if composer_owned(target) else "user-owned"},
             "memory": {"state": state, "settings_file": str(settings), "store": {"location": str(store), "file_count": file_count, "empty": file_count == 0, "locations": [str(location) for location in locations]}},
             "off_mutations": mutations,

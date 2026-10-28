@@ -2,12 +2,14 @@
 """Contract tests for the set-up rules and memory proposal helper."""
 import importlib.util
 import json
+import os
 import pathlib
 import subprocess
 import sys
 import tempfile
 import tomllib
 import unittest
+from unittest import mock
 
 
 SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "rules_setup.py"
@@ -29,7 +31,58 @@ class RulesSetupTests(unittest.TestCase):
         for name, home in self.homes.items():
             (home / "bin").mkdir(parents=True)
             executable = {"claude-code": "claude", "codex": "codex", "openclaw": "openclaw"}[name]
-            (home / "bin" / executable).touch()
+            binary = home / "bin" / executable
+            binary.write_text("#!/bin/sh\nexit 0\n")
+            binary.chmod(0o755)
+
+    def test_skills_only_homes_do_not_configure_uninstalled_tools(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        for tool, home in self.homes.items():
+            (home / "bin" / helper.TOOLS[tool]["binary"]).unlink()
+            (home / "skills").mkdir()
+        with mock.patch.dict(os.environ, {"PATH": str(self.base / "empty-path")}):
+            rows = helper.inspect_tools(self.homes)
+            for row in rows:
+                self.assertFalse(row["installed"], row["tool"])
+                self.assertNotIn("target", row)
+                self.assertNotIn("memory", row)
+            value = helper.plan(rows, "thin", profile=profile)
+            self.assertEqual(value["tools"], [])
+            self.assertEqual([m["kind"] for m in value["mutation_list"]], ["profile"])
+            helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+        self.assertEqual(helper.profile_reader().parse(profile)["rules"]["tools"], [])
+        for home in self.homes.values():
+            self.assertEqual(sorted(p.name for p in home.iterdir()), ["bin", "skills"])
+
+    def test_codex_home_environment_controls_detection_targets_and_memory(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        user_home = self.base / "user-home"
+        conventional = user_home / ".codex"
+        conventional.mkdir(parents=True)
+        (conventional / "AGENTS.md").write_text("keep conventional instructions\n")
+        (conventional / "config.toml").write_text("features.memories = false\n")
+        before = {p.name: p.read_bytes() for p in conventional.iterdir()}
+        custom = self.homes["codex"]
+        (custom / "config.toml").write_text("features.memories = true\n")
+        with mock.patch.dict(os.environ, {"HOME": str(user_home), "CODEX_HOME": str(custom), "PATH": str(custom / "bin")}):
+            self.assertEqual(helper.default_homes()["codex"], custom)
+            rows = helper.inspect_tools()
+            codex = next(r for r in rows if r["tool"] == "codex")
+            self.assertTrue(codex["installed"])
+            self.assertEqual(codex["target"]["file"], str(custom / "AGENTS.md"))
+            self.assertEqual(codex["memory"]["settings_file"], str(custom / "config.toml"))
+            self.assertEqual(codex["memory"]["state"], "on")
+            value = helper.plan(rows, "thin", profile=profile)
+            self.assertEqual([r["tool"] for r in value["tools"]], ["codex"])
+            helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+            self.assertEqual(helper.plan(helper.inspect_tools(), "thin", profile=profile)["mutation_list"], [])
+        self.assertIn("shared rule", (custom / "AGENTS.md").read_text())
+        self.assertIs(tomllib.loads((custom / "config.toml").read_text())["features"]["memories"], False)
+        choices = helper.profile_reader().parse(profile)["rules"]["tools"]
+        self.assertEqual(choices, [{"tool": "codex", "rules_target": str(custom / "AGENTS.md"), "memory": "off"}])
+        self.assertEqual({p.name: p.read_bytes() for p in conventional.iterdir()}, before)
 
     def configured_profile(self):
         root = self.base / "configured-knowledge"
