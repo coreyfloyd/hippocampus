@@ -21,7 +21,8 @@ The optional `rules` frontmatter section records the choices approved through
 `hippocampus-set-up`; it is the only rules configuration that set-up and the
 composer read. Its `preset` is `standard` or `thin`. `cross_tool_document` and
 `development_document` name the two rules documents relative to the knowledge
-root. Each `tools` row names one supported tool (`claude-code`, `codex`, or
+root. An optional absolute `development_root` lets set-up describe the delivery
+of development rules. Each `tools` row names one supported tool (`claude-code`, `codex`, or
 `openclaw`), its `rules_target` (a file location or `none`), and its `memory`
 value (`native` or `off`). A profile without this section remains valid and
 uses the standard preset.

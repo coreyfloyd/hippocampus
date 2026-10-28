@@ -15,6 +15,7 @@ TOP_LEVEL_FIELDS = {
 }
 
 RULE_FIELDS = {"preset", "cross_tool_document", "development_document", "tools"}
+OPTIONAL_RULE_FIELDS = {"development_root"}
 RULE_TOOL_FIELDS = {"tool", "rules_target", "memory"}
 RULE_TOOLS = {"claude-code", "codex", "openclaw"}
 
@@ -49,7 +50,7 @@ def parse_rules(lines, index):
                     fail("rules.tools must appear once without a value")
                 rules[key] = tools
                 current_tool = None
-            elif key in RULE_FIELDS - {"tools"}:
+            elif key in (RULE_FIELDS | OPTIONAL_RULE_FIELDS) - {"tools"}:
                 if key in rules or not value:
                     fail(f"rules.{key} must appear once with a value")
                 rules[key] = value
@@ -190,6 +191,8 @@ def validate_rules(root, rules):
             (root / path).resolve().relative_to(root)
         except ValueError:
             fail(f"rules.{key} escapes knowledge_root")
+    if "development_root" in rules and not pathlib.Path(rules["development_root"]).is_absolute():
+        fail("rules.development_root must be an absolute path")
     seen_tools = set()
     for row in rules["tools"]:
         missing = RULE_TOOL_FIELDS - row.keys()

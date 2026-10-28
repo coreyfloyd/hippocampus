@@ -99,6 +99,7 @@ Run all checks against the exact commit intended for release:
 ```bash
 git diff --check
 python3 tests/test-profile-meetings.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test-rules-setup.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
 bash tests/test-release.sh

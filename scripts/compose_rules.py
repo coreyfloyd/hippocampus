@@ -215,7 +215,7 @@ def parse_user_block(existing: bytes, replacement: bytes, path: pathlib.Path) ->
     return existing[:markers[0][2]] + replacement + existing[markers[1][1]:]
 
 
-def preflight_target(target: Target) -> tuple[bytes | None, int | None]:
+def preflight_target(target: Target, allow_missing_parents: bool = False) -> tuple[bytes | None, int | None]:
     original = None
     mode = None
     try:
@@ -229,12 +229,15 @@ def preflight_target(target: Target) -> tuple[bytes | None, int | None]:
     except OSError as exc:
         fail(f"target cannot be read: {target.path}: {exc}")
     parent = target.path.parent
+    if allow_missing_parents:
+        while not parent.exists():
+            parent = parent.parent
     if not parent.is_dir() or not os.access(parent, os.W_OK | os.X_OK):
         fail(f"target cannot be written: {target.path} (parent is unavailable or not writable)")
     return original, mode
 
 
-def plan(targets: list[Target]) -> list[PlannedWrite]:
+def plan(targets: list[Target], allow_missing_parents: bool = False) -> list[PlannedWrite]:
     source_cache: dict[pathlib.Path, bytes] = {}
     plans: list[PlannedWrite] = []
     for target in targets:
@@ -243,7 +246,7 @@ def plan(targets: list[Target]) -> list[PlannedWrite]:
             if source not in source_cache:
                 source_cache[source] = read_source(source)
             source_bytes.append(source_cache[source])
-        original, mode = preflight_target(target)
+        original, mode = preflight_target(target, allow_missing_parents)
         replacement = target_content(target, source_bytes)
         owned = original is None or has_ownership_header(original)
         desired = replacement if owned else parse_user_block(original, replacement, target.path)
