@@ -28,6 +28,7 @@ artifact_followup_destination: "Describe the task system and routing rules for s
 #   preset: standard
 #   cross_tool_document: context/rules.md
 #   development_document: context/development-rules.md
+#   development_root: /absolute/path/to/development
 #   tools:
 #     - tool: claude-code
 #       rules_target: none

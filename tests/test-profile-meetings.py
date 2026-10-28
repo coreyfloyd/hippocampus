@@ -126,6 +126,10 @@ class MeetingProfiles(unittest.TestCase):
         result = self.validate(self.RULES)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_rules_section_accepts_an_absolute_development_root(self):
+        result = self.validate(self.RULES.replace('  development_document: context/development-rules.md\n', '  development_document: context/development-rules.md\n  development_root: /work/development\n'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_rules_documents_cannot_escape_through_a_symlink(self):
         (self.root / 'context').symlink_to(self.root.parent, target_is_directory=True)
         result = self.validate(self.RULES)

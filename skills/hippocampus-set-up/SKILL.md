@@ -48,6 +48,54 @@ Read `~/.config/hippocampus/profile.md` if it exists. Inspect referenced paths w
 
 Do not assume that an existing directory is disposable or dedicated to this package. Preserve existing files and the free-form profile body unless the user explicitly approves changing them.
 
+## Configure rules and memory after the base profile is valid
+
+When the user is configuring or changing their rules and memory choices, inspect
+the available tools before asking them to choose a preset. Run the installed
+`scripts/rules_setup.py inspect` helper (with fake homes only in tests). It
+reports each supported tool's installation state, user instruction target,
+target existence and composer ownership, current memory state and settings
+file, and the memory store's location and file count. Report a nonempty store
+as content for the user to act on; set-up never deletes a store or any file in
+it.
+
+If the profile's optional `rules.development_root` is present, include one
+delivery column in the state table: Claude Code receives development rules by
+directory walk from that root; Codex and OpenClaw receive them through a
+repository block. The profile may record the absolute development root; it is
+not a rules document location.
+
+Offer two editable starting points for installed tools:
+
+- **standard:** every rules target is `none` and every memory value is
+  `native`;
+- **thin:** each rules target is its detected default instruction file and
+  every memory value is `off`.
+
+The user may change either value in any row before approval. `native` records
+the choice while retaining the detected state and proposes no memory setting
+change. `off` proposes only an already-documented off setting that differs
+from the detected value. Claude Code uses `autoMemoryEnabled: false`; Codex
+uses `features.memories = false`; OpenClaw disables both pre-compaction memory flush and
+memory-core dreaming. If a memory directory or workspace is customized,
+describe it, flag an `off` selection for the user, and propose no change.
+
+Use `scripts/rules_setup.py plan --profile <profile>` to prepare the complete proposed mutation
+list. It names every target file that will change and every memory setting with
+its current and proposed value. Also show the four useful context documents —
+devices, file locations, people and preferences — as optional guidance only;
+do not include them in the mutation list.
+
+Wait for explicit approval of that exact list. A decline writes nothing and
+leaves the profile's existing rules section unchanged. On approval, run
+`scripts/rules_setup.py apply --profile <profile> --preset <preset> --approve`
+with any approved per-tool overrides. It applies targets through
+`compose_rules.py`, updates only the proposed memory settings, and records the
+preset, both context document locations, optional development root, and each
+installed tool's final rules target and memory value in the profile. The helper
+reads and validates the profile through `validate_profile.py` before replacing
+only its rules section.
+
 ## Discuss the user-owned choices
 
 Ask only for choices that cannot be inferred safely, and explain each before requesting it:
