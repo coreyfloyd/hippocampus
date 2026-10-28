@@ -196,17 +196,20 @@ def parse_user_block(existing: bytes, replacement: bytes, path: pathlib.Path) ->
 
 
 def preflight_target(target: Target) -> bytes | None:
+    original = None
     try:
         if target.path.exists() and target.path.is_dir():
             fail(f"target cannot be written: {target.path} is a directory")
         if target.path.exists():
-            return target.path.read_bytes()
+            if not os.access(target.path, os.W_OK):
+                fail(f"target cannot be written: {target.path} (file is not writable)")
+            original = target.path.read_bytes()
     except OSError as exc:
         fail(f"target cannot be read: {target.path}: {exc}")
     parent = target.path.parent
     if not parent.is_dir() or not os.access(parent, os.W_OK | os.X_OK):
         fail(f"target cannot be written: {target.path} (parent is unavailable or not writable)")
-    return None
+    return original
 
 
 def plan(targets: list[Target]) -> list[PlannedWrite]:
@@ -255,6 +258,7 @@ def write_all(plans: list[PlannedWrite]) -> None:
             os.replace(temporary, item.target.path)
             replaced.append(item)
     except OSError as exc:
+        failed_target = item.target.path
         for item in reversed(replaced):
             if item.original is None:
                 item.target.path.unlink(missing_ok=True)
@@ -263,7 +267,7 @@ def write_all(plans: list[PlannedWrite]) -> None:
                 with os.fdopen(descriptor, "wb") as handle:
                     handle.write(item.original)
                 os.replace(rollback, item.target.path)
-        fail(f"target cannot be written: {item.target.path}: {exc}")
+        fail(f"target cannot be written: {failed_target}: {exc}")
     finally:
         for _, temporary in staged:
             temporary.unlink(missing_ok=True)

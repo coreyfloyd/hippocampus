@@ -4,9 +4,11 @@ import json
 import hashlib
 import os
 import pathlib
+import runpy
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 COMPOSER = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "compose_rules.py"
@@ -197,6 +199,43 @@ class ComposerTests(unittest.TestCase):
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertGreater(target.stat().st_size, 65536)
+
+    def test_read_only_existing_target_prevents_every_write(self):
+        before = self.seed_targets()
+        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
+        self.cross.write_text("revised rules requiring every target to change\n")
+        self.codex.chmod(0o444)
+        self.addCleanup(self.codex.chmod, 0o600)
+        result = self.compose("refresh")
+        self.assert_unchanged(before)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"target cannot be written: {self.codex.resolve()}", result.stderr)
+        self.assertIn("not writable", result.stderr)
+        self.assertEqual(list(self.targets.glob(".hippocampus-rules-*")), [])
+
+    def test_later_replacement_failure_rolls_back_and_names_failed_target(self):
+        before = self.seed_targets()
+        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
+        self.cross.write_text("revised rules requiring every target to change\n")
+        composer = runpy.run_path(str(COMPOSER))
+        replace = os.replace
+
+        def fail_second_replacement(source, destination):
+            if destination == self.codex.resolve():
+                self.assertNotEqual(self.claude.read_bytes(), before[self.claude])
+                raise PermissionError("replacement denied")
+            return replace(source, destination)
+
+        # Inject a filesystem failure after preflight, without platform-specific flags.
+        with mock.patch.object(os, "replace", side_effect=fail_second_replacement):
+            with self.assertRaises(composer["ComposeError"]) as raised:
+                composer["compose"](self.config)
+        self.assert_unchanged(before)
+        self.assertEqual(
+            str(raised.exception),
+            f"target cannot be written: {self.codex.resolve()}: replacement denied",
+        )
+        self.assertEqual(list(self.targets.glob(".hippocampus-rules-*")), [])
 
 
 if __name__ == "__main__":
