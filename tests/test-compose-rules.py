@@ -231,6 +231,36 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("more rules", self.codex.read_text())
 
+    def test_user_owned_block_round_trips_source_with_its_exact_markers(self):
+        start, end = self.block_markers(self.codex)
+        self.cross.write_text(f"rule documentation\n{start}\nmarker example\n{end}\nmore rules\n")
+        self.codex.write_text("user instruction\n")
+        self.write_config([self.target("codex", self.codex)])
+
+        initial = self.compose()
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        before = self.codex.read_bytes()
+        refresh = self.compose("refresh")
+        self.assertEqual(refresh.returncode, 0, refresh.stderr)
+        self.assertEqual(self.codex.read_bytes(), before)
+        self.assertIn(self.cross.read_text(), self.codex.read_text())
+
+    def test_replacement_preserves_existing_mode_and_new_target_uses_default_mode(self):
+        self.write_config([self.target("codex", self.codex)])
+        previous_umask = os.umask(0o022)
+        try:
+            initial = self.compose()
+        finally:
+            os.umask(previous_umask)
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        self.assertEqual(self.codex.stat().st_mode & 0o777, 0o644)
+
+        self.codex.chmod(0o640)
+        self.cross.write_text("revised rule\n")
+        refreshed = self.compose("refresh")
+        self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+        self.assertEqual(self.codex.stat().st_mode & 0o777, 0o640)
+
     def seed_targets(self):
         self.write_config([self.target("claude", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
         self.assertEqual(self.compose().returncode, 0)

@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import pathlib
+import stat
 import tempfile
 from dataclasses import dataclass
 
@@ -52,6 +53,7 @@ class Target:
 class PlannedWrite:
     target: Target
     original: bytes | None
+    mode: int | None
     desired: bytes
     ownership: str
 
@@ -177,11 +179,12 @@ def has_ownership_header(content: bytes) -> bool:
     return ownership_header([pathlib.Path(source) for source in sources], generated=True).rstrip(b"\n") == header
 
 
-def block_markers(path: pathlib.Path) -> tuple[bytes, bytes]:
+def block_markers(path: pathlib.Path, variant: int = 0) -> tuple[bytes, bytes]:
     digest = hashlib.sha256(os.fsencode(str(path))).hexdigest().encode()
+    token = digest if variant == 0 else digest + b"-" + str(variant).encode()
     return (
-        b"<!-- hippocampus-rules:block:start " + digest + b" -->",
-        b"<!-- hippocampus-rules:block:end " + digest + b" -->",
+        b"<!-- hippocampus-rules:block:start " + token + b" -->",
+        b"<!-- hippocampus-rules:block:end " + token + b" -->",
     )
 
 
@@ -195,23 +198,75 @@ def delimiter_lines(content: bytes, delimiter: bytes) -> list[tuple[int, int]]:
     return positions
 
 
+def marker_token(line: bytes, path: pathlib.Path, kind: bytes) -> bytes | None:
+    prefix = b"<!-- hippocampus-rules:block:" + kind + b" "
+    suffix = b" -->"
+    if not (line.startswith(prefix) and line.endswith(suffix)):
+        return None
+    token = line[len(prefix):-len(suffix)]
+    digest = hashlib.sha256(os.fsencode(str(path))).hexdigest().encode()
+    if token == digest:
+        return token
+    if not token.startswith(digest + b"-"):
+        return None
+    variant = token[len(digest) + 1:]
+    return token if variant.isdigit() else None
+
+
+def block_delimiters(content: bytes, path: pathlib.Path) -> tuple[list[tuple[bytes, int, int]], list[tuple[bytes, int, int]]]:
+    starts: list[tuple[bytes, int, int]] = []
+    ends: list[tuple[bytes, int, int]] = []
+    offset = 0
+    for line in content.splitlines(keepends=True):
+        normalized = line.rstrip(b"\r\n")
+        start_token = marker_token(normalized, path, b"start")
+        end_token = marker_token(normalized, path, b"end")
+        if start_token is not None:
+            starts.append((start_token, offset, offset + len(line)))
+        if end_token is not None:
+            ends.append((end_token, offset, offset + len(line)))
+        offset += len(line)
+    return starts, ends
+
+
+def available_block_markers(path: pathlib.Path, content: bytes) -> tuple[bytes, bytes]:
+    variant = 0
+    while True:
+        start_marker, end_marker = block_markers(path, variant)
+        if not delimiter_lines(content, start_marker) and not delimiter_lines(content, end_marker):
+            return start_marker, end_marker
+        variant += 1
+
+
 def parse_user_block(existing: bytes, replacement: bytes, path: pathlib.Path) -> bytes:
-    start_marker, end_marker = block_markers(path)
-    starts = delimiter_lines(existing, start_marker)
-    ends = delimiter_lines(existing, end_marker)
+    starts, ends = block_delimiters(existing, path)
     if not starts and not ends:
+        start_marker, end_marker = available_block_markers(path, existing + replacement)
         return existing + (b"" if not existing or existing.endswith(b"\n") else b"\n") + start_marker + b"\n" + replacement + end_marker + b"\n"
-    if len(starts) != 1 or len(ends) != 1:
+    candidates = []
+    for token, start, start_line_end in starts:
+        matching_ends = [(end, end_line_end) for end_token, end, end_line_end in ends if end_token == token]
+        if sum(start_token == token for start_token, _, _ in starts) == 1 and len(matching_ends) == 1:
+            end, end_line_end = matching_ends[0]
+            if end >= start_line_end:
+                candidates.append((token, start, start_line_end, end, end_line_end))
+    header = replacement.splitlines(keepends=True)[:1]
+    header_candidates = [candidate for candidate in candidates if header and existing[candidate[2]:].startswith(header[0])]
+    if len(header_candidates) == 1:
+        token, start, start_line_end, end, _ = header_candidates[0]
+    elif len(candidates) == 1:
+        token, start, start_line_end, end, _ = candidates[0]
+    else:
         fail(f"malformed marked block in target {path}: expected exactly one start and one end marker")
-    start, start_line_end = starts[0]
-    end, _ = ends[0]
-    if end < start_line_end:
-        fail(f"malformed marked block in target {path}: end marker precedes start marker")
-    return existing[:start] + start_marker + b"\n" + replacement + end_marker + existing[end + len(end_marker):]
+    _, old_end_marker = block_markers(path, int(token.rsplit(b"-", 1)[1]) if b"-" in token else 0)
+    outside_block = existing[:start] + existing[end + len(old_end_marker):]
+    start_marker, end_marker = available_block_markers(path, outside_block + replacement)
+    return existing[:start] + start_marker + b"\n" + replacement + end_marker + existing[end + len(old_end_marker):]
 
 
-def preflight_target(target: Target) -> bytes | None:
+def preflight_target(target: Target) -> tuple[bytes | None, int | None]:
     original = None
+    mode = None
     try:
         if target.path.exists() and target.path.is_dir():
             fail(f"target cannot be written: {target.path} is a directory")
@@ -219,12 +274,13 @@ def preflight_target(target: Target) -> bytes | None:
             if not os.access(target.path, os.W_OK):
                 fail(f"target cannot be written: {target.path} (file is not writable)")
             original = target.path.read_bytes()
+            mode = stat.S_IMODE(target.path.stat().st_mode)
     except OSError as exc:
         fail(f"target cannot be read: {target.path}: {exc}")
     parent = target.path.parent
     if not parent.is_dir() or not os.access(parent, os.W_OK | os.X_OK):
         fail(f"target cannot be written: {target.path} (parent is unavailable or not writable)")
-    return original
+    return original, mode
 
 
 def plan(targets: list[Target]) -> list[PlannedWrite]:
@@ -236,11 +292,11 @@ def plan(targets: list[Target]) -> list[PlannedWrite]:
             if source not in source_cache:
                 source_cache[source] = read_source(source)
             source_bytes.append(source_cache[source])
-        original = preflight_target(target)
+        original, mode = preflight_target(target)
         replacement = target_content(target, source_bytes)
         owned = original is None or has_ownership_header(original)
         desired = replacement if owned else parse_user_block(original, replacement, target.path)
-        plans.append(PlannedWrite(target, original, desired, "composer-owned" if owned else "user-owned"))
+        plans.append(PlannedWrite(target, original, mode, desired, "composer-owned" if owned else "user-owned"))
     return plans
 
 
@@ -252,6 +308,12 @@ def stage(plans: list[PlannedWrite]) -> list[tuple[PlannedWrite, pathlib.Path]]:
                 continue
             descriptor, temporary = tempfile.mkstemp(prefix=".hippocampus-rules-", dir=item.target.path.parent)
             with os.fdopen(descriptor, "wb") as handle:
+                if item.mode is None:
+                    current_umask = os.umask(0)
+                    os.umask(current_umask)
+                    os.fchmod(handle.fileno(), 0o666 & ~current_umask)
+                else:
+                    os.fchmod(handle.fileno(), item.mode)
                 handle.write(item.desired)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -280,6 +342,7 @@ def write_all(plans: list[PlannedWrite]) -> None:
             else:
                 descriptor, rollback = tempfile.mkstemp(prefix=".hippocampus-rules-rollback-", dir=item.target.path.parent)
                 with os.fdopen(descriptor, "wb") as handle:
+                    os.fchmod(handle.fileno(), item.mode)
                     handle.write(item.original)
                 os.replace(rollback, item.target.path)
         fail(f"target cannot be written: {failed_target}: {exc}")
