@@ -82,9 +82,19 @@ receive the same package.
 
 ## Publication checklist
 
-- [ ] Verify and commit the candidate; resolve the public commit-history scan.
-- [ ] Complete independent review, evaluation and public-communication approval.
-- [ ] Merge the reviewed candidate and tag its exact commit as `v0.11.0`.
-- [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
-- [ ] Verify signed assets, publish, and independently verify downloaded assets.
-- [ ] Install and verify the signed release in both supported clients.
+- [x] Verify and commit the candidate; resolve the public commit-history scan.
+- [x] Complete independent review, evaluation and public-communication approval.
+- [x] Merge the reviewed candidate and tag its exact commit as `v0.11.0`.
+- [x] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
+- [x] Verify signed assets, publish, and independently verify downloaded assets.
+- [x] Install and verify the signed release in both supported clients.
+
+## Publication
+
+Published 2026-10-28 as a public, non-draft, non-prerelease release.
+
+- Tag: `v0.11.0`, annotated; peeled commit `827acd0ab87a7123e027c385484b49ff601a2829`, equal to `origin/main` at publication.
+- Release: https://github.com/coreyfloyd/hippocampus/releases/tag/v0.11.0
+- Assets (6): `hippocampus-0.11.0.tar.gz`, `hippocampus-0.11.0.tar.gz.sha256`, `hippocampus-0.11.0.tar.gz.asc`, `hippocampus-release.asc`, `install-release.sh`, `verify-release.sh`.
+- Verification: local `scripts/verify-release.sh` passed against `dist/` before publication; the six downloaded public assets were verified in a fresh temporary directory (`cmp` on the key and both scripts, signature and checksum on the archive: OK). The archive lists 132 entries, all under `hippocampus/`.
+- Installation: `install-release.sh` from the downloaded assets installed 0.11.0 on the maintainer machine; `current` resolves to the 0.11.0 release directory and includes `scripts/compose_rules.py`.
