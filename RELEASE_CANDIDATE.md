@@ -1,105 +1,84 @@
-# Release candidate: 0.10.0
+# Release candidate: 0.11.0
 
 ## Scope
 
-This candidate covers the changes since v0.9.0:
+This candidate covers the changes since v0.10.0:
 
-- Rename four research commands to `dev-research`, `feature-research`, `feedback-research` and `quick-research` ([hippocampus#34](https://github.com/coreyfloyd/hippocampus/issues/34)); `absorb` and its compatibility entry point keep their names.
+- Add a knowledge-root rules composer, `scripts/compose_rules.py` ([hippocampus#41](https://github.com/coreyfloyd/hippocampus/issues/41)). It composes tool instruction files from rule documents in the knowledge root: Claude Code targets import the documents by path, and other targets receive their content. A file carrying the composer's generated header is rewritten in full; any other existing file gains or updates exactly one marked block and is otherwise unchanged. Every target is checked before any is written: missing or unreadable sources, source/target overlaps, unwritable targets and malformed marked blocks fail without changing any target. File modes are preserved.
+- Add an optional `rules` section to the profile and its validator ([hippocampus#42](https://github.com/coreyfloyd/hippocampus/issues/42)): a `standard` or `thin` preset, the cross-tool and development rules document locations relative to the knowledge root, an optional absolute development root, and one row per tool (`claude-code`, `codex` or `openclaw`) with its rules target (a file or `none`) and memory value (`native` or `off`).
+- Detect each tool's rules and memory state during `hippocampus-set-up` and offer the two presets through `scripts/rules_setup.py` ([hippocampus#43](https://github.com/coreyfloyd/hippocampus/issues/43)). `inspect` reports installation, the default instruction file and its owner, the memory setting and the memory store's location and file count; `plan` lists every proposed mutation with an approval fingerprint; `apply` recomputes the plan and refuses when it no longer matches the approved fingerprint. Installation packages both helpers, and `install.sh --verify` checks for the set-up helper.
 
-- Retire the old setup compatibility skill; `hippocampus-set-up` is the setup entry point ([hippocampus#24](https://github.com/coreyfloyd/hippocampus/issues/24)).
-- File original meeting transcripts from policy-defined intake into retained primary-source storage only after every authorized capture route completes or is explicitly declined, repairing source references ([hippocampus#29](https://github.com/coreyfloyd/hippocampus/issues/29)).
-- Create configurable meeting records directly in their meeting folder, preserve meaningful filenames and stable identity on retry, share approved distribution through `absorb`, compile selected primary evidence through `wiki-compile` ([hippocampus#31](https://github.com/coreyfloyd/hippocampus/issues/31)).
-- Route retained-source understanding, applicability assessment and distribution planning through `research-sources`; inventory intended outcomes before proposing distribution ([hippocampus#36](https://github.com/coreyfloyd/hippocampus/issues/36)).
-- Reconcile skill boundaries, meeting action/document routes, optional profile fields, raw metadata, inline research, compiler/audit guidance and public documentation ([hippocampus#39](https://github.com/coreyfloyd/hippocampus/issues/39)).
-- Add opt-in custom proposal classes declared in local policy; writing opportunities become a user-declared worked example, with legacy records preserved ([hippocampus#40](https://github.com/coreyfloyd/hippocampus/issues/40)).
-- Preserve Insights & Highlights in research artifacts and meeting reviews: useful specifics with provenance, dispositions linked to existing rows, and read-back of accepted details before archival (shared definition in `skills/absorb/references/insights-highlights.md`).
-
-Research reports stay in output while work is pending, then retain their excluded
-reference lifecycle under `raw/derived/`. Meeting records stay at their original
-path. Transcript ingestion, completed absorption and retention are distinct.
-Custom classes declare searches, required fields and execution workflows or
-destinations in the profile body; undeclared classes cannot be proposed.
-Source evidence, attribution, approval, receipts and read-back remain required. Curriculum/playbook changes use maintained document/project routes.
+The `standard` preset writes no user instruction file and keeps each tool's
+detected memory setting. The `thin` preset composes into each tool's default instruction
+file and proposes each tool's documented memory-off setting. Each row is
+editable before approval. Set-up uses `context/rules.md` and
+`context/development-rules.md` in the knowledge root and records those
+locations in the profile. When the profile names a development root, set-up
+also composes the development rules into `CLAUDE.md` and `AGENTS.md` at that
+root, under either preset.
 
 ## Compatibility
 
-The four renamed commands install only under their new names in both clients.
-Update profiles and habits that invoke the old commands. Installation removes
-package-owned old links and preserves user-owned directories or links with a
-message; it does not rewrite local profiles.
+Profile version remains 4. The `rules` section is optional: existing published
+profiles need no new fields and, without the section, use the `standard`
+preset. The validator rejects a malformed `rules` section, a document location
+outside the knowledge root, a relative development root, and an unknown or
+duplicated tool row.
 
-Profile version remains 4. Existing published profiles need no new fields.
-Optional `meeting_record_folder` and `meeting_record_template` default to
-`meetings/` and the bundled minimal Markdown template. The three independent
-meeting inputs remain optional. The unreleased `meeting_daily_note_path` name
-became `meeting_note_path`; published profiles need no migration for it.
+Set-up changes only the files in the approved mutation list: composed rule
+targets, the listed memory settings (`autoMemoryEnabled` in Claude Code
+settings, `features.memories` in the Codex configuration, and the
+pre-compaction memory flush and memory-core dreaming flags in the OpenClaw
+configuration), the profile's `rules` section, and any missing parent
+directories those need. It never deletes a memory store or any file in one; a
+nonempty store is reported for the user to act on. `native` proposes no memory
+setting change. A customized memory directory or workspace is described,
+flagged when `off` is selected, and left unchanged. A user-written instruction
+file keeps everything outside its marked block. A decline writes nothing and
+leaves the profile's existing `rules` section unchanged.
 
-`research-absorb` delegates to `absorb`; `research-to-wiki` and `vault-compile`
-delegate to `wiki-compile`; `vault-audit` delegates to `wiki-audit`. Existing
-artifact-contract links remain supported. Direct authorized compilation accepts
-selected primary sources without requiring a research or meeting record.
-The retired setup compatibility command is removed only when package-owned.
-Unowned skill collisions block installation; custom templates and local policy
-remain user-owned. Installation neither relocates existing sources nor performs
-live captures. Both Claude Code and Codex receive the same package.
+Installation adds `scripts/compose_rules.py` and `scripts/rules_setup.py` to the
+release directory and its manifest. It does not run set-up, compose rules or
+change any tool's memory setting. Both Claude Code and Codex receive the same
+package. The public signing key and fingerprint are unchanged.
 
 ## Verification
 
-Run the exact candidate checks in `RELEASING.md`, including
-`python3 tests/test-capture-absorb.py`, the documentation sweeps and the public
-commit-range scan. Generator evidence and finding dispositions accompany this
-candidate; independent review and evaluation belong to the orchestrator.
+Run the exact candidate checks in `RELEASING.md`, plus
+`python3 tests/test-compose-rules.py` and `python3 tests/test-capture-absorb.py`,
+the documentation sweep and the public commit-range scan. Final commit
+identifiers and results are recorded in the release-session evidence;
+publication evidence is appended after release to avoid a self-referential
+commit.
 
-The reviewed candidate landed as one squash commit so that earlier candidate
-commits carrying private references stay out of the published history; the
-public range scan passed on the pushed range. The Insights & Highlights change
-was reconciled onto the squash and verified with the same suites.
-
-Previous publication evidence: [0.9.0](docs/releases/0.9.0.md).
-Public comparison: [before/after inventory](docs/reviews/2026-10-09-public-documentation.md).
+Previous publication evidence: [0.10.0](docs/releases/0.10.0.md),
+[0.9.0](docs/releases/0.9.0.md).
 
 ## Release-note draft
 
-Command renames: `research-dev` → `dev-research`, `research-feature` → `feature-research`, `research-feedback` → `feedback-research`, `research-quick` → `quick-research`. Update profiles and command habits; old names no longer install.
+Hippocampus v0.11.0 lets your agent rules live in your knowledge root.
+Keep rules for every tool in `context/rules.md` and rules for development work
+in `context/development-rules.md`, and `hippocampus-set-up` composes them into
+the instruction files of Claude Code, Codex and OpenClaw.
 
-Hippocampus v0.10.0 unifies approved research and meeting distribution through
-`absorb` and selected primary-source compilation through `wiki-compile`.
-Template-driven meeting records start and stay in their configured folder,
-use meaningful subjects for new filenames, and preserve existing paths, edits
-and confirmed receipts on retries. Original transcripts follow a separate
-policy-defined intake/archive lifecycle with verified content and source links.
-Completed research reports remain excluded reference artifacts. Research
-summaries and meeting reviews preserve Insights & Highlights, the useful
-specifics with their provenance and dispositions, and verify that accepted
-details actually landed before archival.
+Set-up first reports each installed tool's instruction file, its native memory
+setting and its memory store, then offers two editable presets: `standard`
+writes no user instruction file and keeps native memory; `thin` composes into each
+tool's default instruction file and turns native memory off. You review the
+complete list of changes before anything is written, and set-up refuses to
+apply a plan that changed after your approval. In an instruction file you wrote
+yourself, only one marked block changes. Set-up never deletes a memory store.
 
-Capture and durable research support user-declared custom proposal classes through
-local policy, with constrained execution and verified receipts. Writing opportunities
-are an opt-in worked example rather than a built-in class. Existing legacy rows
-remain readable; new custom rows require a declaration. Intended outcomes
-are explicitly accounted for, and retained-source analysis reuses existing
-primary evidence. Optional meeting settings and public routing/metadata guidance
-are documented consistently. Existing profile version 4 and compiler/absorption
-compatibility entry points remain supported; use `hippocampus-set-up` instead
-of the retired setup compatibility command. Both supported clients receive the
-same package, and installation preserves unowned skills, templates and sources.
+Your choices are recorded in a new optional `rules` section of the profile.
+Profile version 4 is unchanged, existing profiles need no migration, and a
+profile without the section uses the `standard` preset. Both supported clients
+receive the same package.
 
 ## Publication checklist
 
-- [x] Verify and commit the candidate; resolve the public commit-history scan.
-- [x] Complete independent review, evaluation and public-communication approval.
-- [x] Merge the reviewed candidate and tag its exact commit as `v0.10.0`.
-- [x] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
-- [x] Verify signed assets, publish, and independently verify downloaded assets.
-- [x] Install and verify the signed release in both supported clients.
-
-## Publication
-
-Published 2026-10-14T16:34:19Z as a public, non-draft, non-prerelease release.
-
-- Tag: `v0.10.0`, annotated; peeled commit `fbd965780b8866581166c429e7e263e1b07592ed`, equal to `origin/main` at publication.
-- Release: https://github.com/coreyfloyd/hippocampus/releases/tag/v0.10.0
-- Assets (6): `hippocampus-0.10.0.tar.gz`, `hippocampus-0.10.0.tar.gz.sha256`, `hippocampus-0.10.0.tar.gz.asc`, `hippocampus-release.asc`, `install-release.sh`, `verify-release.sh`.
-- Verification: local `scripts/verify-release.sh` passed against `dist/` before publication; the six downloaded public assets were verified in a fresh temporary directory (`cmp` on the key and both scripts, signature and checksum on the archive: OK). The archive lists 127 entries, all under `hippocampus/`.
-- Installation: `install-release.sh` from the downloaded assets installed 0.10.0 on the maintainer machine for both Claude Code and Codex; it removed the package-owned links for the retired setup command and the four old research command names, and the four new names resolve to the 0.10.0 release directory in both clients.
-
+- [ ] Verify and commit the candidate; resolve the public commit-history scan.
+- [ ] Complete independent review, evaluation and public-communication approval.
+- [ ] Merge the reviewed candidate and tag its exact commit as `v0.11.0`.
+- [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
+- [ ] Verify signed assets, publish, and independently verify downloaded assets.
+- [ ] Install and verify the signed release in both supported clients.

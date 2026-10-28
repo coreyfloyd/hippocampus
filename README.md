@@ -94,7 +94,8 @@ less room for confident invention. `research-sources` and `research-topic` build
 their artifacts on top of that grounded layer.
 
 After installation, start with `hippocampus-set-up`. It walks you through the
-knowledge-store structure, local policy, and follow-up routing, then shows the
+knowledge-store structure, local policy, follow-up routing, and optional
+rules and memory choices for each agent tool, then shows the
 complete proposed configuration before creating or changing anything.
 
 The system stands on excellent tools others built — [NotebookLM][8] for source-grounded synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and [Defuddle][9] for source gathering, Apple Speech for transcription, and [Obsidian][7] for browsing the result — and the wiki design is inspired by [Andrej Karpathy's LLM Wiki gist][1]. What `Hippocampus` contributes is the system that makes them work as one: the contracts that define how evidence becomes durable knowledge, the decision discipline that makes every report end in choices you can act on rather than a summary you file away, and the lifecycle rules that preserve source identity, keep unfinished work visible, and record completed distribution. The tools gather and ground the evidence; this system determines what happens to it.
@@ -312,6 +313,58 @@ Compilation is never a sweep of every uncompiled file in `raw/`. It reads the
 selected raw sources before existing wiki synthesis, drafts claims, then checks
 nearby articles for real tensions and gaps instead of silently blending
 incompatible assertions.
+
+### Rules and memory configuration
+
+```text
+hippocampus-set-up
+  -> inspect each tool: installed?, instruction file, owner, memory state, memory store
+  -> plan: standard | thin preset, editable per tool
+  -> review the complete mutation list and its approval fingerprint
+  -> approval
+  -> apply: compose rule targets | change listed memory settings | record the profile rules section
+```
+
+Legend: arrows show the set-up sequence; approval is the control boundary, and
+`apply` refuses when the recomputed plan no longer matches the approved fingerprint.
+
+Your agent rules can live in the knowledge root beside the rest of your
+knowledge, as plain Markdown, and be composed into each tool's own instruction
+file. Set-up uses two documents: `context/rules.md` holds rules for every tool,
+and `context/development-rules.md` holds rules for development work under an
+optional development root. Claude Code, Codex and OpenClaw are the supported
+tools; a tool that is not installed gets no row in the plan.
+
+Set-up first reports each tool's state: its default user instruction file
+(`CLAUDE.md` in the Claude Code home, `AGENTS.md` in the Codex home or the
+OpenClaw workspace), whether that
+file exists and who owns it, the native memory setting, and the memory store's
+location and file count. It then offers two editable starting points:
+
+| Preset     | Rules target per tool                       | Memory per tool                          |
+| ---------- | ------------------------------------------- | ---------------------------------------- |
+| `standard` | `none`: no user instruction file is written | `native`: the detected setting is kept   |
+| `thin`     | the tool's default instruction file         | `off`: the tool's documented off setting |
+
+Any row can be changed before approval. The plan lists every file that will
+change, including each memory setting with its current and proposed value, and
+nothing outside that list is written. A decline writes nothing.
+
+A target that carries the composer's generated header is rewritten in full.
+In a file you wrote yourself, composition changes only one marked block and
+leaves the rest of the file as it was. Claude Code targets import the documents
+by path; Codex and OpenClaw targets receive their content. With a development
+root, `CLAUDE.md` and `AGENTS.md` at that root carry the development rules.
+Every target is checked before any is written, so a failed check leaves all of
+them untouched. After editing either document, run set-up again: the new plan
+lists each target whose composed content changed.
+
+Set-up never deletes a memory store or any file in it; a nonempty store is
+reported for you to act on. `native` changes no memory setting. When a tool's
+memory directory or workspace is customized, set-up describes it, flags an
+`off` choice and proposes no change. The approved choices are recorded in the profile's optional
+`rules` section, described in the [Karpathy-wiki contract][2]. A profile
+without that section stays valid and uses the `standard` preset.
 
 ## Architecture
 
