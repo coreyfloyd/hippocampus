@@ -175,7 +175,7 @@ def meeting_settings(root, values, template_override=None):
     return folder, template, content
 
 
-def validate_rules(rules):
+def validate_rules(root, rules):
     missing = RULE_FIELDS - rules.keys()
     if missing:
         fail(f"rules missing field: {sorted(missing)[0]}")
@@ -184,8 +184,12 @@ def validate_rules(rules):
     for key in ("cross_tool_document", "development_document"):
         value = rules[key]
         path = pathlib.Path(value)
-        if path.is_absolute() or ".." in path.parts:
+        if path.is_absolute():
             fail(f"rules.{key} must be relative to knowledge_root")
+        try:
+            (root / path).resolve().relative_to(root)
+        except ValueError:
+            fail(f"rules.{key} escapes knowledge_root")
     seen_tools = set()
     for row in rules["tools"]:
         missing = RULE_TOOL_FIELDS - row.keys()
@@ -230,7 +234,7 @@ def validate(path, require_wiki=False):
         fail("missing artifact_followup_destination")
 
     if "rules" in values:
-        validate_rules(values["rules"])
+        validate_rules(root, values["rules"])
 
     # Meeting adapters are optional, independent, runtime-neutral settings.
     for key in ("meeting_transcript_source", "meeting_event_source", "meeting_note_path"):

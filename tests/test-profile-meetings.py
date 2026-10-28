@@ -126,6 +126,12 @@ class MeetingProfiles(unittest.TestCase):
         result = self.validate(self.RULES)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_rules_documents_cannot_escape_through_a_symlink(self):
+        (self.root / 'context').symlink_to(self.root.parent, target_is_directory=True)
+        result = self.validate(self.RULES)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('rules.cross_tool_document escapes knowledge_root', result.stderr)
+
     def test_rules_memory_must_be_native_or_off(self):
         result = self.validate(self.RULES.replace('memory: native', 'memory: enabled'))
         self.assertNotEqual(result.returncode, 0)
