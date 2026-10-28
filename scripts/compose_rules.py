@@ -23,6 +23,7 @@ same operation: refresh is the stable entry point for synchronizers.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -30,9 +31,9 @@ import tempfile
 from dataclasses import dataclass
 
 
-OWNERSHIP_PREFIX = b"<!-- hippocampus-rules:"
-BLOCK_START = b"<!-- hippocampus-rules:start -->"
-BLOCK_END = b"<!-- hippocampus-rules:end -->"
+CLAUDE_OWNERSHIP_HEADER = b"<!-- hippocampus-rules: generated; do not hand-edit -->"
+GENERATED_HEADER_PREFIX = b"<!-- hippocampus-rules: generated from "
+OWNERSHIP_HEADER_SUFFIX = b"; do not hand-edit -->"
 
 
 class ComposeError(Exception):
@@ -97,7 +98,7 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
         destination = pathlib.Path(file_value).expanduser()
         if not destination.is_absolute():
             fail(f"configuration: {label} file must be an absolute path")
-        destination = destination.absolute()
+        destination = destination.resolve(strict=False)
         if destination in seen:
             fail(f"configuration: duplicate target {destination}")
         seen.add(destination)
@@ -131,7 +132,7 @@ def read_source(path: pathlib.Path) -> bytes:
 
 def ownership_header(sources: list[pathlib.Path], generated: bool) -> bytes:
     if not generated:
-        return b"<!-- hippocampus-rules: generated; do not hand-edit -->\n"
+        return CLAUDE_OWNERSHIP_HEADER + b"\n"
     names = ", ".join(str(source) for source in sources)
     return f"<!-- hippocampus-rules: generated from {names}; do not hand-edit -->\n".encode()
 
@@ -150,25 +151,48 @@ def target_content(target: Target, source_bytes: list[bytes]) -> bytes:
 
 def has_ownership_header(content: bytes) -> bool:
     first_line = content.splitlines(keepends=True)[:1]
-    return bool(first_line and first_line[0].startswith(OWNERSHIP_PREFIX)
-                and first_line[0].rstrip(b"\r\n").endswith(b"; do not hand-edit -->"))
+    if not first_line:
+        return False
+    header = first_line[0].rstrip(b"\r\n")
+    if header == CLAUDE_OWNERSHIP_HEADER:
+        return True
+    if not (header.startswith(GENERATED_HEADER_PREFIX) and header.endswith(OWNERSHIP_HEADER_SUFFIX)):
+        return False
+    sources = header[len(GENERATED_HEADER_PREFIX):-len(OWNERSHIP_HEADER_SUFFIX)]
+    return bool(sources) and all(source.startswith(b"/") for source in sources.split(b", "))
+
+
+def block_markers(path: pathlib.Path) -> tuple[bytes, bytes]:
+    digest = hashlib.sha256(os.fsencode(str(path))).hexdigest().encode()
+    return (
+        b"<!-- hippocampus-rules:block:start " + digest + b" -->",
+        b"<!-- hippocampus-rules:block:end " + digest + b" -->",
+    )
+
+
+def delimiter_lines(content: bytes, delimiter: bytes) -> list[tuple[int, int]]:
+    positions: list[tuple[int, int]] = []
+    offset = 0
+    for line in content.splitlines(keepends=True):
+        if line.rstrip(b"\r\n") == delimiter:
+            positions.append((offset, offset + len(line)))
+        offset += len(line)
+    return positions
 
 
 def parse_user_block(existing: bytes, replacement: bytes, path: pathlib.Path) -> bytes:
-    starts = existing.count(BLOCK_START)
-    ends = existing.count(BLOCK_END)
-    if starts == 0 and ends == 0:
-        return existing + (b"" if not existing or existing.endswith(b"\n") else b"\n") + BLOCK_START + b"\n" + replacement + BLOCK_END + b"\n"
-    if starts != 1 or ends != 1:
+    start_marker, end_marker = block_markers(path)
+    starts = delimiter_lines(existing, start_marker)
+    ends = delimiter_lines(existing, end_marker)
+    if not starts and not ends:
+        return existing + (b"" if not existing or existing.endswith(b"\n") else b"\n") + start_marker + b"\n" + replacement + end_marker + b"\n"
+    if len(starts) != 1 or len(ends) != 1:
         fail(f"malformed marked block in target {path}: expected exactly one start and one end marker")
-    start = existing.index(BLOCK_START)
-    end = existing.index(BLOCK_END)
-    if end < start:
+    start, start_line_end = starts[0]
+    end, _ = ends[0]
+    if end < start_line_end:
         fail(f"malformed marked block in target {path}: end marker precedes start marker")
-    line_end = existing.find(b"\n", start)
-    if line_end == -1:
-        fail(f"malformed marked block in target {path}: start marker must end a line")
-    return existing[: start] + BLOCK_START + b"\n" + replacement + BLOCK_END + existing[end + len(BLOCK_END) :]
+    return existing[:start] + start_marker + b"\n" + replacement + end_marker + existing[end + len(end_marker):]
 
 
 def preflight_target(target: Target) -> bytes | None:

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Black-box contract tests for the rule-target composer."""
 import json
+import hashlib
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -55,6 +57,13 @@ class ComposerTests(unittest.TestCase):
     def snapshot(self):
         return {path: path.read_bytes() for path in (self.claude, self.codex, self.openclaw)}
 
+    def block_markers(self, path):
+        digest = hashlib.sha256(os.fsencode(str(path.resolve()))).hexdigest()
+        return (
+            f"<!-- hippocampus-rules:block:start {digest} -->",
+            f"<!-- hippocampus-rules:block:end {digest} -->",
+        )
+
     def assert_unchanged(self, snapshot):
         self.assertEqual(snapshot, self.snapshot())
 
@@ -67,7 +76,7 @@ class ComposerTests(unittest.TestCase):
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
         for target in (self.claude, self.codex, self.openclaw):
-            self.assertIn(f"composer-owned: {target}", result.stdout)
+            self.assertIn(f"composer-owned: {target.resolve()}", result.stdout)
 
         imports = (
             "<!-- hippocampus-rules: generated; do not hand-edit -->\n"
@@ -85,19 +94,32 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_unchanged(before)
 
+    def test_target_aliases_are_rejected_before_any_write(self):
+        target = self.targets / "shared.md"
+        alias = self.targets / ".." / "targets" / "shared.md"
+        self.write_config([
+            self.target("claude", alias),
+            self.target("codex", target),
+        ])
+        result = self.compose()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate target", result.stderr)
+        self.assertFalse(target.exists())
+
     def test_user_owned_block_preserves_everything_else_and_refreshes(self):
-        self.codex.write_text(f"before\n{START}\nold body\n{END}\nafter\n")
+        start, end = self.block_markers(self.codex)
+        self.codex.write_text(f"before\n{start}\nold body\n{end}\nafter\n")
         self.write_config([self.target("codex", self.codex)])
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f"user-owned: {self.codex}", result.stdout)
+        self.assertIn(f"user-owned: {self.codex.resolve()}", result.stdout)
         self.assertEqual(
             self.codex.read_text(),
             (
-                f"before\n{START}\n"
+                f"before\n{start}\n"
                 f"<!-- hippocampus-rules: generated from {self.cross}, {self.development}, {self.extra}; do not hand-edit -->\n"
                 "cross-tool rule\ndevelopment rule\ntool mechanic\n"
-                f"{END}\nafter\n"
+                f"{end}\nafter\n"
             ),
         )
         self.cross.write_text("cross-tool rule revised\n")
@@ -105,6 +127,25 @@ class ComposerTests(unittest.TestCase):
         self.assertIn("cross-tool rule revised", self.codex.read_text())
         self.assertTrue(self.codex.read_text().startswith("before\n"))
         self.assertTrue(self.codex.read_text().endswith("after\n"))
+
+    def test_user_header_that_the_composer_did_not_emit_remains_user_owned(self):
+        original = "<!-- hippocampus-rules: local notes; do not hand-edit -->\nuser instruction\n"
+        self.codex.write_text(original)
+        self.write_config([self.target("codex", self.codex)])
+        result = self.compose()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"user-owned: {self.codex.resolve()}", result.stdout)
+        self.assertTrue(self.codex.read_text().startswith(original))
+        self.assertIn("cross-tool rule", self.codex.read_text())
+
+    def test_source_marker_text_does_not_become_a_block_delimiter(self):
+        self.cross.write_text("rule documentation\n<!-- hippocampus-rules:start -->\nmore rules\n")
+        self.codex.write_text("user instruction\n")
+        self.write_config([self.target("codex", self.codex)])
+        self.assertEqual(self.compose().returncode, 0)
+        result = self.compose("refresh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("more rules", self.codex.read_text())
 
     def seed_targets(self):
         self.write_config([self.target("claude", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
@@ -128,13 +169,14 @@ class ComposerTests(unittest.TestCase):
     def test_malformed_or_unwritable_target_leaves_targets_byte_identical(self):
         before = self.seed_targets()
         malformed = self.targets / "malformed.md"
-        malformed.write_text(f"custom\n{START}\nunterminated\n")
+        start, end = self.block_markers(malformed)
+        malformed.write_text(f"custom\n{start}\nunterminated\n")
         self.write_config([self.target("claude", self.claude), self.target("codex", malformed)])
         result = self.compose()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("malformed marked block", result.stderr)
         self.assert_unchanged(before)
-        malformed.write_text(f"{START}\nfirst\n{END}\n{START}\nsecond\n{END}\n")
+        malformed.write_text(f"{start}\nfirst\n{end}\n{start}\nsecond\n{end}\n")
         result = self.compose()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("malformed marked block", result.stderr)
