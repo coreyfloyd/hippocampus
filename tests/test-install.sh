@@ -24,6 +24,7 @@ release_manifest() {
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
     [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
+    [ ! -f scripts/rules_setup.py ] || manifest_paths="$manifest_paths scripts/rules_setup.py"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
@@ -34,6 +35,7 @@ release_manifest_legacy() {
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
     [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
+    [ ! -f scripts/rules_setup.py ] || manifest_paths="$manifest_paths scripts/rules_setup.py"
     find $manifest_paths -type f -not -path '*/.build/*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
@@ -92,6 +94,11 @@ test -f "$TEST_HOME/.codex/skills/meeting-capture/../knowledge-capture/reference
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/profiles/karpathy-wiki.example.md"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/validate_profile.py"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/compose_rules.py"
+test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_setup.py"
+INSTALLED_RULES_SETUP="$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_setup.py"
+INSTALLED_HOMES="{\"claude-code\": \"$TEST_HOME/installed-claude\", \"codex\": \"$TEST_HOME/installed-codex\", \"openclaw\": \"$TEST_HOME/installed-openclaw\"}"
+PYTHONDONTWRITEBYTECODE=1 python3 "$INSTALLED_RULES_SETUP" inspect --homes "$INSTALLED_HOMES" > "$TEST_HOME/installed-rules-inspect.json"
+PYTHONDONTWRITEBYTECODE=1 python3 "$INSTALLED_RULES_SETUP" plan --homes "$INSTALLED_HOMES" > "$TEST_HOME/installed-rules-plan.json"
 mkdir -p "$TEST_HOME/.config/hippocampus" "$TEST_HOME/knowledge/raw" "$TEST_HOME/knowledge/wiki" "$TEST_HOME/knowledge/output" "$TEST_HOME/knowledge/docs"
 touch "$TEST_HOME/knowledge/wiki/hot.md" "$TEST_HOME/knowledge/docs/log.md" "$TEST_HOME/knowledge/docs/DECISIONS.md"
 sed "s|/absolute/path/to/knowledge|$TEST_HOME/knowledge|" "$SOURCE_ROOT/profiles/karpathy-wiki.example.md" > "$TEST_HOME/.config/hippocampus/profile.md"
@@ -104,6 +111,7 @@ test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/contracts/karpath
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/profiles/karpathy-wiki.example.md"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/validate_profile.py"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/compose_rules.py"
+test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_setup.py"
 test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/quick-research/reddit-read.sh"
 test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/run-transcribe.sh"
 test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/.build/hippocampus-test-sentinel"
