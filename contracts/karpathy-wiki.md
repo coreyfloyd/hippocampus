@@ -15,6 +15,17 @@ body only to the configured knowledge root. The body can declare a personal
 taxonomy, local operations conventions, or optional source-library routing; it
 is deliberately local configuration, not package content.
 
+## Optional rules profile section
+
+The optional `rules` frontmatter section records the choices approved through
+`hippocampus-set-up`; it is the only rules configuration that set-up and the
+composer read. Its `preset` is `standard` or `thin`. `cross_tool_document` and
+`development_document` name the two rules documents relative to the knowledge
+root. Each `tools` row names one supported tool (`claude-code`, `codex`, or
+`openclaw`), its `rules_target` (a file location or `none`), and its `memory`
+value (`native` or `off`). A profile without this section remains valid and
+uses the standard preset.
+
 ## Optional wiki
 
 The wiki is optional. `hippocampus-set-up` explains both the wiki and the
