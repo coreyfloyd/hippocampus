@@ -138,7 +138,9 @@ def read_source(path: pathlib.Path) -> bytes:
 def ownership_header(sources: list[pathlib.Path], generated: bool) -> bytes:
     if not generated:
         return CLAUDE_OWNERSHIP_HEADER + b"\n"
-    names = ", ".join(str(source) for source in sources)
+    names = json.dumps(
+        [str(source) for source in sources], ensure_ascii=True, separators=(",", ":")
+    )
     return f"<!-- hippocampus-rules: generated from {names}; do not hand-edit -->\n".encode()
 
 
@@ -163,8 +165,16 @@ def has_ownership_header(content: bytes) -> bool:
         return True
     if not (header.startswith(GENERATED_HEADER_PREFIX) and header.endswith(OWNERSHIP_HEADER_SUFFIX)):
         return False
-    sources = header[len(GENERATED_HEADER_PREFIX):-len(OWNERSHIP_HEADER_SUFFIX)]
-    return bool(sources) and all(source.startswith(b"/") for source in sources.split(b", "))
+    encoded_sources = header[len(GENERATED_HEADER_PREFIX):-len(OWNERSHIP_HEADER_SUFFIX)]
+    try:
+        sources = json.loads(encoded_sources.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(sources, list) or not sources:
+        return False
+    if not all(isinstance(source, str) and os.path.isabs(source) for source in sources):
+        return False
+    return ownership_header([pathlib.Path(source) for source in sources], generated=True).rstrip(b"\n") == header
 
 
 def block_markers(path: pathlib.Path) -> tuple[bytes, bytes]:

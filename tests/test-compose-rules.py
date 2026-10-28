@@ -66,6 +66,14 @@ class ComposerTests(unittest.TestCase):
             f"<!-- hippocampus-rules:block:end {digest} -->",
         )
 
+    def generated_header(self, sources):
+        encoded_sources = json.dumps(
+            [str(source) for source in sources],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        return f"<!-- hippocampus-rules: generated from {encoded_sources}; do not hand-edit -->\n"
+
     def assert_unchanged(self, snapshot):
         self.assertEqual(snapshot, self.snapshot())
 
@@ -85,8 +93,8 @@ class ComposerTests(unittest.TestCase):
             f"@{self.cross}\n@{self.development}\n@{self.extra}\n"
         )
         generated = (
-            f"<!-- hippocampus-rules: generated from {self.cross}, {self.development}, {self.extra}; do not hand-edit -->\n"
-            "cross-tool rule\ndevelopment rule\ntool mechanic\n"
+            self.generated_header([self.cross, self.development, self.extra])
+            + "cross-tool rule\ndevelopment rule\ntool mechanic\n"
         )
         self.assertEqual(self.claude.read_text(), imports)
         self.assertEqual(self.codex.read_text(), generated)
@@ -155,8 +163,8 @@ class ComposerTests(unittest.TestCase):
             self.codex.read_text(),
             (
                 f"before\n{start}\n"
-                f"<!-- hippocampus-rules: generated from {self.cross}, {self.development}, {self.extra}; do not hand-edit -->\n"
-                "cross-tool rule\ndevelopment rule\ntool mechanic\n"
+                + self.generated_header([self.cross, self.development, self.extra])
+                + "cross-tool rule\ndevelopment rule\ntool mechanic\n"
                 f"{end}\nafter\n"
             ),
         )
@@ -166,8 +174,46 @@ class ComposerTests(unittest.TestCase):
         self.assertTrue(self.codex.read_text().startswith("before\n"))
         self.assertTrue(self.codex.read_text().endswith("after\n"))
 
+    def test_encoded_source_header_round_trips_special_paths_for_generated_targets(self):
+        special_rules = self.root / "context, special rules"
+        special_rules.mkdir()
+        cross = special_rules / "cross-tool, source & notes.md"
+        development = special_rules / "development rule [v2].md"
+        extra = self.base / "tool, mechanics @2.md"
+        cross.write_text("old cross rule\n")
+        development.write_text("development rule\n")
+        extra.write_text("extra rule\n")
+        sources = [cross, development]
+        extras = [extra]
+        self.write_config([
+            self.target("codex", self.codex, sources, extras),
+            self.target("openclaw", self.openclaw, sources, extras),
+        ])
+
+        result = self.compose()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected_header = self.generated_header([*sources, *extras])
+        self.assertTrue(self.codex.read_text().startswith(expected_header))
+        self.assertTrue(self.openclaw.read_text().startswith(expected_header))
+
+        before = {target: target.read_bytes() for target in (self.codex, self.openclaw)}
+        result = self.compose("refresh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(before, {target: target.read_bytes() for target in (self.codex, self.openclaw)})
+
+        cross.write_text("new cross rule\n")
+        result = self.compose("refresh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for target in (self.codex, self.openclaw):
+            content = target.read_text()
+            self.assertIn("new cross rule", content)
+            self.assertNotIn("old cross rule", content)
+
     def test_user_header_that_the_composer_did_not_emit_remains_user_owned(self):
-        original = "<!-- hippocampus-rules: local notes; do not hand-edit -->\nuser instruction\n"
+        original = (
+            "<!-- hippocampus-rules: generated from [\"/manual/rules.md\", \"/manual/extra.md\"]; do not hand-edit -->\n"
+            "user instruction\n"
+        )
         self.codex.write_text(original)
         self.write_config([self.target("codex", self.codex)])
         result = self.compose()
