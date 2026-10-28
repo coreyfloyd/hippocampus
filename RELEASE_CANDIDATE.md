@@ -37,6 +37,12 @@ flagged when `off` is selected, and left unchanged. A user-written instruction
 file keeps everything outside its marked block. A decline writes nothing and
 leaves the profile's existing `rules` section unchanged.
 
+Known limitation: set-up composes from `context/rules.md` and
+`context/development-rules.md` and records those two paths in the profile, even
+when the profile's `cross_tool_document` or `development_document` names another
+location. Use the default names until this is fixed
+([hippocampus#45](https://github.com/coreyfloyd/hippocampus/issues/45)).
+
 Installation adds `scripts/compose_rules.py` and `scripts/rules_setup.py` to the
 release directory and its manifest. It does not run set-up, compose rules or
 change any tool's memory setting. Both Claude Code and Codex receive the same
