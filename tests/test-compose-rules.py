@@ -332,6 +332,21 @@ class ComposerTests(unittest.TestCase):
         self.assertIn("knowledge root unavailable", result.stderr)
         self.assert_unchanged(before)
 
+    def test_unreadable_source_leaves_targets_byte_identical(self):
+        before = self.seed_targets()
+        self.cross.write_text("revised rule\n")
+        unreadable = self.rules / "unreadable.md"
+        unreadable.write_text("private extra\n")
+        unreadable.chmod(0o000)
+        try:
+            self.write_config([self.target("claude", self.claude), self.target("codex", self.codex, [self.cross], [unreadable])])
+            result = self.compose()
+        finally:
+            unreadable.chmod(0o644)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(str(unreadable), result.stderr)
+        self.assert_unchanged(before)
+
     def test_malformed_or_unwritable_target_leaves_targets_byte_identical(self):
         before = self.seed_targets()
         malformed = self.targets / "malformed.md"
