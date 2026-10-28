@@ -35,6 +35,7 @@ manifest_listing() {
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
+    [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
@@ -48,6 +49,7 @@ manifest_hash_legacy() {
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
     [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
+    [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
     find $manifest_paths -type f -not -path '*/.build/*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
@@ -302,6 +304,7 @@ mkdir -p "$CLAUDE_DIR" "$CODEX_DIR" "$RELEASE_ROOT"
 TEMP_RELEASE="$RELEASE_ROOT/.$VERSION.$$"; rm -rf "$TEMP_RELEASE"; mkdir -p "$TEMP_RELEASE"
 copy_release_tree "$ROOT/skills" "$TEMP_RELEASE/skills"; copy_release_tree "$ROOT/contracts" "$TEMP_RELEASE/contracts"; copy_release_tree "$ROOT/profiles" "$TEMP_RELEASE/profiles"
 mkdir -p "$TEMP_RELEASE/scripts"; cp -p "$ROOT/scripts/validate_profile.py" "$TEMP_RELEASE/scripts/validate_profile.py"
+[ ! -f "$ROOT/scripts/compose_rules.py" ] || cp -p "$ROOT/scripts/compose_rules.py" "$TEMP_RELEASE/scripts/compose_rules.py"
 if [ ! -d "$RELEASE_DIR" ]; then
   printf '%s\n' "$SOURCE_HASH" > "$TEMP_RELEASE/manifest"; mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
