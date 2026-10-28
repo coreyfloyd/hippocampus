@@ -21,6 +21,24 @@ artifact_followup_destination: "Describe the task system and routing rules for s
 # meeting_record_template: templates/meeting.md
 # Templates are Markdown files: relative to the knowledge root, or explicit absolute paths.
 # Record folders stay within the root; validation creates no files.
+# Optional rules and memory choices, written by hippocampus-set-up. Omit this
+# section to use the standard preset. The document locations are relative to
+# the knowledge root; each installed tool has one row.
+# rules:
+#   preset: standard
+#   cross_tool_document: context/rules.md
+#   development_document: context/development-rules.md
+#   development_root: /absolute/path/to/development
+#   tools:
+#     - tool: claude-code
+#       rules_target: none
+#       memory: native
+#     - tool: codex
+#       rules_target: none
+#       memory: native
+#     - tool: openclaw
+#       rules_target: none
+#       memory: native
 ---
 
 Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.

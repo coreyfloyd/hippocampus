@@ -11,7 +11,13 @@ TOP_LEVEL_FIELDS = {
     "wiki_enabled",
     "meeting_transcript_source", "meeting_event_source", "meeting_note_path",
     "meeting_record_folder", "meeting_record_template",
+    "rules",
 }
+
+RULE_FIELDS = {"preset", "cross_tool_document", "development_document", "tools"}
+OPTIONAL_RULE_FIELDS = {"development_root"}
+RULE_TOOL_FIELDS = {"tool", "rules_target", "memory"}
+RULE_TOOLS = {"claude-code", "codex", "openclaw"}
 
 
 def fail(message):
@@ -19,31 +25,90 @@ def fail(message):
     raise SystemExit(1)
 
 
+def parse_mapping(line, label):
+    if ":" not in line:
+        fail(f"invalid {label} field")
+    key, value = line.split(":", 1)
+    return key.strip(), value.strip()
+
+
+def parse_rules(lines, index):
+    rules = {}
+    tools = []
+    current_tool = None
+    while index < len(lines):
+        line = lines[index]
+        if line == "---" or (line and not line.startswith(" ")):
+            break
+        index += 1
+        if not line or line.lstrip().startswith("#"):
+            continue
+        if line.startswith("  ") and not line.startswith("   "):
+            key, value = parse_mapping(line[2:], "rules")
+            if key == "tools":
+                if value or key in rules:
+                    fail("rules.tools must appear once without a value")
+                rules[key] = tools
+                current_tool = None
+            elif key in (RULE_FIELDS | OPTIONAL_RULE_FIELDS) - {"tools"}:
+                if key in rules or not value:
+                    fail(f"rules.{key} must appear once with a value")
+                rules[key] = value
+                current_tool = None
+            else:
+                fail(f"unsupported rules field: {key}")
+            continue
+        if line.startswith("    - "):
+            if "tools" not in rules:
+                fail("rules tool rows must follow rules.tools")
+            key, value = parse_mapping(line[6:], "rules tool")
+            if key != "tool" or not value:
+                fail("each rules tool row must start with tool")
+            current_tool = {key: value}
+            tools.append(current_tool)
+            continue
+        if line.startswith("      "):
+            if current_tool is None:
+                fail("rules tool fields must follow a tool row")
+            key, value = parse_mapping(line[6:], "rules tool")
+            if key not in RULE_TOOL_FIELDS - {"tool"} or key in current_tool or not value:
+                fail(f"invalid rules tool field: {key}")
+            current_tool[key] = value
+            continue
+        fail("invalid rules section indentation")
+    return rules, index
+
+
 def parse(path):
     lines = path.read_text().splitlines()
     if not lines or lines[0] != "---":
         fail("missing YAML frontmatter")
     values = {}
-    for line in lines[1:]:
+    index = 1
+    while index < len(lines):
+        line = lines[index]
         if line == "---":
             return values
+        index += 1
         if not line:
             continue
         if line.startswith("#"):
             continue
         if line.startswith(" "):
             fail("nested profile fields are not supported")
-        if ":" not in line:
-            fail("invalid profile field")
-        key, value = line.split(":", 1)
-        key = key.strip()
+        key, value = parse_mapping(line, "profile")
         if key == "meeting_daily_note_path":
             fail("meeting_daily_note_path was renamed to meeting_note_path")
         if key not in TOP_LEVEL_FIELDS:
             fail(f"unsupported profile field: {key}")
         if key in values:
             fail(f"duplicate profile field: {key}")
-        values[key] = value.strip()
+        if key == "rules":
+            if value:
+                fail("rules must be a section")
+            values[key], index = parse_rules(lines, index)
+        else:
+            values[key] = value
     fail("unterminated YAML frontmatter")
 
 
@@ -111,6 +176,39 @@ def meeting_settings(root, values, template_override=None):
     return folder, template, content
 
 
+def validate_rules(root, rules):
+    missing = RULE_FIELDS - rules.keys()
+    if missing:
+        fail(f"rules missing field: {sorted(missing)[0]}")
+    if rules["preset"] not in {"standard", "thin"}:
+        fail("rules.preset must be standard or thin")
+    for key in ("cross_tool_document", "development_document"):
+        value = rules[key]
+        path = pathlib.Path(value)
+        if path.is_absolute():
+            fail(f"rules.{key} must be relative to knowledge_root")
+        try:
+            (root / path).resolve().relative_to(root)
+        except ValueError:
+            fail(f"rules.{key} escapes knowledge_root")
+    if "development_root" in rules and not pathlib.Path(rules["development_root"]).is_absolute():
+        fail("rules.development_root must be an absolute path")
+    seen_tools = set()
+    for row in rules["tools"]:
+        missing = RULE_TOOL_FIELDS - row.keys()
+        if missing:
+            fail(f"rules tool row missing field: {sorted(missing)[0]}")
+        if row["tool"] not in RULE_TOOLS:
+            fail(f"unknown rules tool: {row['tool']}")
+        if row["tool"] in seen_tools:
+            fail(f"duplicate rules tool: {row['tool']}")
+        seen_tools.add(row["tool"])
+        if not row["rules_target"]:
+            fail("rules_target must name a file or none")
+        if row["memory"] not in {"native", "off"}:
+            fail("rules memory must be native or off")
+
+
 def validate(path, require_wiki=False):
     values = parse(pathlib.Path(path))
     if values.get("profile_version") != "4":
@@ -137,6 +235,9 @@ def validate(path, require_wiki=False):
         contained_file(root, values.get(key), key)
     if not values.get("artifact_followup_destination"):
         fail("missing artifact_followup_destination")
+
+    if "rules" in values:
+        validate_rules(root, values["rules"])
 
     # Meeting adapters are optional, independent, runtime-neutral settings.
     for key in ("meeting_transcript_source", "meeting_event_source", "meeting_note_path"):

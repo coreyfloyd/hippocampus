@@ -188,6 +188,7 @@ then test the optional Apple Speech package:
 
 ```bash
 python3 tests/test-profile-meetings.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/test-rules-setup.py
 PYTHONDONTWRITEBYTECODE=1 python3 tests/test-capture-absorb.py
 bash tests/test-contracts.sh
 bash tests/test-install.sh
