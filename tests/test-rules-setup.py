@@ -3,6 +3,8 @@
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -105,11 +107,60 @@ class RulesSetupTests(unittest.TestCase):
         profile = self.base / "profile.md"
         profile.write_text("---\nprofile_version: 4\nknowledge_root: " + str(root) + "\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n---\npolicy\n")
         plan = helper.plan(self.describe(), "thin")
-        helper.apply(plan, profile, knowledge_root=root, approved=True)
+        helper.apply(
+            plan,
+            profile,
+            knowledge_root=root,
+            approved=True,
+            approval_fingerprint=plan["approval_fingerprint"],
+        )
         self.assertIn("shared rule", (self.homes["codex"] / "AGENTS.md").read_text())
         self.assertIn("rules:\n  preset: thin", profile.read_text())
         self.assertIn("tool: openclaw", profile.read_text())
         self.assertEqual(helper.plan(self.describe(), "thin", profile=profile)["mutation_list"], [])
+
+    def test_apply_refuses_a_stale_approved_plan_before_writing(self):
+        helper = load_helper()
+        root = self.base / "knowledge"
+        (root / "context").mkdir(parents=True)
+        for name in ("raw", "output", "docs"):
+            (root / name).mkdir()
+        (root / "docs" / "log.md").touch()
+        (root / "docs" / "DECISIONS.md").touch()
+        (root / "context" / "rules.md").write_text("shared rule\n")
+        (root / "context" / "development-rules.md").write_text("development rule\n")
+        (self.homes["openclaw"] / "workspace").mkdir()
+        profile = self.base / "profile.md"
+        profile.write_text("---\nprofile_version: 4\nknowledge_root: " + str(root) + "\nwiki_enabled: false\noperation_log_file: docs/log.md\ndecision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n---\npolicy\n")
+        reviewed = helper.plan(self.describe(), "thin", profile=profile)
+        profile_before = profile.read_text()
+        (self.homes["claude-code"] / "settings.json").write_text(
+            json.dumps({"autoMemoryEnabled": False})
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "apply",
+                "--homes",
+                json.dumps({name: str(home) for name, home in self.homes.items()}),
+                "--preset",
+                "thin",
+                "--profile",
+                str(profile),
+                "--approve",
+                "--approval-fingerprint",
+                reviewed["approval_fingerprint"],
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("approved mutation list changed", result.stderr)
+        self.assertEqual(profile.read_text(), profile_before)
+        self.assertFalse((self.homes["claude-code"] / "CLAUDE.md").exists())
+        self.assertFalse((self.homes["codex"] / "AGENTS.md").exists())
 
 
 if __name__ == "__main__":

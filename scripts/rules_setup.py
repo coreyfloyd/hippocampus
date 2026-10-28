@@ -7,6 +7,7 @@ has approved its complete mutation list.  Tests pass fake tool homes; callers
 without an explicit mapping receive the user's conventional tool homes.
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -201,6 +202,26 @@ def inspect_tools(homes=None):
     return rows
 
 
+def approval_payload(plan_value):
+    """Return the complete user-reviewable portion of a plan."""
+    return {
+        "preset": plan_value["preset"],
+        "development_root": plan_value["development_root"],
+        "tools": [{
+            "tool": row["tool"],
+            "rules_target": row["rules_target"],
+            "memory": row["memory"],
+            "memory_mutations": row["memory_mutations"],
+        } for row in plan_value["tools"]],
+        "mutation_list": plan_value["mutation_list"],
+    }
+
+
+def plan_fingerprint(plan_value):
+    payload = json.dumps(approval_payload(plan_value), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def plan(rows, preset, development_root=None, overrides=None, profile=None):
     if preset not in {"standard", "thin"}:
         raise ValueError("preset must be standard or thin")
@@ -241,6 +262,7 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
             expected["development_root"] = result["development_root"]
         if current != expected:
             result["mutation_list"].append({"kind": "profile", "file": str(profile), "current": "rules section present" if current else "rules section absent", "proposed": "record approved rules and memory choices"})
+    result["approval_fingerprint"] = plan_fingerprint(result)
     return result
 
 
@@ -340,9 +362,11 @@ def compose_targets(plan_value, knowledge_root):
         config_path.unlink(missing_ok=True)
 
 
-def apply(plan_value, profile, knowledge_root=None, approved=False):
+def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fingerprint=None):
     if not approved:
         raise ValueError("complete mutation list requires explicit approval")
+    if approval_fingerprint != plan_fingerprint(plan_value):
+        raise ValueError("approved mutation list changed; rerun plan and approve the new fingerprint")
     profile = pathlib.Path(profile)
     reader = profile_reader()
     reader.validate(profile)
@@ -385,6 +409,7 @@ def main():
     parser.add_argument("--overrides", help="JSON object of per-tool approved row choices")
     parser.add_argument("--profile", help="profile to update after approval")
     parser.add_argument("--approve", action="store_true", help="apply the complete displayed mutation list")
+    parser.add_argument("--approval-fingerprint", help="fingerprint printed by the approved plan")
     args = parser.parse_args()
     homes = {key: pathlib.Path(value) for key, value in json.loads(args.homes).items()} if args.homes else None
     rows = inspect_tools(homes)
@@ -393,7 +418,17 @@ def main():
     if args.command == "apply":
         if not args.profile:
             parser.error("apply requires --profile")
-        value = apply(value, args.profile, approved=args.approve)
+        if not args.approval_fingerprint:
+            parser.error("apply requires --approval-fingerprint from the approved plan")
+        try:
+            value = apply(
+                value,
+                args.profile,
+                approved=args.approve,
+                approval_fingerprint=args.approval_fingerprint,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
     print(json.dumps(value, indent=2, sort_keys=True))
 
 

@@ -84,12 +84,15 @@ Use `scripts/rules_setup.py plan --profile <profile>` to prepare the complete pr
 list. It names every target file that will change and every memory setting with
 its current and proposed value. Also show the four useful context documents —
 devices, file locations, people and preferences — as optional guidance only;
-do not include them in the mutation list.
+do not include them in the mutation list. Record the returned
+`approval_fingerprint` with that exact review.
 
 Wait for explicit approval of that exact list. A decline writes nothing and
 leaves the profile's existing rules section unchanged. On approval, run
-`scripts/rules_setup.py apply --profile <profile> --preset <preset> --approve`
-with any approved per-tool overrides. It applies targets through
+`scripts/rules_setup.py apply --profile <profile> --preset <preset> --approve --approval-fingerprint <approval_fingerprint>`
+with any approved per-tool overrides. The helper recomputes the plan before
+writing and refuses if its fingerprint differs, so no newly introduced mutation
+can be applied without a new review. It applies targets through
 `compose_rules.py`, updates only the proposed memory settings, and records the
 preset, both context document locations, optional development root, and each
 installed tool's final rules target and memory value in the profile. The helper
