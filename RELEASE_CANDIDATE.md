@@ -83,7 +83,7 @@ receive the same package.
 ## Publication checklist
 
 - [x] Verify and commit the candidate; resolve the public commit-history scan.
-- [x] Complete independent review, evaluation and public-communication approval.
+- [ ] Complete independent review, evaluation and public-communication approval. Not run for 0.11.0: the maintainer authorized an unattended release; the candidate had the runbook checks and documentation sweep only.
 - [x] Merge the reviewed candidate and tag its exact commit as `v0.11.0`.
 - [x] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
 - [x] Verify signed assets, publish, and independently verify downloaded assets.
