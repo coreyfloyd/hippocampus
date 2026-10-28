@@ -106,5 +106,38 @@ class MeetingProfiles(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('escapes knowledge_root', result.stderr)
 
+    RULES = '''rules:
+  preset: thin
+  cross_tool_document: context/rules.md
+  development_document: context/development-rules.md
+  tools:
+    - tool: claude-code
+      rules_target: /tool-home/claude/CLAUDE.md
+      memory: off
+    - tool: codex
+      rules_target: /tool-home/codex/AGENTS.md
+      memory: native
+    - tool: openclaw
+      rules_target: none
+      memory: off
+'''
+
+    def test_rules_section_is_accepted(self):
+        result = self.validate(self.RULES)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rules_memory_must_be_native_or_off(self):
+        result = self.validate(self.RULES.replace('memory: native', 'memory: enabled'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('memory', result.stderr)
+
+    def test_rules_reject_unknown_tool(self):
+        result = self.validate(self.RULES.replace('tool: codex', 'tool: unknown-tool'))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('tool', result.stderr)
+
+    def test_rules_section_remains_optional(self):
+        self.assertEqual(self.validate().returncode, 0)
+
 if __name__ == '__main__':
     unittest.main()
