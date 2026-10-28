@@ -422,6 +422,7 @@ cp -R "$JUNK_SOURCE/contracts" "$JUNK_RELEASE/contracts"
 cp -R "$JUNK_SOURCE/profiles" "$JUNK_RELEASE/profiles"
 cp -p "$JUNK_SOURCE/scripts/validate_profile.py" "$JUNK_RELEASE/scripts/validate_profile.py"
 cp -p "$JUNK_SOURCE/scripts/compose_rules.py" "$JUNK_RELEASE/scripts/compose_rules.py"
+cp -p "$JUNK_SOURCE/scripts/rules_setup.py" "$JUNK_RELEASE/scripts/rules_setup.py"
 test "$(release_manifest "$JUNK_RELEASE")" = "$(release_manifest "$JUNK_SOURCE")"
 printf 'ATTACKER:0\n' > "$JUNK_RELEASE/manifest"
 if HOME="$JUNK_HOME" CODEX_HOME="$JUNK_HOME/.codex" bash "$JUNK_SOURCE/install.sh" 2>"$JUNK_HOME/err.log"; then
