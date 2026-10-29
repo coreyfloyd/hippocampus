@@ -114,6 +114,23 @@ index, and records the final source disposition only after the result is known.
 atomicity/collision candidates, link and source coverage, tensions, and gaps.
 It cannot modify articles, raw sources, frontmatter, indexes, or operation logs.
 
+## What is enforced and what is instructed
+
+Most checks in this contract are agent instructions: the skills tell the agent
+what to verify, and nothing outside the agent re-checks it. `wiki-audit` is one
+of them; no deterministic structure checker ships yet.
+
+Code enforces less, and only in absorption. `skills/absorb/scripts/distribution.py`
+locks the distribution record, replaces it atomically, ties approval to a hash of
+each row's scope, verifies retained source files by SHA-256 before use, and
+requires read-back before a write with an uncertain result is retried.
+
+Two limits follow. Recording where a source came from is provenance; it is not
+evidence that any claim drawn from it is accepted, and this contract keeps no
+claim-level records. A distribution receipt confirms one approved row's write; it
+does not make a multi-file change atomic, and editors or other writers do not
+honor the record lock.
+
 
 ## Capture and shared absorption
 
