@@ -257,6 +257,13 @@ with the project it serves:
 **Communities to watch** always closes the body before the sources, because
 surfacing the right venues is a primary output rather than a footnote.
 
+When either deliverable, or a `dev-research` answer persisted to a file, cites
+public sources whose findings are reusable outside the project, it ends with a
+`## Wiki candidates` table and reports it as a proposed distribution. After
+approval, `absorb` stages those sources and compiles them; the project document
+stays where it is and is never compile input. See
+[`skills/absorb/references/wiki-candidates.md`](skills/absorb/references/wiki-candidates.md).
+
 ### Capture knowledge from a conversation
 
 ```text

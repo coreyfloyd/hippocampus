@@ -77,7 +77,7 @@ Run searches in parallel.
 ## Output
 
 Write a decision memo. It exists to be read once and acted on, not absorbed
-into a knowledge base: `research-absorb` does not apply. Placement: when the
+into a knowledge base: `research-absorb` does not apply to the memo. When its public sources carry knowledge reusable beyond the decision, end it with the `## Wiki candidates` section defined in [wiki candidates](../absorb/references/wiki-candidates.md) and report them at completion as a proposed distribution. Placement: when the
 subject is a competitor or the research otherwise serves a project, write the
 memo into that project at the path the caller names; otherwise write it to the
 validated knowledge root’s `output/YYYY-MM-DD-feedback-<subject>.md`; a profile-body naming policy may refine the filename within `output/`. After the decision and authorized actions are complete, retain a knowledge-root memo in `raw/derived/` as an excluded reference artifact rather than deleting it. Project memos stay under that project's retention policy.

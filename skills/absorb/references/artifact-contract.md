@@ -2,7 +2,7 @@
 
 Every durable artifact produced by `research-sources` or `research-topic` is a
 transient, evidence-grounded handoff to `absorb`. (`feature-research`
-and `feedback-research` produce deliverables that are read and retained or filed with their project, not absorbed; each defines its own document in its SKILL.md.) It is not raw wiki input. Its purpose is to let the user make the decisions the evidence raises, then execute the approved plan and preserve the completed report in `raw/derived/` as an excluded reference artifact.
+and `feedback-research` produce deliverables that are read and retained or filed with their project, not absorbed; each defines its own document in its SKILL.md. Their reusable public sources reach the wiki only through an approved [Wiki candidates](wiki-candidates.md) section.) It is not raw wiki input. Its purpose is to let the user make the decisions the evidence raises, then execute the approved plan and preserve the completed report in `raw/derived/` as an excluded reference artifact.
 
 This contract is the only place the artifact's sections are defined. A producing
 skill adds requirements of its own; it does not restate the section list.

@@ -162,6 +162,11 @@ for skill in feature-research feedback-research; do
   if grep -Fq 'artifact-contract.md' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
   if grep -Fq 'Findings format' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
 done
+for skill in feature-research feedback-research dev-research; do
+  grep -Fq 'references/wiki-candidates.md' "$ROOT/skills/$skill/SKILL.md" || exit 1
+done
+grep -Fq 'references/wiki-candidates.md' "$ROOT/skills/absorb/SKILL.md"
+grep -Fq 'never compile input' "$ROOT/skills/absorb/references/wiki-candidates.md"
 grep -Fq '## Sources' "$ROOT/skills/feature-research/SKILL.md"
 grep -Fq '## Communities to watch' "$ROOT/skills/feedback-research/SKILL.md"
 grep -Fq 'For research artifacts also read' "$ROOT/skills/absorb/SKILL.md"
