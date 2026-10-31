@@ -82,6 +82,11 @@ Requirements: [link or path]   Platform: [iOS / macOS / web]   Researched: [date
 | ID | Product | Type | Link | Date | Version observed |
 |----|---------|------|------|------|------------------|
 | S1 | [Product A] | official docs / review / user thread / hands-on / HIG | [label](url) | [date] | [version] |
+
+## Wiki candidates (optional; see ../absorb/references/wiki-candidates.md)
+| ID | Source | Reusable finding | Proposed wiki target |
+|----|--------|------------------|----------------------|
+| W1 | S1 | [claim true outside this project] | [article] |
 ```
 
 Include the requirement × product matrix when three or more products are
