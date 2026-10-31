@@ -90,4 +90,4 @@ List every source scraped with a one-line description of what it contributed. Pr
 - **Error text beats description.** Search with the verbatim error message; paraphrasing misses exact matches.
 - **GitHub Issues first for library bugs.**
 - **Multiple proposals over false certainty.**
-- **No new notebook or knowledge-store output.** This skill produces a conversation response only. If the user wants to persist findings, they can ask for a durable output separately. Reading an existing NotebookLM notebook is optional input lookup, not a new notebook or artifact workflow.
+- **No new notebook or knowledge-store output.** This skill produces a conversation response only. If the user or a caller asks to persist the findings to a file, write it where they name and end it with the `## Wiki candidates` section defined in [wiki candidates](../absorb/references/wiki-candidates.md) when its public sources carry reusable knowledge; report the candidates at completion as a proposed distribution. Reading an existing NotebookLM notebook is optional input lookup, not a new notebook or artifact workflow.

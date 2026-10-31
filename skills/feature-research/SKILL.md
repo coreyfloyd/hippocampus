@@ -40,8 +40,8 @@ Before writing the document, run `python3` with `../../scripts/validate_profile.
 Write a design input document. It feeds the feature's design and spec and stays
 with the project: write it into the project repo at the path the caller names,
 beside the requirements it answers. When no project path is named, write it to
-`output/YYYY-MM-DD-feature-research-<subject>.md` under the validated knowledge root and say so. A profile-body output naming policy may refine the filename within `output/`. It is not absorbed into a knowledge
-base; `research-absorb` does not apply. Report the path at completion.
+`output/YYYY-MM-DD-feature-research-<subject>.md` under the validated knowledge root and say so. A profile-body output naming policy may refine the filename within `output/`. The document itself is not absorbed into a knowledge
+base; `research-absorb` does not apply to it. When its public sources carry knowledge reusable outside the project, end it with the `## Wiki candidates` section defined in [wiki candidates](../absorb/references/wiki-candidates.md). Report the path, and any Wiki candidates as a proposed distribution, at completion.
 
 ## Artifact body
 
@@ -94,7 +94,7 @@ Novel approaches, and Table stakes cites a Sources row by ID.
 - **Evidence-based.** Cite specific products and specific behaviors. Don't generalize without examples.
 - **User perspective.** Focus on what works for users, not what's technically clever.
 - **Include negative signals.** What users complain about is as valuable as what they like.
-- **Placement:** the document lives with the project it serves; nothing is distributed elsewhere.
+- **Placement:** the document lives with the project it serves and is never moved or compiled; only approved Wiki candidates' sources are distributed, through `absorb`.
 
 ## When NOT to Use
 

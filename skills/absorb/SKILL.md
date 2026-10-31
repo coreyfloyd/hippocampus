@@ -10,9 +10,10 @@ and `~/.config/hippocampus/profile.md`. If invalid or missing, use
 `hippocampus-set-up` before writes. Read the profile body, each target's rules,
 and [the shared distribution contract](references/distribution-contract.md).
 For research artifacts also read [the artifact contract](references/artifact-contract.md).
+For a project deliverable's approved Wiki candidates read [wiki candidates](references/wiki-candidates.md).
 
 Input is one supported research artifact or meeting record and its existing
-source-linked plan. Output is each row's confirmed result, pending reason or
+source-linked plan, or a project deliverable with approved Wiki candidates rows. Output is each row's confirmed result, pending reason or
 explicit decline, plus the retained record/source paths. Do not extract a new
 plan from a chat here; capture frontends own proposals. Existing authorization
 carries through. Ask only about changed scope, missing facts or destination-required
@@ -69,7 +70,7 @@ Never infer success from a tool's attempted write or repeat an uncertain effect.
 
 ## Finish and retain
 
-Meeting records stay at their original path. Research artifacts stay in `output/`
+Meeting records stay at their original path. Project deliverables stay at their project path, unedited; their row receipts go to the operation log. Research artifacts stay in `output/`
 while any row is pending; after all rows complete or are explicitly declined,
 retain them in `raw/derived/` with absorbed status, date, original path,
 `use: artifact` and `compile_mode: exclude`. Never overwrite another artifact.
