@@ -219,8 +219,9 @@ compiler input.
 ### Deliverables that are not absorbed
 
 `feature-research` and `feedback-research` sit outside that lifecycle. Neither
-uses the artifact contract and neither goes through `absorb`; each
-writes a document with its own structure, defined in its own SKILL.md.
+uses the artifact contract and neither document goes through `absorb`; each
+writes a document with its own structure, defined in its own SKILL.md. Only an
+optional Wiki candidates table, described below, reaches `absorb`.
 
 `feature-research` produces a **design input document**. It feeds the feature's
 design and spec, and is written into the project repo beside the requirements
@@ -235,7 +236,8 @@ it answers:
 ├── Table stakes         # what users expect based on market norms
 ├── Platform conventions # HIG, Material, or other platform guidance
 ├── Implications         # what this suggests for your design
-└── Sources              # ID, product, type, link, date, version observed
+├── Sources              # ID, product, type, link, date, version observed
+└── Wiki candidates      # optional: reusable public findings for the wiki
 ```
 
 Every claim cites a source row by ID.
@@ -251,7 +253,8 @@ with the project it serves:
 ├── What people are saying   # recurring themes, dated against the version in scope
 ├── Recurring issues, ranked # by frequency and severity
 ├── Communities to watch # the venues worth following afterward
-└── Sources              # thread, date, poster's version, how it was read
+├── Sources              # thread, date, poster's version, how it was read
+└── Wiki candidates      # optional: reusable public findings for the wiki
 ```
 
 **Communities to watch** always closes the body before the sources, because

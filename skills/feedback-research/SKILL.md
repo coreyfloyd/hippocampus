@@ -105,6 +105,11 @@ Scope: [version or date range the feedback covers]   Researched: [date]
 
 ## Sources
 - [Thread or page](url) — [date] — [poster's version] — [read via browser / Defuddle / snippet only]
+
+## Wiki candidates (optional; see ../absorb/references/wiki-candidates.md)
+| ID | Source | Reusable finding | Proposed wiki target |
+|----|--------|------------------|----------------------|
+| W1 | [thread or page] | [claim true beyond this decision] | [article] |
 ```
 
 Consolidate agreeing sources. Make conflicts explicit. **Communities to watch**
