@@ -281,7 +281,7 @@ def validate(path, require_wiki=False):
                 fail(f"{key} must be absent when wiki_enabled is false")
         if require_wiki:
             fail(
-                "wiki is not configured; run hippocampus-set-up to enable it"
+                "wiki is not configured; run setup to enable it"
             )
 
     return root, values

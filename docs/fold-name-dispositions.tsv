@@ -1,0 +1,381 @@
+current_path	line	disposition
+docs/architecture/session/runtime.architecture.json	9	retained: immutable imported architecture source attribution
+docs/architecture/session/runtime.html	4985	retained: immutable imported architecture source attribution
+docs/continuity-inventory.tsv	0	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	2	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	3	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	4	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	5	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	6	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	7	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	8	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	9	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	10	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	11	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	12	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	13	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	14	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	15	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	16	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	17	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	18	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	19	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	20	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	21	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	22	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	23	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	24	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	25	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	26	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	27	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	28	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	29	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	30	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	31	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	32	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	33	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	34	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	35	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	36	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	37	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	38	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	39	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	40	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	41	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	42	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	43	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	44	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	45	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	46	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	47	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	48	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	49	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	50	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	51	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	52	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	53	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	54	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	55	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	56	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	57	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	58	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	59	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	60	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	61	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	62	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	63	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	64	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	65	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	66	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	67	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	68	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	69	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	70	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	71	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	72	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	73	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	74	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	75	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	76	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	77	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	78	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	79	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	80	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	81	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	82	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	83	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	84	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	85	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	86	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	87	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	88	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	89	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	90	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	91	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	92	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	93	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	94	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	95	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	96	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	97	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	98	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	99	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	100	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	101	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	102	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	103	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	104	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	105	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	106	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	107	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	108	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	109	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	110	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	111	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	112	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	113	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	114	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	115	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	116	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	117	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	118	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	119	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	120	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	121	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	122	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	123	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	124	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	125	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	126	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	127	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	128	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	129	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	130	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	131	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	132	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	133	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	134	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	135	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	136	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	137	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	138	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	139	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	140	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	141	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	142	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	143	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	144	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	145	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	146	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	147	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	148	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	149	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	150	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	151	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	152	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	153	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	154	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	155	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	156	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	157	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	158	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	159	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	160	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	161	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	162	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	163	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	164	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	165	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	166	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	167	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	168	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	169	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	170	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	171	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	172	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	173	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	174	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	175	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	176	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	177	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	178	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	179	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	180	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	181	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	182	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	183	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	184	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	185	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	186	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	187	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	188	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	189	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	190	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	191	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	192	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	193	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	194	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	195	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	196	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	197	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	198	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	199	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	200	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	201	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	202	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	203	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	204	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	205	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	206	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	207	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	208	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	209	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	210	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	211	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	212	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	213	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	214	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	215	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	216	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	217	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	218	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	219	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	220	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	221	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	222	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	223	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	224	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	225	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	226	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	227	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	228	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	229	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	230	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	231	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	232	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	233	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	234	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	235	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	236	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	237	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	238	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	239	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	240	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	241	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	242	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	243	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	244	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	245	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	246	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	247	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	248	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	249	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	250	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	251	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	252	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	253	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	254	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	255	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	256	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	257	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	258	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	259	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	260	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	261	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	262	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	263	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	264	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	265	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	266	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	267	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	268	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	269	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	270	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	271	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	272	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	273	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	274	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	275	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	276	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	277	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	278	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	279	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	280	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	281	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	282	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	283	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	284	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	285	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	286	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	287	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	288	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	289	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	290	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	291	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	292	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	293	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	294	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	295	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	296	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	297	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	298	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	299	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	300	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	301	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	302	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	303	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	304	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	305	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	306	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	307	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	308	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	309	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	310	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	311	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	312	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	313	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	314	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	315	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	316	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	317	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	318	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	319	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	320	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	321	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	322	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	323	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	324	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	325	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	326	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	327	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	328	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	329	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	330	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	331	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	332	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	333	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-inventory.tsv	334	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-snapshot.md	0	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-snapshot.md	9	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-snapshot.md	16	retained: pinned snapshot provenance and inventory tooling
+docs/continuity-snapshot.md	39	retained: pinned snapshot provenance and inventory tooling
+scripts/generate-fold-inventory.py	15	retained: pinned snapshot provenance and inventory tooling
+scripts/generate-fold-inventory.py	22	retained: pinned snapshot provenance and inventory tooling
+scripts/generate-fold-inventory.py	31	retained: pinned snapshot provenance and inventory tooling
+scripts/generate-fold-inventory.py	44	retained: pinned snapshot provenance and inventory tooling
+scripts/generate-fold-inventory.py	49	retained: pinned snapshot provenance and inventory tooling
+tests/fixtures/session-release/.claude-plugin/plugin.json	1	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	1	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	3	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	12	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	13	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	14	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	15	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	19	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	25	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	108	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	132	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	133	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	141	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	156	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	159	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/RELEASING.md	160	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/keys/continuity-release.asc	0	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/scripts/build-release.sh	39	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/scripts/build-release.sh	40	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/scripts/build-release.sh	42	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/scripts/verify-release.sh	4	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/conftest.py	1	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/conftest.py	13	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/conftest.py	14	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/conftest.py	15	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	19	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	21	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	93	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	127	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	136	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	148	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	163	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	169	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/fixtures/session-release/tests/test_release.py	170	retained: isolated old archive/signing fixture; release integration is issue 64
+tests/test_public_documentation.py	87	retained: immutable imported architecture source attribution

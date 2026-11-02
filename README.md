@@ -93,7 +93,7 @@ tied to what your sources actually say, with far less outside influence and far
 less room for confident invention. `research-sources` and `research-topic` build
 their artifacts on top of that grounded layer.
 
-After installation, start with `hippocampus-set-up`. It walks you through the
+After installation, start with `setup`. It walks you through the
 knowledge-store structure, local policy, follow-up routing, and optional
 rules and memory choices for each agent tool, then shows the
 complete proposed configuration before creating or changing anything.
@@ -103,7 +103,7 @@ The system stands on excellent tools others built — [NotebookLM][8] for source
 ## Knowledge store
 
 The wiki is optional. A configured root contains three canonical directories,
-plus a fourth for compiled knowledge when `hippocampus-set-up` configures
+plus a fourth for compiled knowledge when `setup` configures
 the wiki as enabled:
 
 ```text
@@ -119,7 +119,7 @@ profile fields exist only when the wiki is enabled; declining it at setup
 skips the wiki folder, its profile fields, wiki routing in absorption plans
 and knowledge captures, and the `wiki-compile` / `wiki-audit` skills,
 which refuse to run without it. The wiki can be turned on or off later
-through `hippocampus-set-up` alone. The directory names are part of the
+through `setup` alone. The directory names are part of the
 public [Karpathy-wiki contract][2]. The organization of the `wiki/`is
 customizable, but relies on internal wikilinks for traversal by AI and
 wikilink-aware tools.
@@ -327,7 +327,7 @@ incompatible assertions.
 ### Rules and memory configuration
 
 ```text
-hippocampus-set-up
+setup
   -> inspect each tool: installed?, instruction file, owner, memory state, memory store
   -> plan: standard | thin preset, editable per tool
   -> review the complete mutation list and its approval fingerprint

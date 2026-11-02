@@ -72,7 +72,7 @@ foreign skill link, broken package link, tampered release, or same-version
 release with different content.
 
 Installation succeeds before a knowledge profile exists so that the
-`hippocampus-set-up` skill is available to guide configuration. The package is
+`setup` skill is available to guide configuration. The package is
 installed at that point, but it is not ready for workflows that read or write
 the knowledge store. `bash install.sh --verify` remains the combined package
 integrity and configuration-readiness check.
@@ -88,7 +88,7 @@ bash install.sh
 Then ask your agent to configure it:
 
 ```text
-Use hippocampus-set-up to walk me through configuring Hippocampus.
+Use setup to walk me through configuring Hippocampus.
 ```
 
 The skill explains the storage model and workflow, inspects any existing

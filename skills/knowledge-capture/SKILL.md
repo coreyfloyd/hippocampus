@@ -5,7 +5,7 @@ description: Capture sources and synthesized knowledge from the current conversa
 
 # Knowledge Capture
 
-Turn conversation knowledge into an explicit, complete disposition. Before proposing or performing a persistent capture, run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill) and `~/.config/hippocampus/profile.md`. If the profile is missing or invalid, stop and use `hippocampus-set-up`; do not choose a fallback destination. Cross-project work uses `artifact_followup_destination`, not the wiki-maintenance route. This skill owns knowledge preservation and routing; project work records and agent-rule maintenance use the caller’s own workflows outside this package. A durable research artifact is processed by `absorb`, not by this session-capture workflow.
+Turn conversation knowledge into an explicit, complete disposition. Before proposing or performing a persistent capture, run `python3` with `../../scripts/validate_profile.py` (resolved relative to this skill) and `~/.config/hippocampus/profile.md`. If the profile is missing or invalid, stop and use `setup`; do not choose a fallback destination. Cross-project work uses `artifact_followup_destination`, not the wiki-maintenance route. This skill owns knowledge preservation and routing; project work records and agent-rule maintenance use the caller’s own workflows outside this package. A durable research artifact is processed by `absorb`, not by this session-capture workflow.
 
 ## Meeting inputs
 

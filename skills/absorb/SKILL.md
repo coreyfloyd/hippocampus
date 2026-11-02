@@ -7,7 +7,7 @@ description: Validate and execute authorized source-linked changes in a research
 
 Run `python3` with `../../scripts/validate_profile.py` (relative to this skill)
 and `~/.config/hippocampus/profile.md`. If invalid or missing, use
-`hippocampus-set-up` before writes. Read the profile body, each target's rules,
+`setup` before writes. Read the profile body, each target's rules,
 and [the shared distribution contract](references/distribution-contract.md).
 For research artifacts also read [the artifact contract](references/artifact-contract.md).
 For a project deliverable's approved Wiki candidates read [wiki candidates](references/wiki-candidates.md).

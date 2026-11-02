@@ -520,7 +520,7 @@
     {
       "id": "setup",
       "type": "backend",
-      "label": "hippocampus-set-up",
+      "label": "setup",
       "sublabel": "approved root and local policy",
       "pos": [
         275,
@@ -532,7 +532,7 @@
       ],
       "sources": [
         {
-          "path": "skills/hippocampus-set-up/SKILL.md",
+          "path": "skills/setup/SKILL.md",
           "line": 64,
           "label": "configuration approval before writes"
         }
@@ -553,7 +553,7 @@
       ],
       "sources": [
         {
-          "path": "skills/hippocampus-set-up/SKILL.md",
+          "path": "skills/setup/SKILL.md",
           "line": 72,
           "label": "apply approved configuration safely"
         }

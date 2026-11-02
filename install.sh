@@ -26,7 +26,7 @@ CODEX_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
 # Skills this package shipped once and has retired, space-separated. An install
 # removes a package-owned link with one of these names; any other package-owned
 # link without a matching skill still stops the install.
-RETIRED_SKILLS="research-tools-set-up research-dev research-feature research-feedback research-quick"
+RETIRED_SKILLS="hippocampus-set-up research-tools-set-up research-dev research-feature research-feedback research-quick"
 
 manifest_listing() {
   manifest_root="${1:-$ROOT}"
@@ -159,7 +159,7 @@ validate_legacy_current_pointer() {
 
 validate_profile() {
   if [ ! -f "$PROFILE" ]; then
-    echo "profile missing: run the hippocampus-set-up skill after installing" >&2
+    echo "profile missing: run the setup skill after installing" >&2
     return 1
   fi
   validator="$ROOT/scripts/validate_profile.py"
@@ -345,4 +345,4 @@ current_expected="__absent__"; [ ! -L "$CURRENT_LINK" ] || current_expected="$(r
 set_current_release "$RELEASE_DIR" "$current_expected"
 record_profile_migration
 if validate_profile >/dev/null 2>&1; then echo "Hippocampus $VERSION installed and configured"
-else echo "Hippocampus $VERSION installed; run the hippocampus-set-up skill to configure it"; fi
+else echo "Hippocampus $VERSION installed; run the setup skill to configure it"; fi

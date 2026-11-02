@@ -133,7 +133,7 @@ HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" bash "$ROOT/scripts/insta
 HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" bash "$ROOT/scripts/install-release.sh" "$ARCHIVE" "$TEST_DIR/public.asc" "$KEY"
 test -L "$INSTALL_HOME/.claude/skills/research-topic"
 test -L "$INSTALL_HOME/.codex/skills/research-topic"
-test -L "$INSTALL_HOME/.claude/skills/hippocampus-set-up"
+test -L "$INSTALL_HOME/.claude/skills/setup"
 test -f "$INSTALL_HOME/.local/share/hippocampus/current/profiles/karpathy-wiki.example.md"
 test -f "$INSTALL_HOME/.local/share/hippocampus/current/scripts/validate_profile.py"
 test -f "$INSTALL_HOME/.local/share/hippocampus/current/scripts/compose_rules.py"

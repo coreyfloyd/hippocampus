@@ -23,8 +23,8 @@ scan() {
 test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
-test -f "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Use `hippocampus-set-up`' "$ROOT/MIGRATION.md"
+test -f "$ROOT/skills/setup/SKILL.md"
+grep -Fq 'Use `setup`' "$ROOT/MIGRATION.md"
 test ! -d "$ROOT/skills/research-tools-set-up"
 grep -Fq 'old release directory in place for recovery' "$ROOT/MIGRATION.md"
 grep -Fq 'never a backlog sweep' "$CONTRACT"
@@ -114,7 +114,7 @@ python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/explicit-enabled.md" 
 # passes through unaffected on an enabled one (absent field, and explicit true).
 REQUIRE_WIKI_ERR="$PROFILE_ROOT/require-wiki.err"
 if python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/disabled.md" --require-wiki 2>"$REQUIRE_WIKI_ERR"; then exit 1; fi
-grep -Fq 'hippocampus-set-up' "$REQUIRE_WIKI_ERR"
+grep -Fq 'setup' "$REQUIRE_WIKI_ERR"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/valid.md" --require-wiki >/dev/null
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/explicit-enabled.md" --require-wiki >/dev/null
 
@@ -128,7 +128,7 @@ case "$UNCOMMENTED_WIKI_LINE" in
   *) printf 'wiki_enabled example line carries trailing content: %s\n' "$UNCOMMENTED_WIKI_LINE" >&2; exit 1 ;;
 esac
 # Full documented recipe: uncomment that line and drop the two wiki-only
-# fields, exactly as hippocampus-set-up and INSTALLATION.md instruct, and
+# fields, exactly as setup and INSTALLATION.md instruct, and
 # confirm the result validates against a root with no wiki/.
 sed -e "s|/absolute/path/to/knowledge|$PROFILE_ROOT/disabled-root|" \
     -e '/^hot_file:/d' \
@@ -181,11 +181,11 @@ done
 grep -Fq 'runtime-detected' "$ROOT/skills/transcribe/SKILL.md"
 for skill in research-sources research-topic feature-research feedback-research research-absorb knowledge-capture research-to-wiki wiki-audit; do
   grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  grep -Fq 'hippocampus-set-up' "$ROOT/skills/$skill/SKILL.md" || exit 1
+  grep -Fq 'setup' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
-grep -Fq 'profiles/karpathy-wiki.example.md' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Do not write or change configuration until the user approves' "$ROOT/skills/hippocampus-set-up/SKILL.md"
+grep -Fq 'profiles/karpathy-wiki.example.md' "$ROOT/skills/setup/SKILL.md"
+grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/setup/SKILL.md"
+grep -Fq 'Do not write or change configuration until the user approves' "$ROOT/skills/setup/SKILL.md"
 
 # Optional wiki: setup asks with no lean, gates wiki-only questions, and can
 # flip the wiki state later without redoing the rest of setup.
@@ -198,16 +198,16 @@ grep -Fq 'Do not write or change configuration until the user approves' "$ROOT/s
 # matching reword here. The validator cases above them are the behavioral
 # tests for this feature; there is no bash-only way to exercise agent-read
 # Markdown instructions behaviorally.
-grep -Fq 'Neither option is the default or the recommendation' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'no `wiki/hot.md`, no `hot_file`, and no `wiki_followup_destination`' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq '## Enable or disable the wiki later' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Never delete or modify `wiki/`' "$ROOT/skills/hippocampus-set-up/SKILL.md"
+grep -Fq 'Neither option is the default or the recommendation' "$ROOT/skills/setup/SKILL.md"
+grep -Fq 'no `wiki/hot.md`, no `hot_file`, and no `wiki_followup_destination`' "$ROOT/skills/setup/SKILL.md"
+grep -Fq '## Enable or disable the wiki later' "$ROOT/skills/setup/SKILL.md"
+grep -Fq 'Never delete or modify `wiki/`' "$ROOT/skills/setup/SKILL.md"
 
 # The wiki skills gate on the validator's require-wiki option, not their own
 # judgment, and relay its refusal back to setup.
 for skill in research-to-wiki wiki-audit; do
   grep -Fq -- '--require-wiki' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  grep -Fq 'hippocampus-set-up enables' "$ROOT/skills/$skill/SKILL.md" || exit 1
+  grep -Fq 'setup enables' "$ROOT/skills/$skill/SKILL.md" || exit 1
 done
 
 # A wiki-disabled artifact has no Wiki Additions class, and research-absorb
