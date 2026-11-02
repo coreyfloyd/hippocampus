@@ -240,6 +240,18 @@ def test_skill_review_contract_and_source_routing():
         assert '2026-10-12' in ref and 'https://' in ref
 
 
+def test_produced_surfaces_use_the_single_composer_and_default_to_nothing():
+    for name in ('slim-harness', 'improve-harness'):
+        text = (ROOT / 'skills' / name / 'SKILL.md').read_text()
+        assert 'no entry produces no surfaces' in text
+        assert 'compose_rules.py surfaces --source' in text
+        assert 'compose_rules.py check --config' in text
+        assert 'never edit a generated surface' in text
+        assert 'After a source edit' in text
+    text = (SKILL / 'SKILL.md').read_text()
+    assert 'ask the user which surfaces it produces' not in text
+
+
 def test_package_installer_registers_skill():
     path=ROOT/'scripts/install-codex.py'
     spec=importlib.util.spec_from_file_location('installer',path)

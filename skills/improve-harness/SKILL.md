@@ -60,7 +60,8 @@ The routing file may include a **Produced surfaces** section. Each entry names
 one canonical source path and every produced surface's path and regeneration
 command. Paths resolve relative to the routing file unless absolute; expand
 home/environment references and resolve symlinks before matching a source.
-An explicit empty list declares that a source produces no surfaces. Example:
+A source with no entry produces no surfaces; an explicit empty list has the same
+meaning. Edit these sources without asking about outputs. Example:
 
 ```yaml
 Produced surfaces:
@@ -70,8 +71,19 @@ Produced surfaces:
   skills/local/SKILL.md: []
 ```
 
-This mapping records ownership; it does not authorize running generators or
-editing generated files. `/hippocampus:slim-harness` asks the user when a source has no entry.
+Use the package's existing `scripts/compose_rules.py surfaces --source <path>`
+entry point to read this mapping (optional `--routing <file>` overrides discovery).
+It returns JSON with canonical `sources` and `surfaces`, including each regeneration
+command. If handed a produced path, trace it to its owning source; never edit a generated surface.
+The routing block uses the indentation shown above and plain, double-quoted or
+single-quoted strings; malformed entries are errors, not declarations of no outputs.
+
+After a source edit, regenerate its listed surfaces with the declared commands,
+within the user's authorized scope. For rule targets use
+`python3 scripts/compose_rules.py refresh --config <targets.json>`, then
+`python3 scripts/compose_rules.py check --config <targets.json>`; check reports
+missing or changed target content as drift and writes nothing. Mapping lookup
+runs nothing and does not authorize unknown generators against live configuration.
 
 ## Over-limit files — independent size pass
 

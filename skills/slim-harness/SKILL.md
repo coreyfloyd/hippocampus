@@ -34,9 +34,11 @@ Size is one trigger: a user or scheduled review may request an under-limit file.
 5. Read the improve-harness routing file: `$HIPPOCAMPUS_ROUTING`, otherwise
    `hippocampus/routing.md` under `$XDG_CONFIG_HOME` (default `~/.config`).
    From its **Produced surfaces** section, find the resolved source's entry and
-   each produced surface path with its regeneration command. If there is **no entry**,
-   ask the user which surfaces it produces and how each is regenerated, including
-   confirmation when it produces none. Wait for the answer before editing.
+   each produced surface path with its regeneration command. A source with
+   no entry produces no surfaces; an explicit empty list means the same. Do not
+   ask about outputs in either case. Use the package's
+   `scripts/compose_rules.py surfaces --source <path>` (optional `--routing <file>`)
+   for the canonical mapping; malformed entries are errors.
    If handed a generated surface, trace it to its owning source through that mapping
    or ask the user; never edit a generated surface. Review the source only, never
    each generated copy separately. Every finding names its source file and lines.
@@ -48,6 +50,10 @@ Size is one trigger: a user or scheduled review may request an under-limit file.
    own limits. If the generator cannot be safely previewed, ask how to verify its output and
    hold edits requiring that evidence. Name the regeneration step; do not run an
    unknown regeneration command against live configuration without authorization.
+   After a source edit, regenerate the listed surfaces within the authorized scope.
+   For rule targets run `python3 scripts/compose_rules.py refresh --config <targets.json>`,
+   then `python3 scripts/compose_rules.py check --config <targets.json>`; drift is an
+   error, and check writes nothing.
 
 ## Review in this order
 
