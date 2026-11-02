@@ -369,6 +369,25 @@ Every target is checked before any is written, so a failed check leaves all of
 them untouched. After editing either document, run set-up again: the new plan
 lists each target whose composed content changed.
 
+The existing composer also supports read-only drift checks:
+
+```sh
+python3 scripts/compose_rules.py refresh --config /path/to/targets.json
+python3 scripts/compose_rules.py check --config /path/to/targets.json
+python3 scripts/compose_rules.py surfaces --source /path/to/rules.md
+```
+
+`check` exits with an error for missing or changed target content and writes
+nothing. `surfaces` reads the **Produced surfaces** mapping in the improve-harness
+routing file (`--routing`, then `HIPPOCAMPUS_ROUTING`, then
+`${XDG_CONFIG_HOME:-~/.config}/hippocampus/routing.md`). Its JSON result names
+canonical sources and produced paths with regeneration commands; querying a
+produced path traces back to its source. An absent mapping or explicit `[]`
+produces no surfaces. Mapping lookup never runs commands. After editing a source,
+regenerate its listed surfaces and check for drift; edit the source rather than
+the generated file. See the routing block format in
+[improve-harness](skills/improve-harness/SKILL.md#produced-surfaces-routing-contract).
+
 Set-up never deletes a memory store or any file in it; a nonempty store is
 reported for you to act on. `native` changes no memory setting. When a tool's
 memory directory or workspace is customized, set-up describes it, flags an
