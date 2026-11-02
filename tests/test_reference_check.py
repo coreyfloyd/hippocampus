@@ -252,7 +252,7 @@ def test_terms_file_from_environment(tmp_path, terms):
 
 
 @pytest.mark.parametrize(
-    "hippocampus-set-up",
+    "setup",
     ["missing_terms", "empty_terms", "missing_path", "no_terms_given"],
 )
 def test_usage_errors_exit_2(tmp_path, terms, setup):

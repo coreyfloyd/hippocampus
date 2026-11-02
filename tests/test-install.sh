@@ -22,9 +22,9 @@ release_manifest() {
     cd "$1"
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
-    [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
-    [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
-    [ ! -f scripts/rules_setup.py ] || manifest_paths="$manifest_paths scripts/rules_setup.py"
+    [ ! -d scripts ] || manifest_paths="$manifest_paths scripts"
+    [ ! -d hooks ] || manifest_paths="$manifest_paths hooks"
+    [ ! -f INTERFACE.md ] || manifest_paths="$manifest_paths INTERFACE.md"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
@@ -335,7 +335,9 @@ cp -R "$SOURCE_ROOT" "$MIGRATE_SOURCE"
 mkdir -p "$MIGRATE_HOME/.config/hippocampus" "$MIGRATE_HOME/knowledge/raw" "$MIGRATE_HOME/knowledge/wiki" "$MIGRATE_HOME/knowledge/output" "$MIGRATE_HOME/knowledge/docs"
 touch "$MIGRATE_HOME/knowledge/wiki/hot.md" "$MIGRATE_HOME/knowledge/docs/log.md" "$MIGRATE_HOME/knowledge/docs/DECISIONS.md"
 sed "s|/absolute/path/to/knowledge|$MIGRATE_HOME/knowledge|" "$MIGRATE_SOURCE/profiles/karpathy-wiki.example.md" > "$MIGRATE_HOME/.config/hippocampus/profile.md"
-# Build a release exactly as main's (pre-#6) install.sh would have produced
+# Use the current runtime layout with the pre-#6 manifest exclusion rules.
+# This isolates manifest-format compatibility from package-layout additions.
+# Build a release as the legacy installer would have produced
 # from a tree with .DS_Store present: the copied tree kept it (no tar
 # exclusion) and the stored manifest was computed over it (no find
 # exclusion). MIGRATE_SOURCE itself has since been cleaned (no .DS_Store) --
@@ -350,9 +352,9 @@ touch "$MIGRATE_RELEASE/skills/.DS_Store"
 cp -R "$MIGRATE_SOURCE/contracts" "$MIGRATE_RELEASE/contracts"
 cp -R "$MIGRATE_SOURCE/profiles" "$MIGRATE_RELEASE/profiles"
 mkdir -p "$MIGRATE_RELEASE/scripts"
-cp -p "$MIGRATE_SOURCE/scripts/validate_profile.py" "$MIGRATE_RELEASE/scripts/validate_profile.py"
-cp -p "$MIGRATE_SOURCE/scripts/compose_rules.py" "$MIGRATE_RELEASE/scripts/compose_rules.py"
-cp -p "$MIGRATE_SOURCE/scripts/rules_setup.py" "$MIGRATE_RELEASE/scripts/rules_setup.py"
+cp -R "$MIGRATE_SOURCE/scripts/." "$MIGRATE_RELEASE/scripts"
+cp -R "$MIGRATE_SOURCE/hooks" "$MIGRATE_RELEASE/hooks"
+cp -p "$MIGRATE_SOURCE/INTERFACE.md" "$MIGRATE_RELEASE/INTERFACE.md"
 release_manifest_legacy "$MIGRATE_RELEASE" > "$MIGRATE_RELEASE/manifest"
 MIGRATE_LEGACY_MANIFEST="$(cat "$MIGRATE_RELEASE/manifest")"
 ln -s "$MIGRATE_RELEASE" "$MIGRATE_HOME/.local/share/hippocampus/current"
@@ -390,9 +392,9 @@ mkdir -p "$DIRTY_RELEASE/scripts" "$DIRTY_HOME/.claude/skills" "$DIRTY_HOME/.cod
 cp -R "$DIRTY_SOURCE/skills" "$DIRTY_RELEASE/skills"
 cp -R "$DIRTY_SOURCE/contracts" "$DIRTY_RELEASE/contracts"
 cp -R "$DIRTY_SOURCE/profiles" "$DIRTY_RELEASE/profiles"
-cp -p "$DIRTY_SOURCE/scripts/validate_profile.py" "$DIRTY_RELEASE/scripts/validate_profile.py"
-cp -p "$DIRTY_SOURCE/scripts/compose_rules.py" "$DIRTY_RELEASE/scripts/compose_rules.py"
-cp -p "$DIRTY_SOURCE/scripts/rules_setup.py" "$DIRTY_RELEASE/scripts/rules_setup.py"
+cp -R "$DIRTY_SOURCE/scripts/." "$DIRTY_RELEASE/scripts"
+cp -R "$DIRTY_SOURCE/hooks" "$DIRTY_RELEASE/hooks"
+cp -p "$DIRTY_SOURCE/INTERFACE.md" "$DIRTY_RELEASE/INTERFACE.md"
 release_manifest_legacy "$DIRTY_RELEASE" > "$DIRTY_RELEASE/manifest"
 DIRTY_LEGACY_MANIFEST="$(cat "$DIRTY_RELEASE/manifest")"
 ln -s "$DIRTY_RELEASE" "$DIRTY_HOME/.local/share/hippocampus/current"
@@ -420,9 +422,9 @@ mkdir -p "$JUNK_RELEASE/scripts"
 cp -R "$JUNK_SOURCE/skills" "$JUNK_RELEASE/skills"
 cp -R "$JUNK_SOURCE/contracts" "$JUNK_RELEASE/contracts"
 cp -R "$JUNK_SOURCE/profiles" "$JUNK_RELEASE/profiles"
-cp -p "$JUNK_SOURCE/scripts/validate_profile.py" "$JUNK_RELEASE/scripts/validate_profile.py"
-cp -p "$JUNK_SOURCE/scripts/compose_rules.py" "$JUNK_RELEASE/scripts/compose_rules.py"
-cp -p "$JUNK_SOURCE/scripts/rules_setup.py" "$JUNK_RELEASE/scripts/rules_setup.py"
+cp -R "$JUNK_SOURCE/scripts/." "$JUNK_RELEASE/scripts"
+cp -R "$JUNK_SOURCE/hooks" "$JUNK_RELEASE/hooks"
+cp -p "$JUNK_SOURCE/INTERFACE.md" "$JUNK_RELEASE/INTERFACE.md"
 test "$(release_manifest "$JUNK_RELEASE")" = "$(release_manifest "$JUNK_SOURCE")"
 printf 'ATTACKER:0\n' > "$JUNK_RELEASE/manifest"
 if HOME="$JUNK_HOME" CODEX_HOME="$JUNK_HOME/.codex" bash "$JUNK_SOURCE/install.sh" 2>"$JUNK_HOME/err.log"; then

@@ -34,9 +34,9 @@ manifest_listing() {
     cd "$manifest_root"
     manifest_paths="skills contracts"
     [ ! -d profiles ] || manifest_paths="$manifest_paths profiles"
-    [ ! -f scripts/validate_profile.py ] || manifest_paths="$manifest_paths scripts/validate_profile.py"
-    [ ! -f scripts/compose_rules.py ] || manifest_paths="$manifest_paths scripts/compose_rules.py"
-    [ ! -f scripts/rules_setup.py ] || manifest_paths="$manifest_paths scripts/rules_setup.py"
+    [ ! -d scripts ] || manifest_paths="$manifest_paths scripts"
+    [ ! -d hooks ] || manifest_paths="$manifest_paths hooks"
+    [ ! -f INTERFACE.md ] || manifest_paths="$manifest_paths INTERFACE.md"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
@@ -306,9 +306,10 @@ done
 mkdir -p "$CLAUDE_DIR" "$CODEX_DIR" "$RELEASE_ROOT"
 TEMP_RELEASE="$RELEASE_ROOT/.$VERSION.$$"; rm -rf "$TEMP_RELEASE"; mkdir -p "$TEMP_RELEASE"
 copy_release_tree "$ROOT/skills" "$TEMP_RELEASE/skills"; copy_release_tree "$ROOT/contracts" "$TEMP_RELEASE/contracts"; copy_release_tree "$ROOT/profiles" "$TEMP_RELEASE/profiles"
-mkdir -p "$TEMP_RELEASE/scripts"; cp -p "$ROOT/scripts/validate_profile.py" "$TEMP_RELEASE/scripts/validate_profile.py"
-[ ! -f "$ROOT/scripts/compose_rules.py" ] || cp -p "$ROOT/scripts/compose_rules.py" "$TEMP_RELEASE/scripts/compose_rules.py"
-[ ! -f "$ROOT/scripts/rules_setup.py" ] || cp -p "$ROOT/scripts/rules_setup.py" "$TEMP_RELEASE/scripts/rules_setup.py"
+# Keep every linked skill's shared engines and interface in the same release.
+copy_release_tree "$ROOT/scripts" "$TEMP_RELEASE/scripts"
+copy_release_tree "$ROOT/hooks" "$TEMP_RELEASE/hooks"
+cp -p "$ROOT/INTERFACE.md" "$TEMP_RELEASE/INTERFACE.md"
 if [ ! -d "$RELEASE_DIR" ]; then
   printf '%s\n' "$SOURCE_HASH" > "$TEMP_RELEASE/manifest"; mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
