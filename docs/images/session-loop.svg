@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="session-loop-title session-loop-desc">
+  <title id="session-loop-title">How a session uses Hippocampus</title>
+  <desc id="session-loop-desc">A session in Claude Code or Codex starts from its handoff through pickup, or gets it back after compaction. It hands off through checkpoint or the checklist wrap. At the wrap, the checklist sends what the session learned to the knowledge root and wiki (knowledge-capture and absorb), to rules and skills (improve-harness) and to your record of tickets and project tools through your own command. New sources from outside come in through research-topic. The next session starts from all of them: rules and skills load, pickup checks your record and the wiki is there to read. Every change is proposed first and runs only once approved.</desc>
+<style>
+    :root {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #17212b;
+      --dim: #5d6975;
+      --line: #b8c1ca;
+      --question: #0284c7;
+      --question-bg: #e0f2fe;
+      --answer: #c2410c;
+      --answer-bg: #ffedd5;
+      --action: #047857;
+      --action-bg: #d1fae5;
+      --off: #64748b;
+      --off-bg: #f1f5f9;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15191d;
+        --panel: #22282e;
+        --ink: #f0f2f5;
+        --dim: #a2abb5;
+        --line: #59636e;
+        --question: #38bdf8;
+        --question-bg: #102f3f;
+        --answer: #fb923c;
+        --answer-bg: #402719;
+        --action: #34d399;
+        --action-bg: #14382e;
+        --off: #94a3b8;
+        --off-bg: #29313a;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #15191d;
+      --panel: #22282e;
+      --ink: #f0f2f5;
+      --dim: #a2abb5;
+      --line: #59636e;
+      --question: #38bdf8;
+      --question-bg: #102f3f;
+      --answer: #fb923c;
+      --answer-bg: #402719;
+      --action: #34d399;
+      --action-bg: #14382e;
+      --off: #94a3b8;
+      --off-bg: #29313a;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #17212b;
+      --dim: #5d6975;
+      --line: #b8c1ca;
+      --question: #0284c7;
+      --question-bg: #e0f2fe;
+      --answer: #c2410c;
+      --answer-bg: #ffedd5;
+      --action: #047857;
+      --action-bg: #d1fae5;
+      --off: #64748b;
+      --off-bg: #f1f5f9;
+    }
+    .stage { fill: var(--panel); stroke-width: 2.5; }
+    .input { fill: var(--question-bg); stroke: var(--question); stroke-width: 1.6; }
+    .outcome { fill: var(--action-bg); stroke: var(--action); stroke-width: 1.4; }
+    .label { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 1.4px; }
+    .heading { fill: var(--ink); font-family: var(--sans); font-size: 23px; font-weight: 750; }
+    .stage-heading { fill: var(--ink); font-family: var(--sans); font-size: 19px; font-weight: 750; }
+    .copy { fill: var(--dim); font-family: var(--sans); font-size: 15px; }
+    .small { fill: var(--dim); font-family: var(--sans); font-size: 11.5px; }
+    .edge { fill: none; stroke: var(--line); stroke-width: 2.2; marker-end: url(#arrow); }
+    .branch { fill: none; stroke: var(--action); stroke-width: 1.8; marker-end: url(#action-arrow); }
+    .skill { fill: var(--dim); font-family: var(--mono); font-size: 12px; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+    .column { font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 1.6px; }
+    .outcome-title { fill: var(--ink); font-family: var(--sans); font-size: 15px; font-weight: 650; }
+  </style>
+<defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="var(--line)"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="520" rx="20" fill="var(--bg)"/>
+  <text x="40" y="48" class="heading">A session starts from what the last one left</text>
+  <text data-diagram-key="true" x="40" y="75" class="copy">blue: what you bring · orange: what Hippocampus writes · green: where what the session learned goes</text>
+  <text data-column="handoff" x="40" y="104" class="column" fill="var(--answer)">HANDOFF</text>
+  <text data-column="session" x="360" y="104" class="column" fill="var(--question)">SESSION</text>
+  <text data-column="learned" x="710" y="104" class="column" fill="var(--action)">WHAT IT LEARNED</text>
+  <rect data-thing="input" x="360" y="116" width="240" height="82" rx="12" class="input"/>
+  <text x="378" y="148" class="stage-heading">New sources</text>
+  <text x="378" y="175" class="copy">questions, links, media</text>
+  <rect data-thing="input" x="360" y="240" width="240" height="82" rx="12" class="input"/>
+  <text x="378" y="272" class="stage-heading">A session</text>
+  <text x="378" y="299" class="copy">in Claude Code or Codex</text>
+  <rect data-thing="record" x="40" y="226" width="190" height="112" rx="14" class="stage" stroke="var(--answer)"/>
+  <text x="58" y="259" class="label" fill="var(--answer)">HANDOFF</text>
+  <text x="58" y="290" class="stage-heading">Where it stands</text>
+  <text x="58" y="315" class="small">kept outside either tool</text>
+  <rect data-thing="destination" data-outcome="wiki" x="710" y="150" width="280" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="wiki" x="726" y="174" class="outcome-title">Knowledge and wiki</text>
+  <text x="726" y="192" class="skill">knowledge-capture · absorb</text>
+  <rect data-thing="destination" data-outcome="rules" x="710" y="226" width="280" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="rules" x="726" y="250" class="outcome-title">Rules and skills</text>
+  <text x="726" y="268" class="skill">improve-harness</text>
+  <rect data-thing="destination" data-outcome="record" x="710" y="302" width="280" height="56" rx="12" class="outcome"/>
+  <text data-outcome-label="record" x="726" y="326" class="outcome-title">Your record</text>
+  <text x="726" y="344" class="small">tickets and project tools you already use</text>
+  <g data-operation="hand-off">
+    <path d="M360,262 C320,214 270,214 230,256" class="edge"/>
+    <text x="250" y="206" text-anchor="middle" class="skill" data-skill="checkpoint · checklist">checkpoint · checklist</text>
+  </g>
+  <g data-operation="start-from">
+    <path d="M230,310 C270,352 320,352 360,302" class="edge"/>
+    <text x="295" y="372" text-anchor="middle" class="skill" data-skill="pickup · restore">pickup · restore</text>
+  </g>
+  <g data-operation="research">
+    <path d="M600,157 C650,157 660,178 710,178" class="edge"/>
+    <text x="655" y="146" text-anchor="middle" class="skill" data-skill="research-topic">research-topic</text>
+  </g>
+  <g data-operation="wrap">
+    <path d="M600,281 L680,281" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+    <text x="640" y="271" text-anchor="middle" class="skill" data-skill="checklist">checklist</text>
+    <path d="M680,178 L680,330" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+    <path d="M680,178 L710,178" class="edge"/>
+    <path d="M680,254 L710,254" class="edge"/>
+    <path d="M680,330 L710,330" class="edge"/>
+  </g>
+  <g data-operation="next-session">
+    <path d="M990,178 L1030,178" fill="none" stroke="var(--line)" stroke-width="2.2"/><path d="M990,254 L1030,254" fill="none" stroke="var(--line)" stroke-width="2.2"/><path d="M990,330 L1030,330" fill="none" stroke="var(--line)" stroke-width="2.2"/>
+    <path d="M1030,178 L1030,430 L480,430 L480,322" class="edge"/>
+    <text x="1046" y="270" class="small">the next</text>
+    <text x="1046" y="286" class="small">session</text>
+    <text x="1046" y="302" class="small">starts here</text>
+    <text x="480" y="456" class="small">rules and skills load · pickup checks your record · the wiki is there to read</text>
+  </g>
+  <text data-compaction-note="true" x="40" y="484" class="small">The handoff is checked at every stop and put back into context after the agent compacts, so the agent's own compaction does not cost you where the work stands.</text>
+  <text data-approval-note="true" x="40" y="504" class="small">Every change is proposed first and runs only once approved.</text>
+</svg>

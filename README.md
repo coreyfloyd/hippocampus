@@ -1,8 +1,10 @@
 # Hippocampus
 
-Hippocampus is a memory system for AI agents. It keeps what an agent learns in
-plain files you own, and it works the same way in Claude Code and Codex. It
-remembers five kinds of things:
+Hippocampus is a portable, holistic system for keeping your agents' rules and
+knowledge. It works with any agent: installers ship for Claude Code and Codex
+today, and because the skills are standard Agent Skills and the rules are
+composed into `AGENTS.md`, any agent that reads those can use them.
+Everything is plain files you own. It remembers five kinds of things:
 
 - **Captured knowledge** from meetings and conversations, kept as
   source-linked records.
@@ -20,6 +22,17 @@ research question becomes a wiki article, and the next session starts with
 both. Every change to a person, document, task, wiki article or rule is
 proposed first and runs only once approved.
 
+Hippocampus runs on top of your agent's own compaction and complements it.
+Compaction summarizes a long conversation and can drop detail. Hippocampus
+keeps a handoff for each session (where the work stands, its open loops, the
+files it changed), checks it at the end of every turn, and puts it back into
+context after the agent compacts. Because the handoff is kept current at every
+stop rather than written at the last moment, it holds even when the agent
+compacts a session while you are away, as Claude Code now does with idle
+sessions. A wrap at the end of a task sends what
+the session learned to your rules, your knowledge and your record before the
+conversation is gone.
+
 ## How the parts fit together
 
 ![Hippocampus has five parts. A session writes a handoff through checkpoint or checklist and captures knowledge through knowledge-capture; sources become a meeting record through meeting-capture or a research report through research-topic. You approve or decline each proposed change: lessons reach rules and the agent harness through improve-harness, and absorb carries captures and research to the wiki through wiki-compile and to documents and follow-up work. Through pickup, the next session resumes from its handoff under the improved rules, with the wiki to read.](docs/images/overview.svg)
@@ -29,6 +42,40 @@ something you own asks first. You can run any step on its own. The wrap
 checklist runs the loop for you at the end of a task: it reconciles your
 record, captures knowledge, folds lessons into your rules, persists the work
 and writes a handoff, in that order.
+
+## The session loop
+
+![A session starts from its handoff through pickup, or gets it back after compaction, and hands off through checkpoint or the checklist wrap. At the wrap, the checklist sends what the session learned to knowledge and the wiki (knowledge-capture, absorb), to rules and skills (improve-harness) and to your record of tickets and project tools. New sources come in from outside through research-topic. The next session starts from all of them.](docs/images/session-loop.svg)
+
+A session that ends, compacts or runs out of context loses what it was doing.
+Hippocampus keeps your **record** (tickets, project status, documents) as the
+source of truth and writes a thin **handoff** that points back to it, with the
+session's open loops and uncommitted files.
+
+Hippocampus does not impose its own files for projects and tasks. Most people
+already run a project-management tool or task tracker, so Hippocampus writes to
+the one you use: the checklist's record and persist steps call your own
+commands or skills, and follow-up work from research and meetings goes to the
+task route you describe in set-up.
+
+- `checkpoint` writes the handoff now, mid-task. It never commits or pushes.
+- `checklist` wraps a finished task through five fixed steps: reconcile the
+  record, capture knowledge, fold in lessons, persist, and write and validate
+  the handoff. A checklist profile binds the record and persist steps to your
+  own commands and can add steps, but cannot remove any.
+- `pickup` lists handoffs after a cold start, including ones from other
+  worktrees of the same repository, and checks the one you choose against the
+  record.
+- `wip` reports current work, blockers and pending approvals.
+  `handoff-prompt` writes a prompt for deliberately handing work to another
+  session or tool. `sweep` reports abandoned sessions and, when configured,
+  files their open items.
+
+Handoffs live outside either tool's data folder, so you can checkpoint in
+Claude Code and pick up in Codex. Hooks remind you to checkpoint when context
+passes 50%, restore the handoff after compaction, and suggest a wrap after a
+commit, push or passing test run. The [session guide](docs/session-guide.md)
+covers every skill, hook and file the package writes.
 
 ## What it remembers
 
@@ -137,35 +184,6 @@ Getting results where they belong:
 | `knowledge-capture` | The current conversation produced sources or conclusions worth keeping. | A complete disposition proposal, then the approved captures. |
 | `wiki-compile` | A selected set of raw sources is ready to become wiki articles. | New or updated articles, indexes and source status. |
 | `wiki-audit` | You want a structural and source-coverage review of the wiki. | A ranked report in `output/`; nothing else changes. |
-
-## Sessions and handoffs
-
-![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](docs/images/session-lifecycle.svg)
-
-A session that ends, compacts or runs out of context loses what it was doing.
-Hippocampus keeps your **record** (tickets, project status, documents) as the
-source of truth and writes a thin **handoff** that points back to it, with the
-session's open loops and uncommitted files. Hippocampus does not provide the
-record; you bind it to whatever you already use.
-
-- `checkpoint` writes the handoff now, mid-task. It never commits or pushes.
-- `checklist` wraps a finished task through five fixed steps: reconcile the
-  record, capture knowledge, fold in lessons, persist, and write and validate
-  the handoff. A checklist profile binds the record and persist steps to your
-  own commands and can add steps, but cannot remove any.
-- `pickup` lists handoffs after a cold start, including ones from other
-  worktrees of the same repository, and checks the one you choose against the
-  record.
-- `wip` reports current work, blockers and pending approvals.
-  `handoff-prompt` writes a prompt for deliberately handing work to another
-  session or tool. `sweep` reports abandoned sessions and, when configured,
-  files their open items.
-
-Handoffs live outside either tool's data folder, so you can checkpoint in
-Claude Code and pick up in Codex. Hooks remind you to checkpoint when context
-passes 50%, restore the handoff after compaction, and suggest a wrap after a
-commit, push or passing test run. The [session guide](docs/session-guide.md)
-covers every skill, hook and file the package writes.
 
 ## Rules and the agent harness
 
