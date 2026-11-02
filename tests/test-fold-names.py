@@ -8,10 +8,19 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
+def package_skill_files():
+    """Files git tracks (what the release archive ships), so ignored worktree copies are never scanned."""
+    listed = subprocess.run(
+        ['git', 'ls-files', '-z', '--cached'],
+        cwd=ROOT, capture_output=True, check=True).stdout.decode().split('\0')
+    return sorted(ROOT / name for name in listed
+                  if name and Path(name).name == 'SKILL.md' and Path(name).parts[-3:-2] == ('skills',))
+
 class FoldNames(unittest.TestCase):
     def test_one_plain_name_per_skill_in_one_plugin(self):
         names = []
-        for path in ROOT.glob('**/skills/*/SKILL.md'):
+        for path in package_skill_files():
             name = re.search(r'^name: (.+)$', path.read_text(), re.M).group(1)
             self.assertEqual(name, path.parent.name)
             names.append(name)

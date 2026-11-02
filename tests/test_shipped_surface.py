@@ -4,6 +4,7 @@ Everything in the repository ships, tests and fixtures included, so the checks
 walk the whole tree.
 """
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -28,10 +29,13 @@ HOOK_ADAPTERS = {
 
 
 def shipped_files():
-    for root, dirs, files in os.walk(ROOT):
-        dirs[:] = sorted(d for d in dirs if d not in SKIPPED_DIRS)
-        for name in sorted(files):
-            yield os.path.join(root, name)
+    """Files git tracks (what the release archive ships), so ignored worktree copies are never scanned."""
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--cached"],
+        cwd=ROOT, capture_output=True, check=True).stdout.decode().split("\0")
+    for name in sorted(name for name in listed if name):
+        if not set(Path(name).parts) & SKIPPED_DIRS:
+            yield os.path.join(ROOT, name)
 
 
 def read_text(path):
