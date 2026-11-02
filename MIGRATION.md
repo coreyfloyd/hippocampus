@@ -43,3 +43,34 @@ conversion. Original meeting transcripts keep a separate raw intake/archive
 policy; a source's ingested status does not imply all authorized routes completed.
 Public-documentation approval, signing/version decisions, release publication,
 production activation and live backfill are separate later steps.
+
+## Manual continuity cutover
+
+Continuity was never released. Hippocampus ships no continuity migration code
+or aliases. Before changing anything, back up the files you want to keep.
+
+1. Uninstall continuity from every tool where it is present, using its original
+   uninstall commands (the Hippocampus installers report those commands when
+   they detect it). Then install Hippocampus with `python3 scripts/install-claude.py`
+   and/or `python3 scripts/install-codex.py` from the checkout or a verified release.
+2. Move or recreate `~/.config/checklist/profile.md` as
+   `~/.config/hippocampus/checklist-profile.md`. Manually remove the `knowledge`
+   and `lessons` binding blocks; preserve `record`, `persist`, ask and your own
+   added steps. The removed slots are now native steps. If both files exist,
+   reconcile them yourself rather than overwriting either one.
+3. Move custom lesson routing from `~/.config/improve-harness/routing.md` to
+   `~/.config/hippocampus/routing.md`. Replace `IMPROVE_HARNESS_ROUTING` overrides
+   with `HIPPOCAMPUS_ROUTING`. Move wanted shared configuration from
+   `~/.config/continuity/config.json` to `~/.config/hippocampus/config.json`,
+   replacing `CONTINUITY_CONFIG` with `HIPPOCAMPUS_CONFIG`. Reconcile existing
+   destination files and any old paths inside your configuration manually.
+4. Move wanted handoffs from `~/.local/state/continuity/handoffs/` to
+   `~/.local/state/hippocampus/handoffs/`, preserving filenames and resolving
+   collisions manually. `HANDOFF_STATE_DIR` remains supported if you prefer
+   your existing custom location. Use pickup to inspect carried items; the
+   native knowledge and lessons steps receive those items at the next wrap.
+
+Claude commands now use `/hippocampus:<skill>`; Codex uses plain names. Setup
+stays `hippocampus-set-up`. Existing Hippocampus knowledge profiles remain
+version 4 at `~/.config/hippocampus/profile.md`; do not replace that knowledge
+profile with your checklist profile. Your knowledge root does not move.

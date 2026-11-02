@@ -1,10 +1,16 @@
 {
   "name": "hippocampus",
-  "version": "0.1.1",
+  "version": "0.13.0",
   "description": "Session hippocampus: checkpoint, wrap, and pick up interactive sessions through a thin handoff, with hooks that keep the handoff fresh.",
   "author": {
     "name": "hippocampus contributors"
   },
   "license": "Apache-2.0",
-  "keywords": ["handoff", "checkpoint", "pickup", "checklist", "session"]
+  "keywords": [
+    "handoff",
+    "checkpoint",
+    "pickup",
+    "checklist",
+    "session"
+  ]
 }

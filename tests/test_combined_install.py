@@ -24,12 +24,15 @@ def test_codex_adopts_old_installer_and_uninstall_keeps_replaced_link(tmp_path, 
     home = tmp_path / '.codex'
     env = dict(os.environ, CODEX_HOME=str(home))
     subprocess.run(['bash', str(ROOT / 'install.sh')], env=env, check=True, capture_output=True)
+    assert (tmp_path / '.local/share/hippocampus/current/VERSION').read_text() == (ROOT / 'VERSION').read_text()
     module = installer()
     monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
     monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
     assert module.main() == 0
     manifest = json.loads((home / 'hippocampus-install.json').read_text())
     assert set(manifest['skill_links']) == set(module.SKILLS)
+    assert manifest['version'] == (ROOT / 'VERSION').read_text().strip()
+    assert (tmp_path / '.local/share/hippocampus/current/VERSION').read_text() == (ROOT / 'VERSION').read_text()
     link = home / 'skills' / module.SKILLS[0]
     link.unlink()
     link.symlink_to(tmp_path / 'foreign')
@@ -251,3 +254,45 @@ def test_codex_runtime_transaction_with_cross_device_home(tmp_path, monkeypatch,
     assert moves
     assert all(source.parent == destination.parent == package.parent for source, destination in moves)
     assert not (package.parent/'hippocampus-install-backup').exists()
+
+
+@pytest.mark.parametrize('damage', ['modified', 'deleted', 'other-content'])
+def test_installed_version_integrity_and_narrow_repair(tmp_path, damage):
+    home = tmp_path / 'home'
+    knowledge = home / 'knowledge'
+    for name in ('raw', 'wiki', 'output', 'docs'):
+        (knowledge / name).mkdir(parents=True)
+    for name in ('wiki/hot.md', 'docs/log.md', 'docs/DECISIONS.md'):
+        (knowledge / name).touch()
+    profile = home / '.config/hippocampus/profile.md'
+    profile.parent.mkdir(parents=True)
+    profile.write_text((ROOT / 'profiles/karpathy-wiki.example.md').read_text().replace(
+        '/absolute/path/to/knowledge', str(knowledge)))
+    env = dict(os.environ, HOME=str(home), CODEX_HOME=str(home / '.codex'))
+    command = ['bash', str(ROOT / 'install.sh')]
+    def run(*args):
+        return subprocess.run(command + list(args), env=env, capture_output=True, text=True)
+    assert run().returncode == 0
+    assert run('--verify').returncode == 0
+    release = home / '.local/share/hippocampus/current'
+    version = release / 'VERSION'
+    manifest = (release / 'manifest').read_bytes()
+    if damage == 'deleted':
+        version.unlink()
+    else:
+        version.write_text(version.read_text() + 'tampered\n')
+    if damage == 'other-content':
+        skill = release / 'skills/research-topic/SKILL.md'
+        skill.write_text(skill.read_text() + '\ntampered\n')
+    verification = run('--verify')
+    assert verification.returncode != 0, 'tampered VERSION passed verification'
+    assert 'current manifest hash' in verification.stderr
+    repair = run()
+    if damage == 'other-content':
+        assert repair.returncode != 0
+        assert 'tampered' in version.read_text()
+    else:
+        assert repair.returncode == 0, repair.stdout + repair.stderr
+        assert version.read_bytes() == (ROOT / 'VERSION').read_bytes()
+        assert (release / 'manifest').read_bytes() == manifest
+        assert run('--verify').returncode == 0
