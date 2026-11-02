@@ -254,6 +254,12 @@ record_profile_migration() {
   mv "$temporary" "$MIGRATION_MARKER"
 }
 
+if [ "${1:-}" = "--verify-runtime" ]; then
+  validate_current_pointer
+  [ -n "$CURRENT_RELEASE" ] || { echo "current release missing" >&2; exit 1; }
+  exit 0
+fi
+
 if [ "${1:-}" = "--verify" ]; then
   reject_retired_links
   verify_check "current pointer" "$CURRENT_LINK" test -L "$CURRENT_LINK"

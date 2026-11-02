@@ -58,18 +58,21 @@ commands relative to `CLAUDE_PLUGIN_ROOT`. The commands are namespaced
 
 ### Codex
 
-The installer copies the runtime rather than depending on the download:
+The installer copies the runtime to `~/.local/share/hippocampus/current` rather
+than depending on the download. Codex registrations live in:
 
 ```text
 ${CODEX_HOME:-~/.codex}/
-├── hippocampus/               # scripts/, skills/, hooks/, INTERFACE.md, LICENSE
-├── skills/<skill>            # seven links into hippocampus/skills/
+├── skills/<skill>            # links into ~/.local/share/hippocampus/current/skills/
 ├── hooks.json                # six hippocampus handlers plus the actor guard
 ├── config.toml               # persisted hook trust; other settings retained
 └── hippocampus-install.json   # ownership of registrations and trust entries
 ```
 
-Existing hooks and settings are retained. A skill owned by another installer
+Existing hooks and settings are retained. Existing release-installer links can
+be adopted; ownership of each skill link is recorded alongside hooks and trust.
+Uninstall preserves any link the user has subsequently replaced, and restores
+the old release pointer when Claude still uses that installer layout. A skill owned by another installer
 causes refusal before writes. Installation checks all seven handlers through
 `codex app-server` (`hooks/list`); failed trust verification restores the previous
 installation. Repeating the install command updates the runtime and owned links.
@@ -88,7 +91,7 @@ cd hippocampus
 For Claude Code, install from that checkout:
 
 ```bash
-claude plugin install hippocampus --marketplace "$PWD"
+python3 scripts/install-claude.py
 ```
 
 For Codex:
@@ -97,7 +100,15 @@ For Codex:
 python3 scripts/install-codex.py
 ```
 
-Both routes register seven skills. The package itself requires no account
+The Claude helper runs `claude plugin install hippocampus --marketplace <package-root>`
+from either tree. It removes only links owned by the released installer in the
+same transaction, preserves foreign links, and restores links, plugin registry,
+and settings if the CLI fails. Use this helper when upgrading an existing
+`install.sh` installation; invoking the native plugin command directly does not
+perform that cutover. `--claude PATH` selects the executable. Concurrent helper
+invocations are refused while a cutover holds the lock.
+
+Both routes register every packaged skill. The package itself requires no account
 credentials; your agent CLI retains its own authentication requirements.
 
 ## Install a downloaded signed release
@@ -231,7 +242,7 @@ python3 scripts/lib/handoff.py state-dir
 Claude Code:
 
 ```bash
-claude plugin uninstall hippocampus@hippocampus
+python3 scripts/install-claude.py --uninstall
 ```
 
 Codex, from a checkout or extracted package:
@@ -243,7 +254,7 @@ python3 scripts/install-codex.py --uninstall
 If only the installed Codex copy remains, use:
 
 ```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/hippocampus/scripts/install-codex.py" --uninstall
+python3 "$HOME/.local/share/hippocampus/current/scripts/install-codex.py" --uninstall
 ```
 
 Codex removes the runtime, owned skill links, handlers, trust entries, and install
