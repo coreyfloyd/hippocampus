@@ -1,4 +1,4 @@
-name: test
+name: Imported session package tests
 
 on:
   pull_request:
@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   test:
+    defaults:
+      run:
+        working-directory: continuity
     strategy:
       fail-fast: false
       matrix:
@@ -17,9 +20,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The architecture ancestor check needs history.
-          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.x"
@@ -30,6 +30,8 @@ jobs:
       # instead of skipping, and without claude the plugin checks skip.
       - run: npm install -g @openai/codex@0.162.0 @anthropic-ai/claude-code@2.1.300
       - run: python -m pip install pytest
+      - run: python tests/test-staged-release.py
+        working-directory: .
       - run: python -m pytest -q tests
       - run: bash tests/test-pickup-wrapper.sh
       - run: bash tests/test-pickup-branch-scan.sh

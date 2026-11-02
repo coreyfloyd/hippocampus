@@ -9,7 +9,7 @@ the parent specification's original history requirement.
 The parent specification does not prescribe a staging directory. `continuity/`
 is the temporary prefix; the rename slice moves its contents into the final
 package layout. Existing installers and runtime behavior are unchanged here.
-The only source adjustment makes architecture documentation tests distinguish
+The initial source adjustment makes architecture documentation tests distinguish
 a staged snapshot from a source checkout: file and line checks still run, but
 source-history checks require the original repository root.
 
@@ -32,3 +32,11 @@ configuration, documentation and fixtures; 62 handles installation and plugin
 surfaces; 64 handles release and signing surfaces. Immutable source links stay
 as historical attribution under slice 59. These assignments track naming work;
 semantic checklist and composer changes remain in their own planned slices.
+
+Review repairs keep the staged release builder from archiving the enclosing
+repository: it refuses before signing or writing output and directs release
+work to hippocampus issue 64. Standalone fixture copies retain the historical
+release tests. The source workflow now lives at `.github/workflows/continuity.yml`
+with its run steps rooted in the staging directory, so GitHub discovers it.
+The pinned inventory remains an input-tree inventory; slice 62 owns the moved
+workflow's naming references, and slice 64 owns the release-script references.
