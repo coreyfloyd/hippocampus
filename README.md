@@ -29,9 +29,8 @@ files it changed), checks it at the end of every turn, and puts it back into
 context after the agent compacts. Because the handoff is kept current at every
 stop rather than written at the last moment, it holds even when the agent
 compacts a session while you are away, as Claude Code now does with idle
-sessions. A wrap at the end of a task sends what
-the session learned to your rules, your knowledge and your record before the
-conversation is gone.
+sessions. A wrap at the end of a task sends what the session learned to your
+rules, your knowledge and your record before the conversation is gone.
 
 ## How the parts fit together
 
@@ -45,10 +44,10 @@ and writes a handoff, in that order.
 
 ## The session loop
 
-![A session starts from its handoff through pickup, or gets it back after compaction, and hands off through checkpoint or the checklist wrap. At the wrap, the checklist sends what the session learned to knowledge and the wiki (knowledge-capture, absorb), to rules and skills (improve-harness) and to your record of tickets and project tools. New sources come in from outside through research-topic. The next session starts from all of them.](docs/images/session-loop.svg)
+![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](docs/images/session-lifecycle.svg)
 
-A session that ends, compacts or runs out of context loses what it was doing.
-Hippocampus keeps your **record** (tickets, project status, documents) as the
+The handoff is how one session passes its work to the next. Hippocampus keeps
+your **record** (tickets, project status, documents) as the
 source of truth and writes a thin **handoff** that points back to it, with the
 session's open loops and uncommitted files.
 
@@ -238,9 +237,10 @@ and the setting that moves it.
 
 ## Install
 
-Hippocampus runs on macOS and Linux (and WSL). It needs Python 3.9 or newer and
-`git`; the Claude Code hooks also need `jq`. From a checkout or a
-signature-verified release, run the installer for each tool you use:
+Hippocampus runs on macOS and Linux (and WSL). It needs Python 3.9 or newer
+(3.11 or newer for rules set-up) and `git`; the Claude Code hooks also need
+`jq`. From a checkout or a signature-verified release, run the installer for
+each tool you use:
 
 ```bash
 python3 scripts/install-claude.py   # Claude Code plugin, skills and hooks

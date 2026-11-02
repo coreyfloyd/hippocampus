@@ -31,8 +31,13 @@ Uninstall with the same helper's `--uninstall` flag. Shared handoffs and user
 profiles survive removal. See [session installation](docs/session-installation.md)
 for prerequisites, the signed-release verification commands, and installed paths.
 
-The `install.sh` route below retains its existing knowledge-skill installation
-behavior. It does not register the combined package's session hooks.
+`install.sh` is the package installer that `install-release.sh` runs. It writes the
+versioned package under `~/.local/share/hippocampus/` and links every skill by
+its plain name into the Claude and Codex skill folders. It registers no hooks
+and does not give Claude Code the `/hippocampus:` names. After it, run the
+helper for each tool you use: `install-claude.py` replaces the plain Claude
+links with the namespaced plugin, and `install-codex.py` adopts the package and
+registers its hooks.
 
 ## Prerequisites
 
@@ -90,6 +95,10 @@ $HOME/.claude/skills/<skill> -> $HOME/.local/share/hippocampus/current/skills/<s
 $HOME/.codex/skills/<skill>  -> $HOME/.local/share/hippocampus/current/skills/<skill>
 ```
 
+The plain Claude links last only until `install-claude.py` runs; it removes
+them in the same transaction that installs the `hippocampus` plugin, so each
+skill is found once, as `/hippocampus:<skill>`.
+
 The Codex root defaults to `$HOME/.codex` and can be changed with `CODEX_HOME`.
 
 Upgrades activate all package skills together by moving `current`. Older valid
@@ -108,10 +117,12 @@ integrity and configuration-readiness check.
 A source checkout may contain changes beyond the latest signed release. Use the verified signed-release route for normal live upgrades. An agent must obtain explicit authorization before activating a development checkout in the user's live skill directories; candidate tests use temporary homes. If intentionally installing the development checkout:
 
 ```bash
-bash install.sh
+python3 scripts/install-claude.py   # Claude Code
+python3 scripts/install-codex.py    # Codex
 ```
 
-Then ask your agent to configure it:
+Run only the helper for each tool you use. Then ask your agent to configure it
+(`/hippocampus:hippocampus-set-up` in Claude Code):
 
 ```text
 Use hippocampus-set-up to walk me through configuring Hippocampus.
@@ -138,7 +149,7 @@ mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT"/{raw,output,docs}
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/log.md"
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/DECISIONS.md"
 
-# Only when using the wiki, which is enabled by default:
+# Only when using the wiki:
 mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki"
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki/hot.md"
 
@@ -155,7 +166,9 @@ Edit `~/.config/hippocampus/profile.md` and set:
 - `artifact_followup_destination` to the task route for source-derived actions,
   including meeting tasks and research follow-ups.
 
-The wiki is enabled by default. To use it, also set `hot_file` to an existing
+Set-up asks whether you want a wiki and recommends neither answer. In the
+profile itself the wiki is enabled by default: a profile without
+`wiki_enabled` uses it. To use it, also set `hot_file` to an existing
 file relative to the root and `wiki_followup_destination` to the route for
 knowledge-base maintenance. To skip the wiki, add `wiki_enabled: false` to the
 profile and omit both wiki fields; the `wiki/` directory is then neither

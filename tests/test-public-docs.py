@@ -72,7 +72,7 @@ class PublicDocs(unittest.TestCase):
     def test_every_readme_diagram_shares_one_style(self):
         readme = (ROOT / 'README.md').read_text()
         names = re.findall(r'\(docs/images/([\w-]+)\.svg\)', readme)
-        self.assertEqual(names, ['overview', 'session-loop', 'question-answer-action', 'capture-meetings'])
+        self.assertEqual(names, ['overview', 'session-lifecycle', 'question-answer-action', 'capture-meetings'])
         research = ET.parse(ROOT / 'docs/images/question-answer-action.svg').getroot()
         for name in names:
             with self.subTest(diagram=name):

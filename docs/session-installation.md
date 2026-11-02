@@ -7,7 +7,7 @@ Profiles separately connect the checklist to your record and persistence policy.
 
 ## Prerequisites
 
-The runtime requires Python 3.9 or newer (standard library only), Bash 3.2 or
+The runtime requires Python 3.9 or newer (standard library only; rules set-up in `scripts/rules_setup.py` needs 3.11 or newer for `tomllib`), Bash 3.2 or
 newer, and `git`. The Claude Code checklist reminder also requires `jq`.
 Install your chosen agent CLI separately: Claude Code with plugin support, or
 Codex CLI 0.160.0 or newer with command hooks and `app-server` hook discovery.
