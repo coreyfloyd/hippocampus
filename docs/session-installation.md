@@ -51,7 +51,7 @@ copy in its plugin cache, normally beneath `~/.claude/plugins/cache/hippocampus/
 For a local marketplace install, the CLI may read directly from the source
 folder (`Read from` in `claude plugin list`); keep that folder available.
 The active package contains `skills/<skill>/SKILL.md`, `scripts/`, `hooks/`, and
-`hooks/hooks.json`. Claude Code discovers the seven skills from `skills/` and
+`hooks/hooks.json`. Claude Code discovers every packaged skill from `skills/` and
 registers the six handlers declared in `hooks/hooks.json`, resolving their
 commands relative to `CLAUDE_PLUGIN_ROOT`. The commands are namespaced
 `/hippocampus:<skill>`; no separate copy in `~/.claude/skills` is required.
@@ -131,7 +131,7 @@ cd hippocampus
 ```
 
 The published fingerprint is `09674AFF392661238F4ACBD9F32B3A412CD5EFC5`, also
-in [RELEASE_SIGNING_FINGERPRINT](RELEASE_SIGNING_FINGERPRINT). The verifier
+in [RELEASE_SIGNING_FINGERPRINT](../RELEASE_SIGNING_FINGERPRINT). The verifier
 requires a signature by that primary key and an archive matching the signed
 checksum. Replace the version consistently when installing a later release.
 
@@ -145,7 +145,7 @@ The helper is the supported installation path; a bare native plugin command or
 in-session marketplace action bypasses the required transaction.
 
 No release assets exist until the release is published; their exact route is
-checked in the release's verification procedure in [RELEASING.md](RELEASING.md).
+checked in the release's verification procedure in [RELEASING.md](../RELEASING.md).
 
 ## Shared configuration
 
@@ -154,7 +154,7 @@ Both tools read one JSON object from `$HIPPOCAMPUS_CONFIG`, otherwise
 empty configuration. An unreadable file, non-object value, or wrongly typed
 setting is an error, not an empty configuration.
 
-These are every key in [INTERFACE.md section 2](INTERFACE.md#2-configuration):
+These are every key in [INTERFACE.md section 2](../INTERFACE.md#2-configuration):
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -200,8 +200,8 @@ at `.claude/checklist-profile.md` and add steps. JSON or a Markdown
 `checklist-profile` fence binds the record and persist slots and adds steps around the spine.
 For example, the glossary's profile binds `record` to `/record-step`, consuming
 `progress` and `decision` items; replace that command with your own record
-workflow. See [the profile contract](INTERFACE.md#6-checklist-engine-scriptslibchecklistpy)
-and [glossary](docs/glossary.md) for the full shape and allowed anchors.
+workflow. See [the profile contract](../INTERFACE.md#6-checklist-engine-scriptslibchecklistpy)
+and [glossary](glossary.md) for the full shape and allowed anchors.
 
 Without a profile, `record` and `persist` are unbound; their
 items go through the filing rules before wrap; unbound destinations warn and
