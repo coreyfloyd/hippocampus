@@ -97,13 +97,28 @@ class ChecklistTests(unittest.TestCase):
                         self.assertEqual(output["incomplete"][0]["id"], identity)
                         self.assertTrue(output["incomplete"][0]["reason"])
 
-    def test_ask_delivery_is_not_a_native_capture_receipt(self):
-        source = self.handoff()
-        source["resume"]["open_loops"] = [self.item("knowledge")]
-        result = self.engine.file_items(self.engine.compose([]), source,
-            [dict(index=0, rule="R4", status="filed", destination="ask", choices=["save", "leave"])],
-            {"command": "/ask"})
-        self.assertEqual(result["resume"]["open_loops"], source["resume"]["open_loops"])
+    def test_r4_ask_delivery_preserves_payload_choices_and_pending_native_item(self):
+        for kind in ("knowledge", "lesson"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                source = self.handoff()
+                source["subject"]["working_directory"] = directory
+                source["resume"]["open_loops"] = [self.item(kind)]
+                ask = {"command": "/ask"}
+                row = dict(index=0, rule="R4", status="filed", destination="ask", choices=["save", "leave"])
+                result = self.engine.file_items(self.engine.compose([]), source, [row], ask)
+                payload, = result["filing"]["asks"][directory]
+                self.assertEqual(payload["choices"], ["save", "leave"])
+                self.assertEqual(payload["text"], kind + " now")
+                self.assertEqual(payload["session_id"], "wrap-session")
+                self.assertEqual(result["resume"]["open_loops"], source["resume"]["open_loops"])
+                entry, = result["filing"]["items"]
+                self.assertEqual(entry["binding"], "ask")
+                self.assertEqual(entry["status"], "pending")
+                self.assertEqual(entry["ask_status"], "filed")
+                self.assertEqual(self.engine.filing_check(self.engine.compose([]), result, ask)[0], [])
+                for choices in [None, [], [""], "save"]:
+                    with self.assertRaisesRegex(ValueError, "choices"):
+                        self.engine.file_items(self.engine.compose([]), source, [dict(row, choices=choices)], ask)
 
     def test_bound_record_and_persist_failures_fail_report(self):
         plan = self.engine.compose([{"name": "user", "bindings": {

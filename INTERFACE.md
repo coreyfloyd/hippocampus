@@ -275,7 +275,11 @@ requires `priority` and `priority_reason`. R4 native rows retain unsaved items w
 `nothing`, or `not configured`; only a capture disposition or applied/proposal
 receipt removes the item. Failed, declined, and pending native results make
 `report: "incomplete"`, listing each step and reason, without failing handoff
-validation. Nothing and not configured do not make wrap incomplete. Every ask requires non-empty `choices`.
+validation. Nothing and not configured do not make wrap incomplete. Every ask requires non-empty `choices`. R4 `destination: "ask"` retains its
+payload in `filing.asks` for invocation by the driving skill. After a successful
+ask acknowledgement its row keeps `binding: "ask"`, `ask_status: "filed"`,
+`native_step` and `status: "pending"`; its original item stays carried. Ask
+delivery does not substitute for a capture receipt.
 
 The ask command receives `text`, source `session_id`, `directory`, linked
 `ticket` or null, and `choices`. Asks never become tickets. `file` returns the
@@ -625,3 +629,9 @@ acknowledged after a lost reply. Worktree removal and local branch deletion
 cannot be undone. Asks and their activity history remain delivered. Optional
 retention remains a separate operation, off by default; see
 [usage](docs/sweep.md#undo-and-retention).
+
+Checklist setup's `skills/hippocampus-set-up/scripts/profile.py` accepts only
+`record` and `persist` in `--bindings`. `--ask` accepts the JSON command object or
+JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
+lessons binding blocks are refused, with the source file's line numbers and the
+instruction to delete those blocks manually; no configuration is converted.

@@ -592,3 +592,18 @@ def test_sweep_rejects_applied_native_results(sandbox):
                                        receipt='applied', destination='rules')]))
     result = command(sandbox, 'complete', '--run-id', run['run_id'], '--results', str(results), code=1)
     assert 'unattended native step' in result.stderr
+
+
+@pytest.mark.parametrize('kind', ['knowledge', 'lesson'])
+def test_native_r4_ask_is_delivered_but_never_consumes_sweep_item(sandbox, kind):
+    item = dict(type=kind, context='Approve native capture', session_id='producer',
+                produced_at='2026-10-23T12:00:00Z', disposition='carry')
+    path = source(sandbox, loops=[item])
+    run = act(sandbox, [dict(rule='R4', destination='ask', choices=['save', 'leave'])])
+    work, = run['work']
+    assert work['operation'] == 'ask'
+    assert work['ask']['text'] == item['context']
+    done = complete(sandbox, run, ['written'])
+    assert path.exists()
+    assert done['directories'][str(sandbox[0])]['unfiled_items']
+    assert done['directories'][str(sandbox[0])]['asks_raised'][0]['receipt']

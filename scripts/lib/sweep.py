@@ -357,6 +357,10 @@ def plan_item(candidate, item, decision, plan, ask):
     if 'ask' in checked:
         checked['ask']['identity'] = item['identity']
     status = checked.pop('status')
+    if checked.get('native_step') in checklist.NATIVE and checked.get('ask_status') == 'filed':
+        # Validation used a hypothetical ask receipt; the driving agent must still deliver it.
+        checked.update(ask_status='planned', reason='Native capture pending; deliver ask')
+        status = 'filed'
     return dict(base, **{k: v for k, v in checked.items() if k != 'item'},
                 outcome=('carried' if checked.get('binding') in checklist.NATIVE else 'dry run')
                 if status in ('filed', 'dropped') else status)
@@ -524,6 +528,7 @@ def build_report(discovery, decisions, plan, ask, checks, interactive, started, 
         clean_check = archive_worktree_check(candidate)
         candidate['archive_worktree_check'] = clean_check
         archive = (not dirty and (clean_check is None or clean_check['clean']) and
+                   not any(row.get('native_step') in checklist.NATIVE for row in outcomes) and
                    all(row['outcome'] == 'dry run' for row in outcomes))
         key = 'handoffs_archived' if archive else 'handoffs_kept'
         section[key].append({'path': candidate['path'], 'outcome': 'dry run' if archive else 'kept',
@@ -715,6 +720,10 @@ def complete_act(config, run_id, results_path, evidence=None):
         for key in ('receipt', 'destination', 'error'):
             if key in result:
                 row[key] = result[key]
+        if (row['operation'] == 'ask' and row.get('native_step') in checklist.NATIVE
+                and row['outcome'] in ('written', 'already_written')):
+            row.update(ask_outcome=row['outcome'], ask_status='filed', outcome='carried',
+                       reason='Ask delivered; native capture remains pending')
         if row['outcome'] == 'written' and row['operation'] not in ('ask',):
             report['undo_items'].append(dict(row, kind='record',
                 write_operation=row['operation'], write_outcome='written'))

@@ -198,7 +198,12 @@ For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
 and `choices` (the user's options). An ask is **never filed as a ticket**.
 These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
-an ask acknowledgement does not replace a capture or lesson receipt.
+an ask acknowledgement does not replace a capture or lesson receipt. Always run
+the bound ask command for R4 `destination: "ask"`, using the complete payload in
+`filing.asks`, and collect its receipt. Validate non-empty `choices` before
+calling. A delivered native ask retains `binding: "ask"`, its payload and receipt,
+`ask_status: "filed"`, and the native item's `status: "pending"`. Keep the item
+carried until the native step returns its own capture receipt.
 A successful invocation alone does not acknowledge every input.
 
 Combine remaining open loops with unsaved current `session_items` in a payload.
