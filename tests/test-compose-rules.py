@@ -94,6 +94,46 @@ class ComposerTests(unittest.TestCase):
         self.assertEqual(self.compose("refresh").returncode, 0)
         self.assertEqual(self.compose("check").returncode, 0)
 
+    def test_check_reads_read_only_targets_and_directories_without_writes(self):
+        self.write_config([self.target("codex", self.codex)])
+        self.assertEqual(self.compose().returncode, 0)
+        before = self.codex.read_bytes()
+        for file_mode, directory_mode in ((0o444, 0o755), (0o644, 0o555), (0o444, 0o555)):
+            with self.subTest(file_mode=file_mode, directory_mode=directory_mode):
+                self.cross.write_text("cross-tool rule\n")
+                self.codex.chmod(file_mode)
+                self.targets.chmod(directory_mode)
+                try:
+                    clean = self.compose("check")
+                    self.assertEqual(clean.returncode, 0, clean.stderr)
+                    self.cross.write_text("changed source\n")
+                    drift = self.compose("check")
+                    self.assertEqual(drift.returncode, 1, drift.stderr)
+                    self.assertIn("drift", drift.stderr)
+                    self.assertIn(str(self.codex.resolve()), drift.stderr)
+                    self.assertEqual(self.codex.read_bytes(), before)
+                    self.assertEqual(self.codex.stat().st_mode & 0o777, file_mode)
+                    self.assertEqual(self.targets.stat().st_mode & 0o777, directory_mode)
+                    self.assertEqual(list(self.targets.iterdir()), [self.codex])
+                finally:
+                    self.targets.chmod(0o755)
+                    self.codex.chmod(0o644)
+
+    def test_check_missing_targets_report_drift_without_requiring_writable_parents(self):
+        self.targets.chmod(0o555)
+        try:
+            for target in (self.codex, self.targets / "missing-parent" / "AGENTS.md"):
+                with self.subTest(target=target):
+                    self.write_config([self.target("codex", target)])
+                    result = self.compose("check")
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("drift", result.stderr)
+                    self.assertIn(str(target.resolve()), result.stderr)
+                    self.assertFalse(target.exists())
+                    self.assertEqual(list(self.targets.iterdir()), [])
+        finally:
+            self.targets.chmod(0o755)
+
     def surfaces(self, path, routing=None, env=None):
         args = ["python3", str(COMPOSER), "surfaces", "--source", str(path)]
         if routing is not None:

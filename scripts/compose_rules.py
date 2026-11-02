@@ -317,19 +317,22 @@ def parse_user_block(existing: bytes, replacement: bytes, path: pathlib.Path) ->
     return existing[:markers[0][2]] + replacement + existing[markers[1][1]:]
 
 
-def preflight_target(target: Target, allow_missing_parents: bool = False) -> tuple[bytes | None, int | None]:
+def preflight_target(target: Target, allow_missing_parents: bool = False, *, read_only: bool = False) -> tuple[bytes | None, int | None]:
     original = None
     mode = None
     try:
         if target.path.exists() and target.path.is_dir():
-            fail(f"target cannot be written: {target.path} is a directory")
+            action = "read" if read_only else "written"
+            fail(f"target cannot be {action}: {target.path} is a directory")
         if target.path.exists():
-            if not os.access(target.path, os.W_OK):
+            if not read_only and not os.access(target.path, os.W_OK):
                 fail(f"target cannot be written: {target.path} (file is not writable)")
             original = target.path.read_bytes()
             mode = stat.S_IMODE(target.path.stat().st_mode)
     except OSError as exc:
         fail(f"target cannot be read: {target.path}: {exc}")
+    if read_only:
+        return original, mode
     parent = target.path.parent
     if allow_missing_parents:
         while not parent.exists():
@@ -339,7 +342,7 @@ def preflight_target(target: Target, allow_missing_parents: bool = False) -> tup
     return original, mode
 
 
-def plan(targets: list[Target], allow_missing_parents: bool = False) -> list[PlannedWrite]:
+def plan(targets: list[Target], allow_missing_parents: bool = False, *, read_only: bool = False) -> list[PlannedWrite]:
     source_cache: dict[pathlib.Path, bytes] = {}
     plans: list[PlannedWrite] = []
     for target in targets:
@@ -348,7 +351,7 @@ def plan(targets: list[Target], allow_missing_parents: bool = False) -> list[Pla
             if source not in source_cache:
                 source_cache[source] = read_source(source)
             source_bytes.append(source_cache[source])
-        original, mode = preflight_target(target, allow_missing_parents)
+        original, mode = preflight_target(target, allow_missing_parents, read_only=read_only)
         replacement = target_content(target, source_bytes)
         owned = original is None or has_ownership_header(original)
         desired = replacement if owned else parse_user_block(original, replacement, target.path)
@@ -409,7 +412,7 @@ def write_all(plans: list[PlannedWrite]) -> None:
 
 def compose(config_path: pathlib.Path, check: bool = False) -> None:
     _, targets = load_config(config_path)
-    plans = plan(targets)
+    plans = plan(targets, read_only=check)
     if check:
         drift = [str(item.target.path) for item in plans if item.original != item.desired]
         if drift:
