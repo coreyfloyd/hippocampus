@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+<title id="title">Session continuity across a session boundary</title>
+<desc id="desc">An interactive session in Claude Code or Codex can checkpoint while working or wrap through the spine and profiles. Both write a thin handoff. The next session uses pickup in either tool to follow its pointers back to the durable record. A bound record slot updates the record during wrap; unconsumed items remain open loops.</desc>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+    --node:#1c222b; --nodeline:#39424f;
+    --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+    --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+    --off:#6f7885; --offbg:#20262f;
+    --warn:#e8a06a; --warnbg:#33241a;
+    --ok:#3ecfa5; --okbg:#12302a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1116; --panel:#161b22; --ink:#e7ecf3; --dim:#9aa4b2; --line:#2a313c;
+  --node:#1c222b; --nodeline:#39424f;
+  --host:#6ba4ff; --sess:#b98cff; --job:#3ecfa5; --daemon:#e0a44a;
+  --hot:#ff5d86; --hotbg:#3a1424; --hotline:#ff5d86;
+  --off:#6f7885; --offbg:#20262f;
+  --warn:#e8a06a; --warnbg:#33241a;
+  --ok:#3ecfa5; --okbg:#12302a;
+}
+:root[data-theme="light"]{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#15181d; --dim:#5c6470; --line:#d5d9e0;
+  --node:#ffffff; --nodeline:#c3c9d4;
+  --host:#2f6fdb; --sess:#7a41c4; --job:#0f8a6a; --daemon:#b06a00;
+  --hot:#d92b5c; --hotbg:#fdeaf0; --hotline:#d92b5c;
+  --off:#8b929c; --offbg:#eceef1;
+  --warn:#b3541e; --warnbg:#fdf0e6;
+  --ok:#0f8a6a; --okbg:#e6f5f0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+h3{font-size:14px;margin:18px 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sub{color:var(--dim);font-size:13px;margin:0}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px;margin:22px 0}
+section.hot{border-color:var(--hotline);box-shadow:0 0 0 3px color-mix(in srgb,var(--hotline) 12%,transparent)}
+.hotflag{display:inline-block;background:var(--hotbg);color:var(--hot);border:1px solid var(--hot);
+  border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;letter-spacing:.04em;
+  vertical-align:middle;margin-left:8px}
+.src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-word}
+.src b{color:var(--dim);font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:12px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;
+  vertical-align:-1px;border:2px solid currentColor}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.card{background:var(--node);border:1px solid var(--nodeline);border-radius:9px;padding:10px 11px}
+.card.dead{opacity:.62;border-style:dashed}
+.card .t{font-family:var(--mono);font-size:12.5px;font-weight:600;word-break:break-all}
+.card .m{font-size:11.5px;color:var(--dim);margin-top:3px;overflow-wrap:anywhere}
+.pill{display:inline-block;border-radius:99px;padding:1px 7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.03em;margin-right:4px;margin-top:5px;border:1px solid transparent}
+.p-run{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.p-idle{background:var(--offbg);color:var(--off);border-color:var(--nodeline)}
+.p-off{background:var(--offbg);color:var(--off);border-color:var(--off)}
+.p-warn{background:var(--warnbg);color:var(--warn);border-color:var(--warn)}
+.p-hot{background:var(--hotbg);color:var(--hot);border-color:var(--hot)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px;vertical-align:top}
+td.mono,th.mono{font-family:var(--mono);font-size:12px}
+ul.find{margin:6px 0 0;padding-left:0;list-style:none}
+ul.find li{border-left:3px solid var(--warn);background:var(--warnbg);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin-bottom:8px;font-size:13.5px}
+ul.find li.sev-hot{border-left-color:var(--hot);background:var(--hotbg)}
+ul.find li b{font-family:var(--mono);font-size:12.5px}
+.two{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+code{font-family:var(--mono);font-size:12px;background:var(--offbg);padding:1px 4px;border-radius:4px;
+  overflow-wrap:anywhere}
+section{overflow-x:hidden}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.toc a{font-size:12px;text-decoration:none;color:var(--ink);background:var(--node);
+  border:1px solid var(--nodeline);border-radius:99px;padding:3px 10px}
+.toc a.hot{border-color:var(--hot);color:var(--hot)}
+/* category chips — hue encodes WHO RUNS IT, the label carries the category name.
+   Only palette vars already defined in all four theme blocks are used. */
+.cat{display:inline-block;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700;
+  letter-spacing:.03em;border:1px solid;margin:5px 4px 0 0;white-space:nowrap;vertical-align:1px}
+.k-det{color:var(--job);border-color:var(--job);background:var(--okbg)}
+.k-model{color:var(--sess);border-color:var(--sess);background:transparent}
+.k-daemon{color:var(--daemon);border-color:var(--daemon);background:transparent}
+.k-eph{color:var(--off);border-color:var(--off);background:var(--offbg)}
+.k-none{color:var(--warn);border-color:var(--warn);background:var(--warnbg)}
+td .cat{margin-top:0}
+.vocab td:first-child{white-space:nowrap}
+.keyrow{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--dim);margin:10px 0 4px}
+/* check IDs — what Slack alerts actually cite, so they lead the row */
+.cid{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+  border:1.5px solid var(--host);color:var(--host);border-radius:6px;padding:1px 8px;
+  letter-spacing:.02em;white-space:nowrap}
+.cid.b{border-color:var(--sess);color:var(--sess)}
+.cid.off{border-color:var(--off);color:var(--off)}
+table.reg td{vertical-align:top}
+table.reg td:first-child{white-space:nowrap;width:1%}
+table.reg tr.owner td{background:var(--offbg);font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.owns{border-left:3px solid var(--host);background:var(--node);border-radius:0 7px 7px 0;
+  padding:9px 12px;margin:10px 0 0;font-size:13px}
+
+.label{fill:var(--ink);font:700 21px var(--mono)}
+.copy{fill:var(--dim);font:17px -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.small{fill:var(--dim);font:13px var(--mono)}
+.lane{fill:var(--panel);stroke:var(--nodeline);stroke-width:2}
+.node{fill:var(--node);stroke:var(--sess);stroke-width:2}
+.persisted{fill:var(--okbg);stroke:var(--ok);stroke-width:2}
+.edge{fill:none;stroke:var(--sess);stroke-width:2.5;marker-end:url(#arrow)}
+.record-edge{fill:none;stroke:var(--ok);stroke-width:2.5;marker-end:url(#record-arrow)}
+</style>
+<defs>
+<marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--sess)"/></marker>
+<marker id="record-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" fill="var(--ok)"/></marker>
+</defs>
+<rect width="1200" height="650" rx="18" fill="var(--bg)"/>
+<text x="40" y="48" class="label">Work outlives the interactive session</text>
+<text x="40" y="79" class="copy">Keep the record primary. Carry continuation through a handoff.</text>
+<rect x="40" y="132" width="740" height="253" rx="16" class="lane"/>
+<rect x="905" y="132" width="255" height="253" rx="16" class="lane"/>
+<text x="65" y="164" class="small">THIS SESSION · CLAUDE CODE OR CODEX</text>
+<text x="925" y="164" class="small">NEXT SESSION · EITHER TOOL</text>
+<line x1="848" y1="125" x2="848" y2="400" stroke="var(--off)" stroke-width="2" stroke-dasharray="6 6"/>
+<text x="848" y="116" text-anchor="middle" class="small">session boundary</text>
+<rect x="65" y="195" width="200" height="100" rx="12" class="node"/>
+<text x="83" y="232" class="label">Session work</text>
+<text x="83" y="262" class="copy">changes + decisions</text>
+<rect x="325" y="181" width="170" height="78" rx="12" class="node"/>
+<text x="342" y="214" class="label">checkpoint</text>
+<text x="342" y="240" class="copy">continue later</text>
+<rect x="325" y="285" width="170" height="85" rx="12" class="node"/>
+<text x="342" y="320" class="label">wrap</text>
+<text x="342" y="347" class="copy">spine + profiles</text>
+<rect x="575" y="225" width="180" height="100" rx="12" class="persisted"/>
+<text x="595" y="259" class="label">handoff</text>
+<text x="595" y="285" class="copy">pointers</text>
+<text x="595" y="308" class="copy">+ open loops</text>
+<rect x="935" y="225" width="205" height="100" rx="12" class="node"/>
+<text x="955" y="259" class="label">pickup</text>
+<text x="955" y="285" class="copy">select + revalidate</text>
+<text x="955" y="308" class="small">siblings included</text>
+<rect x="40" y="455" width="1120" height="125" rx="16" class="persisted"/>
+<text x="65" y="493" class="label">record</text>
+<text x="65" y="524" class="copy">Your tickets, project status, documents, and their history</text>
+<text x="65" y="555" class="copy">The package points here; your profile supplies the record workflow.</text>
+<path d="M260,217 L330,217" class="edge"/>
+<path d="M260,267 L294,267 L294,326 L330,326" class="edge"/>
+<path d="M490,220 L533,220 L533,250 L580,250" class="edge"/>
+<path d="M490,328 L533,328 L533,300 L580,300" class="edge"/>
+<path d="M750,275 L940,275" class="edge"/>
+<path d="M410,365 L410,460" class="record-edge"/>
+<path d="M1037,320 L1037,460" class="record-edge"/>
+<text x="430" y="422" class="small">bound record slot reconciles</text>
+<text x="880" y="422" class="small">follow pointers</text>
+<text x="40" y="610" class="small">source: skills/checkpoint/SKILL.md · skills/checklist/SKILL.md · skills/pickup/SKILL.md</text>
+<text x="40" y="632" class="small">Checkpoint writes even if lint fails; wrap requires validation. Neither the handoff nor pickup replaces the record.</text>
+</svg>

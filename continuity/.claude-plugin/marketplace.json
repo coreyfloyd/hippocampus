@@ -1,0 +1,14 @@
+{
+  "name": "continuity",
+  "description": "Session continuity for coding agents.",
+  "owner": {
+    "name": "continuity contributors"
+  },
+  "plugins": [
+    {
+      "name": "continuity",
+      "source": "./",
+      "description": "Checkpoint, wrap, and pick up interactive sessions through a thin handoff."
+    }
+  ]
+}

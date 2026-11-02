@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "continuity: interactive session to shared handoff",
+    "output": "runtime.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/coreyfloyd/continuity.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "55c11867d403c8754409f2b1c0670413ff9abda7"
+    }
+  },
+  "components": [
+    {
+      "id": "claude",
+      "type": "external",
+      "label": "Claude Code",
+      "sublabel": "interactive session",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        180,
+        78
+      ]
+    },
+    {
+      "id": "codex",
+      "type": "external",
+      "label": "Codex",
+      "sublabel": "interactive session",
+      "pos": [
+        380,
+        40
+      ],
+      "size": [
+        180,
+        78
+      ]
+    },
+    {
+      "id": "adapters",
+      "type": "backend",
+      "label": "Hook adapters",
+      "sublabel": "six hooks; Codex adds actor guard",
+      "pos": [
+        180,
+        260
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "hooks/hooks.json",
+          "line": 1,
+          "end_line": 48
+        },
+        {
+          "path": "scripts/codex-hook.py",
+          "line": 11,
+          "end_line": 21
+        },
+        {
+          "path": "scripts/codex-hook.py",
+          "line": 119,
+          "end_line": 160
+        }
+      ]
+    },
+    {
+      "id": "skills",
+      "type": "frontend",
+      "label": "Seven skills",
+      "sublabel": "checkpoint, checklist, pickup + helpers",
+      "pos": [
+        760,
+        530
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "skills/checkpoint/SKILL.md",
+          "line": 9,
+          "end_line": 64
+        },
+        {
+          "path": "skills/checklist/SKILL.md",
+          "line": 152,
+          "end_line": 202
+        },
+        {
+          "path": "scripts/install-codex.py",
+          "line": 16,
+          "end_line": 20
+        }
+      ]
+    },
+    {
+      "id": "handoff",
+      "type": "backend",
+      "label": "Handoff engine",
+      "sublabel": "resolve, lint, checkpoint, hook decisions",
+      "pos": [
+        760,
+        260
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 481,
+          "end_line": 541
+        },
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 742,
+          "end_line": 788
+        },
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 858,
+          "end_line": 958
+        }
+      ]
+    },
+    {
+      "id": "checklist",
+      "type": "backend",
+      "label": "Checklist engine",
+      "sublabel": "compose spine; settle; check wrap",
+      "pos": [
+        180,
+        530
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 21,
+          "end_line": 30
+        },
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 84,
+          "end_line": 152
+        },
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 421,
+          "end_line": 453
+        }
+      ]
+    },
+    {
+      "id": "handoffs",
+      "type": "database",
+      "label": "Shared handoffs",
+      "sublabel": "one file per subject + session",
+      "pos": [
+        1300,
+        260
+      ],
+      "size": [
+        260,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 127,
+          "end_line": 151
+        },
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 527,
+          "end_line": 541
+        },
+        {
+          "path": "skills/pickup/scripts/pickup.py",
+          "line": 206,
+          "end_line": 275
+        }
+      ]
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "Ledger + backups",
+      "sublabel": "session touches; raw compaction input",
+      "pos": [
+        760,
+        40
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 608,
+          "end_line": 624
+        },
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 641,
+          "end_line": 673
+        },
+        {
+          "path": "scripts/lib/handoff.py",
+          "line": 943,
+          "end_line": 958
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "type": "security",
+      "label": "Profile",
+      "sublabel": "bind slots; add steps; preserve spine",
+      "pos": [
+        380,
+        800
+      ],
+      "size": [
+        340,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 59,
+          "end_line": 81
+        },
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 84,
+          "end_line": 152
+        }
+      ]
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "Checklist state",
+      "sublabel": "nudge + unattended-wrap markers",
+      "pos": [
+        40,
+        800
+      ],
+      "size": [
+        260,
+        78
+      ],
+      "sources": [
+        {
+          "path": "scripts/lib/checklist.py",
+          "line": 277,
+          "end_line": 316
+        },
+        {
+          "path": "scripts/codex-hook.py",
+          "line": 102,
+          "end_line": 116
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "claude-adapters",
+      "from": "claude",
+      "to": "adapters",
+      "label": "hook events"
+    },
+    {
+      "id": "codex-adapters",
+      "from": "codex",
+      "to": "adapters",
+      "label": "hook events"
+    },
+    {
+      "id": "adapters-handoff",
+      "from": "adapters",
+      "to": "handoff",
+      "label": "interactive only"
+    },
+    {
+      "id": "adapters-checklist",
+      "from": "adapters",
+      "to": "checklist",
+      "label": "cadence + guard"
+    },
+    {
+      "id": "skills-handoff",
+      "from": "skills",
+      "to": "handoff",
+      "label": "checkpoint / wrap write"
+    },
+    {
+      "id": "skills-checklist",
+      "from": "skills",
+      "to": "checklist",
+      "label": "compose + check"
+    },
+    {
+      "id": "handoff-handoffs",
+      "from": "handoff",
+      "to": "handoffs",
+      "label": "write / restore"
+    },
+    {
+      "id": "handoff-ledger",
+      "from": "handoff",
+      "to": "ledger",
+      "label": "read / append / back up"
+    },
+    {
+      "id": "profile-checklist",
+      "from": "profile",
+      "to": "checklist",
+      "label": "bind + extend"
+    },
+    {
+      "id": "checklist-state",
+      "from": "checklist",
+      "to": "state",
+      "label": "wrap marker"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Skills run the work",
+      "items": [
+        "checkpoint writes without committing; checklist runs the spine and writes via checkpoint.",
+        "pickup reads the same handoffs in either tool, grouping sibling worktrees before other subjects.",
+        "handoff-prompt, wip, improve-harness and slim-harness complete the seven-skill surface."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Spine and shared storage",
+      "items": [
+        "Spine: record, knowledge, lessons, persist, handoff. The first four are slots.",
+        "The checklist engine checks and composes; it does not execute skills or write a handoff.",
+        "Handoffs, ledger, compaction backups and checklist state live outside either tool's data area."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Not shown",
+      "items": [
+        "Installer trust internals, transcript parsing and optional session-cycling consumers.",
+        "The user's record implementation and profile-bound commands; the package provides no record.",
+        "The next interactive session invokes pickup to follow the handoff back to the record."
+      ]
+    }
+  ]
+}

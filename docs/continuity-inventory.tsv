@@ -1,0 +1,334 @@
+revision	merged_path	kind	line	column	match	slice	disposition
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/marketplace.json	content	2	12	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/marketplace.json	content	3	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/marketplace.json	content	5	14	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/marketplace.json	content	9	16	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/plugin.json	content	2	12	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/plugin.json	content	4	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/.claude-plugin/plugin.json	content	6	14	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	3	1	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	50	69	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	57	3	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	65	5	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	66	50	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	67	37	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	69	5	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	84	41	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	85	4	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	91	23	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	105	51	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	106	2	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	106	36	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	107	2	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	111	24	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	111	48	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	113	10	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	114	4	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	131	23	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	131	59	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	141	40	CONTINUITY	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	142	32	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	163	30	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	164	65	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	165	44	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	166	37	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	176	34	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	210	10	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	210	21	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	212	29	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	234	25	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	234	36	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	246	38	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	292	30	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INSTALLATION.md	content	312	62	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	13	30	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	15	44	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	16	66	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	34	30	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	35	32	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	193	3	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	337	41	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	339	2	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/INTERFACE.md	content	345	29	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	1	3	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	5	1	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	16	34	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	26	15	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	27	20	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	28	16	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	29	19	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	30	24	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	31	15	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	32	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	33	25	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	34	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	112	26	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	113	52	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	127	19	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	154	18	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	159	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	159	65	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	159	105	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	362	42	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/README.md	content	363	2	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	1	13	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	3	31	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	12	1	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	13	1	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	14	1	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	15	1	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	19	63	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	25	59	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	85	1	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	108	33	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	121	1	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	132	9	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	132	48	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	133	27	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	133	73	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	141	9	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	156	18	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	156	47	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	159	16	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/RELEASING.md	content	160	16	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.architecture.json	content	5	15	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.architecture.json	content	9	45	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	8	10	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4981	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	157	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	269	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	319	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	506	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	682	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	866	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	1065	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	1257	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	1448	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	1648	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	1836	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2024	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2226	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2415	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2606	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2809	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	2997	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	3194	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	3402	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	3590	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	3778	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	3978	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	4167	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	4368	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4985	4557	continuity	59	keep historical source attribution
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/architecture/runtime.html	content	4991	43	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/examples/PROVENANCE.md	content	20	2	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/examples/PROVENANCE.md	content	28	54	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/examples/PROVENANCE.md	content	35	8	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/examples/PROVENANCE.md	content	109	7	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/glossary.md	content	1	11	Continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/glossary.md	content	3	40	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/images/session-lifecycle.svg	content	2	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	2	120	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	8	154	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	15	349	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	15	759	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	17	421	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/presentation.html	content	17	502	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	4	3	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	19	38	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	20	2	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	20	45	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	21	12	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/docs/sweep.md	content	210	46	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/hooks/checklist-nudge.sh	content	72	24	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/hooks/checklist-nudge.sh	content	89	44	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/hooks/hooks.json	content	2	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/hooks/hooks.json	content	36	62	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/keys/continuity-release.asc	path	0	6	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/build-release.sh	content	8	8	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/build-release.sh	content	8	32	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/build-release.sh	content	31	15	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/build-release.sh	content	32	59	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/build-release.sh	content	34	53	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/checklist-surfaces.sh	content	24	68	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/codex-hook.py	content	102	94	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/codex-hook.py	content	121	17	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/codex-hook.py	content	158	16	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	2	31	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	194	64	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	195	72	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	202	76	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	204	70	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	210	18	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	217	20	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	228	16	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	254	27	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/install-codex.py	content	262	16	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	353	51	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	368	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	378	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	380	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	385	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	406	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/checklist.py	content	426	37	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/codex_trust.py	content	3	12	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/codex_trust.py	content	25	28	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/codex_trust.py	content	401	45	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	8	19	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	9	33	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	28	37	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	30	37	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	81	32	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	85	32	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	89	19	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	96	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	98	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	108	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	110	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	120	28	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	565	29	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	895	29	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/handoff.py	content	1110	40	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/reference_check.py	content	13	48	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/lib/reference_check.py	content	45	53	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/pickup.sh	content	14	12	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/pickup.sh	content	114	14	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/verify-release.sh	content	4	23	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/scripts/verify-release.sh	content	4	51	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/checklist/SKILL.md	content	32	29	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/checklist/SKILL.md	content	89	77	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/pickup/SKILL.md	content	17	120	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/pickup/SKILL.md	content	17	169	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/setup/SKILL.md	content	3	24	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/setup/SKILL.md	content	6	10	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/slim-harness/references/claude.md	content	20	33	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/slim-harness/references/removable-rules.md	content	22	35	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/slim-harness/references/removable-rules.md	content	23	32	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/slim-harness/references/removable-rules.md	content	27	144	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/sweep/SKILL.md	content	11	24	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/skills/wip/SKILL.md	content	17	326	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	1	9	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	13	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	14	27	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	15	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	15	61	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/conftest.py	content	29	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/PostToolUse.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/PostToolUse.json	content	1	271	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/PostToolUse.json	content	1	319	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/PreCompact.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/README.md	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/SessionStart.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/Stop.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/UserPromptSubmit.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/UserPromptSubmit.json	content	1	273	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/completion.jsonl	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/headless.jsonl	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/interactive.jsonl	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/manifest.json	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/subagent.jsonl	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/fixtures/codex-continuity/usage.jsonl	path	0	22	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test-pickup-wrapper.sh	content	149	15	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test-pickup-wrapper.sh	content	152	42	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_artifact_documentation.py	content	22	44	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_artifact_documentation.py	content	27	16	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	42	47	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	46	49	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	761	21	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	766	69	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	803	45	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	805	48	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	833	37	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist.py	content	835	46	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist_surfaces.py	content	23	44	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_checklist_surfaces.py	content	66	28	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	46	43	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	56	24	CONTINUITY	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	175	33	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	176	89	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	193	61	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	307	54	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	360	43	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	420	51	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	423	57	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	423	68	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	430	44	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	451	57	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	451	68	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	454	53	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	454	64	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	457	13	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_claude_plugin.py	content	457	24	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	13	36	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	20	110	CONTINUITY	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	33	25	CONTINUITY	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	234	37	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	255	48	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	326	37	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	481	22	CONTINUITY	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	645	28	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_codex_adapter.py	content	648	26	continuity	62	replace installer/plugin naming and update its fixtures
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	122	26	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	124	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	142	26	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	144	28	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	694	57	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	705	62	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	890	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	898	60	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	899	66	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	918	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	920	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	921	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	930	43	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	1004	59	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	1025	64	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_handoff.py	content	1101	30	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup.py	content	1054	5	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup.py	content	1061	26	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup.py	content	1064	50	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1253	13	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1283	10	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1308	13	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1312	14	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1315	37	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1317	41	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1334	10	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_pickup_cross_tool.py	content	1347	10	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	29	70	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	37	23	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	43	44	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	43	80	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	48	46	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	63	30	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_public_documentation.py	content	78	47	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_reference_check.py	content	180	8	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_reference_check.py	content	216	30	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_reference_check.py	content	220	8	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_reference_check.py	content	227	33	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	19	45	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	21	57	Continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	30	32	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	93	43	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	100	44	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	127	35	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	136	29	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	148	35	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	163	53	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	169	41	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release.py	content	170	40	continuity	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release_check.py	content	31	28	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release_check.py	content	41	14	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_release_check.py	content	56	13	CONTINUITY	64	replace package release naming and signing references
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_shared_storage.py	content	34	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_shared_storage.py	content	53	67	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_shared_storage.py	content	59	25	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_shared_storage.py	content	69	56	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_shipped_surface.py	content	56	16	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_slim_harness.py	content	25	30	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_slim_harness.py	content	43	34	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_slim_harness.py	content	61	30	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_slim_harness.py	content	63	13	continuity	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_slim_harness.py	content	77	30	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/tests/test_sweep.py	content	65	16	CONTINUITY	59	rename package/configuration/state/docs reference or fixture
+5198d0567840694e71ddc20877c9a2c3415b0d80	continuity/	staging-prefix	0	1	continuity	59	move staged files into final package directories; remove staging prefix

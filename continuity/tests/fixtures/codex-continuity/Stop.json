@@ -1,0 +1,1 @@
+{"session_id":"captured-session","turn_id":"captured-turn","transcript_path":"/redacted/rollout.jsonl","cwd":"/redacted/work","hook_event_name":"Stop","model":"gpt-6-astra","permission_mode":"bypassPermissions","stop_hook_active":false,"last_assistant_message":"done"}

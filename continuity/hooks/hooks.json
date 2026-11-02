@@ -1,0 +1,48 @@
+{
+  "description": "The six continuity hooks. Each adapter pipes the hook payload to an engine command and exits 0.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|compact",
+        "hooks": [
+          {"type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-restore.sh\"", "timeout": 10}
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {"type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/pre-compact.sh\"", "timeout": 10}
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {"type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/context-guard.sh\"", "timeout": 5}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {"type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-ledger.sh\"", "timeout": 5}
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {"type": "command", "command": "CHECKLIST_COMMAND=/continuity:checklist bash \"${CLAUDE_PLUGIN_ROOT}/hooks/checklist-nudge.sh\"", "timeout": 5}
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {"type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-staleness-guard.sh\"", "timeout": 10}
+        ]
+      }
+    ]
+  }
+}
