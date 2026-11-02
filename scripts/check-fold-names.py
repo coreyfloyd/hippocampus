@@ -23,6 +23,8 @@ HISTORICAL = {
 def disposition(path, line):
     if path in {'MIGRATION.md', 'RELEASE_CANDIDATE.md'}:
         return 'retained: release history and explicit manual cutover instructions (issue 64)'
+    if path == 'README.md':
+        return 'retained: README pointer to the manual cutover for unreleased users'
     if path in HISTORICAL:
         return 'retained: pinned snapshot provenance and inventory tooling'
     if path in {'scripts/lib/install_conflicts.py', 'tests/test_install_conflicts.py'}:
