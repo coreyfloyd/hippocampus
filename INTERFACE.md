@@ -306,7 +306,7 @@ tool-specific home directory.
 
 | Skill | Role |
 |---|---|
-| `setup` | Create or extend the user profile and write and validate the user-owned record-read skill, with the user present. |
+| `hippocampus-set-up` | Create or extend the user profile and write and validate the user-owned record-read skill, with the user present. |
 | `checkpoint` | Checkpoint the current session. `scripts/checkpoint.sh` is the entry point the checklist also calls. |
 | `pickup` | Resume after a cold start. Its engine is `scripts/pickup.py`. |
 | `checklist` | Wrap through the spine plus profile steps. |

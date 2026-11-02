@@ -532,7 +532,7 @@
       ],
       "sources": [
         {
-          "path": "skills/setup/SKILL.md",
+          "path": "skills/hippocampus-set-up/SKILL.md",
           "line": 64,
           "label": "configuration approval before writes"
         }
@@ -553,7 +553,7 @@
       ],
       "sources": [
         {
-          "path": "skills/setup/SKILL.md",
+          "path": "skills/hippocampus-set-up/SKILL.md",
           "line": 72,
           "label": "apply approved configuration safely"
         }

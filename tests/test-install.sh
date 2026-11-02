@@ -85,8 +85,8 @@ for old in research-dev research-feature research-feedback research-quick; do
 done
 test ! -e "$TEST_HOME/.config/hippocampus/profile.md"
 test -L "$TEST_HOME/.local/share/hippocampus/current"
-test -L "$TEST_HOME/.claude/skills/setup"
-test -L "$TEST_HOME/.codex/skills/setup"
+test -L "$TEST_HOME/.claude/skills/hippocampus-set-up"
+test -L "$TEST_HOME/.codex/skills/hippocampus-set-up"
 test -L "$TEST_HOME/.claude/skills/meeting-capture"
 test -L "$TEST_HOME/.codex/skills/meeting-capture"
 test -f "$TEST_HOME/.claude/skills/meeting-capture/../knowledge-capture/references/meetings.md"

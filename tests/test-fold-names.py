@@ -16,8 +16,8 @@ class FoldNames(unittest.TestCase):
             self.assertEqual(name, path.parent.name)
             names.append(name)
         self.assertEqual(len(names), len(set(names)), 'duplicate skill name')
-        self.assertIn('setup', names)
-        self.assertNotIn('hippocampus-set-up', names)
+        self.assertIn('hippocampus-set-up', names)
+        self.assertNotIn('setup', names)
         self.assertEqual(json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['name'], 'hippocampus')
         self.assertTrue((ROOT / 'skills/checklist/SKILL.md').exists())
 

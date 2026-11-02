@@ -8,5 +8,5 @@ description: Compatibility entry point for direct compilation of an already-sele
 Use [wiki-compile](../wiki-compile/SKILL.md) with the same selected sources,
 upstream authorization, profile and local policy. It owns the Karpathy-wiki contract,
 `~/.config/hippocampus/profile.md`, `scripts/validate_profile.py`, `--require-wiki`
-refusal (setup enables it), and `wiki_followup_destination`.
+refusal (hippocampus-set-up enables it), and `wiki_followup_destination`.
 This entry point has no independent synthesis rules or additional approval gate.

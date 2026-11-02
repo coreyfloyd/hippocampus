@@ -18,7 +18,7 @@ is deliberately local configuration, not package content.
 ## Optional rules profile section
 
 The optional `rules` frontmatter section records the choices approved through
-`setup`; it is the only rules configuration that set-up and the
+`hippocampus-set-up`; it is the only rules configuration that set-up and the
 composer read. Its `preset` is `standard` or `thin`. `cross_tool_document` and
 `development_document` name the two rules documents relative to the knowledge
 root. An optional absolute `development_root` lets set-up describe the delivery
@@ -29,7 +29,7 @@ uses the standard preset.
 
 ## Optional wiki
 
-The wiki is optional. `setup` explains both the wiki and the
+The wiki is optional. `hippocampus-set-up` explains both the wiki and the
 no-wiki alternative in neutral terms, with no default lean, and can enable or
 disable the wiki later without disturbing the rest of an existing
 configuration. `wiki-compile` and `wiki-audit` gate on the profile
@@ -39,7 +39,7 @@ has no `wiki/` directory, no `hot_file`, and no `wiki_followup_destination`,
 and no Wiki Additions class appears in any research artifact or
 knowledge-capture proposal it produces.
 
-Disabling the wiki never deletes or modifies an existing `wiki/` directory or anything in it; only `setup`'s own enable/disable conversation changes the profile fields, and only after the user approves.
+Disabling the wiki never deletes or modifies an existing `wiki/` directory or anything in it; only `hippocampus-set-up`'s own enable/disable conversation changes the profile fields, and only after the user approves.
 
 ## Navigation and links
 

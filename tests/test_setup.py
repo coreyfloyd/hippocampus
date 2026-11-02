@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-WRITER = ROOT / 'skills/setup/scripts/profile.py'
+WRITER = ROOT / 'skills/hippocampus-set-up/scripts/profile.py'
 COMPOSER = ROOT / 'scripts/lib/checklist.py'
 
 
@@ -165,7 +165,7 @@ def test_rejected_setup_in_fresh_package_leaves_no_import_cache(tmp_path):
     package = tmp_path / 'package'
     shutil.copytree(ROOT / 'scripts/lib', package / 'scripts/lib',
                     ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-    helper = package / 'skills/setup/scripts/profile.py'
+    helper = package / 'skills/hippocampus-set-up/scripts/profile.py'
     helper.parent.mkdir(parents=True)
     shutil.copy2(WRITER, helper)
     before = set(tmp_path.rglob('*'))

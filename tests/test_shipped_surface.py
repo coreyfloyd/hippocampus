@@ -195,7 +195,7 @@ def test_shipped_files_contain_no_external_record_conventions():
                      'docs/session-guide.md', 'docs/session-installation.md']
     session_roots += ['skills/' + name for name in (
         'checklist', 'checkpoint', 'handoff-prompt', 'improve-harness', 'pickup',
-        'setup', 'slim-harness', 'sweep', 'wip')]
+        'hippocampus-set-up', 'slim-harness', 'sweep', 'wip')]
     for relative in session_roots:
         path = os.path.join(ROOT, relative)
         if os.path.isdir(path):

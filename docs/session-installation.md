@@ -289,7 +289,7 @@ with `#` are comments; use `\#` for a literal leading `#`. Exit zero is clean.
 
 ## Guided setup with the user present
 
-After installation, invoke `/hippocampus:setup` in Claude Code or `Use setup` in
+After installation, invoke `/hippocampus:hippocampus-set-up` in Claude Code or `Use hippocampus-set-up` in
 Codex. Setup is included among the nine installed skills. It is discovered by the
 Claude Code plugin and linked by the Codex installer. Both tools use the same setup
 procedure and user profile.

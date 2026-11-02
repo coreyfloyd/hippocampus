@@ -1,5 +1,5 @@
 ---
-name: setup
+name: hippocampus-set-up
 description: Configure or repair hippocampus knowledge and checklist profiles with the user present. Use after installation or to change the knowledge root, checklist bindings, record-read skill, rules, or memory choices.
 ---
 

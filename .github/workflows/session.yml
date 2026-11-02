@@ -33,6 +33,7 @@ jobs:
       - run: python tests/test-staged-release.py
         working-directory: .
       - run: python tests/test-fold-names.py
+      - run: python tests/test-install-engines.py
       - run: python -m pytest -q tests
       - run: bash tests/test-pickup-wrapper.sh
       - run: bash tests/test-pickup-branch-scan.sh
