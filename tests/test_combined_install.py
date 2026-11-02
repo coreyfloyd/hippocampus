@@ -24,12 +24,15 @@ def test_codex_adopts_old_installer_and_uninstall_keeps_replaced_link(tmp_path, 
     home = tmp_path / '.codex'
     env = dict(os.environ, CODEX_HOME=str(home))
     subprocess.run(['bash', str(ROOT / 'install.sh')], env=env, check=True, capture_output=True)
+    assert (tmp_path / '.local/share/hippocampus/current/VERSION').read_text() == (ROOT / 'VERSION').read_text()
     module = installer()
     monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
     monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
     assert module.main() == 0
     manifest = json.loads((home / 'hippocampus-install.json').read_text())
     assert set(manifest['skill_links']) == set(module.SKILLS)
+    assert manifest['version'] == (ROOT / 'VERSION').read_text().strip()
+    assert (tmp_path / '.local/share/hippocampus/current/VERSION').read_text() == (ROOT / 'VERSION').read_text()
     link = home / 'skills' / module.SKILLS[0]
     link.unlink()
     link.symlink_to(tmp_path / 'foreign')

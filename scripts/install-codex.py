@@ -180,7 +180,7 @@ def copy_package(destination):
     destination.mkdir(parents=True)
     for name in ('scripts','skills','hooks','contracts','profiles'):
         shutil.copytree(ROOT/name,destination/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-    for name in ('INTERFACE.md','LICENSE'):
+    for name in ('INTERFACE.md','LICENSE','VERSION'):
         shutil.copy2(ROOT/name,destination/name)
 
 
@@ -296,7 +296,7 @@ def main():
         trust.atomic_write(target,json.dumps(installed,indent=2)+'\n')
         trust.atomic_write(config,trust.update_config_text(clean_config,{**foreign_hashes,**hashes}))
         trust.verify_with_hooks_list(args.codex,home,home,hashes)
-        trust.atomic_write(manifest,json.dumps({'hooks':registrations(package),'trust_keys':list(hashes),
+        trust.atomic_write(manifest,json.dumps({'version':(ROOT/'VERSION').read_text().strip(),'hooks':registrations(package),'trust_keys':list(hashes),
                                                   'skill_links':{name:str(package/'skills'/name) for name in SKILLS},
                                                   'previous_runtime':previous_runtime},indent=2)+'\n')
     except BaseException:

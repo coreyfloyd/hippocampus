@@ -92,12 +92,46 @@ gh auth status
 printf 'VERSION=%s\nTAG=%s\nCOMMIT=%s\n' "$VERSION_VALUE" "$TAG" "$COMMIT"
 ```
 
+## Prepare version metadata and unsigned artifacts
+
+Set the next release version in `VERSION`, then generate the Claude metadata:
+
+```bash
+python3 scripts/generate-release-metadata.py
+python3 scripts/generate-release-metadata.py --check
+```
+
+Commit both `VERSION` and the generated `.claude-plugin/plugin.json`. Codex's
+installation receipt reads its version directly from `VERSION`; schema versions
+and client protocol versions are independent of the package release version.
+The release suite and builder reject Claude metadata drift.
+
+For preparation before the maintainer signs, build from a clean committed tree:
+
+```bash
+bash scripts/build-release.sh dist --unsigned
+```
+
+This uses the same archive and checksum steps as the signing command below,
+without invoking GnuPG. It removes any stale archive signature. These two files
+are unsigned candidates and must not be published. The maintainer's normal
+build-and-sign command rebuilds them and adds the signature.
+
 ## Verify the candidate
 
 Run all checks against the exact commit intended for release:
 
 ```bash
 git diff --check
+python3 scripts/generate-release-metadata.py --check
+python3 tests/test-staged-release.py
+python3 tests/test-fold-names.py
+python3 -m pytest -q tests
+bash tests/test-pickup-wrapper.sh
+bash tests/test-pickup-branch-scan.sh
+python3 tests/test-compose-rules.py
+python3 tests/test-capture-absorb.py
+python3 tests/test-public-docs.py
 python3 tests/test-install-engines.py
 python3 tests/test-profile-meetings.py
 PYTHONDONTWRITEBYTECODE=1 python3 tests/test-rules-setup.py

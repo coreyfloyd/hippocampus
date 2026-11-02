@@ -4,7 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 OUT="${1:-$ROOT/dist}"
-KEY="${HIPPOCAMPUS_GPG_KEY:?set HIPPOCAMPUS_GPG_KEY to the signing key fingerprint}"
+UNSIGNED=false
+case "${2:-}" in
+  --unsigned) UNSIGNED=true ;;
+  "") : ;;
+  *) echo "usage: $0 [output-directory] [--unsigned]" >&2; exit 2 ;;
+esac
+if [ "$UNSIGNED" = false ]; then
+  KEY="${HIPPOCAMPUS_GPG_KEY:?set HIPPOCAMPUS_GPG_KEY to the signing key fingerprint}"
+fi
+python3 "$ROOT/scripts/generate-release-metadata.py" --check
 
 # Only tracked-file modifications count as "dirty" here: an in-tree, untracked
 # output directory (this script's own OUT, editor droppings, etc.) must not
@@ -35,4 +44,10 @@ ARCHIVE="$OUT/hippocampus-$VERSION.tar.gz"
 # so build output and untracked files are structurally excluded.
 (cd "$ROOT" && git archive --format=tar.gz --prefix=hippocampus/ -o "$ARCHIVE" HEAD)
 (cd "$OUT" && shasum -a 256 "$(basename "$ARCHIVE")") > "$ARCHIVE.sha256"
+if [ "$UNSIGNED" = true ]; then
+  # Never leave an older signature beside a freshly rebuilt candidate.
+  rm -f "$ARCHIVE.asc"
+  echo "Unsigned candidate only; maintainer signature required before publication."
+  exit 0
+fi
 gpg --batch --yes --local-user "$KEY" --detach-sign --armor --output "$ARCHIVE.asc" "$ARCHIVE.sha256"

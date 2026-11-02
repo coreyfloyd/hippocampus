@@ -316,6 +316,7 @@ copy_release_tree "$ROOT/skills" "$TEMP_RELEASE/skills"; copy_release_tree "$ROO
 copy_release_tree "$ROOT/scripts" "$TEMP_RELEASE/scripts"
 copy_release_tree "$ROOT/hooks" "$TEMP_RELEASE/hooks"
 cp -p "$ROOT/INTERFACE.md" "$TEMP_RELEASE/INTERFACE.md"
+cp -p "$ROOT/VERSION" "$TEMP_RELEASE/VERSION"
 if [ ! -d "$RELEASE_DIR" ]; then
   printf '%s\n' "$SOURCE_HASH" > "$TEMP_RELEASE/manifest"; mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else

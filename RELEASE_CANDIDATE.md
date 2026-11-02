@@ -1,44 +1,83 @@
-# Release candidate: 0.12.0
+# Release candidate: 0.13.0
 
 ## Scope
 
-This candidate covers the changes since v0.11.0:
-
-- Offer wiki candidates from project-filed research ([hippocampus#53](https://github.com/coreyfloyd/hippocampus/issues/53)). `feature-research`, `feedback-research` and a `dev-research` answer persisted to a file end with an optional `## Wiki candidates` table when their public sources carry knowledge reusable outside the project: each row names a Sources entry, the reusable finding and a proposed wiki target. Completion reports the table as a proposed distribution. After approval, `absorb` re-fetches each approved row's source into the research raw folder and invokes `wiki-compile` with that subset. The project document stays at its project path, unedited, and is never compile input; row receipts go to the operation log. The section is defined once in `skills/absorb/references/wiki-candidates.md`.
-- State what the Karpathy-wiki contract enforces in code and what it only instructs, with two limits: provenance is not claim evidence, and a distribution receipt is not a multi-file transaction.
-- Record the v0.11.0 publication in `docs/releases/0.11.0.md`.
+This candidate combines session memory, knowledge workflows and agent-rule
+maintenance in one Hippocampus package. It implements the release preparation
+slice of [hippocampus#64](https://github.com/coreyfloyd/hippocampus/issues/64)
+for [the approved fold](https://github.com/coreyfloyd/hippocampus/issues/57).
 
 ## Compatibility
 
-Profile version remains 4; no profile field is added or changed. The Wiki candidates section is added only when the validated profile has a wiki configured and a cited public source supports a reusable finding, so existing deliverables and profiles without a wiki are unchanged. `research-absorb` still does not apply to the deliverable documents themselves. Installation adds one reference file, `skills/absorb/references/wiki-candidates.md`. Both supported clients receive the same package. The public signing key and fingerprint are unchanged.
+The Claude Code command rename is breaking: every skill is now
+`/hippocampus:<skill>`, including previously unprefixed knowledge skills.
+Codex retains plain skill names. Setup remains `hippocampus-set-up` in both
+tools; there is no bare `setup` or `continuity:` alias. The Claude installer
+transactionally removes only installer-owned old skill links.
 
-## Verification
+The knowledge profile format (version 4), knowledge root, installation root
+and composer entry point remain compatible. Continuity was never released;
+there is no automatic migration from its installation or data locations.
+Follow the manual steps in [MIGRATION.md](MIGRATION.md#manual-continuity-cutover).
+The public signing key and fingerprint are unchanged.
 
-Run the exact candidate checks in `RELEASING.md`, plus `python3 tests/test-compose-rules.py`, `python3 tests/test-capture-absorb.py` and `python3 tests/test-public-docs.py`, the documentation sweep and the public commit-range scan. Final commit identifiers and results are recorded in the release-session evidence; publication evidence is appended after release to avoid a self-referential commit.
+## Verification and publication state
 
-Previous publication evidence: [0.11.0](docs/releases/0.11.0.md), [0.10.0](docs/releases/0.10.0.md).
+Preparation only: no tag, maintainer signature, publication or downloaded-release
+verification is claimed. Run the full checks and documentation sweep in
+[RELEASING.md](RELEASING.md) against the final candidate commit. Build the
+unsigned archive and checksum using `bash scripts/build-release.sh dist --unsigned`.
+The maintainer must sign before publication. After publication, download and
+signature-verify the assets, install into clean temporary homes for both tools,
+and run `install.sh --verify` before the continuity repository can be archived.
+Record that evidence in a post-publication follow-up; do not infer it from a
+local unsigned candidate or the disposable test signing key.
 
 ## Release-note draft
 
-Hippocampus v0.12.0 lets project-filed research feed your wiki. Design inputs from `feature-research`, decision memos from `feedback-research`, and `dev-research` answers saved to a file can now end with a short Wiki candidates table: the public sources they cite, the finding each supports that holds outside the project, and where it might go in the wiki. You approve the rows you want, and `absorb` fetches those sources fresh and compiles them, while the project document stays exactly where it was.
+Hippocampus v0.13.0 combines session memory, knowledge workflows and agent-rule
+maintenance in one package for Claude Code and Codex.
 
-Nothing changes for profiles without a wiki, and no profile migration is needed. Both supported clients receive the same package.
+**Breaking Claude Code rename:** invoke every skill as `/hippocampus:<skill>`
+(for example `/hippocampus:research-topic` and `/hippocampus:checklist`). Codex
+uses plain names, such as `Use checklist`. Setup remains `hippocampus-set-up`:
+`/hippocampus:hippocampus-set-up` in Claude Code and `Use hippocampus-set-up` in
+Codex. Old Claude names are not retained.
 
-## Publication checklist
+Install from a checkout or a signature-verified extracted release with:
 
-- [x] Verify and commit the candidate; resolve the public commit-history scan.
-- [ ] Complete independent review, evaluation and public-communication approval. Not run for 0.12.0: the maintainer directed the release in an interactive session; the candidate had the runbook checks and documentation sweep only.
-- [x] Merge the reviewed candidate and tag its exact commit as `v0.12.0`.
-- [x] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
-- [x] Verify signed assets, publish, and independently verify downloaded assets.
-- [x] Install and verify the signed release in both supported clients.
+```bash
+python3 scripts/install-claude.py
+python3 scripts/install-codex.py
+```
 
-## Publication
+Run only the helper for each tool you use. The Claude helper installs the native
+plugin and replaces installer-owned old links in one transaction. Foreign links
+are retained; failures restore the prior state. Codex registers and verifies
+trusted hooks and retains foreign settings.
 
-Published 2026-10-31 as a public, non-draft, non-prerelease release.
+**Continuity users:** continuity was never released, so this release ships no
+migration code. Uninstall continuity from both tools before installing
+Hippocampus. Back up your data; move or recreate your checklist profile at
+`~/.config/hippocampus/checklist-profile.md`, manually removing its `knowledge`
+and `lessons` binding blocks. Keep `record`, `persist` and ask bindings. Move
+custom lesson routing to `~/.config/hippocampus/routing.md`; move wanted shared
+configuration and handoffs to the Hippocampus paths described in
+[MIGRATION.md](MIGRATION.md#manual-continuity-cutover). Installation refuses while
+continuity is still installed and prints the uninstall commands.
 
-- Tag: `v0.12.0`, annotated; peeled commit `a2c6d8771b439b089d86c1649a8524e67b7c0282`, equal to `origin/main` at publication. Its tree equals the tested candidate commit `baad26d`.
-- Release: https://github.com/coreyfloyd/hippocampus/releases/tag/v0.12.0
-- Assets (6): `hippocampus-0.12.0.tar.gz`, `hippocampus-0.12.0.tar.gz.sha256`, `hippocampus-0.12.0.tar.gz.asc`, `hippocampus-release.asc`, `install-release.sh`, `verify-release.sh`.
-- Verification: local `scripts/verify-release.sh` passed against `dist/` before publication; the six downloaded public assets were verified in a fresh temporary directory (`cmp` on the key and both scripts, signature and checksum on the archive: OK). The archive lists 134 entries, all under `hippocampus/`, including `skills/absorb/references/wiki-candidates.md`.
-- Installation: `install-release.sh` from the downloaded assets installed 0.12.0 on the maintainer machine; `current` resolves to the 0.12.0 release directory, and both clients' `feature-research` and `absorb` links resolve into it.
+Knowledge capture and lessons are native checklist steps: knowledge runs
+`knowledge-capture`, and lessons runs `improve-harness`. Lesson destinations
+remain configurable through routing. Without a knowledge root, capture reports
+not configured and continues; setup can configure session memory alone.
+Failures and declines retain carried items and report an incomplete wrap.
+
+The fold's open questions are resolved: existing Claude knowledge skills take
+the `hippocampus:` namespace as a breaking change; lessons are native rather
+than a configurable slot; the continuity snapshot was taken after in-flight
+work reached a clean break, with no code in flight. History is retained through
+the subtree fold. There is one rule composer and one glossary.
+
+`VERSION` is the package version authority. Claude plugin metadata is generated
+from it and checked by the release suite; Codex install receipts read it directly.
+The existing knowledge profile and root remain compatible.

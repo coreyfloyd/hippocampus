@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+python3 "$ROOT/scripts/generate-release-metadata.py" --check
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 export GNUPGHOME="$TEST_DIR/gnupg"
@@ -45,6 +46,15 @@ sandbox_repo() {
 REPO="$TEST_DIR/repo"
 sandbox_repo "$REPO"
 
+# An unsigned candidate follows the identical archive/checksum path without GPG.
+UNSIGNED_LOG="$TEST_DIR/unsigned.log"
+env -u HIPPOCAMPUS_GPG_KEY bash "$REPO/scripts/build-release.sh" "$REPO/unsigned" --unsigned >"$UNSIGNED_LOG" 2>&1
+UNSIGNED_ARCHIVE="$REPO/unsigned/hippocampus-$VERSION.tar.gz"
+test -f "$UNSIGNED_ARCHIVE"
+test -f "$UNSIGNED_ARCHIVE.sha256"
+test ! -e "$UNSIGNED_ARCHIVE.asc"
+(cd "$REPO/unsigned" && shasum -a 256 -c "hippocampus-$VERSION.tar.gz.sha256")
+
 # T3 setup: untracked files that must structurally be unable to reach the
 # archive, since git archive packages only tracked content.
 mkdir -p "$REPO/skills"
@@ -71,6 +81,8 @@ rm -rf "$REPO/distcd"
 # Primary archive for the Ulysses guard, T3, and the T5 round-trip cases.
 HIPPOCAMPUS_GPG_KEY="$KEY" bash "$REPO/scripts/build-release.sh" "$REPO/dist"
 ARCHIVE="$REPO/dist/hippocampus-$VERSION.tar.gz"
+cmp "$UNSIGNED_ARCHIVE" "$ARCHIVE"
+cmp "$UNSIGNED_ARCHIVE.sha256" "$ARCHIVE.sha256"
 
 # Fail closed: `rg` is not POSIX and its absence made this guard pass vacuously.
 ARCHIVE_LIST="$TEST_DIR/archive-list.txt"
