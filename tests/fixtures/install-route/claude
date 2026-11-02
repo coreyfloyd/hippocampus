@@ -25,7 +25,14 @@ if operation == 'install':
     settings.write_text(json.dumps(value))
     print(json.dumps({'outcome': 'ok'}))
 elif operation == 'list':
-    print(json.dumps([{'id': key, 'enabled': True, **entry}
+    # Model only the settings/scopes exercised by the offline installer tests.
+    project = Path.cwd()
+    enabled = {}
+    for path in (config / 'settings.json', project / '.claude/settings.json',
+                 project / '.claude/settings.local.json'):
+        if path.exists():
+            enabled.update(json.loads(path.read_text()).get('enabledPlugins', {}))
+    print(json.dumps([{'id': key, 'enabled': enabled.get(key) is True, **entry}
                       for key, rows in entries.items() for entry in rows]))
 elif operation == 'uninstall':
     entries.pop('hippocampus@hippocampus', None)

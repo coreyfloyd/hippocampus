@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STUB = ROOT / 'tests/fixtures/install-route/claude'
 
 
-def run(env, *args, check=True):
-    result = subprocess.run(list(map(str, args)), env=env, capture_output=True, text=True, timeout=180)
+def run(env, *args, check=True, cwd=None):
+    result = subprocess.run(list(map(str, args)), env=env, cwd=cwd, capture_output=True, text=True, timeout=180)
     if check:
         assert result.returncode == 0, result.stdout + result.stderr
     return result
@@ -157,4 +157,65 @@ def test_signed_route_accepts_a_symlinked_home(installed):
     _, env, current = installed
     run(env, sys.executable, current / 'scripts/install-codex.py')
     assert current.is_symlink()
+    run(env, 'bash', current / 'install.sh', '--verify')
+
+
+@pytest.mark.parametrize('user,project,local,scope,enabled', [
+    (False, None, None, 'user', False),
+    (None, None, None, 'user', False),
+    ('missing-file', None, None, 'user', False),
+    (True, None, None, 'user', True),
+    (False, True, None, 'user', True),
+    (True, False, None, 'user', False),
+    (True, True, False, 'user', False),
+    (False, False, True, 'user', True),
+    (None, True, None, 'project', True),
+    (None, None, None, 'project', False),
+    (None, True, False, 'local', False),
+    (None, None, True, 'local', True),
+    (True, None, None, 'other-project', False),
+])
+def test_verify_uses_effective_plugin_enablement(installed, user, project, local, scope, enabled):
+    home, env, current = installed
+    work = home / 'project'
+    work.mkdir()
+    run(env, 'git', 'init', '-q', work)
+    run(env, sys.executable, current / 'scripts/install-claude.py')
+    shutil.rmtree(home / '.codex/skills')
+    registry = home / '.claude/plugins/installed_plugins.json'
+    value = json.loads(registry.read_text())
+    entry = value['plugins']['hippocampus@hippocampus'][0]
+    entry['scope'] = 'project' if scope == 'other-project' else scope
+    if scope != 'user':
+        entry['projectPath'] = str(home / 'elsewhere' if scope == 'other-project' else work)
+    registry.write_text(json.dumps(value))
+    for path, state in [(home / '.claude/settings.json', user),
+                        (work / '.claude/settings.json', project),
+                        (work / '.claude/settings.local.json', local)]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if state == 'missing-file':
+            path.unlink()
+        else:
+            path.write_text(json.dumps({'enabledPlugins': {'hippocampus@hippocampus': state}}
+                                       if state is not None else {}))
+    result = run(env, 'bash', current / 'install.sh', '--verify', check=False, cwd=work)
+    assert (result.returncode == 0) is enabled, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('fallback', ['plain', 'codex'])
+def test_disabled_plugin_falls_back_to_available_client(installed, fallback):
+    home, env, current = installed
+    if fallback == 'plain':
+        # Register without the cutover so installer-owned plain links survive.
+        run(env, 'claude', 'plugin', 'install', 'hippocampus', '--marketplace', current)
+        shutil.rmtree(home / '.codex/skills')
+    else:
+        run(env, sys.executable, current / 'scripts/install-claude.py')
+    settings = home / '.claude/settings.json'
+    settings.write_text(json.dumps({'enabledPlugins': {'hippocampus@hippocampus': False}}))
+    # A disabled registration is absent, including its stale install root.
+    registry = home / '.claude/plugins/installed_plugins.json'
+    value = json.loads(registry.read_text())
+    value['plugins']['hippocampus@hippocampus'][0]['installPath'] = str(home / 'stale')
+    registry.write_text(json.dumps(value))
     run(env, 'bash', current / 'install.sh', '--verify')

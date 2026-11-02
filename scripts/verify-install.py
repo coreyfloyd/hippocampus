@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 
 
 def verify(current: Path, claude: Path, codex: Path) -> None:
@@ -16,6 +17,17 @@ def verify(current: Path, claude: Path, codex: Path) -> None:
     if plugin is not None:
         if not isinstance(plugin, list) or not plugin:
             raise ValueError(f'claude plugin registration invalid: {registry}')
+        # Let Claude resolve user/project/local and managed settings in this
+        # invocation's directory, including missing enablement entries.
+        result = subprocess.run(['claude', 'plugin', 'list', '--json'],
+                                env=dict(os.environ, CLAUDE_CONFIG_DIR=str(claude.parent)),
+                                capture_output=True, text=True, check=True, timeout=30)
+        plugin = [entry for entry in json.loads(result.stdout)
+                  if entry.get('id') == 'hippocampus@hippocampus' and entry.get('enabled') is True
+                  and (entry.get('scope') not in ('project', 'local') or
+                       entry.get('projectPath') and
+                       Path(entry['projectPath']).resolve() == Path.cwd().resolve())] or None
+    if plugin is not None:
         for entry in plugin:
             root = entry.get('installPath')
             if not root or Path(root).resolve() != current.resolve():
@@ -45,5 +57,5 @@ def verify(current: Path, claude: Path, codex: Path) -> None:
 if __name__ == '__main__':
     try:
         verify(*(Path(argument) for argument in sys.argv[1:]))
-    except (OSError, ValueError, TypeError, AttributeError) as error:
+    except (OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError) as error:
         raise SystemExit(f'verify failed: {error}')

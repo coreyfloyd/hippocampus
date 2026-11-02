@@ -70,7 +70,12 @@ bash ~/.local/share/hippocampus/current/install.sh --verify
 ```
 
 This checks manifest integrity and profile readiness, accepting the current
-Claude plugin registration or plain Claude links, Codex links, or both tools.
+Claude plugin registration when `claude plugin list --json` reports it enabled
+in the verification directory, or plain Claude links, Codex links, or both tools.
+Claude resolves settings precedence; project/local registrations must belong
+to that directory. A disabled plugin (including missing enablement) is absent:
+verification falls back to plain links or Codex and fails if no client remains.
+Keep the Claude CLI on `PATH` when verifying a registered plugin.
 Plain links from `install.sh` alone remain supported. Broken registrations,
 incomplete or retargeted links and tampered manifests fail. The earlier
 helper-only checkout directory layout and its recovery are documented in

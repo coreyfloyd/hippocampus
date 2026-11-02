@@ -121,8 +121,18 @@ bash ~/.local/share/hippocampus/current/install.sh --verify
 ```
 
 Verification checks the release manifest and profile, then each installed client.
-Claude can have plain skill links or a registered `hippocampus@hippocampus`
-plugin whose `installPath` resolves to the current release. Codex uses plain
+Claude can have plain skill links or an enabled, registered `hippocampus@hippocampus`
+plugin whose `installPath` resolves to the current release and whose effective
+`enabled` state is true in `claude plugin list --json`. Verification runs this
+read-only CLI command in the directory where you invoke the check, using the
+configured Claude directory. Claude resolves its user, project, local and
+managed settings; project/local registrations must also belong to that
+directory. Run verification from the project directory whose settings you
+intend to check. A missing enablement entry or explicit `false` does not count
+as an active plugin unless a higher-precedence setting enables it. Disabled
+plugins fall back to the plain Claude-link check or an installed Codex client;
+verification fails when no client remains. The Claude CLI must be on `PATH`
+when checking a registered plugin. Codex uses plain
 skill links. Without a Claude plugin, any plain Claude package skill requires
 the complete set. Codex requires the complete set whenever any skill link or
 ownership receipt is present. A valid Claude plugin leaves foreign plain skills
