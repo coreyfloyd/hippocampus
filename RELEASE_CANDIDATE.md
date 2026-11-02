@@ -29,7 +29,11 @@ verification is claimed. Run the full checks and documentation sweep in
 unsigned archive and checksum using `bash scripts/build-release.sh dist --unsigned`.
 The maintainer must sign before publication. After publication, download and
 signature-verify the assets, install into clean temporary homes for both tools,
-and run `install.sh --verify` before the continuity repository can be archived.
+and verify the installation before the continuity repository can be archived.
+`install.sh --verify` currently fails after the documented Claude plugin
+installation, because it still expects plain skill links
+([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80)); verify
+the plugin and Codex links directly until 0.13.1 fixes it.
 Record that evidence in a post-publication follow-up; do not infer it from a
 local unsigned candidate or the disposable test signing key.
 
@@ -77,6 +81,11 @@ the `hippocampus:` namespace as a breaking change; lessons are native rather
 than a configurable slot; the continuity snapshot was taken after in-flight
 work reached a clean break, with no code in flight. continuity's history is not
 carried over: it was imported as one squashed snapshot that names its source commit. There is one rule composer and one glossary.
+
+**Known issue:** `install.sh --verify` fails after the documented Claude
+plugin installation because it still expects plain skill links. The
+installation itself works; the fix ships in 0.13.1
+([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80)).
 
 `VERSION` is the package version authority. Claude plugin metadata is generated
 from it and checked by the release suite; Codex install receipts read it directly.
