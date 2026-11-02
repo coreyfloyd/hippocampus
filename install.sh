@@ -80,7 +80,8 @@ valid_release_at() {
   [ "$(manifest_hash "$release")" = "$stored" ] || [ "$(manifest_hash_legacy "$release")" = "$stored" ]
 }
 # Repair only the current version's VERSION file, and only when every other
-# manifest input plus the source VERSION reproduces the stored release hash.
+# manifest input plus the source VERSION reproduces the stored release hash
+# (or matches the source tree for an already valid legacy-manifest upgrade).
 # Verification never invokes this path, and arbitrary content tampering still
 # fails current-pointer validation below.
 repair_current_version() {
@@ -95,7 +96,14 @@ repair_current_version() {
       (cd "$ROOT" && cksum VERSION)
     } | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )"
-  [ "$repaired_hash" = "$(cat "$RELEASE_DIR/manifest")" ] || return 0
+  stored_version_manifest="$(cat "$RELEASE_DIR/manifest")"
+  if [ "$repaired_hash" != "$stored_version_manifest" ]; then
+    # A valid legacy manifest did not cover VERSION. Add it only when the
+    # rest of the current tree also matches this source; normal install then
+    # upgrades that legacy manifest to the current format.
+    [ "$repaired_hash" = "$SOURCE_HASH" ] &&
+      [ "$(manifest_hash_legacy "$RELEASE_DIR")" = "$stored_version_manifest" ] || return 0
+  fi
   version_temporary="$RELEASE_DIR/.VERSION.$$"
   cp -p "$ROOT/VERSION" "$version_temporary"
   mv "$version_temporary" "$RELEASE_DIR/VERSION"
