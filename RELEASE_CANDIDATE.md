@@ -75,8 +75,8 @@ Failures and declines retain carried items and report an incomplete wrap.
 The fold's open questions are resolved: existing Claude knowledge skills take
 the `hippocampus:` namespace as a breaking change; lessons are native rather
 than a configurable slot; the continuity snapshot was taken after in-flight
-work reached a clean break, with no code in flight. History is retained through
-the subtree fold. There is one rule composer and one glossary.
+work reached a clean break, with no code in flight. continuity's history is not
+carried over: it was imported as one squashed snapshot that names its source commit. There is one rule composer and one glossary.
 
 `VERSION` is the package version authority. Claude plugin metadata is generated
 from it and checked by the release suite; Codex install receipts read it directly.
