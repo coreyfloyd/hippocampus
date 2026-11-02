@@ -2,25 +2,27 @@
 
 Hippocampus is a memory system for AI agents. It keeps what an agent learns in
 plain files you own, and it works the same way in Claude Code and Codex. It
-remembers four kinds of things:
+remembers five kinds of things:
 
-- **Knowledge** you research or hear in meetings, kept as evidence-linked
-  reports and records.
+- **Captured knowledge** from meetings and conversations, kept as
+  source-linked records.
+- **Research**: reports that answer a question, cite their sources and end in
+  decisions.
 - **The wiki**, where selected evidence is compiled into short, linked articles.
 - **Sessions**: where a piece of work stands, written as a handoff the next
   session can pick up.
 - **Rules**: the instruction files, skills and memory settings that govern
   your agents.
 
-Most memory tools keep one of these. Hippocampus keeps all four because they
+Most memory tools keep one of these. Hippocampus keeps all five because they
 feed each other: a lesson from a session becomes a rule, a source from a
 research question becomes a wiki article, and the next session starts with
 both. Every change to a person, document, task, wiki article or rule is
 proposed first and runs only once approved.
 
-## The improvement loop
+## How the parts fit together
 
-![A session writes a handoff through checkpoint or checklist, and its lessons reach your rules through improve-harness; sources and meetings become a report or record through research-topic or meeting-capture, and absorb carries approved outcomes to the wiki and to documents and follow-up work; the next session starts through pickup from better rules, a richer wiki and its handoff.](docs/images/improvement-loop.svg)
+![Hippocampus has five parts. A session writes a handoff through checkpoint or checklist and captures knowledge through knowledge-capture; sources become a meeting record through meeting-capture or a research report through research-topic. You approve or decline each proposed change: lessons reach rules and the agent harness through improve-harness, and absorb carries captures and research to the wiki through wiki-compile and to documents and follow-up work. Through pickup, the next session resumes from its handoff under the improved rules, with the wiki to read.](docs/images/overview.svg)
 
 Every step writes Markdown or JSON to disk, and every step that changes
 something you own asks first. You can run any step on its own. The wrap
