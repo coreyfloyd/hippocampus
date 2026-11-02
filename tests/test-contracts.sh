@@ -128,7 +128,7 @@ case "$UNCOMMENTED_WIKI_LINE" in
   *) printf 'wiki_enabled example line carries trailing content: %s\n' "$UNCOMMENTED_WIKI_LINE" >&2; exit 1 ;;
 esac
 # Full documented recipe: uncomment that line and drop the two wiki-only
-# fields, exactly as hippocampus-set-up and INSTALLATION.md instruct, and
+# fields, exactly as setup and INSTALLATION.md instruct, and
 # confirm the result validates against a root with no wiki/.
 sed -e "s|/absolute/path/to/knowledge|$PROFILE_ROOT/disabled-root|" \
     -e '/^hot_file:/d' \

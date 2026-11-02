@@ -1,0 +1,14 @@
+{
+  "name": "hippocampus",
+  "description": "Session hippocampus for coding agents.",
+  "owner": {
+    "name": "hippocampus contributors"
+  },
+  "plugins": [
+    {
+      "name": "hippocampus",
+      "source": "./",
+      "description": "Checkpoint, wrap, and pick up interactive sessions through a thin handoff."
+    }
+  ]
+}

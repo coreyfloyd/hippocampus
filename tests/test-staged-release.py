@@ -13,9 +13,9 @@ class StagedReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'release'
             env = dict(os.environ)
-            env.pop('CONTINUITY_GPG_KEY', None)
+            env.pop('HIPPOCAMPUS_GPG_KEY', None)
             result = subprocess.run(
-                ['bash', str(ROOT / 'continuity/scripts/build-release.sh'), str(output)],
+                ['bash', str(ROOT / 'tests/fixtures/session-release/scripts/build-release.sh'), str(output)],
                 cwd=directory, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('hippocampus#64', result.stderr)

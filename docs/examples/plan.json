@@ -1,0 +1,104 @@
+{
+  "profiles": [
+    "docs/examples/profile.md"
+  ],
+  "unattended": false,
+  "steps": [
+    {
+      "id": "record",
+      "slot": "record",
+      "title": "Reconcile the record",
+      "binding": {
+        "command": "/record-step",
+        "consumes": [
+          "progress",
+          "commitment",
+          "decision",
+          "artifact"
+        ],
+        "instructions": "Write this session's progress, commitments, decisions, and artifact locations to the record."
+      },
+      "carried_items": [
+        {
+          "index": 0,
+          "item": {
+            "type": "artifact",
+            "context": "Published artifact",
+            "location": "https://example.invalid/review",
+            "disposition": "keep",
+            "session_id": "example-session",
+            "produced_at": "2026-10-14T04:53:48.539974Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "knowledge",
+      "slot": "knowledge",
+      "title": "Capture knowledge",
+      "binding": {
+        "command": "/knowledge-step",
+        "consumes": [
+          "knowledge"
+        ],
+        "instructions": "Save the knowledge this session produced, asking before anything is written."
+      },
+      "carried_items": []
+    },
+    {
+      "id": "lessons",
+      "slot": "lessons",
+      "title": "Fold in lessons",
+      "binding": {
+        "command": "/hippocampus:improve-harness",
+        "consumes": [
+          "lesson"
+        ],
+        "instructions": "Place each lesson in the rules, skills, or memory it belongs to."
+      },
+      "carried_items": []
+    },
+    {
+      "id": "persist",
+      "slot": "persist",
+      "title": "Persist",
+      "binding": {
+        "command": "/persist-step",
+        "consumes": [],
+        "instructions": "Commit and push every repository this session touched."
+      },
+      "carried_items": []
+    },
+    {
+      "id": "cleanup",
+      "after": "persist",
+      "instructions": "Remove worktrees and stop background agents this session started.",
+      "profile": "example-user"
+    },
+    {
+      "id": "context-health",
+      "after": "persist",
+      "instructions": "Recommend clearing only when context use is high or compaction has happened more than once.",
+      "profile": "example-user"
+    },
+    {
+      "id": "session-metadata",
+      "after": "persist",
+      "instructions": "Record usage metadata for this session, if the tool provides it.",
+      "profile": "example-user"
+    },
+    {
+      "id": "whats-next",
+      "after": "persist",
+      "instructions": "Suggest what to pick up next.",
+      "profile": "example-user"
+    },
+    {
+      "id": "handoff",
+      "title": "Write and validate the handoff"
+    }
+  ],
+  "record_read": null,
+  "ask": null,
+  "rerun_all_steps": true
+}

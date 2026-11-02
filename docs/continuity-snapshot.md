@@ -40,3 +40,17 @@ release tests. The source workflow now lives at `.github/workflows/continuity.ym
 with its run steps rooted in the staging directory, so GitHub discovers it.
 The pinned inventory remains an input-tree inventory; slice 62 owns the moved
 workflow's naming references, and slice 64 owns the release-script references.
+
+## Rename slice
+
+The runtime, hooks, skills and tests now live at the package root. The session
+guide is `docs/session-guide.md`, the interface is `INTERFACE.md`, and the shared
+glossary is `docs/glossary.md`. The imported architecture's source citations
+remain pinned to their source repository. Release-only scripts, signing material
+and their tests remain isolated in `tests/fixtures/session-release/` for issue 64;
+the fixture builder still refuses to release the enclosing repository.
+
+Run `python3 scripts/check-fold-names.py --write` to regenerate
+`docs/fold-name-dispositions.tsv`. It audits the pinned inventory and current
+tracked or new files, rejects unhandled source-package names, and records the
+reason for every retained occurrence. The original input inventory stays intact.

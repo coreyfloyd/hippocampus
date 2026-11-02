@@ -327,7 +327,7 @@ incompatible assertions.
 ### Rules and memory configuration
 
 ```text
-hippocampus-set-up
+setup
   -> inspect each tool: installed?, instruction file, owner, memory state, memory store
   -> plan: standard | thin preset, editable per tool
   -> review the complete mutation list and its approval fingerprint
