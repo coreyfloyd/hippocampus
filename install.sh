@@ -37,6 +37,7 @@ manifest_listing() {
     [ ! -d scripts ] || manifest_paths="$manifest_paths scripts"
     [ ! -d hooks ] || manifest_paths="$manifest_paths hooks"
     [ ! -f INTERFACE.md ] || manifest_paths="$manifest_paths INTERFACE.md"
+    [ ! -f VERSION ] || manifest_paths="$manifest_paths VERSION"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
@@ -78,6 +79,29 @@ valid_release_at() {
   stored="$(cat "$release/manifest")"
   [ "$(manifest_hash "$release")" = "$stored" ] || [ "$(manifest_hash_legacy "$release")" = "$stored" ]
 }
+# Repair only the current version's VERSION file, and only when every other
+# manifest input plus the source VERSION reproduces the stored release hash.
+# Verification never invokes this path, and arbitrary content tampering still
+# fails current-pointer validation below.
+repair_current_version() {
+  [ -L "$CURRENT_LINK" ] && [ "$(readlink "$CURRENT_LINK")" = "$RELEASE_DIR" ] || return 0
+  [ -d "$RELEASE_DIR" ] && [ ! -L "$RELEASE_DIR" ] && [ -f "$RELEASE_DIR/manifest" ] || return 0
+  [ ! -L "$RELEASE_DIR/VERSION" ] || return 0
+  [ ! -e "$RELEASE_DIR/VERSION" ] || [ -f "$RELEASE_DIR/VERSION" ] || return 0
+  cmp -s "$ROOT/VERSION" "$RELEASE_DIR/VERSION" && return 0
+  repaired_hash="$(
+    {
+      manifest_listing "$RELEASE_DIR" | awk '$3 != "VERSION"'
+      (cd "$ROOT" && cksum VERSION)
+    } | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
+  )"
+  [ "$repaired_hash" = "$(cat "$RELEASE_DIR/manifest")" ] || return 0
+  version_temporary="$RELEASE_DIR/.VERSION.$$"
+  cp -p "$ROOT/VERSION" "$version_temporary"
+  mv "$version_temporary" "$RELEASE_DIR/VERSION"
+  echo "repaired release VERSION: $RELEASE_DIR" >&2
+}
+
 valid_release() {
   valid_release_at "$1" "$RELEASE_ROOT"
 }
@@ -278,7 +302,7 @@ if [ "${1:-}" = "--verify" ]; then
   validate_profile; exit 0
 fi
 
-mkdir -p "$(dirname "$LOCK_DIR")"; acquire_lock; validate_current_pointer; validate_legacy_current_pointer
+mkdir -p "$(dirname "$LOCK_DIR")"; acquire_lock; repair_current_version; validate_current_pointer; validate_legacy_current_pointer
 prepare_profile_migration; reject_retired_links unlisted
 
 # Check every client target before mutating profile, release pointer, or links.

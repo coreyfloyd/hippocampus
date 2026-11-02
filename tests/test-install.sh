@@ -25,6 +25,7 @@ release_manifest() {
     [ ! -d scripts ] || manifest_paths="$manifest_paths scripts"
     [ ! -d hooks ] || manifest_paths="$manifest_paths hooks"
     [ ! -f INTERFACE.md ] || manifest_paths="$manifest_paths INTERFACE.md"
+    [ ! -f VERSION ] || manifest_paths="$manifest_paths VERSION"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
   )
 }
