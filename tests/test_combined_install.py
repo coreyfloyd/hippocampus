@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -186,3 +188,66 @@ def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path):
             assert set(manifest['skill_links']) == set(installer().SKILLS)
         else:
             assert not (home / '.codex/hippocampus-install.json').exists()
+
+
+@pytest.mark.parametrize('operation', ['update', 'failed-update', 'uninstall', 'failed-uninstall'])
+def test_codex_runtime_transaction_with_cross_device_home(tmp_path, monkeypatch, operation):
+    import errno
+    home = tmp_path / 'user-home'
+    codex = tmp_path / 'other-device/codex'
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv('CODEX_HOME', str(codex))
+    module = installer()
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
+    install_args = ['install', '--codex-home', str(codex), '--codex', 'codex']
+    monkeypatch.setattr(sys, 'argv', install_args)
+    assert module.main() == 0
+    package = home / '.local/share/hippocampus/current'
+    marker = package / 'previous-runtime-marker'
+    marker.write_text('original runtime')
+    before = {name: (codex/name).read_bytes() for name in
+              ('hooks.json', 'config.toml', 'hippocampus-install.json')}
+    links = {p.name: os.readlink(p) for p in (codex/'skills').iterdir()}
+    rename = Path.rename
+    moves = []
+
+    def cross_device_rename(source, destination):
+        destination = Path(destination)
+        # Model CODEX_HOME as a mount distinct from the shared runtime's mount.
+        if source.is_relative_to(codex) != destination.is_relative_to(codex):
+            raise OSError(errno.EXDEV, os.strerror(errno.EXDEV), str(source), str(destination))
+        moves.append((source, destination))
+        return rename(source, destination)
+
+    monkeypatch.setattr(Path, 'rename', cross_device_rename)
+    if operation == 'failed-update':
+        def refuse_trust(*args):
+            raise RuntimeError('trust refused after runtime replacement')
+        monkeypatch.setattr(module.trust, 'verify_with_hooks_list', refuse_trust)
+    if operation == 'failed-uninstall':
+        unlink = Path.unlink
+        def refuse_manifest_removal(path, *args, **kwargs):
+            if path == codex/'hippocampus-install.json':
+                raise OSError('manifest removal refused after runtime backup')
+            return unlink(path, *args, **kwargs)
+        monkeypatch.setattr(Path, 'unlink', refuse_manifest_removal)
+    if 'uninstall' in operation:
+        monkeypatch.setattr(sys, 'argv', install_args+['--uninstall'])
+    if operation.startswith('failed-'):
+        with pytest.raises((OSError, RuntimeError), match='refused'):
+            module.main()
+        assert marker.read_text() == 'original runtime'
+        assert {name: (codex/name).read_bytes() for name in before} == before
+        assert {p.name: os.readlink(p) for p in (codex/'skills').iterdir()} == links
+    else:
+        assert module.main() == 0
+        if operation == 'update':
+            assert (package/'scripts/codex-hook.py').is_file()
+            assert not marker.exists()
+        else:
+            assert not package.exists()
+            assert not (codex/'hippocampus-install.json').exists()
+            assert not list((codex/'skills').iterdir())
+    assert moves
+    assert all(source.parent == destination.parent == package.parent for source, destination in moves)
+    assert not (package.parent/'hippocampus-install-backup').exists()

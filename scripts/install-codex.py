@@ -233,7 +233,8 @@ def main():
     hooks=read_hooks(target)
     cleaned=remove_managed(hooks,managed) if saved else hooks
     clean_config=remove_trust(old_config or '',set(saved['trust_keys'])) if saved else old_config or ''
-    backup=home/'hippocampus-install-backup'
+    # Keep runtime renames on its filesystem, even when CODEX_HOME is another mount.
+    backup=package.parent/'hippocampus-install-backup'
     if os.path.lexists(backup):
         raise ValueError('an earlier install backup needs recovery before installing')
     newlinks=[]
