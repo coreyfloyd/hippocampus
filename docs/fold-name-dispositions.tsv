@@ -5,6 +5,10 @@ MIGRATION.md	52	retained: release history and explicit manual cutover instructio
 MIGRATION.md	64	retained: release history and explicit manual cutover instructions (issue 64)
 MIGRATION.md	65	retained: release history and explicit manual cutover instructions (issue 64)
 MIGRATION.md	67	retained: release history and explicit manual cutover instructions (issue 64)
+README.md	266	retained: README pointer to the manual cutover for unreleased users
+README.md	268	retained: README pointer to the manual cutover for unreleased users
+README.md	271	retained: README pointer to the manual cutover for unreleased users
+README.md	279	retained: README pointer to the manual cutover for unreleased users
 RELEASE_CANDIDATE.md	15	retained: release history and explicit manual cutover instructions (issue 64)
 RELEASE_CANDIDATE.md	19	retained: release history and explicit manual cutover instructions (issue 64)
 RELEASE_CANDIDATE.md	21	retained: release history and explicit manual cutover instructions (issue 64)
@@ -14,6 +18,7 @@ RELEASE_CANDIDATE.md	60	retained: release history and explicit manual cutover in
 RELEASE_CANDIDATE.md	66	retained: release history and explicit manual cutover instructions (issue 64)
 RELEASE_CANDIDATE.md	67	retained: release history and explicit manual cutover instructions (issue 64)
 RELEASE_CANDIDATE.md	77	retained: release history and explicit manual cutover instructions (issue 64)
+RELEASE_CANDIDATE.md	78	retained: release history and explicit manual cutover instructions (issue 64)
 docs/architecture/session/runtime.architecture.json	9	retained: immutable imported architecture source attribution
 docs/architecture/session/runtime.html	4985	retained: immutable imported architecture source attribution
 docs/continuity-inventory.tsv	0	retained: pinned snapshot provenance and inventory tooling

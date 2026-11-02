@@ -30,8 +30,9 @@ Before asking for any wiki-specific value, describe the wiki and its alternative
   Wikilinks are a portable Markdown convention either way; Obsidian is an
   optional client for browsing the result.
 - **Without a wiki**: no `wiki/` folder, no wiki-only profile fields, no wiki
-  routing in absorption plans or knowledge captures, and `research-to-wiki`
-  and `wiki-audit` refuse to run. `raw/`, `output/`, `docs/`, and the rest of
+  routing in absorption plans or knowledge captures, and `wiki-compile`,
+  `wiki-audit` and their compatibility names (`research-to-wiki`,
+  `vault-compile`, `vault-audit`) refuse to run. `raw/`, `output/`, `docs/`, and the rest of
   the research and distribution workflow are unaffected.
 
 If the user declines the wiki, ask none of the wiki-only questions below (the

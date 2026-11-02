@@ -6,7 +6,7 @@ operation_log_file: docs/log.md
 decision_log_file: docs/DECISIONS.md
 wiki_followup_destination: "Describe the backlog or task route for knowledge-base maintenance."
 artifact_followup_destination: "Describe the task system and routing rules for source-derived actions, including meeting actions and research follow-ups."
-# The wiki is optional and enabled by default. To disable it, uncomment the
+# The wiki is optional; a profile without wiki_enabled uses it. To disable it, uncomment the
 # line below exactly as written, and remove hot_file and wiki_followup_destination.
 # wiki_enabled: false
 # Optional meeting inputs; each can independently be disabled. Use unquoted values.
