@@ -3,6 +3,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This imported package is staged inside the combined repository. Only the
+# root release path may publish it; standalone copies remain test fixtures.
+REPOSITORY_ROOT="$(git -C "$ROOT" rev-parse --show-toplevel)"
+if [ "$REPOSITORY_ROOT" != "$ROOT" ]; then
+  echo "refusing to release the staged snapshot; use the root release path after hippocampus#64" >&2
+  exit 1
+fi
+
 VERSION="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$ROOT/.claude-plugin/plugin.json")"
 OUT="${1:-$ROOT/dist}"
 KEY="${CONTINUITY_GPG_KEY:?set CONTINUITY_GPG_KEY to the signing key fingerprint}"
