@@ -7,7 +7,7 @@ back to it. **Checkpoint** writes that handoff while work is still in progress;
 **wrap** finishes the session through a checklist; **pickup** helps the next
 session find its way back, in Claude Code or Codex.
 
-![Checkpoint or wrap writes a handoff across the session boundary; pickup in either tool follows it back to the record.](images/session-lifecycle.svg)
+![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](images/session-lifecycle.svg)
 
 The record is your durable home for tickets, project status, documents, and
 their history. The package does not provide that home. A handoff carries pointers,

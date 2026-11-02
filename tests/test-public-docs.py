@@ -69,6 +69,18 @@ class PublicDocs(unittest.TestCase):
         meeting_section = readme.split('## Meetings', 1)[1].split('## ', 1)[0]
         self.assertIn('(docs/images/capture-meetings.svg)', meeting_section)
 
+    def test_every_readme_diagram_shares_one_style(self):
+        readme = (ROOT / 'README.md').read_text()
+        names = re.findall(r'\(docs/images/([\w-]+)\.svg\)', readme)
+        self.assertEqual(names, ['improvement-loop', 'question-answer-action', 'capture-meetings', 'session-lifecycle'])
+        research = ET.parse(ROOT / 'docs/images/question-answer-action.svg').getroot()
+        for name in names:
+            with self.subTest(diagram=name):
+                svg = ET.parse(ROOT / ('docs/images/' + name + '.svg')).getroot()
+                self.assertEqual(svg.get('viewBox'), '0 0 1200 520')
+                self.assertEqual(svg.find(NS + 'style').text, research.find(NS + 'style').text)
+                self.assertTrue(svg.find(NS + 'title').text and svg.find(NS + 'desc').text)
+
     def test_destination_boxes_match_and_retain_references_instead_of_discarding_reports(self):
         research = ET.parse(ROOT / 'docs/images/question-answer-action.svg').getroot()
         meeting = ET.parse(ROOT / 'docs/images/capture-meetings.svg').getroot()

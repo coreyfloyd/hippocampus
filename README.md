@@ -20,25 +20,7 @@ proposed first and runs only once approved.
 
 ## The improvement loop
 
-```text
-  work in a session
-        │
-        ▼
-  capture ──────── knowledge-capture, meeting-capture, checkpoint
-        │
-        ▼
-  research ─────── research-topic, research-sources (grounded in NotebookLM)
-        │
-        ▼
-  wiki ─────────── absorb → wiki-compile, checked by wiki-audit
-        │
-        ▼
-  rules ────────── improve-harness → slim-harness → rule composer
-        │
-        ▼
-  the next session starts from better rules, a richer wiki and a handoff
-  (pickup)
-```
+![A session writes a handoff through checkpoint or checklist, and its lessons reach your rules through improve-harness; sources and meetings become a report or record through research-topic or meeting-capture, and absorb carries approved outcomes to the wiki and to documents and follow-up work; the next session starts through pickup from better rules, a richer wiki and its handoff.](docs/images/improvement-loop.svg)
 
 Every step writes Markdown or JSON to disk, and every step that changes
 something you own asks first. You can run any step on its own. The wrap
@@ -156,7 +138,7 @@ Getting results where they belong:
 
 ## Sessions and handoffs
 
-![Checkpoint or wrap writes a handoff across the session boundary; pickup in either tool follows it back to the record.](docs/images/session-lifecycle.svg)
+![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](docs/images/session-lifecycle.svg)
 
 A session that ends, compacts or runs out of context loses what it was doing.
 Hippocampus keeps your **record** (tickets, project status, documents) as the
