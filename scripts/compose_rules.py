@@ -27,6 +27,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import stat
 import tempfile
 from dataclasses import dataclass
@@ -126,6 +127,107 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
             if resolved_source in seen:
                 fail(f"configuration: target {resolved_source} overlaps source {source}")
     return root, targets
+
+
+def routing_path() -> pathlib.Path:
+    configured = os.environ.get("HIPPOCAMPUS_ROUTING")
+    if configured:
+        return pathlib.Path(os.path.expandvars(configured)).expanduser()
+    return pathlib.Path(os.environ.get("XDG_CONFIG_HOME", str(pathlib.Path.home() / ".config"))) / "hippocampus" / "routing.md"
+
+
+def routing_scalar(value: str) -> str:
+    """Read the plain or quoted strings in the routing contract's YAML subset."""
+    value = value.strip()
+    if value.startswith('"'):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            fail(f"routing: invalid quoted string: {exc}")
+    elif value.startswith("'"):
+        if len(value) < 2 or not value.endswith("'"):
+            fail("routing: unterminated quoted string")
+        value = value[1:-1].replace("''", "'")
+    if not isinstance(value, str) or not value:
+        fail("routing: paths and regeneration commands must be nonempty strings")
+    return value
+
+
+def resolved_routing_path(value: str, directory: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(os.path.expandvars(value)).expanduser()
+    return (path if path.is_absolute() else directory / path).resolve()
+
+
+def load_surfaces(path: pathlib.Path) -> dict[pathlib.Path, list[dict[str, str]]]:
+    """Read a Produced surfaces section, without executing its commands.
+
+    The documented block form uses two spaces for sources, four for list
+    entries, and six for regeneration commands. Other routing prose is ignored.
+    Malformed entries fail closed rather than silently becoming an empty list.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        if path.is_symlink():
+            fail(f"routing: broken symlink {path}")
+        return {}
+    except (OSError, UnicodeError) as exc:
+        fail(f"routing {path}: {exc}")
+    mapping: dict[pathlib.Path, list[dict[str, str]]] = {}
+    active = False
+    found = False
+    source = None
+    surface = None
+    empty = False
+    for line in lines:
+        if line.strip() == "Produced surfaces:":
+            if found:
+                fail("routing: duplicate Produced surfaces section")
+            found = active = True
+            continue
+        if not active or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line.startswith(" "):
+            active = False
+            continue
+        match = re.fullmatch(r"  (.+):(?: *(\[\]))? *", line)
+        if match:
+            source = resolved_routing_path(routing_scalar(match[1]), path.parent)
+            if source in mapping:
+                fail(f"routing: duplicate source {source}")
+            mapping[source] = []
+            empty = match[2] is not None
+            surface = None
+        elif line.startswith("    - path:") and source is not None and not empty:
+            surface = {"path": str(resolved_routing_path(routing_scalar(line[11:]), path.parent))}
+            mapping[source].append(surface)
+        elif line.startswith("      regeneration command:") and surface is not None:
+            if "regeneration command" in surface:
+                fail("routing: duplicate regeneration command")
+            surface["regeneration command"] = routing_scalar(line.split(":", 1)[1])
+        else:
+            fail(f"routing {path}: invalid Produced surfaces entry: {line.strip()}")
+    for source, surfaces in mapping.items():
+        for surface in surfaces:
+            if "regeneration command" not in surface:
+                fail(f"routing: missing regeneration command for {source}: {surface['path']}")
+    return mapping
+
+
+def surfaces_for(path: pathlib.Path, routing: pathlib.Path) -> dict:
+    mapping = load_surfaces(routing)
+    requested = resolved_routing_path(str(path), pathlib.Path.cwd())
+    # Reverse lookup comes first: even a mapped source may itself be generated.
+    sources = [source for source, surfaces in mapping.items()
+               if any(surface["path"] == str(requested) for surface in surfaces)]
+    if not sources:
+        sources = [requested]
+    surfaces = []
+    for source in sources:
+        for surface in mapping.get(source, []):
+            if surface not in surfaces:
+                surfaces.append(surface)
+    return {"sources": [str(source) for source in sources], "surfaces": surfaces}
 
 
 def read_source(path: pathlib.Path) -> bytes:
@@ -305,9 +407,14 @@ def write_all(plans: list[PlannedWrite]) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def compose(config_path: pathlib.Path) -> None:
+def compose(config_path: pathlib.Path, check: bool = False) -> None:
     _, targets = load_config(config_path)
     plans = plan(targets)
+    if check:
+        drift = [str(item.target.path) for item in plans if item.original != item.desired]
+        if drift:
+            fail("drift in rule targets:\n" + "\n".join(drift))
+        return
     for item in plans:
         print(f"{item.ownership}: {item.target.path}")
     write_all(plans)
@@ -315,11 +422,20 @@ def compose(config_path: pathlib.Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("compose", "refresh"), nargs="?", default="compose")
-    parser.add_argument("--config", required=True, type=pathlib.Path, help="JSON file listing explicit rule targets")
+    parser.add_argument("command", choices=("compose", "refresh", "check", "surfaces"), nargs="?", default="compose")
+    parser.add_argument("--config", type=pathlib.Path, help="JSON file listing explicit rule targets")
+    parser.add_argument("--routing", type=pathlib.Path, help="Produced surfaces routing file")
+    parser.add_argument("--source", type=pathlib.Path, help="source or generated surface to trace")
     args = parser.parse_args()
+    if args.command == "surfaces" and args.source is None:
+        parser.error("surfaces requires --source")
+    if args.command != "surfaces" and args.config is None:
+        parser.error(f"{args.command} requires --config")
     try:
-        compose(args.config)
+        if args.command == "surfaces":
+            print(json.dumps(surfaces_for(args.source, args.routing or routing_path())))
+        else:
+            compose(args.config, check=args.command == "check")
     except ComposeError as exc:
         print(f"compose-rules: {exc}", file=os.sys.stderr)
         raise SystemExit(1) from None

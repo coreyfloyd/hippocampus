@@ -77,6 +77,91 @@ class ComposerTests(unittest.TestCase):
     def assert_unchanged(self, snapshot):
         self.assertEqual(snapshot, self.snapshot())
 
+    def test_check_reports_missing_changed_and_clean_targets_without_writes(self):
+        self.write_config([self.target("codex", self.codex)])
+        missing = self.compose("check")
+        self.assertEqual(missing.returncode, 1, missing.stderr)
+        self.assertIn("drift", missing.stderr)
+        self.assertFalse(self.codex.exists())
+        self.assertEqual(self.compose().returncode, 0)
+        before = self.codex.read_bytes()
+        self.assertEqual(self.compose("check").returncode, 0)
+        self.cross.write_text("changed source\n")
+        changed = self.compose("check")
+        self.assertEqual(changed.returncode, 1, changed.stderr)
+        self.assertIn(str(self.codex), changed.stderr)
+        self.assertEqual(self.codex.read_bytes(), before)
+        self.assertEqual(self.compose("refresh").returncode, 0)
+        self.assertEqual(self.compose("check").returncode, 0)
+
+    def surfaces(self, path, routing=None, env=None):
+        args = ["python3", str(COMPOSER), "surfaces", "--source", str(path)]
+        if routing is not None:
+            args += ["--routing", str(routing)]
+        return subprocess.run(args, capture_output=True, text=True, env=env)
+
+    def test_absent_empty_and_generated_source_mappings(self):
+        routing = self.base / "routing.md"
+        routing.write_text('''# Routing
+
+```yaml
+Produced surfaces:
+  knowledge/context/cross-tool.md:
+    - path: targets/codex.md
+      regeneration command: "python3 compose_rules.py refresh --config targets.json"
+    - path: targets/claude.md
+      regeneration command: "python3 compose_rules.py refresh --config targets.json"
+  knowledge/context/development.md: []
+```
+''')
+        for source in (self.extra, self.development):
+            result = self.surfaces(source, routing)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout), {"sources": [str(source.resolve())], "surfaces": []})
+        source = self.surfaces(self.cross, routing)
+        generated = self.surfaces(self.codex, routing)
+        self.assertEqual(source.returncode, 0, source.stderr)
+        self.assertEqual(generated.returncode, 0, generated.stderr)
+        self.assertEqual(json.loads(source.stdout), json.loads(generated.stdout))
+        mapping = json.loads(source.stdout)
+        self.assertEqual(mapping["sources"], [str(self.cross.resolve())])
+        self.assertEqual([row["path"] for row in mapping["surfaces"]], [str(self.codex.resolve()), str(self.claude.resolve())])
+        self.assertTrue(all(row["regeneration command"] for row in mapping["surfaces"]))
+        self.assertFalse(self.codex.exists())  # Lookup never runs the declared command.
+
+    def test_routing_defaults_and_path_aliases(self):
+        routing = self.base / "hippocampus" / "routing.md"
+        routing.parent.mkdir()
+        alias = self.base / "source-link.md"
+        alias.symlink_to(self.cross)
+        routing.write_text('Produced surfaces:\n  "$RULE_SOURCE":\n    - path: "../targets/codex.md"\n      regeneration command: "compose rules"\n')
+        env = dict(os.environ, XDG_CONFIG_HOME=str(self.base), RULE_SOURCE=str(self.cross.resolve()))
+        env.pop("HIPPOCAMPUS_ROUTING", None)
+        result = self.surfaces(alias, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["sources"], [str(self.cross.resolve())])
+        self.assertEqual(json.loads(result.stdout)["surfaces"][0]["path"], str(self.codex.resolve()))
+        env["HIPPOCAMPUS_ROUTING"] = str(routing)
+        env["XDG_CONFIG_HOME"] = str(self.base / "unused")
+        self.assertEqual(self.surfaces(alias, env=env).returncode, 0)
+
+    def test_missing_routing_or_section_produces_nothing(self):
+        routing = self.base / "routing.md"
+        for content in (None, "# Routing\nOther instructions.\n"):
+            if content is not None:
+                routing.write_text(content)
+            result = self.surfaces(self.cross, routing)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["surfaces"], [])
+
+    def test_malformed_mapping_fails_instead_of_claiming_no_surfaces(self):
+        routing = self.base / "routing.md"
+        for entry in ("    - path: targets/codex.md\n", "    - path: targets/codex.md\n      regeneration command: \"\"\n"):
+            routing.write_text("Produced surfaces:\n  rules.md:\n" + entry)
+            result = self.surfaces(self.cross, routing)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("routing", result.stderr)
+
     def test_exact_forms_and_no_byte_change_rerun(self):
         self.write_config([
             self.target("claude", self.claude),
