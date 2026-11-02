@@ -1,6 +1,6 @@
 # User profile: example
 
-A user profile for the checklist tests. It binds the four slots and adds four
+A user profile for the checklist tests. It binds the two slots and adds four
 steps after the persist step. The shared checklist owns their ordering.
 
 ```checklist-profile
@@ -11,16 +11,6 @@ steps after the persist step. The shared checklist owns their ordering.
       "command": "/record-step",
       "consumes": ["progress", "commitment", "decision", "artifact"],
       "section": "Reconcile the record"
-    },
-    "knowledge": {
-      "command": "/knowledge-step",
-      "consumes": ["knowledge"],
-      "section": "Capture knowledge"
-    },
-    "lessons": {
-      "command": "/hippocampus:improve-harness",
-      "consumes": ["lesson"],
-      "section": "Fold in lessons"
     },
     "persist": {
       "command": "/persist-step",

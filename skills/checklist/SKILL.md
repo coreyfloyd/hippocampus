@@ -6,8 +6,8 @@ description: "End-of-task wrap-up for any session: run the five-step spine with 
 # Checklist — end-of-task wrap-up
 
 Run one fixed spine: reconcile the record, capture knowledge, fold in lessons,
-persist, then write and validate the handoff. The first four steps are slots.
-Profiles bind them and add steps; the handoff is not a slot, and only an
+persist, then write and validate the handoff. Record and persist are configurable
+slots; knowledge and lessons are native package steps. Profiles bind slots and add steps; the handoff is not a slot, and only an
 `own-worktree` step may follow it.
 Run the named binding skill as the step, preserving its own approval requirements.
 
@@ -58,9 +58,11 @@ Repeat `--repository-profile` for each additional file. Omit `--handoff` when no
 handoff was resumed. `plan` writes a start marker row to the current session's
 ledger; `--session-id` defaults to the Claude Code session in the environment,
 so pass it in Codex. No profile is also a valid plan: omit the profile arguments, and the plan is the
-five spine steps ending with the handoff. Record, knowledge, and persist are
-unbound in the spine; lessons defaults to `/hippocampus:improve-harness`, consuming `lesson`
-items. An unbound slot's `carries` lists item types for the final filing pass.
+five spine steps ending with the handoff. Record and persist are unbound.
+Knowledge always runs the package’s knowledge-capture, consuming `knowledge`;
+lessons always runs improve-harness, consuming `lesson`. In Claude Code these
+are `/hippocampus:knowledge-capture` and `/hippocampus:improve-harness`; in Codex
+use the same skills by their plain discovered names. Neither can be rebound or disabled. An unbound slot's `carries` lists item types for the final filing pass.
 
 Added steps may run `before-spine` or after `record`, `knowledge`, `lessons`, or
 `persist`. At each anchor they run in profile order, then declaration order.
@@ -137,18 +139,28 @@ decisions. It writes each project's part into that project's session-log entry.
 Keep the summary file it names, or the reason it gives for not composing one;
 the report starts with it.
 
-### 2. Capture knowledge — slot `knowledge`
+### 2. Capture knowledge — native `knowledge`
 
-Run the binding on new knowledge and matching carried knowledge. Keep anything
-pending approval or otherwise unsaved for the filing pass. If unbound, the
-filing pass warns and retains the item.
+Run this package's knowledge-capture. Present carried knowledge items first,
+intact with their provenance, then new session knowledge. Follow its knowledge
+profile and approval requirements. With nothing to capture, report `nothing`.
+With no configured knowledge root, report `not configured`, name
+`hippocampus-set-up`, and keep carried knowledge. An invalid configuration or
+capture error is `failed`, with its error. A refusal is `declined`, with its reason.
 
-### 3. Fold in lessons — slot `lessons`
+### 3. Fold in lessons — native `lessons`
 
-Run the bound lesson-routing command on current lessons and carried lesson text.
-The default command is `/hippocampus:improve-harness`; a user profile can replace it.
-Send every unsaved lesson through R4 in the filing pass. Anything the slot
-leaves pending becomes an ask; a failed bound write is reported with its error.
+Always run this package's improve-harness, presenting carried lessons first and
+then current lessons. Read its routing file to decide destinations; profiles
+cannot replace this step. With no lessons, report `nothing`. Failed or declined
+work reports its error or reason and keeps every unsaved lesson.
+
+Both native steps continue to the next checklist step on failure or refusal.
+Remove an item only after an explicit receipt: the knowledge capture disposition,
+or a lesson applied or written to the routing file's proposal destination.
+Presentation, approval requests, and ask delivery alone are not capture receipts.
+Unattended and sweep runs use these same native steps in unattended mode: carry
+items and apply nothing. Report pending proposals and preserve their provenance.
 
 ### 4. Persist — slot `persist`
 
@@ -167,7 +179,7 @@ the first match decides. Rule numbers are names, not evaluation order.
 |---|---|---|
 | R1 | Already on the ticket or document it names, or information only | Drop with the reason. |
 | R3 | Needs the user's decision, approval, or a destructive action | Ask, linking its ticket if any. Removing a clean, merged worktree and its local branch under the sweep's S6 rule is not destructive: its commits are in the pushed trunk. |
-| R4 | Lesson or knowledge | Pass to `lessons` or `knowledge`; anything the slot leaves pending becomes an ask. |
+| R4 | Lesson or knowledge | Pass to `lessons` or `knowledge`; unsaved native items stay carried until their step returns a receipt. |
 | R7 | Changes a project document (spec, design document, README) | Edit through `record`; a change to an approved spec becomes an ask. |
 | R2 | Names an open ticket | Comment on that ticket through `record`. |
 | R5 | Work with a stated outcome and no matching open ticket | New ticket through `record`, with recommended priority and a one-line reason. |
@@ -185,8 +197,13 @@ Run the required bound command for each write and collect explicit receipts.
 For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
 and `choices` (the user's options). An ask is **never filed as a ticket**.
-These fields also appear in the filing report's `ask` payload. For R4 pending
-items, use `destination: "ask"` and the ask command's write acknowledgement.
+These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
+an ask acknowledgement does not replace a capture or lesson receipt. Always run
+the bound ask command for R4 `destination: "ask"`, using the complete payload in
+`filing.asks`, and collect its receipt. Validate non-empty `choices` before
+calling. A delivered native ask retains `binding: "ask"`, its payload and receipt,
+`ask_status: "filed"`, and the native item's `status: "pending"`. Keep the item
+carried until the native step returns its own capture receipt.
 A successful invocation alone does not acknowledge every input.
 
 Combine remaining open loops with unsaved current `session_items` in a payload.
@@ -214,7 +231,10 @@ The module does bookkeeping, not command execution. Its output removes only
 explicitly filed or dropped items and includes a `filing` report listing every
 item, rule, destination or reason, warnings and failures. Keep that report in
 the payload through checkpoint. A missing binding retains the item and warns,
-without failing wrap. A bound write failure retains it and fails wrap. With no
+without failing wrap. A bound record, persist, or ask write failure retains it and fails wrap.
+A native failure or refusal retains its items and makes the final report
+`incomplete`, without failing wrap validation. `nothing` and `not configured`
+do not make the wrap incomplete. With no
 ask binding, the report's `asks` groups asks under their directory; retain this
 report for the sweep report and keep the producing handoff. Do not archive it.
 For a failed write, checkpoint the retained payload before reporting failure.
@@ -266,14 +286,14 @@ clean, its branch is merged into the pushed trunk, and a plain
 
 ## Carried-item contract
 
-At each slot, consume the typed open loops listed in that step's `carried_items`
+At each slot or native step, present carried items first and consume the typed open loops listed in that step's `carried_items`
 in the plan **as well as** the current conversation. Each entry has an `index`
 into the original resumed handoff and its complete `item`. Pass that item intact,
 including its producing session identity and time, a decision's author and source,
 lesson text, and artifact location/disposition. Also pass the resumed handoff's
 session summaries to a record binding; earlier history belongs to its producer.
 
-Collect explicit saved-item acknowledgements from each binding as JSON:
+Collect explicit saved-item acknowledgements from each slot or native step as JSON:
 `{"record": [0, 2], "knowledge": [3]}`. These are indexes into the original
 input, not into a shrinking list. Do not acknowledge pending, failed, unsupported,
 or merely presented items. If a binding lacks provenance support, report it and
@@ -288,7 +308,7 @@ python3 <checklist-module> settle --user-profile <user-profile> \
   --receipts <saved-item-receipts.json>
 ```
 
-The returned JSON removes only acknowledged loops of types the binding consumes.
+The returned JSON removes only acknowledged loops of types the slot or native step consumes.
 It preserves every other field and never rewrites the source handoff. Merge its
 remaining loops with this session's unsaved items, then apply the filing rules
 in step 5 under the current session. Unbound destinations warn without failing.
@@ -329,3 +349,12 @@ what remains carried, and the final
 handoff location, validation result, the wrap check's result, and the own-worktree result:
 removed, or kept with the failed check. Profile steps appear at their declared anchors; after
 the handoff write, only `own-worktree` and reporting the result follow.
+
+Native result statuses also include `nothing`, `not configured` (knowledge), and
+`declined`. Failed and declined results need an `error` or `reason`. Use these
+same statuses on retained R4 filing rows; `pending` needs a reason. A native
+`filed` row requires its disposition or applied/proposal receipt as `destination`.
+The final report returns `report: "incomplete"` and an `incomplete` list naming
+every failed, declined, or pending native step with its reason, even with no
+carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
+persist retain their existing bound-write failure rule.

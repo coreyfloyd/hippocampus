@@ -186,17 +186,18 @@ A profile is separate from the shared configuration. The user profile is
 `$CHECKLIST_USER_PROFILE`, otherwise
 `${XDG_CONFIG_HOME:-~/.config}/hippocampus/checklist-profile.md`. Repository profiles live
 at `.claude/checklist-profile.md` and add steps. JSON or a Markdown
-`checklist-profile` fence binds the four slots and adds steps around the spine.
+`checklist-profile` fence binds the record and persist slots and adds steps around the spine.
 For example, the glossary's profile binds `record` to `/record-step`, consuming
 `progress` and `decision` items; replace that command with your own record
 workflow. See [the profile contract](INTERFACE.md#6-checklist-engine-scriptslibchecklistpy)
 and [glossary](docs/glossary.md) for the full shape and allowed anchors.
 
-Without a profile, `record`, `knowledge`, and `persist` are unbound; their
+Without a profile, `record` and `persist` are unbound; their
 items go through the filing rules before wrap; unbound destinations warn and
-retain their items. `lessons` defaults to `improve-harness`. A user profile may
+retain their items. Knowledge and lessons always run the package’s
+knowledge-capture and improve-harness, using the knowledge profile and routing file. A user profile may
 bind `"ask": {"command": "/ask-step"}` for user decisions and approvals. This
-command is separate from the four slots and never files asks as tickets. A profile
+command is separate from the two slots and never files asks as tickets. A profile
 cannot remove a spine step. Only `own-worktree` may follow the handoff.
 
 ## Verify the installation
@@ -294,11 +295,14 @@ Codex. Setup is included among the nine installed skills. It is discovered by th
 Claude Code plugin and linked by the Codex installer. Both tools use the same setup
 procedure and user profile.
 
-Setup asks about each checklist slot: record, knowledge, lessons and persist.
+Setup asks about the two checklist slots, record and persist, and the separate ask binding.
 It creates a user profile or extends your existing one, preserving notes,
-sections, added steps and unchanged bindings. You can decline any slot;
-explicitly declining lessons leaves it unbound rather than selecting its
-default. Unbound slots carry unsaved items into the handoff.
+sections, added steps and unchanged bindings. You can decline either slot or
+leave ask unbound. Unbound slots carry unsaved items into the handoff.
+Knowledge and lessons are native; their destinations follow the knowledge profile
+and lesson routing file. Legacy knowledge/lessons binding blocks are refused with
+their line numbers and instructions to delete those blocks manually. Setup does
+not convert or remove them automatically.
 
 Setup also asks which tool you track work in. The agent writes your own
 read-only record-read skill outside the installed package, using tools you

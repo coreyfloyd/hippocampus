@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--user-present', action='store_true', help='agent confirmed a live setup conversation')
     parser.add_argument('--profile', type=Path)
     parser.add_argument('--bindings', required=True, help='JSON object of only the slot choices being changed')
+    parser.add_argument('--ask', help='JSON ask command object, or null to unbind; omit to preserve')
     parser.add_argument('--record-read', help='command naming the user-owned read skill')
     args = parser.parse_args()
     if not args.user_present:
@@ -48,10 +49,20 @@ def main():
         profile = json.loads(match[1])
     if not isinstance(profile, dict):
         raise ValueError('profile must be an object')
+    checklist.reject_native_bindings(profile, str(path), original or '')
     choices = json.loads(args.bindings)
+    if isinstance(choices, dict):
+        checklist.reject_native_bindings({'bindings': choices}, 'setup bindings')
     if not isinstance(choices, dict) or set(choices) - set(checklist.SLOTS):
-        raise ValueError('bindings must be an object containing only the four slots')
+        raise ValueError('bindings must contain only record and persist; configure ask with --ask')
     profile.setdefault('bindings', {}).update(choices)
+    if args.ask is not None:
+        ask = json.loads(args.ask)
+        if ask is None:
+            profile.pop('ask', None)
+        else:
+            checklist.ask_binding({'ask': ask})
+            profile['ask'] = ask
     if args.record_read is not None:
         profile['record_read'] = {'command': args.record_read}
     encoded = json.dumps(profile, indent=2) + '\n'

@@ -74,7 +74,7 @@ def test_filing_through_checkpoint_wrap_and_report_in_both_modes(tmp_path):
     for unattended in [False, True]:
         for bound, status, expected in [(True, "filed", 0), (True, "failed", 1), (False, "pending", 0)]:
             profile = tmp_path / "profile.json"
-            profile.write_text(json.dumps({"name": "test", "bindings": {"lessons": None},
+            profile.write_text(json.dumps({"name": "test", "bindings": {},
                                            **({"ask": {"command": "/ask"}} if bound else {})}))
             common = ["--user-profile", str(profile)]
             mode = ["--unattended"] if unattended else []
@@ -115,3 +115,66 @@ def test_filing_through_checkpoint_wrap_and_report_in_both_modes(tmp_path):
             assert report.returncode == expected, report.stderr
             if not expected:
                 assert json.loads(report.stdout)["filing"]["items"][0]["rule"] == "R3"
+
+
+def test_native_r4_ask_runs_bound_command_and_stays_pending_through_wrap(tmp_path):
+    """Drive the skill's command/receipt protocol with a real temporary ask command."""
+    import shlex
+    import sys
+
+    engine = os.path.join(ROOT, 'scripts/lib/checklist.py')
+    writer = os.path.join(ROOT, 'scripts/lib/handoff.py')
+    config = tmp_path / 'config.json'
+    config.write_text('{}')
+    env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), CLAUDE_CODE_ENTRYPOINT='cli',
+               HANDOFF_LEDGER_DIR=str(tmp_path / 'ledger'), CHECKLIST_STATE_DIR=str(tmp_path / 'state'),
+               HANDOFF_STATE_DIR=str(tmp_path / 'handoffs'))
+    ask_script = tmp_path / 'ask.py'
+    ask_script.write_text('import json, pathlib, sys\n'
+                          'payload = json.load(sys.stdin)\n'
+                          'pathlib.Path(sys.argv[1]).write_text(json.dumps(payload))\n'
+                          'print("ask receipt")\n')
+
+    def invoke(script, *args, payload=None):
+        result = subprocess.run([sys.executable, script, *map(str, args)], input=payload,
+                                env=env, text=True, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        return result
+
+    for kind in ('knowledge', 'lesson'):
+        received = tmp_path / (kind + '-ask.json')
+        command = shlex.join([sys.executable, str(ask_script), str(received)])
+        profile = tmp_path / 'profile.json'
+        profile.write_text(json.dumps({'name': 'user', 'ask': {'command': command}}))
+        common = ['--user-profile', profile]
+        source = tmp_path / 'source.json'
+        item = dict(type=kind, context='Approve capture of ' + kind, session_id='producer',
+                    produced_at='2026-10-23T12:00:00Z', disposition='carry')
+        source.write_text(json.dumps({'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)},
+                                      'resume': {'headline': 'wrap', 'open_loops': [item]}}))
+        plan = json.loads(invoke(engine, 'plan', *common, '--session-id', 'producer').stdout)
+        outcomes = tmp_path / 'outcomes.json'
+        row = dict(index=0, rule='R4', status='pending', destination='ask', choices=['capture', 'decline'])
+        outcomes.write_text(json.dumps([row]))
+        pending = json.loads(invoke(engine, 'file', *common, '--handoff', source, '--filing', outcomes).stdout)
+        payload, = pending['filing']['asks'][str(tmp_path)]
+        called = subprocess.run(shlex.split(plan['ask']['command']), input=json.dumps(payload), env=env,
+                                text=True, capture_output=True)
+        assert called.returncode == 0, called.stderr
+        assert json.loads(received.read_text()) == payload
+        outcomes.write_text(json.dumps([dict(row, status='filed', receipt=called.stdout.strip())]))
+        filed = invoke(engine, 'file', *common, '--handoff', source, '--filing', outcomes)
+        data = json.loads(filed.stdout)
+        assert data['filing']['asks'][str(tmp_path)] == [payload]
+        assert data['filing']['items'][0]['receipt'] == 'ask receipt'
+        assert data['filing']['items'][0]['status'] == 'pending'
+        assert data['resume']['open_loops'] == [item]
+        invoke(writer, 'checkpoint', '--cwd', tmp_path, '--session-id', 'producer', '--trigger', 'wrap',
+               payload=filed.stdout)
+        written = next((tmp_path / 'handoffs').rglob('*.json'))
+        invoke(engine, 'wrap-check', *common, '--written-handoff', written)
+        results = tmp_path / 'results.json'
+        results.write_text(json.dumps([dict(id=s['id'], status='run', writes=[]) for s in plan['steps']]))
+        report = json.loads(invoke(engine, 'report', *common, '--handoff', written, '--results', results).stdout)
+        assert report['report'] == 'incomplete'
+        assert report['incomplete'][0]['id'] == ('knowledge' if kind == 'knowledge' else 'lessons')

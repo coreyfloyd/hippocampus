@@ -21,7 +21,7 @@ Take the requested directory or `all` as scope. If none is given, use the
 working directory. Read the user checklist profile at `$CHECKLIST_USER_PROFILE`,
 else `hippocampus/checklist-profile.md` under `$XDG_CONFIG_HOME` (default `~/.config`). Omit
 `--user-profile` when absent. The existing profile binds `record_read`, the
-record/knowledge/lessons slots, and the one ask command; do not invent bindings.
+record and persist slots, and the one ask command; do not invent bindings.
 
 ## Inspect and decide
 
@@ -64,9 +64,10 @@ is R6; a concrete deliverable needing work is R5 only after a successful open
 ticket search. Mentioning a ticket is insufficient for R2 unless it is open and
 the item belongs on it. A proposed change to an approved spec is R3, not R7.
 Knowledge for reuse is R4; information already saved in its named destination is
-R1 only with evidence from a successful read. Anything a lesson/knowledge slot
-would leave pending becomes an ask under R4 with `destination: "ask"`.
-For an untyped legacy item going to a slot under R4, set `destination` to
+R1 only with evidence from a successful read. Knowledge and lessons use the package’s native steps in unattended mode: carry
+items, apply nothing, and keep their source handoffs. Native proposals do not
+become an ask receipt that consumes their source items.
+For an untyped legacy item going to a native step under R4, set `destination` to
 `"lessons"` or `"knowledge"`. That choice supplies its type for validation;
 the original item and identity stay unchanged. Other rules need no added type.
 
@@ -215,3 +216,10 @@ configured, it deletes only regular archive JSON handoffs whose modification
 age is strictly greater than that number of days. Never run retention implicitly
 as part of watch-only or undo. Read its report and report deletions and failures.
 See [undo and retention](../../docs/sweep.md#undo-and-retention) for boundaries.
+
+R4 native work is returned as `operation: "native_step"`, with `native_step`,
+the package `command`, and `unattended: true`. Run that skill in unattended mode
+with the complete original item. Return `carried` (or `nothing`, `not configured`,
+`declined`, `failed`, or `uncertain` as appropriate); native `written` and
+`already_written` results are rejected. No native item is archived by these
+outcomes. Record and ask work retain their existing result contracts.

@@ -204,26 +204,39 @@ replace an existing profile with the example profile. If it is malformed, stop
 and explain the error rather than discarding content. Repository profiles add
 steps; setup changes only the user profile.
 
-## Offer every slot
+Legacy `bindings.knowledge` and `bindings.lessons` blocks are invalid: knowledge
+and lessons are native steps. Stop and show the validator's file and line numbers
+with the instruction to delete those complete binding blocks before retrying.
+Do not convert bindings or silently delete configuration. Keep the file unchanged.
 
-Explain and offer each of these four choices, including keeping an existing
+## Offer the two slots and the ask binding
+
+Explain and offer both configurable slots, including keeping an existing
 binding. Ask which available skill they want, or whether they decline:
 
 | Slot | What its binding does | Usual consumed item types |
 |---|---|---|
 | `record` | Write progress, commitments, decisions and artifact locations to their durable record. | `progress`, `commitment`, `decision`, `artifact` |
-| `knowledge` | Capture knowledge in the user's chosen home. | `knowledge` |
-| `lessons` | Fold lessons into rules, skills or memory; offer the installed `improve-harness` skill. | `lesson` |
 | `persist` | Persist changes through the user's chosen workflow. | an empty list unless their skill consumes specific item types |
 
 Use skills the user actually has. Explain missing capabilities without inventing
 commands. Confirm consumed types against the chosen skill. For each accepted
 binding prepare `{"command": "<actual skill invocation>", "consumes": [<types>]}`.
-For a declined slot use JSON `null`, including for `lessons`: omission would
-retain its default binding. Unbound slots still run their spine step and carry
+For a declined slot use JSON `null`. Unbound slots still run their spine step and carry
 unsaved items as open loops. Declining a replacement for an existing binding
 means keep it unless the user explicitly chooses to unbind it; explain that
 choice before changing it.
+
+Knowledge and lessons always run the package's knowledge-capture and
+improve-harness. Configure their destinations through the knowledge profile and
+the improve-harness routing file; never offer replacement slot commands.
+
+Offer the separate ask binding for decisions and approvals. It is one discovered
+command, `{"command": "<actual skill invocation>"}`, with no `consumes` field.
+Explain that it receives `text`, source `session_id`, `directory`, `ticket`
+(or null), and `choices`, and returns a write acknowledgement. Ask delivery never
+files a ticket and never consumes an unsaved knowledge or lesson item. Preserve
+an existing ask unless the user chooses to change or unbind it.
 
 ## Write the user's read skill
 
@@ -287,8 +300,14 @@ profile is created when none exists.
 ```bash
 python3 <setup-directory>/scripts/profile.py --user-present \
   --bindings '<JSON object of accepted bindings and explicit null declines>' \
+  --ask '<JSON ask command object, or null to unbind>' \
   --record-read '<actual user-owned skill invocation>'
 ```
+
+`--bindings` accepts only `record` and `persist`. Omit `--ask` to preserve its
+current value; an explicit JSON `null` removes it. Invalid ask objects are refused
+without changing the profile. Legacy native binding blocks are refused with
+manual deletion instructions, including when changing an unrelated slot.
 
 The helper uses the profile resolution above; `--profile <path>` explicitly
 selects the same resolved user profile. Omit `--record-read` if preserving an
@@ -308,8 +327,8 @@ On any composition error report setup incomplete; keep existing content intact.
 
 ## Report
 
-Name the user profile and user-owned read skill; list all four slot choices,
-including unbound slots. Include the request kind, validator verdict and exit
+Name the user profile and user-owned read skill; list both slot choices and the ask binding,
+including unbound destinations. Include the request kind, validator verdict and exit
 code, composer result, and outstanding access or user decisions. Report success
 only after the new skill ran successfully, its response passed validation, and
 the written profile passed the composer. When a tracked setup task requires a

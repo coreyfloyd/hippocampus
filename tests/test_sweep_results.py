@@ -118,7 +118,7 @@ def test_reads_are_agent_evidence_and_failures_never_file(sandbox, rule, read_st
     assert (sandbox[1] / 'source.json').exists()
 
 
-@pytest.mark.parametrize('rule,operation', [('R2', 'comment'), ('R7', 'edit_document'), ('R3', 'ask'), ('R4', 'file_slot')])
+@pytest.mark.parametrize('rule,operation', [('R2', 'comment'), ('R7', 'edit_document'), ('R3', 'ask'), ('R4', 'native_step')])
 def test_all_operations_are_planned_and_no_binding_executes(sandbox, rule, operation):
     source(sandbox)
     entry = dict(rule=rule, destination='knowledge' if rule == 'R4' else 'record:existing',
@@ -126,7 +126,10 @@ def test_all_operations_are_planned_and_no_binding_executes(sandbox, rule, opera
     run = act(sandbox, [entry])
     assert run['work'][0]['operation'] == operation
     if rule == 'R4':
-        assert run['work'][0]['slot'] == 'knowledge'
+        assert run['work'][0]['native_step'] == 'knowledge'
+        done = complete(sandbox, run, ['carried'])
+        assert done['directories'][str(sandbox[0])]['unfiled_items']
+        return
     done = complete(sandbox, run)
     assert not done['directories'][str(sandbox[0])]['unfiled_items']
     undo = json.loads(command(sandbox, 'undo', '--run-id', done['run_id'], '--user-started').stdout)
@@ -221,20 +224,13 @@ def test_undo_archive_conflict_preserves_newer_handoff(sandbox):
     assert all(row['outcome'] == 'conflict' for row in result['items'])
 
 
-def test_pending_slot_returns_an_ask_in_same_run_before_archive(sandbox):
+def test_pending_native_step_keeps_source_without_applying_or_asking(sandbox):
     path = source(sandbox)
     run = act(sandbox, [dict(rule='R4', destination='knowledge')])
-    results = sandbox[0] / 'pending.json'
-    results.write_text(json.dumps([dict(write_id=run['work'][0]['write_id'], status='failed',
-                                        pending=True, error='slot left item pending')]))
-    payload = json.loads(command(sandbox, 'complete', '--run-id', run['run_id'], '--results', str(results)).stdout)
-    pending = read_run(payload['report'])
-    assert pending['phase'] == 'planned'
-    assert pending['work'][-1]['operation'] == 'ask'
-    assert pending['work'][-1]['identity'] == run['work'][0]['identity']
+    done = complete(sandbox, run, ['failed'])
+    assert done['phase'] == 'completed'
+    assert len(done['work']) == 1
     assert path.exists()
-    done = complete(sandbox, pending, ['failed', 'written'])
-    assert not path.exists()
     assert not any(r['kind'] == 'record' for r in done['undo_items'])
 
 
@@ -571,3 +567,43 @@ def test_completion_accepts_refreshed_agent_session_evidence(sandbox):
     assert checked['phase'] == 'completed' and not checked['work']
     assert not checked['directories'][str(sandbox[0])]['open_sessions']
     assert checked['open_session_checks'][0]['method'] == 'post-write inspection'
+
+
+@pytest.mark.parametrize('destination', ['knowledge', 'lessons'])
+def test_sweep_native_steps_are_unattended_carry_only(sandbox, destination):
+    path = source(sandbox)
+    run = act(sandbox, [dict(rule='R4', destination=destination)])
+    work, = run['work']
+    assert work['operation'] == 'native_step'
+    assert work['native_step'] == destination
+    assert work['unattended'] is True
+    assert work['command'] == '/hippocampus:' + ('knowledge-capture' if destination == 'knowledge' else 'improve-harness')
+    done = complete(sandbox, run, ['carried'])
+    assert path.exists()
+    assert done['directories'][str(sandbox[0])]['unfiled_items']
+    assert not any(row['kind'] == 'record' for row in done['undo_items'])
+
+
+def test_sweep_rejects_applied_native_results(sandbox):
+    source(sandbox)
+    run = act(sandbox, [dict(rule='R4', destination='lessons')])
+    results = sandbox[0] / 'native-results.json'
+    results.write_text(json.dumps([dict(write_id=run['work'][0]['write_id'], status='written',
+                                       receipt='applied', destination='rules')]))
+    result = command(sandbox, 'complete', '--run-id', run['run_id'], '--results', str(results), code=1)
+    assert 'unattended native step' in result.stderr
+
+
+@pytest.mark.parametrize('kind', ['knowledge', 'lesson'])
+def test_native_r4_ask_is_delivered_but_never_consumes_sweep_item(sandbox, kind):
+    item = dict(type=kind, context='Approve native capture', session_id='producer',
+                produced_at='2026-10-23T12:00:00Z', disposition='carry')
+    path = source(sandbox, loops=[item])
+    run = act(sandbox, [dict(rule='R4', destination='ask', choices=['save', 'leave'])])
+    work, = run['work']
+    assert work['operation'] == 'ask'
+    assert work['ask']['text'] == item['context']
+    done = complete(sandbox, run, ['written'])
+    assert path.exists()
+    assert done['directories'][str(sandbox[0])]['unfiled_items']
+    assert done['directories'][str(sandbox[0])]['asks_raised'][0]['receipt']

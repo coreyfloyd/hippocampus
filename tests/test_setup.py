@@ -33,8 +33,8 @@ def plan(path):
                                if not key.startswith(('CODEX_', 'CLAUDE_'))})
 
 
-def test_clean_home_declined_slots_are_unbound_including_lessons(tmp_path):
-    result = write(tmp_path, dict.fromkeys(('record', 'knowledge', 'lessons', 'persist')),
+def test_clean_home_declined_slots_keep_native_steps(tmp_path):
+    result = write(tmp_path, dict.fromkeys(('record', 'persist')),
                    '--record-read', '/read-work')
     assert result.returncode == 0, result.stderr
     profile = tmp_path / '.config/hippocampus/checklist-profile.md'
@@ -43,8 +43,8 @@ def test_clean_home_declined_slots_are_unbound_including_lessons(tmp_path):
     value = json.loads(composed.stdout)
     assert value['record_read'] == {'command': '/read-work'}
     assert [s['id'] for s in value['steps']] == ['record', 'knowledge', 'lessons', 'persist', 'handoff']
-    assert all(s['binding'] is None for s in value['steps'][:4])
-    assert value['steps'][2]['carries'] == ['lesson']
+    assert all(s['binding'] is None for s in value['steps'] if 'slot' in s)
+    assert value['steps'][2]['native'] is True
 
 
 def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path):
@@ -55,7 +55,7 @@ def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path)
     prefix = '# My profile\n\nKeep these notes.\n\n```checklist-profile\n'
     suffix = '\n```\n\n## Record\n\nKeep my record instructions.\n'
     profile.write_text(prefix + json.dumps(existing) + suffix)
-    result = write(tmp_path, {'knowledge': {'command': '/knowledge-step', 'consumes': ['knowledge']}},
+    result = write(tmp_path, {'persist': {'command': '/persist-step', 'consumes': []}},
                    '--profile', str(profile), '--record-read', '/read-work')
     assert result.returncode == 0, result.stderr
     text = profile.read_text()
@@ -176,3 +176,38 @@ def test_rejected_setup_in_fresh_package_leaves_no_import_cache(tmp_path):
     assert result.returncode != 0
     assert 'user present' in result.stderr
     assert set(tmp_path.rglob('*')) == before
+
+
+@pytest.mark.parametrize('suffix', ['.json', '.md'])
+def test_legacy_native_bindings_name_blocks_to_delete_and_preserve_profile(tmp_path, suffix):
+    profile = tmp_path / ('profile' + suffix)
+    data = {'name': 'legacy', 'bindings': {'knowledge': None,
+            'lessons': {'command': '/old-lessons', 'consumes': ['lesson']}}}
+    text = json.dumps(data, indent=2)
+    if suffix == '.md':
+        text = '# Keep notes; old example `"knowledge": null`\n```checklist-profile\n' + text + '\n```\n'
+    profile.write_text(text)
+    for result in [plan(profile), write(tmp_path, {'persist': None}, '--profile', str(profile))]:
+        assert result.returncode == 1
+        assert 'delete' in result.stderr.lower()
+        for slot in ('knowledge', 'lessons'):
+            assert 'bindings.' + slot in result.stderr
+            line = next(i for i, row in enumerate(text.splitlines(), 1) if row.lstrip().startswith('"' + slot + '"'))
+            assert 'line ' + str(line) in result.stderr
+        assert profile.read_text() == text
+
+
+def test_setup_can_configure_and_unbind_ask_separately_from_slots(tmp_path):
+    profile = tmp_path / 'profile.json'
+    result = write(tmp_path, {'record': None, 'persist': None}, '--profile', str(profile),
+                   '--ask', '{"command":"/ask-step"}')
+    assert result.returncode == 0, result.stderr
+    output = json.loads(plan(profile).stdout)
+    assert output['ask'] == {'command': '/ask-step'}
+    before = profile.read_bytes()
+    for ask in ['{}', '{"command":""}', '{"command":"/ask","consumes":[]}']:
+        result = write(tmp_path, {}, '--profile', str(profile), '--ask', ask)
+        assert result.returncode == 1
+        assert profile.read_bytes() == before
+    assert write(tmp_path, {}, '--profile', str(profile), '--ask', 'null').returncode == 0
+    assert json.loads(plan(profile).stdout)['ask'] is None

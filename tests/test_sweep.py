@@ -172,7 +172,7 @@ def bound_profile(sandbox):
     profile = sandbox[0] / 'profile.json'
     profile.write_text(json.dumps({'name': 'test', 'ask': binding, 'record_read': binding,
         'bindings': {slot: dict(binding, consumes=[])
-                     for slot in ('record', 'lessons', 'knowledge')}}))
+                     for slot in ('record',)}}))
     return profile
 
 
@@ -257,7 +257,8 @@ def test_each_identity_component_distinguishes_items_in_one_handoff(sandbox, fie
 
     section = data['directories'][str(sandbox[0])]
     assert len(section['items_dropped']) == 2
-    assert all(row['outcome'] == 'dry run' for row in section['filing_outcomes'])
+    assert all(row['outcome'] == ('carried' if row.get('binding') in ('knowledge', 'lessons') else 'dry run')
+               for row in section['filing_outcomes'])
     assert section['filing_outcomes'][0]['identity'] != section['filing_outcomes'][1]['identity']
     assert section['handoffs_archived'][0]['path'] == str(path)
 
@@ -355,26 +356,30 @@ def test_untyped_legacy_items_receive_every_filing_outcome(sandbox, version, ent
     assert row['identity'] == identity
     assert row['source_handoff'] == str(path)
     assert row['rule'] == entry['rule'] and row['binding'] == binding
-    assert row['outcome'] == 'dry run'
+    assert row['outcome'] == ('carried' if binding in ('knowledge', 'lessons') else 'dry run')
     for key, value in entry.items():
         assert row[key] == value
     if binding == 'ask':
         assert row['ask']['identity'] == identity
     assert section[section_key] == [row]
-    assert section['handoffs_archived'][0]['path'] == str(path)
-    assert not section['handoffs_kept']
+    if binding in ('knowledge', 'lessons'):
+        assert not section['handoffs_archived']
+        assert section['handoffs_kept'][0]['path'] == str(path)
+    else:
+        assert section['handoffs_archived'][0]['path'] == str(path)
+        assert not section['handoffs_kept']
     assert readable_rows(text, row)
     assert outside_report_snapshot(sandbox) == before
     assert len(list((sandbox[0] / 'reports').iterdir())) == 1
 
 
 @pytest.mark.parametrize('slot', ['lessons', 'knowledge'])
-def test_untyped_legacy_slot_without_binding_is_reported_and_kept(sandbox, slot):
+def test_untyped_legacy_item_reaches_native_step_without_profile_binding(sandbox, slot):
     captured = json.loads(FIXTURE.read_text())['resume']['open_loops'][2]
     item = {key: value for key, value in captured.items() if key != 'type'}
     path = source(sandbox, loops=[item], version=1)
     profile = sandbox[0] / 'profile.json'
-    profile.write_text(json.dumps({'name': 'test', 'bindings': {slot: None}}))
+    profile.write_text(json.dumps({'name': 'test', 'bindings': {}}))
     args = decisions(sandbox, [{'rule': 'R4', 'destination': slot}])
     before = outside_report_snapshot(sandbox)
 
@@ -382,7 +387,7 @@ def test_untyped_legacy_slot_without_binding_is_reported_and_kept(sandbox, slot)
 
     section = data['directories'][str(sandbox[0])]
     row, = section['filing_outcomes']
-    assert row['rule'] == 'R4' and row['binding'] == slot and row['outcome'] == 'unbound'
+    assert row['rule'] == 'R4' and row['binding'] == slot and row['outcome'] == 'carried'
     assert row['item'] == item
     assert row['identity']['session_id'] == item['session_id']
     assert row['identity']['produced_at'] == item['produced_at']
@@ -535,7 +540,7 @@ def test_all_filing_rules_share_checklist_validation_without_binding_calls(sandb
     profile = sandbox[0] / 'profile.json'
     profile.write_text(json.dumps({'name': 'test', 'ask': {'command': 'MUST NEVER RUN'},
         'bindings': {key: {'command': 'MUST NEVER RUN', 'consumes': []}
-                     for key in ('record', 'lessons', 'knowledge')}}))
+                     for key in ('record',)}}))
     entries = [
         {'rule': 'R1', 'information_only': True, 'reason': 'Information only'},
         {'rule': 'R3', 'destination': 'ask', 'choices': ['approve', 'decline']},
@@ -547,10 +552,12 @@ def test_all_filing_rules_share_checklist_validation_without_binding_calls(sandb
     _, data = report(sandbox, *decisions(sandbox, entries), '--user-profile', str(profile))
     section = data['directories'][str(sandbox[0])]
     assert len(section['filing_outcomes']) == 7
-    assert all(row['outcome'] == 'dry run' for row in section['filing_outcomes'])
+    assert all(row['outcome'] == ('carried' if row.get('binding') in ('knowledge', 'lessons') else 'dry run')
+               for row in section['filing_outcomes'])
     assert section['new_tickets'][0]['priority'] == 'p2'
     assert section['asks_raised'][0]['ask']['choices'] == ['approve', 'decline']
-    assert section['handoffs_archived']
+    assert not section['handoffs_archived']
+    assert section['handoffs_kept']
     assert section['filing_outcomes'][2]['identity']['session_id'] == 'original'
 
 
