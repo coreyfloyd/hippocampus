@@ -1,0 +1,4 @@
+{"type": "assistant", "sessionId": "captured-claude", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_01StMw3t9eUGtzJph1YeWmKp", "name": "Read", "input": {"file_path": "/redacted/skills/workflow/SKILL.md"}}]}}
+{"type": "user", "sessionId": "captured-claude", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01StMw3t9eUGtzJph1YeWmKp", "content": "[REDACTED]", "is_error": false}]}}
+{"type": "assistant", "sessionId": "captured-claude", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_01TkXkcktpTfhRUSyd41xJgN", "name": "Bash", "input": {"command": "record-cli issue view --repo example/project"}}]}}
+{"type": "user", "sessionId": "captured-claude", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01TkXkcktpTfhRUSyd41xJgN", "content": "[REDACTED]", "is_error": false}]}}

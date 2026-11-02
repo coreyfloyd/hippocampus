@@ -1,0 +1,3 @@
+# Capture provenance
+
+Captured 2026-10-12 from the application repository instruction file. Source SHA-256: `73ae3f2ba640e2ec2a28635fcc4af5db16dfd7475c284bc813843c46fbe6f6bc`. Private source identity, project names, hosts, URLs and home paths are redacted. Required role paths are normalized to the captured role files. Consecutive groups of ten source lines are reflowed to one line without adding content; this tests the byte limit independently of line limits. Remaining nonstandard home paths, local identity aliases and commit identifiers are replaced with placeholders. No instruction records were invented.

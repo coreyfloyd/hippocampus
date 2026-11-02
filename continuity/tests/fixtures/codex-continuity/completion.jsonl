@@ -1,0 +1,1 @@
+{"timestamp": "2026-09-06T22:28:48.353Z", "type": "event_msg", "ordinal": 16, "payload": {"type": "item_completed", "item": {"type": "CommandExecution", "id": "exec-8d84405d-2355-44bc-88c1-bb20ef055920", "command": ["/bin/zsh", "-lc", "[REDACTED TEXT #5]"], "cwd": "/redacted", "exit_code": 0, "status": "completed", "aggregated_output": "[REDACTED TEXT #6]"}}}

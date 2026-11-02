@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "written_at": "2026-10-01T00:00:00Z",
+  "trigger": "checkpoint",
+  "subject": {
+    "working_directory": "/redacted/repository",
+    "session_id": "redacted-session"
+  },
+  "git": {
+    "repository_root": "/redacted/repository",
+    "branch": "main",
+    "head": "[REDACTED COMMIT HASH]"
+  },
+  "resume": {
+    "headline": "[REDACTED HEADLINE]",
+    "next_action": "[REDACTED NEXT ACTION]",
+    "open_loops": [
+      {
+        "context": "[REDACTED ITEM 1]",
+        "disposition": "carry",
+        "type": "commitment",
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "anchor": {
+          "ticket": "https://example.test/ticket"
+        }
+      },
+      {
+        "context": "[REDACTED ITEM 2]",
+        "disposition": "carry",
+        "type": "commitment",
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "anchor": {
+          "ticket": "https://example.test/ticket"
+        }
+      },
+      {
+        "context": "[REDACTED ITEM 3]",
+        "disposition": "carry",
+        "type": "knowledge",
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "anchor": {
+          "ticket": "https://example.test/ticket"
+        }
+      },
+      {
+        "context": "[REDACTED ITEM 4]",
+        "disposition": "carry",
+        "type": "progress",
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "anchor": {
+          "ticket": "https://example.test/ticket"
+        }
+      },
+      {
+        "context": "[REDACTED ITEM 5]",
+        "disposition": "carry",
+        "type": "progress",
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "anchor": {
+          "ticket": "https://example.test/ticket"
+        }
+      }
+    ]
+  },
+  "spawned_processes": [],
+  "uncommitted_files": []
+}
