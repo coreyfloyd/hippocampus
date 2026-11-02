@@ -23,19 +23,28 @@ The public signing key and fingerprint are unchanged.
 
 ## Verification and publication state
 
-Preparation only: no tag, maintainer signature, publication or downloaded-release
-verification is claimed. Run the full checks and documentation sweep in
-[RELEASING.md](RELEASING.md) against the final candidate commit. Build the
-unsigned archive and checksum using `bash scripts/build-release.sh dist --unsigned`.
-The maintainer must sign before publication. After publication, download and
-signature-verify the assets, install into clean temporary homes for both tools,
-and verify the installation before the continuity repository can be archived.
-`install.sh --verify` currently fails after the documented Claude plugin
-installation, because it still expects plain skill links
-([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80)); verify
-the plugin and Codex links directly until 0.13.1 fixes it.
-Record that evidence in a post-publication follow-up; do not infer it from a
-local unsigned candidate or the disposable test signing key.
+Published 2026-11-02: tag `v0.13.0` (annotated) at commit
+`5b364ba7d21497480a1bffdf459e89a638021262`,
+https://github.com/coreyfloyd/hippocampus/releases/tag/v0.13.0 (public, not a
+draft or prerelease). Assets: hippocampus-0.13.0.tar.gz, hippocampus-0.13.0.tar.gz.asc, hippocampus-0.13.0.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
+
+Evidence:
+
+- All RELEASING.md candidate checks passed in a clean worktree at that commit
+  (pytest 1211 passed, 3 skipped; swift test passed). The documentation sweep
+  passed.
+- The maintainer signed. `verify-release.sh` passed on the local build and on
+  the downloaded assets. The downloaded key and scripts are byte-identical to
+  the repository's. The archive has a single `hippocampus/` root.
+- Installed into clean temporary homes from the extracted downloaded archive:
+  `install-codex.py` and `install-claude.py` both succeeded (25 skills, six
+  hooks; plugin `hippocampus@hippocampus`).
+
+Known issue
+([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80), fix in
+0.13.1): `install.sh --verify` fails after the plugin installation. Running the
+helpers after `install-release.sh` also fails. Install by extracting the
+verified archive and running the two helpers from it.
 
 ## Release-note draft
 
