@@ -1,0 +1,18 @@
+{
+  "version": "0.160.0",
+  "source_payload_sha256": {
+    "PostToolUse.json": "f405ef6ef1299cc23644c8071bfb4233782774059ede34d1533ecb416d4fa882",
+    "PreCompact.json": "e868263077338748c617f39a84b7d5bb8721b64b81f01bde84100220c2c13504",
+    "SessionStart.json": "42ab6875c94bc3dd19d807669ab22a8353b4eefc081b28ae343facbd3ef60012",
+    "Stop.json": "421ef1620e610615f64b5d2ba5b3e7127be6db1cc7d143661f7f92faa2332b07",
+    "UserPromptSubmit.json": "c66ace59ff47d240694c0936aac7f411f1917e21c2ccd7dadda12cd853f413bf"
+  },
+  "derived_payload_sha256": {
+    "PostToolUse.json": "55d0f948f4e9bc7d0bc33b57d0528f80db107634d1995371da607e51a469ff87",
+    "PreCompact.json": "c19f564fccae63c6e5be9198ad50881ea8cf88904fef93df6b8ba357e88f4bb0",
+    "SessionStart.json": "15127e01a6bef67436f5469018b3f0b4ae7434315e15d4197ef432c9c2c3b00f",
+    "Stop.json": "4f3a6d264e9a440a50adaa7bd9eb8669ecd91eaa74b8abf311e20d828d5cebf1",
+    "UserPromptSubmit.json": "9509aacf2f57e77b9dfffe72ee4fcbbdd5eb70c2b82c5271ea21552f7b3fbf85"
+  },
+  "substitutions": "Identity and paths replaced; event fields and tool payload unchanged."
+}

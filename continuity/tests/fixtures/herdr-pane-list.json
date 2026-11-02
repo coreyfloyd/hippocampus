@@ -1,0 +1,68 @@
+{
+ "id": "cli:pane:list",
+ "result": {
+  "panes": [
+   {
+    "agent": "claude",
+    "agent_session": {
+     "agent": "claude",
+     "kind": "id",
+     "source": "herdr:claude",
+     "value": "00000000-0000-4000-8000-000000000001"
+    },
+    "pane_id": "w1:p0"
+   },
+   {
+    "agent": "claude",
+    "agent_session": {
+     "agent": "claude",
+     "kind": "id",
+     "source": "herdr:claude",
+     "value": "00000000-0000-4000-8000-000000000002"
+    },
+    "pane_id": "w1:p1"
+   },
+   {
+    "agent": "claude",
+    "agent_session": {
+     "agent": "claude",
+     "kind": "id",
+     "source": "herdr:claude",
+     "value": "00000000-0000-4000-8000-000000000003"
+    },
+    "pane_id": "w1:p2"
+   },
+   {
+    "agent": null,
+    "agent_session": null,
+    "pane_id": "w1:p3"
+   },
+   {
+    "agent": null,
+    "agent_session": null,
+    "pane_id": "w1:p4"
+   },
+   {
+    "agent": "codex",
+    "agent_session": {
+     "agent": "codex",
+     "kind": "id",
+     "source": "herdr:codex",
+     "value": "00000000-0000-4000-8000-000000000004"
+    },
+    "pane_id": "w1:p5"
+   },
+   {
+    "agent": "claude",
+    "agent_session": {
+     "agent": "claude",
+     "kind": "id",
+     "source": "herdr:claude",
+     "value": "00000000-0000-4000-8000-000000000005"
+    },
+    "pane_id": "w1:p0",
+    "agent_status": "done"
+   }
+  ]
+ }
+}

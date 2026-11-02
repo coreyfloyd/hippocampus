@@ -1,0 +1,3 @@
+{"kind":"file","path":"/workspace/example-repo/README.md","checkout":"/workspace/example-repo","session_id":"example-session","ts":"2026-10-14T04:53:48.487512Z"}
+{"kind":"artifact","type":"artifact","location":"https://example.invalid/review","context":"Published artifact","disposition":"keep","status":"pending","session_id":"example-session","produced_at":"2026-10-14T04:53:48.539974Z","working_directory":"/workspace/example-repo","ts":"2026-10-14T04:53:48.540231Z"}
+{"kind":"checklist-start","session_id":"example-session","ts":"2026-10-14T04:53:48.723592Z"}

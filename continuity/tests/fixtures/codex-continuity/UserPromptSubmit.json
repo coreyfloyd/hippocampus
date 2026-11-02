@@ -1,0 +1,1 @@
+{"session_id":"captured-session","turn_id":"captured-turn","transcript_path":"/redacted/rollout.jsonl","cwd":"/redacted/work","hook_event_name":"UserPromptSubmit","model":"gpt-6-astra","permission_mode":"bypassPermissions","prompt":"Run exactly one shell command: printf 'CONTINUITY_HOOK_PROBE_OK\\n'. Then reply done. Do not edit files or launch agents."}
