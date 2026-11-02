@@ -466,10 +466,10 @@ formats. Without optional unattended configuration, it is not used.
 
 ## Architecture
 
-[`docs/architecture/runtime.html`](architecture/runtime.html) is the runtime
+[`docs/architecture/session/runtime.html`](architecture/session/runtime.html) is the runtime
 architecture map: the two tools, hook adapters, skills, handoff and checklist
 engines, profiles, and shared storage. Its boxes link to source files and lines
-at a pinned commit. [`runtime.architecture.json`](architecture/runtime.architecture.json)
+at a pinned commit. [`runtime.architecture.json`](architecture/session/runtime.architecture.json)
 is its source. Agents and maintainers should read the relevant map before
 structural work, confirm it against the code, and regenerate it with the
 [archify skill](https://github.com/tt-a1i/archify) after a change moves a box or
@@ -477,7 +477,7 @@ an edge. The map leaves out installer trust internals, transcript parsing,
 optional session cycling, and the user's record implementation.
 
 For a guided explanation, open the standalone
-[presentation](presentation.html), with keyboard and on-screen controls.
+[presentation](session-presentation.html), with keyboard and on-screen controls.
 The [glossary](glossary.md) defines the vocabulary; [INTERFACE.md](../INTERFACE.md)
 is the contract for adapter and profile authors.
 [docs/examples/](examples/PROVENANCE.md) holds captured outputs, validated
@@ -491,4 +491,4 @@ uninstall, and test commands.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](../LICENSE).
