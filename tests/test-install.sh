@@ -426,6 +426,7 @@ cp -R "$JUNK_SOURCE/profiles" "$JUNK_RELEASE/profiles"
 cp -R "$JUNK_SOURCE/scripts/." "$JUNK_RELEASE/scripts"
 cp -R "$JUNK_SOURCE/hooks" "$JUNK_RELEASE/hooks"
 cp -p "$JUNK_SOURCE/INTERFACE.md" "$JUNK_RELEASE/INTERFACE.md"
+cp -p "$JUNK_SOURCE/VERSION" "$JUNK_RELEASE/VERSION"
 test "$(release_manifest "$JUNK_RELEASE")" = "$(release_manifest "$JUNK_SOURCE")"
 printf 'ATTACKER:0\n' > "$JUNK_RELEASE/manifest"
 if HOME="$JUNK_HOME" CODEX_HOME="$JUNK_HOME/.codex" bash "$JUNK_SOURCE/install.sh" 2>"$JUNK_HOME/err.log"; then
