@@ -100,13 +100,18 @@ For Codex:
 python3 scripts/install-codex.py
 ```
 
-The Claude helper runs `claude plugin install hippocampus --marketplace <package-root>`
-from either tree. It removes only links owned by the released installer in the
-same transaction, preserves foreign links, and restores links, plugin registry,
-and settings if the CLI fails. Use this helper when upgrading an existing
+The Claude helper wraps the native plugin CLI from either tree. It removes only
+links owned by the released installer in the same transaction, preserves foreign
+links, and restores links, plugin registry, and settings if the CLI fails. Use
+this helper for every Claude Code install, including upgrading an existing
 `install.sh` installation; invoking the native plugin command directly does not
 perform that cutover. `--claude PATH` selects the executable. Concurrent helper
 invocations are refused while a cutover holds the lock.
+
+Before installation, both helpers check both selected tool homes for the old
+standalone package. If found, installation stops before writes and names the
+runtime or registration to uninstall/remove. This check never migrates data or
+uninstalls the old package. Hippocampus uninstall remains available.
 
 Both routes register every packaged skill. The package itself requires no account
 credentials; your agent CLI retains its own authentication requirements.
@@ -135,15 +140,10 @@ command above or the Codex checkout install command above. Keep the extracted fo
 route. The Codex installer copies its runtime, so a Codex-only installation
 does not need the extracted folder afterward.
 
-Claude Code also supports the repository's marketplace route, which installs
-from the marketplace's repository rather than your verified extracted bytes:
+Use `python3 scripts/install-claude.py` for Claude Code from either tree.
+The helper is the supported installation path; a bare native plugin command or
+in-session marketplace action bypasses the required transaction.
 
-```bash
-claude plugin install hippocampus --marketplace coreyfloyd/hippocampus
-```
-
-Inside a Claude Code session the corresponding `/plugin install` action can
-also select the marketplace. For a signed release, use the local verified route.
 No release assets exist until the release is published; their exact route is
 checked in the release's verification procedure in [RELEASING.md](RELEASING.md).
 

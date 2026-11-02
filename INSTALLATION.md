@@ -18,11 +18,15 @@ python3 scripts/install-claude.py
 python3 scripts/install-codex.py
 ```
 
-The Claude helper invokes `claude plugin install hippocampus --marketplace
-<package-root>` and removes installer-owned old skill links in that transaction.
+The Claude helper is the supported Claude Code installation command for both
+routes. It invokes the native plugin CLI and removes installer-owned old skill
+links in that transaction.
 Foreign links survive; a CLI failure restores the links and plugin settings.
 The Codex installer links all skills, records ownership, and verifies hook trust
 with `codex app-server` `hooks/list`; failed verification restores the prior install.
+Both installers refuse while the old standalone package remains installed in
+either tool, identifying the runtime or registration and what to uninstall.
+Detection does not move or delete that package or its data.
 Uninstall with the same helper's `--uninstall` flag. Shared handoffs and user
 profiles survive removal. See [session installation](docs/session-installation.md)
 for prerequisites, the signed-release verification commands, and installed paths.

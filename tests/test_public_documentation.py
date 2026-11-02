@@ -42,10 +42,11 @@ def test_skill_tables_and_all_skill_counts_match_directories(path, heading):
 def test_installation_owns_commands_and_fixed_contract_facts():
     readme, guide = text("README.md"), text("INSTALLATION.md")
     assert "[INSTALLATION.md](session-installation.md)" in readme
-    for command in ("claude plugin install hippocampus --marketplace coreyfloyd/hippocampus",
+    for command in ("python3 scripts/install-claude.py",
                     "python3 scripts/install-codex.py"):
         assert command in guide
         assert command not in readme
+    assert "claude plugin install hippocampus --marketplace coreyfloyd/hippocampus" not in guide
     storage = text("INTERFACE.md").split("## 1. Storage", 1)[1].split("## 2. Configuration", 1)[0]
     defaults = re.findall(r"`(~/.local/state/hippocampus/[^`]+)`", storage)
     for default in defaults:

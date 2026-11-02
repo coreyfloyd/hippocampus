@@ -23,6 +23,8 @@ HISTORICAL = {
 def disposition(path, line):
     if path in HISTORICAL:
         return 'retained: pinned snapshot provenance and inventory tooling'
+    if path in {'scripts/lib/install_conflicts.py', 'tests/test_install_conflicts.py'}:
+        return 'retained: detection-only refusal of the old standalone install and its fixtures (issue 62)'
     if path.startswith('tests/fixtures/session-release/'):
         return 'retained: isolated old archive/signing fixture; release integration is issue 64'
     if path in {'docs/architecture/session/runtime.html',

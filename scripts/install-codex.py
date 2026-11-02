@@ -13,6 +13,7 @@ import shutil
 import sys
 
 from lib import codex_trust as trust
+from lib.install_conflicts import refuse_standalone
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = tuple(sorted(p.name for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file()))
@@ -189,6 +190,8 @@ def main():
     parser.add_argument('--codex',default=shutil.which('codex'),help='Codex executable used to verify persisted hook trust')
     parser.add_argument('--uninstall',action='store_true')
     args=parser.parse_args()
+    if not args.uninstall:
+        refuse_standalone(codex_home=args.codex_home)
     if not args.codex and not args.uninstall:
         raise ValueError('codex executable required for hooks/list trust verification')
     home=args.codex_home.expanduser().resolve(); package=Path.home()/'.local/share/hippocampus/current'; skills=home/'skills'

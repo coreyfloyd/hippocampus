@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import tempfile
 
+from lib.install_conflicts import refuse_standalone
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -34,6 +36,8 @@ def main():
     parser.add_argument('--claude', default=shutil.which('claude'))
     parser.add_argument('--uninstall', action='store_true')
     args = parser.parse_args()
+    if not args.uninstall:
+        refuse_standalone()
     if not args.claude:
         parser.error('claude executable is required')
     home = Path.home()
