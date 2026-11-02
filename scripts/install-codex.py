@@ -213,9 +213,18 @@ def main():
     previous_runtime = saved.get('previous_runtime') if saved else (os.readlink(package) if adopting else None)
     if adopting:
         release = package.resolve()
-        if release.parent != package.parent / 'releases' or not (release / 'manifest').is_file():
+        if release.parent != (package.parent / 'releases').resolve() or not (release / 'manifest').is_file():
             raise ValueError('existing current pointer is not an installer release')
         # Reuse the released installer's manifest and content verification.
+        import subprocess
+        subprocess.run(['bash', str(ROOT / 'install.sh'), '--verify-runtime'], check=True)
+    # Running the helper from the installed release must keep that release
+    # active: replacing current would strand Claude and the helper's own source.
+    shared_runtime = (not args.uninstall and package.is_symlink() and
+                      ROOT == package.resolve()) or bool(saved and saved.get('shared_runtime'))
+    if shared_runtime and not args.uninstall and ROOT != package.resolve():
+        raise ValueError('shared release installed; bootstrap the desired release, then run the helper from current')
+    if shared_runtime and not adopting:
         import subprocess
         subprocess.run(['bash', str(ROOT / 'install.sh'), '--verify-runtime'], check=True)
     oldlinks = {}
@@ -252,10 +261,10 @@ def main():
                 if path.is_symlink() and os.readlink(path) == destination:
                     removed[path] = destination
                     path.unlink()
-            if os.path.lexists(package):
+            if not shared_runtime and os.path.lexists(package):
                 package.rename(backup)
                 moved = True
-            if previous_runtime:
+            if previous_runtime and not shared_runtime:
                 package.symlink_to(previous_runtime)
             manifest.unlink()
         except BaseException:
@@ -283,11 +292,12 @@ def main():
     moved = False
     copying = False
     try:
-        if os.path.lexists(package):
-            package.rename(backup)
-            moved = True
-        copying = True
-        copy_package(package)
+        if not shared_runtime:
+            if os.path.lexists(package):
+                package.rename(backup)
+                moved = True
+            copying = True
+            copy_package(package)
         for name in SKILLS:
             path=skills/name
             if path.is_symlink():
@@ -298,7 +308,7 @@ def main():
         trust.verify_with_hooks_list(args.codex,home,home,hashes)
         trust.atomic_write(manifest,json.dumps({'version':(ROOT/'VERSION').read_text().strip(),'hooks':registrations(package),'trust_keys':list(hashes),
                                                   'skill_links':{name:str(package/'skills'/name) for name in SKILLS},
-                                                  'previous_runtime':previous_runtime},indent=2)+'\n')
+                                                  'previous_runtime':previous_runtime,'shared_runtime':shared_runtime},indent=2)+'\n')
     except BaseException:
         trust.restore_file(target,old_hooks);trust.restore_file(config,old_config)
         for link in newlinks:

@@ -21,7 +21,7 @@ LEGACY_CURRENT_LINK="$LEGACY_SHARE_ROOT/current"
 LEGACY_PROFILE="$HOME/.config/$LEGACY_PACKAGE/profile.md"
 MIGRATION_MARKER="$SHARE_ROOT/migrated-from-research-tools"
 RELEASE_DIR="$RELEASE_ROOT/$VERSION"
-CLAUDE_DIR="$HOME/.claude/skills"
+CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
 # Skills this package shipped once and has retired, space-separated. An install
 # removes a package-owned link with one of these names; any other package-owned
@@ -38,6 +38,8 @@ manifest_listing() {
     [ ! -d hooks ] || manifest_paths="$manifest_paths hooks"
     [ ! -f INTERFACE.md ] || manifest_paths="$manifest_paths INTERFACE.md"
     [ ! -f VERSION ] || manifest_paths="$manifest_paths VERSION"
+    [ ! -f install.sh ] || manifest_paths="$manifest_paths install.sh"
+    [ ! -d .claude-plugin ] || manifest_paths="$manifest_paths .claude-plugin"
     find $manifest_paths -type f -not -path '*/.build/*' -not -path '*/.Ulysses-*/*' -not -path '*/__pycache__/*' -not -name '*.pyc' -not -name '*.pyo' -not -name '.DS_Store' -not -name '.Ulysses-*' -exec cksum {} \; | LC_ALL=C sort
   )
 }
@@ -300,12 +302,7 @@ if [ "${1:-}" = "--verify" ]; then
   verify_check "example profile" "$CURRENT_LINK/profiles/karpathy-wiki.example.md" test -f "$CURRENT_LINK/profiles/karpathy-wiki.example.md"
   verify_check "profile validator" "$CURRENT_LINK/scripts/validate_profile.py" test -f "$CURRENT_LINK/scripts/validate_profile.py"
   verify_check "rules setup helper" "$CURRENT_LINK/scripts/rules_setup.py" test -f "$CURRENT_LINK/scripts/rules_setup.py"
-  for skill in $(for_each_skill); do
-    verify_check "claude skill link" "$CLAUDE_DIR/$skill" test -L "$CLAUDE_DIR/$skill"
-    verify_check "claude skill target" "$CLAUDE_DIR/$skill" test "$(readlink "$CLAUDE_DIR/$skill")" = "$CURRENT_LINK/skills/$skill"
-    verify_check "codex skill link" "$CODEX_DIR/$skill" test -L "$CODEX_DIR/$skill"
-    verify_check "codex skill target" "$CODEX_DIR/$skill" test "$(readlink "$CODEX_DIR/$skill")" = "$CURRENT_LINK/skills/$skill"
-  done
+  python3 "$ROOT/scripts/verify-install.py" "$CURRENT_LINK" "$CLAUDE_DIR" "$CODEX_DIR"
   verify_check "wiki contract" "$CURRENT_LINK/contracts/karpathy-wiki.md" test -f "$CURRENT_LINK/contracts/karpathy-wiki.md"
   validate_profile; exit 0
 fi
@@ -349,6 +346,8 @@ copy_release_tree "$ROOT/scripts" "$TEMP_RELEASE/scripts"
 copy_release_tree "$ROOT/hooks" "$TEMP_RELEASE/hooks"
 cp -p "$ROOT/INTERFACE.md" "$TEMP_RELEASE/INTERFACE.md"
 cp -p "$ROOT/VERSION" "$TEMP_RELEASE/VERSION"
+cp -p "$ROOT/install.sh" "$TEMP_RELEASE/install.sh"
+copy_release_tree "$ROOT/.claude-plugin" "$TEMP_RELEASE/.claude-plugin"
 if [ ! -d "$RELEASE_DIR" ]; then
   printf '%s\n' "$SOURCE_HASH" > "$TEMP_RELEASE/manifest"; mv "$TEMP_RELEASE" "$RELEASE_DIR"
 else
