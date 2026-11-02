@@ -8,6 +8,32 @@ Installation is supported on macOS and Linux. Native Windows is not supported;
 Windows users can instead run Hippocampus and their agent client inside the
 same WSL Linux distribution.
 
+## Combined package with session hooks
+
+From a checkout or a verified, extracted signed release, install the combined
+package for each tool you use:
+
+```bash
+python3 scripts/install-claude.py
+python3 scripts/install-codex.py
+```
+
+The Claude helper is the supported Claude Code installation command for both
+routes. It invokes the native plugin CLI and removes installer-owned old skill
+links in that transaction.
+Foreign links survive; a CLI failure restores the links and plugin settings.
+The Codex installer links all skills, records ownership, and verifies hook trust
+with `codex app-server` `hooks/list`; failed verification restores the prior install.
+Both installers refuse while the old standalone package remains installed in
+either tool, identifying the runtime or registration and what to uninstall.
+Detection does not move or delete that package or its data.
+Uninstall with the same helper's `--uninstall` flag. Shared handoffs and user
+profiles survive removal. See [session installation](docs/session-installation.md)
+for prerequisites, the signed-release verification commands, and installed paths.
+
+The `install.sh` route below retains its existing knowledge-skill installation
+behavior. It does not register the combined package's session hooks.
+
 ## Prerequisites
 
 `install.sh` requires `bash`, `python3`, and `tar` on `PATH`; it refuses to run

@@ -344,6 +344,7 @@ scripts/generate-fold-inventory.py	22	retained: pinned snapshot provenance and i
 scripts/generate-fold-inventory.py	31	retained: pinned snapshot provenance and inventory tooling
 scripts/generate-fold-inventory.py	44	retained: pinned snapshot provenance and inventory tooling
 scripts/generate-fold-inventory.py	49	retained: pinned snapshot provenance and inventory tooling
+scripts/lib/install_conflicts.py	9	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
 tests/fixtures/session-release/.claude-plugin/plugin.json	1	retained: isolated old archive/signing fixture; release integration is issue 64
 tests/fixtures/session-release/RELEASING.md	1	retained: isolated old archive/signing fixture; release integration is issue 64
 tests/fixtures/session-release/RELEASING.md	3	retained: isolated old archive/signing fixture; release integration is issue 64
@@ -378,4 +379,14 @@ tests/fixtures/session-release/tests/test_release.py	148	retained: isolated old 
 tests/fixtures/session-release/tests/test_release.py	163	retained: isolated old archive/signing fixture; release integration is issue 64
 tests/fixtures/session-release/tests/test_release.py	169	retained: isolated old archive/signing fixture; release integration is issue 64
 tests/fixtures/session-release/tests/test_release.py	170	retained: isolated old archive/signing fixture; release integration is issue 64
-tests/test_public_documentation.py	87	retained: immutable imported architecture source attribution
+tests/test_install_conflicts.py	1	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	29	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	71	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	93	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	96	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	104	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	105	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	106	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	109	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_install_conflicts.py	122	retained: detection-only refusal of the old standalone install and its fixtures (issue 62)
+tests/test_public_documentation.py	88	retained: immutable imported architecture source attribution

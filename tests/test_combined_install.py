@@ -1,0 +1,253 @@
+"""Combined-package installation ownership and rollback contracts."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def installer():
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    spec = importlib.util.spec_from_file_location('combined_codex', ROOT / 'scripts/install-codex.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_codex_adopts_old_installer_and_uninstall_keeps_replaced_link(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path))
+    home = tmp_path / '.codex'
+    env = dict(os.environ, CODEX_HOME=str(home))
+    subprocess.run(['bash', str(ROOT / 'install.sh')], env=env, check=True, capture_output=True)
+    module = installer()
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
+    assert module.main() == 0
+    manifest = json.loads((home / 'hippocampus-install.json').read_text())
+    assert set(manifest['skill_links']) == set(module.SKILLS)
+    link = home / 'skills' / module.SKILLS[0]
+    link.unlink()
+    link.symlink_to(tmp_path / 'foreign')
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--uninstall'])
+    assert module.main() == 0
+    assert os.readlink(link) == str(tmp_path / 'foreign')
+
+
+def test_codex_failed_adoption_restores_old_runtime_and_links(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path))
+    home = tmp_path / '.codex'
+    subprocess.run(['bash', str(ROOT / 'install.sh')], env=dict(os.environ, CODEX_HOME=str(home)),
+                   check=True, capture_output=True)
+    package = tmp_path / '.local/share/hippocampus/current'
+    before = os.readlink(package)
+    module = installer()
+    def fail(*args):
+        raise RuntimeError('trust refused')
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', fail)
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
+    import pytest
+    with pytest.raises(RuntimeError, match='trust refused'):
+        module.main()
+    assert os.readlink(package) == before
+    assert not (home / 'hooks.json').exists()
+    assert not (home / 'hippocampus-install.json').exists()
+
+
+def test_claude_cutover_and_failure_restore(tmp_path):
+    import pytest
+    for fail in (False, True):
+        home = tmp_path / str(fail)
+        skills = home / '.claude/skills'
+        skills.mkdir(parents=True)
+        owned = skills / 'checkpoint'
+        owned.symlink_to(home / '.local/share/hippocampus/current/skills/checkpoint')
+        foreign = skills / 'pickup'
+        foreign.symlink_to(home / 'personal/pickup')
+        cli = home / 'claude'
+        cli.write_text('#!/bin/sh\nmkdir -p "$HOME/.claude/plugins"\necho changed > "$HOME/.claude/plugins/test"\nexit '+('1' if fail else '0')+'\n')
+        cli.chmod(0o755)
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-claude.py'), '--claude', str(cli)],
+                                env=dict(os.environ, HOME=str(home)), capture_output=True, text=True)
+        if fail:
+            assert result.returncode != 0
+            assert owned.is_symlink()
+            assert not (home / '.claude/plugins').exists()
+        else:
+            assert result.returncode == 0, result.stderr
+            assert not owned.is_symlink()
+        assert foreign.is_symlink()
+
+
+def test_codex_uninstall_after_adoption_keeps_claude_release(tmp_path, monkeypatch):
+    monkeypatch.setenv('HOME', str(tmp_path))
+    home = tmp_path / '.codex'
+    subprocess.run(['bash', str(ROOT / 'install.sh')], env=dict(os.environ, CODEX_HOME=str(home)),
+                   check=True, capture_output=True)
+    module = installer()
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
+    module.main()
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--uninstall'])
+    module.main()
+    assert (tmp_path / '.claude/skills/checkpoint/SKILL.md').is_file()
+
+
+def test_codex_failed_uninstall_restores_files(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setenv('HOME', str(tmp_path))
+    home = tmp_path / '.codex'
+    module = installer()
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--codex', 'codex'])
+    module.main()
+    before = (home / 'hooks.json').read_bytes()
+    original = module.trust.atomic_write
+    def fail(path, text):
+        if path == home / 'config.toml' and 'trusted_hash' not in text:
+            raise OSError('write refused')
+        return original(path, text)
+    monkeypatch.setattr(module.trust, 'atomic_write', fail)
+    monkeypatch.setattr(sys, 'argv', ['install', '--codex-home', str(home), '--uninstall'])
+    with pytest.raises(OSError, match='write refused'):
+        module.main()
+    assert (home / 'hooks.json').read_bytes() == before
+
+
+def test_claude_failed_update_restores_existing_settings_and_plugin(tmp_path):
+    home = tmp_path
+    config = home / '.claude'
+    (config / 'plugins').mkdir(parents=True)
+    (config / 'plugins/installed_plugins.json').write_text('previous plugin registry')
+    (config / 'settings.json').write_text('{"enabledPlugins":{"other":true}}')
+    cli = home / 'claude'
+    cli.write_text('#!/bin/sh\necho partial > "$HOME/.claude/settings.json"\nrm "$HOME/.claude/plugins/installed_plugins.json"\nexit 1\n')
+    cli.chmod(0o755)
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-claude.py'), '--claude', str(cli)],
+                            env=dict(os.environ, HOME=str(home)), capture_output=True)
+    assert result.returncode != 0
+    assert (config / 'plugins/installed_plugins.json').read_text() == 'previous plugin registry'
+    assert (config / 'settings.json').read_text() == '{"enabledPlugins":{"other":true}}'
+
+
+def test_claude_native_cli_cutover_from_checkout_and_release_tree(tmp_path):
+    import shutil
+    import pytest
+    cli = shutil.which('claude')
+    if not cli:
+        pytest.skip('claude command unavailable')
+    source = tmp_path / 'extracted-release'
+    shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__', '.pytest_cache'))
+    for index, tree in enumerate((ROOT, source)):
+        home = tmp_path / f'home-{index}'
+        links = home / '.claude/skills'
+        links.mkdir(parents=True)
+        link = links / 'checkpoint'
+        link.symlink_to(home / '.local/share/hippocampus/current/skills/checkpoint')
+        env = {k: v for k, v in os.environ.items() if not k.startswith(('CLAUDE_', 'CODEX_'))}
+        env.update(HOME=str(home), CLAUDE_CODE_ENTRYPOINT='cli')
+        for operation in ([], [], ['--uninstall']):
+            result = subprocess.run([sys.executable, str(tree / 'scripts/install-claude.py'), '--claude', cli, *operation],
+                                    env=env, capture_output=True, text=True, timeout=180)
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert not link.is_symlink()
+            listing = subprocess.run([cli, 'plugin', 'list', '--json'], env=env, capture_output=True, text=True, check=True)
+            plugins = [p for p in json.loads(listing.stdout) if p['id'] == 'hippocampus@hippocampus']
+            assert len(plugins) == (0 if operation else 1)
+            if plugins:
+                installed = Path(plugins[0]['installPath'])
+                assert {p.name for p in (installed / 'skills').iterdir()} == set(installer().SKILLS)
+                hooks = json.loads((installed / 'hooks/hooks.json').read_text())['hooks']
+                commands = [h['command'] for groups in hooks.values() for g in groups for h in g['hooks']]
+                assert len(commands) == len(set(commands)) == 6
+
+
+def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path):
+    import shutil
+    import pytest
+    codex = shutil.which('codex')
+    if not codex:
+        pytest.fail('codex executable required for native trust verification')
+    source = tmp_path / 'extracted-release'
+    shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__', '.pytest_cache'))
+    home = tmp_path / 'home'
+    home.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('CLAUDE_', 'CODEX_'))}
+    env.update(HOME=str(home), CODEX_HOME=str(home / '.codex'))
+    for operation in ([], [], ['--uninstall']):
+        result = subprocess.run([sys.executable, str(source / 'scripts/install-codex.py'), '--codex', codex, *operation],
+                                env=env, capture_output=True, text=True, timeout=180)
+        assert result.returncode == 0, result.stdout + result.stderr
+        if not operation:
+            manifest = json.loads((home / '.codex/hippocampus-install.json').read_text())
+            assert len(manifest['trust_keys']) == 7
+            assert set(manifest['skill_links']) == set(installer().SKILLS)
+        else:
+            assert not (home / '.codex/hippocampus-install.json').exists()
+
+
+@pytest.mark.parametrize('operation', ['update', 'failed-update', 'uninstall', 'failed-uninstall'])
+def test_codex_runtime_transaction_with_cross_device_home(tmp_path, monkeypatch, operation):
+    import errno
+    home = tmp_path / 'user-home'
+    codex = tmp_path / 'other-device/codex'
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv('CODEX_HOME', str(codex))
+    module = installer()
+    monkeypatch.setattr(module.trust, 'verify_with_hooks_list', lambda *args: None)
+    install_args = ['install', '--codex-home', str(codex), '--codex', 'codex']
+    monkeypatch.setattr(sys, 'argv', install_args)
+    assert module.main() == 0
+    package = home / '.local/share/hippocampus/current'
+    marker = package / 'previous-runtime-marker'
+    marker.write_text('original runtime')
+    before = {name: (codex/name).read_bytes() for name in
+              ('hooks.json', 'config.toml', 'hippocampus-install.json')}
+    links = {p.name: os.readlink(p) for p in (codex/'skills').iterdir()}
+    rename = Path.rename
+    moves = []
+
+    def cross_device_rename(source, destination):
+        destination = Path(destination)
+        # Model CODEX_HOME as a mount distinct from the shared runtime's mount.
+        if source.is_relative_to(codex) != destination.is_relative_to(codex):
+            raise OSError(errno.EXDEV, os.strerror(errno.EXDEV), str(source), str(destination))
+        moves.append((source, destination))
+        return rename(source, destination)
+
+    monkeypatch.setattr(Path, 'rename', cross_device_rename)
+    if operation == 'failed-update':
+        def refuse_trust(*args):
+            raise RuntimeError('trust refused after runtime replacement')
+        monkeypatch.setattr(module.trust, 'verify_with_hooks_list', refuse_trust)
+    if operation == 'failed-uninstall':
+        unlink = Path.unlink
+        def refuse_manifest_removal(path, *args, **kwargs):
+            if path == codex/'hippocampus-install.json':
+                raise OSError('manifest removal refused after runtime backup')
+            return unlink(path, *args, **kwargs)
+        monkeypatch.setattr(Path, 'unlink', refuse_manifest_removal)
+    if 'uninstall' in operation:
+        monkeypatch.setattr(sys, 'argv', install_args+['--uninstall'])
+    if operation.startswith('failed-'):
+        with pytest.raises((OSError, RuntimeError), match='refused'):
+            module.main()
+        assert marker.read_text() == 'original runtime'
+        assert {name: (codex/name).read_bytes() for name in before} == before
+        assert {p.name: os.readlink(p) for p in (codex/'skills').iterdir()} == links
+    else:
+        assert module.main() == 0
+        if operation == 'update':
+            assert (package/'scripts/codex-hook.py').is_file()
+            assert not marker.exists()
+        else:
+            assert not package.exists()
+            assert not (codex/'hippocampus-install.json').exists()
+            assert not list((codex/'skills').iterdir())
+    assert moves
+    assert all(source.parent == destination.parent == package.parent for source, destination in moves)
+    assert not (package.parent/'hippocampus-install-backup').exists()

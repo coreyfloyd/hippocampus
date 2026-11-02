@@ -58,18 +58,21 @@ commands relative to `CLAUDE_PLUGIN_ROOT`. The commands are namespaced
 
 ### Codex
 
-The installer copies the runtime rather than depending on the download:
+The installer copies the runtime to `~/.local/share/hippocampus/current` rather
+than depending on the download. Codex registrations live in:
 
 ```text
 ${CODEX_HOME:-~/.codex}/
-├── hippocampus/               # scripts/, skills/, hooks/, INTERFACE.md, LICENSE
-├── skills/<skill>            # seven links into hippocampus/skills/
+├── skills/<skill>            # links into ~/.local/share/hippocampus/current/skills/
 ├── hooks.json                # six hippocampus handlers plus the actor guard
 ├── config.toml               # persisted hook trust; other settings retained
 └── hippocampus-install.json   # ownership of registrations and trust entries
 ```
 
-Existing hooks and settings are retained. A skill owned by another installer
+Existing hooks and settings are retained. Existing release-installer links can
+be adopted; ownership of each skill link is recorded alongside hooks and trust.
+Uninstall preserves any link the user has subsequently replaced, and restores
+the old release pointer when Claude still uses that installer layout. A skill owned by another installer
 causes refusal before writes. Installation checks all seven handlers through
 `codex app-server` (`hooks/list`); failed trust verification restores the previous
 installation. Repeating the install command updates the runtime and owned links.
@@ -88,7 +91,7 @@ cd hippocampus
 For Claude Code, install from that checkout:
 
 ```bash
-claude plugin install hippocampus --marketplace "$PWD"
+python3 scripts/install-claude.py
 ```
 
 For Codex:
@@ -97,7 +100,20 @@ For Codex:
 python3 scripts/install-codex.py
 ```
 
-Both routes register seven skills. The package itself requires no account
+The Claude helper wraps the native plugin CLI from either tree. It removes only
+links owned by the released installer in the same transaction, preserves foreign
+links, and restores links, plugin registry, and settings if the CLI fails. Use
+this helper for every Claude Code install, including upgrading an existing
+`install.sh` installation; invoking the native plugin command directly does not
+perform that cutover. `--claude PATH` selects the executable. Concurrent helper
+invocations are refused while a cutover holds the lock.
+
+Before installation, both helpers check both selected tool homes for the old
+standalone package. If found, installation stops before writes and names the
+runtime or registration to uninstall/remove. This check never migrates data or
+uninstalls the old package. Hippocampus uninstall remains available.
+
+Both routes register every packaged skill. The package itself requires no account
 credentials; your agent CLI retains its own authentication requirements.
 
 ## Install a downloaded signed release
@@ -124,15 +140,10 @@ command above or the Codex checkout install command above. Keep the extracted fo
 route. The Codex installer copies its runtime, so a Codex-only installation
 does not need the extracted folder afterward.
 
-Claude Code also supports the repository's marketplace route, which installs
-from the marketplace's repository rather than your verified extracted bytes:
+Use `python3 scripts/install-claude.py` for Claude Code from either tree.
+The helper is the supported installation path; a bare native plugin command or
+in-session marketplace action bypasses the required transaction.
 
-```bash
-claude plugin install hippocampus --marketplace coreyfloyd/hippocampus
-```
-
-Inside a Claude Code session the corresponding `/plugin install` action can
-also select the marketplace. For a signed release, use the local verified route.
 No release assets exist until the release is published; their exact route is
 checked in the release's verification procedure in [RELEASING.md](RELEASING.md).
 
@@ -232,7 +243,7 @@ python3 scripts/lib/handoff.py state-dir
 Claude Code:
 
 ```bash
-claude plugin uninstall hippocampus@hippocampus
+python3 scripts/install-claude.py --uninstall
 ```
 
 Codex, from a checkout or extracted package:
@@ -244,7 +255,7 @@ python3 scripts/install-codex.py --uninstall
 If only the installed Codex copy remains, use:
 
 ```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/hippocampus/scripts/install-codex.py" --uninstall
+python3 "$HOME/.local/share/hippocampus/current/scripts/install-codex.py" --uninstall
 ```
 
 Codex removes the runtime, owned skill links, handlers, trust entries, and install

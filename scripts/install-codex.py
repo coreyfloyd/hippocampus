@@ -13,6 +13,7 @@ import shutil
 import sys
 
 from lib import codex_trust as trust
+from lib.install_conflicts import refuse_standalone
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = tuple(sorted(p.name for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file()))
@@ -189,42 +190,88 @@ def main():
     parser.add_argument('--codex',default=shutil.which('codex'),help='Codex executable used to verify persisted hook trust')
     parser.add_argument('--uninstall',action='store_true')
     args=parser.parse_args()
+    if not args.uninstall:
+        refuse_standalone(codex_home=args.codex_home)
     if not args.codex and not args.uninstall:
         raise ValueError('codex executable required for hooks/list trust verification')
     home=args.codex_home.expanduser().resolve(); package=Path.home()/'.local/share/hippocampus/current'; skills=home/'skills'
     target=home/'hooks.json';config=home/'config.toml'; manifest=home/'hippocampus-install.json'
     saved=json.loads(manifest.read_text()) if manifest.exists() else None
     managed=saved['hooks'] if saved else registrations(package)
-    # Refuse collisions before writing anything; reinstall owns only its own links.
-    for name in SKILLS:
-        path=skills/name
-        if os.path.lexists(path) and not (path.is_symlink() and path.resolve()==package/'skills'/name):
-            raise ValueError('existing skill '+str(path)+' is not owned by hippocampus')
-    if package.exists() and not saved:
-        raise ValueError('existing package directory is not owned by hippocampus')
+    # The release installer owns links through current or a versioned release.
+    # Adopt that layout without treating arbitrary links as package ownership.
+    def release_link(path, name):
+        if not path.is_symlink():
+            return False
+        link = Path(os.readlink(path))
+        releases = package.parent / 'releases'
+        return (link == package / 'skills' / name or
+                link.name == name and link.parent.name == 'skills' and
+                link.parent.parent.parent == releases)
+
+    adopting = not saved and package.is_symlink() and not args.uninstall
+    previous_runtime = saved.get('previous_runtime') if saved else (os.readlink(package) if adopting else None)
+    if adopting:
+        release = package.resolve()
+        if release.parent != package.parent / 'releases' or not (release / 'manifest').is_file():
+            raise ValueError('existing current pointer is not an installer release')
+        # Reuse the released installer's manifest and content verification.
+        import subprocess
+        subprocess.run(['bash', str(ROOT / 'install.sh'), '--verify-runtime'], check=True)
+    oldlinks = {}
+    if not args.uninstall:
+        for name in SKILLS:
+            path = skills/name
+            if os.path.lexists(path):
+                if not (release_link(path, name) and (saved or adopting)):
+                    raise ValueError('existing skill '+str(path)+' is not owned by hippocampus')
+                oldlinks[path] = os.readlink(path)
+        if os.path.lexists(package) and not saved and not adopting:
+            raise ValueError('existing package directory is not owned by hippocampus')
     old_hooks=target.read_text() if target.exists() else None
     old_config=config.read_bytes().decode('utf-8') if config.exists() else None
     hooks=read_hooks(target)
     cleaned=remove_managed(hooks,managed) if saved else hooks
     clean_config=remove_trust(old_config or '',set(saved['trust_keys'])) if saved else old_config or ''
-    backup=home/'hippocampus-install-backup'
-    if backup.exists():
+    # Keep runtime renames on its filesystem, even when CODEX_HOME is another mount.
+    backup=package.parent/'hippocampus-install-backup'
+    if os.path.lexists(backup):
         raise ValueError('an earlier install backup needs recovery before installing')
     newlinks=[]
     foreign_hashes = relocate_trust(hooks, cleaned, old_config or '', target) if saved else {}
     if args.uninstall:
         if not saved:
             print('hippocampus is not installed');return 0
-        trust.atomic_write(target,json.dumps(cleaned,indent=2)+'\n')
-        trust.atomic_write(config,trust.update_config_text(clean_config,foreign_hashes) if foreign_hashes else clean_config)
-        for name in SKILLS:
-            path=skills/name
-            if path.is_symlink():path.unlink()
+        removed = {}
+        moved = False
         try:
-            shutil.rmtree(package)
-        except FileNotFoundError:
-            pass
-        manifest.unlink()
+            trust.atomic_write(target,json.dumps(cleaned,indent=2)+'\n')
+            trust.atomic_write(config,trust.update_config_text(clean_config,foreign_hashes) if foreign_hashes else clean_config)
+            for name, destination in saved.get('skill_links', {name: str(package/'skills'/name) for name in SKILLS}).items():
+                path=skills/name
+                if path.is_symlink() and os.readlink(path) == destination:
+                    removed[path] = destination
+                    path.unlink()
+            if os.path.lexists(package):
+                package.rename(backup)
+                moved = True
+            if previous_runtime:
+                package.symlink_to(previous_runtime)
+            manifest.unlink()
+        except BaseException:
+            trust.restore_file(target,old_hooks);trust.restore_file(config,old_config)
+            for path, destination in removed.items():
+                if not os.path.lexists(path):
+                    path.symlink_to(destination)
+            if moved:
+                if package.is_symlink():
+                    package.unlink()
+                backup.rename(package)
+            raise
+        if backup.is_symlink():
+            backup.unlink()
+        elif backup.exists():
+            shutil.rmtree(backup)
         print('hippocampus removed from Codex; handoffs and checklist state retained')
         return 0
     home.mkdir(parents=True,exist_ok=True);skills.mkdir(exist_ok=True)
@@ -233,24 +280,39 @@ def main():
     if saved:
         # Reuse owned table positions so preserved separators are not duplicated.
         clean_config=remove_trust(old_config or '',set(saved['trust_keys']),hashes)
+    moved = False
+    copying = False
     try:
-        if package.exists():package.rename(backup)
+        if os.path.lexists(package):
+            package.rename(backup)
+            moved = True
+        copying = True
         copy_package(package)
         for name in SKILLS:
             path=skills/name
-            if not path.is_symlink():
-                path.symlink_to(package/'skills'/name,target_is_directory=True);newlinks.append(path)
+            if path.is_symlink():
+                path.unlink()
+            path.symlink_to(package/'skills'/name,target_is_directory=True);newlinks.append(path)
         trust.atomic_write(target,json.dumps(installed,indent=2)+'\n')
         trust.atomic_write(config,trust.update_config_text(clean_config,{**foreign_hashes,**hashes}))
         trust.verify_with_hooks_list(args.codex,home,home,hashes)
-        trust.atomic_write(manifest,json.dumps({'hooks':registrations(package),'trust_keys':list(hashes)},indent=2)+'\n')
-    except Exception:
+        trust.atomic_write(manifest,json.dumps({'hooks':registrations(package),'trust_keys':list(hashes),
+                                                  'skill_links':{name:str(package/'skills'/name) for name in SKILLS},
+                                                  'previous_runtime':previous_runtime},indent=2)+'\n')
+    except BaseException:
         trust.restore_file(target,old_hooks);trust.restore_file(config,old_config)
-        for link in newlinks:link.unlink()
-        if package.exists():shutil.rmtree(package)
-        if backup.exists():backup.rename(package)
+        for link in newlinks:
+            link.unlink()
+        for link, destination in oldlinks.items():
+            if not link.is_symlink():
+                link.symlink_to(destination)
+        if copying and package.exists():shutil.rmtree(package)
+        if moved:backup.rename(package)
         raise
-    if backup.exists():shutil.rmtree(backup)
+    if backup.is_symlink():
+        backup.unlink()
+    elif backup.exists():
+        shutil.rmtree(backup)
     print(f'Installed {len(SKILLS)} hippocampus skills, six hooks, and the checklist actor guard; seven trusted handlers')
     return 0
 
