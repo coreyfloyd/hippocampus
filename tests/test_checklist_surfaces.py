@@ -74,7 +74,7 @@ def test_filing_through_checkpoint_wrap_and_report_in_both_modes(tmp_path):
     for unattended in [False, True]:
         for bound, status, expected in [(True, "filed", 0), (True, "failed", 1), (False, "pending", 0)]:
             profile = tmp_path / "profile.json"
-            profile.write_text(json.dumps({"name": "test", "bindings": {"lessons": None},
+            profile.write_text(json.dumps({"name": "test", "bindings": {},
                                            **({"ask": {"command": "/ask"}} if bound else {})}))
             common = ["--user-profile", str(profile)]
             mode = ["--unattended"] if unattended else []

@@ -33,8 +33,8 @@ def plan(path):
                                if not key.startswith(('CODEX_', 'CLAUDE_'))})
 
 
-def test_clean_home_declined_slots_are_unbound_including_lessons(tmp_path):
-    result = write(tmp_path, dict.fromkeys(('record', 'knowledge', 'lessons', 'persist')),
+def test_clean_home_declined_slots_keep_native_steps(tmp_path):
+    result = write(tmp_path, dict.fromkeys(('record', 'persist')),
                    '--record-read', '/read-work')
     assert result.returncode == 0, result.stderr
     profile = tmp_path / '.config/hippocampus/checklist-profile.md'
@@ -43,8 +43,8 @@ def test_clean_home_declined_slots_are_unbound_including_lessons(tmp_path):
     value = json.loads(composed.stdout)
     assert value['record_read'] == {'command': '/read-work'}
     assert [s['id'] for s in value['steps']] == ['record', 'knowledge', 'lessons', 'persist', 'handoff']
-    assert all(s['binding'] is None for s in value['steps'][:4])
-    assert value['steps'][2]['carries'] == ['lesson']
+    assert all(s['binding'] is None for s in value['steps'] if 'slot' in s)
+    assert value['steps'][2]['native'] is True
 
 
 def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path):
@@ -55,7 +55,7 @@ def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path)
     prefix = '# My profile\n\nKeep these notes.\n\n```checklist-profile\n'
     suffix = '\n```\n\n## Record\n\nKeep my record instructions.\n'
     profile.write_text(prefix + json.dumps(existing) + suffix)
-    result = write(tmp_path, {'knowledge': {'command': '/knowledge-step', 'consumes': ['knowledge']}},
+    result = write(tmp_path, {'persist': {'command': '/persist-step', 'consumes': []}},
                    '--profile', str(profile), '--record-read', '/read-work')
     assert result.returncode == 0, result.stderr
     text = profile.read_text()

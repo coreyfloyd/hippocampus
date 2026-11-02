@@ -47,10 +47,76 @@ class ChecklistTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_spine_has_four_slots_and_final_handoff(self):
+    def test_native_steps_cannot_be_bound_or_disabled(self):
+        plan = self.engine.compose([])
+        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["record", "persist"])
+        for identity, command in [("knowledge", "/hippocampus:knowledge-capture"),
+                                  ("lessons", "/hippocampus:improve-harness")]:
+            step = next(s for s in plan if s["id"] == identity)
+            self.assertTrue(step["native"])
+            self.assertEqual(step["binding"]["command"], command)
+            for binding in [None, {"command": "/replacement", "consumes": []}]:
+                with self.assertRaisesRegex(ValueError, identity):
+                    self.engine.compose([{"name": "user", "bindings": {identity: binding}}])
+
+    def test_native_outcomes_survive_checkpoint_wrap_validation_and_report(self):
+        plan = self.engine.compose([])
+        for kind, identity in [("knowledge", "knowledge"), ("lesson", "lessons")]:
+            for status in ["nothing", "not configured", "failed", "declined", "pending", "filed"]:
+                if status == "not configured" and kind == "lesson":
+                    continue
+                with self.subTest(kind=kind, status=status), tempfile.TemporaryDirectory() as directory:
+                    source = self.handoff()
+                    item = self.item(kind)
+                    source["resume"]["open_loops"] = [item]
+                    row = dict(index=0, rule="R4", status=status, reason="native reason",
+                               error="native error", destination="capture disposition or applied lesson receipt")
+                    filed = self.engine.file_items(plan, source, [row])
+                    self.assertEqual(filed["resume"]["open_loops"], [] if status == "filed" else [item])
+                    target = Path(directory) / "handoff.json"
+                    environment = dict(os.environ, HANDOFF_PATH=str(target), HANDOFF_STATE_DIR=directory,
+                                       HANDOFF_LEDGER_DIR=directory)
+                    checkpoint = subprocess.run([sys.executable, str(ROOT / "scripts/lib/handoff.py"),
+                        "checkpoint", "--cwd", directory, "--session-id", "wrap-session", "--trigger", "wrap"],
+                        input=json.dumps(filed), text=True, capture_output=True, env=environment)
+                    self.assertEqual(checkpoint.returncode, 0, checkpoint.stderr)
+                    checked = subprocess.run([sys.executable, str(ENGINE), "wrap-check", "--written-handoff", str(target)],
+                                             text=True, capture_output=True, env=environment)
+                    self.assertEqual(checked.returncode, 0, checked.stderr)
+                    results = [{"id": s["id"], "status": "run", "writes": []} for s in plan]
+                    results[1 if kind == "knowledge" else 2].update(
+                        status="run" if status == "filed" else status, reason="native reason", error="native error")
+                    path = Path(directory) / "results.json"
+                    path.write_text(json.dumps(results))
+                    report = subprocess.run([sys.executable, str(ENGINE), "report", "--handoff", str(target),
+                        "--results", str(path)], text=True, capture_output=True, env=environment)
+                    self.assertEqual(report.returncode, 0, report.stderr)
+                    output = json.loads(report.stdout)
+                    self.assertEqual(output["report"], "incomplete" if status in ("failed", "declined", "pending") else "ok")
+                    if status in ("failed", "declined", "pending"):
+                        self.assertEqual(output["incomplete"][0]["id"], identity)
+                        self.assertTrue(output["incomplete"][0]["reason"])
+
+    def test_ask_delivery_is_not_a_native_capture_receipt(self):
+        source = self.handoff()
+        source["resume"]["open_loops"] = [self.item("knowledge")]
+        result = self.engine.file_items(self.engine.compose([]), source,
+            [dict(index=0, rule="R4", status="filed", destination="ask", choices=["save", "leave"])],
+            {"command": "/ask"})
+        self.assertEqual(result["resume"]["open_loops"], source["resume"]["open_loops"])
+
+    def test_bound_record_and_persist_failures_fail_report(self):
+        plan = self.engine.compose([{"name": "user", "bindings": {
+            key: {"command": "/write", "consumes": []} for key in ("record", "persist")}}])
+        for identity in ("record", "persist"):
+            results = [{"id": s["id"], "status": "failed" if s["id"] == identity else "run",
+                        "error": "write denied", "writes": []} for s in plan]
+            self.assertIn("write denied", " ".join(self.engine.check_report(plan, results)))
+
+    def test_spine_has_two_slots_native_steps_and_final_handoff(self):
         plan = self.engine.compose([])
         self.assertEqual([s["id"] for s in plan], ["record", "knowledge", "lessons", "persist", "handoff"])
-        self.assertEqual([s["slot"] for s in plan[:-1]], ["record", "knowledge", "lessons", "persist"])
+        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["record", "persist"])
         self.assertNotIn("slot", plan[-1])
         self.assertEqual(plan[2]["binding"]["command"], "/hippocampus:improve-harness")
 
@@ -58,7 +124,7 @@ class ChecklistTests(unittest.TestCase):
         user = self.engine.load_profile(PROFILES / "user.md")
         plan = self.engine.compose([user])
         self.assertEqual([s["id"] for s in plan], ["record", "knowledge", "lessons", "persist", "cleanup", "context-health", "session-metadata", "whats-next", "handoff"])
-        self.assertEqual([s["binding"]["command"] for s in plan[:4]], ["/record-step", "/knowledge-step", "/hippocampus:improve-harness", "/persist-step"])
+        self.assertEqual([s["binding"]["command"] for s in plan[:4]], ["/record-step", "/hippocampus:knowledge-capture", "/hippocampus:improve-harness", "/persist-step"])
         for step in plan[4:-1]:
             self.assertTrue(step["instructions"])
 
@@ -78,7 +144,7 @@ class ChecklistTests(unittest.TestCase):
                 plan = self.engine.compose([profile])
                 self.assertGreater(len(plan), 5)
                 self.assertEqual(plan[-1]["id"], "handoff")
-                self.assertTrue(all(step.get("instructions") for step in plan if "slot" not in step and step["id"] != "handoff"))
+                self.assertTrue(all(step.get("instructions") for step in plan if "binding" not in step and step["id"] != "handoff"))
 
     def test_every_insertion_anchor(self):
         for anchor in ["before-spine", "record", "knowledge", "lessons", "persist"]:
@@ -192,7 +258,7 @@ class ChecklistTests(unittest.TestCase):
         steps = json.loads(result.stdout)["steps"]
         self.assertEqual([s["id"] for s in steps], ["record", "knowledge", "lessons", "persist", "handoff"])
         self.assertEqual({s["id"]: s.get("carries") for s in steps[:4]},
-                         {"record": ["progress", "commitment", "decision", "artifact"], "knowledge": ["knowledge"], "lessons": None, "persist": []})
+                         {"record": ["progress", "commitment", "decision", "artifact"], "knowledge": None, "lessons": None, "persist": []})
 
     def test_rejections_name_the_spine_step(self):
         cases = [
@@ -233,8 +299,7 @@ class ChecklistTests(unittest.TestCase):
         return {"type": kind, "context": kind + " now", "session_id": "wrap-session", "produced_at": "2026-10-06T12:00:00Z", "author": "user", "location": "https://example.test/now", "disposition": "keep"}
 
     def filing_profile(self, ask=True, record=True):
-        profile = {"name": "filing", "bindings": {"lessons": None,
-                   "knowledge": {"command": "/knowledge", "consumes": ["knowledge"]}}}
+        profile = {"name": "filing", "bindings": {}}
         if record:
             profile["bindings"]["record"] = {"command": "/record", "consumes": ["progress"]}
         if ask:
@@ -340,8 +405,8 @@ class ChecklistTests(unittest.TestCase):
         self.assertEqual(ask["choices"], ["approve", "decline"])
         self.assertEqual(result["filing"]["items"][4]["binding"], "ask")
         complete = self.engine.file_items(plan, source, [dict(r, status="filed") if r["status"] == "pending" else r for r in rows], self.engine.ask_binding(profile))
-        self.assertEqual(complete["resume"]["open_loops"], [])
-        self.assertEqual(complete["resume"]["next_action"], "Session finished.")
+        self.assertEqual(complete["resume"]["open_loops"], [source["resume"]["open_loops"][4]])
+        self.assertIn("lesson text", complete["resume"]["next_action"])
         self.assertEqual(source, self.handoff() | {"subject": source["subject"]})
 
     def test_filing_preserves_failed_reads_and_never_treats_unknown_as_absence(self):
@@ -674,7 +739,8 @@ class ChecklistTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {"summary": None, "summary_unavailable": "session summary unavailable: HTTP 502",
-                                                         "report": "ok", "pending": ["knowledge"], "filing": {}, "warnings": []})
+                                                         "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
+                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}]})
             path.write_text(json.dumps(wrote))
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 1)

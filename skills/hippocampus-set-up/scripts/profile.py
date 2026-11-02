@@ -50,7 +50,7 @@ def main():
         raise ValueError('profile must be an object')
     choices = json.loads(args.bindings)
     if not isinstance(choices, dict) or set(choices) - set(checklist.SLOTS):
-        raise ValueError('bindings must be an object containing only the four slots')
+        raise ValueError('bindings must be an object containing only the two slots')
     profile.setdefault('bindings', {}).update(choices)
     if args.record_read is not None:
         profile['record_read'] = {'command': args.record_read}

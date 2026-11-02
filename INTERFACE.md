@@ -216,8 +216,11 @@ composes and checks it. It writes no handoff and runs no skill.
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
-`handoff`. The first four are slots. `lessons` is bound to `/improve-harness`, consuming
-`lesson` items. Unbound slots are carried: the items they would consume stay in the handoff
+`handoff`. Only `record` and `persist` are slots. Knowledge and lessons are native
+steps running `/hippocampus:knowledge-capture` and `/hippocampus:improve-harness`
+(plain skill names in Codex), consuming `knowledge` and `lesson` respectively.
+Their destinations follow the knowledge profile and lesson routing file.
+Profiles cannot replace or disable either native step. Unbound slots are carried: the items they would consume stay in the handoff
 until the filing pass. Missing destinations warn and retain their items;
 bound write failures fail wrap. `handoff` is not a slot and is the last spine step; only a profile step
 `own-worktree` may follow it.
@@ -235,8 +238,7 @@ bound write failures fail wrap. `handoff` is not a slot and is the last spine st
 ```
 
 A binding names a `command` and the item types it `consumes`. A user slot may
-explicitly bind to JSON `null` to leave it unbound, including `lessons`, which
-otherwise defaults to `/improve-harness`. This keeps the spine step and carries
+explicitly bind `record` or `persist` to JSON `null` to leave it unbound. This keeps the spine step and carries
 its unsaved items; it does not remove or skip the step. A step has a unique `id`, an
 `after` anchor (`before-spine`, `record`, `knowledge`, `lessons`, or `persist`; `handoff`
 only for the step `own-worktree`, which must use it), and
@@ -269,8 +271,11 @@ followed by unrecorded `session_items`. Status is `filed`, `dropped`, `pending`,
 outcomes require `reason`. Failed outcomes carry `error`. Read-dependent R1,
 R2 and R5 require `read_status: "ok"`, otherwise the item is retained as
 `read failed`. Information-only R1 uses `information_only: true`. R5 also
-requires `priority` and `priority_reason`. R4 routes pending slot items through
-ask with `destination: "ask"`. Every ask requires non-empty `choices`.
+requires `priority` and `priority_reason`. R4 native rows retain unsaved items with `pending`, `failed`, `declined`,
+`nothing`, or `not configured`; only a capture disposition or applied/proposal
+receipt removes the item. Failed, declined, and pending native results make
+`report: "incomplete"`, listing each step and reason, without failing handoff
+validation. Nothing and not configured do not make wrap incomplete. Every ask requires non-empty `choices`.
 
 The ask command receives `text`, source `session_id`, `directory`, linked
 `ticket` or null, and `choices`. Asks never become tickets. `file` returns the
@@ -501,7 +506,7 @@ position. A successor keeps the original identity. Per-operation fields are:
 | `create_ticket` | record binding | `priority`, `priority_reason` |
 | `comment` | record binding | destination ticket; inherits its priority |
 | `edit_document` | record binding | destination document |
-| `file_slot` | named slot binding | `slot`: `lessons` or `knowledge` |
+| `native_step` | package skill in unattended mode | `native_step`: `lessons` or `knowledge`; `command`; `unattended: true` |
 | `ask` | ask binding, or direct presentation for interactive open sessions | `ticket` (possibly null), `choices`; open sessions also carry `activity_at` |
 
 R1/R2 reads use the profile's `record_read`; the agent searches open tickets
@@ -531,7 +536,11 @@ handoffs. Results cannot overwrite already recorded outcomes. A later run
 resolves uncertain writes through identity lookup. `already_written` does not
 count as new this run and does not belong to this run's undo journal.
 
-If a slot leaves work pending without writing, return `failed` with `pending:
+Native steps always carry items in sweep and apply nothing. Return `carried`;
+`nothing`, `not configured`, `declined`, `failed`, and `uncertain` also retain
+the item. Native `written` and `already_written` are rejected.
+
+If an older slot leaves work pending without writing, return `failed` with `pending:
 true` and an error. Completion journals an ask for that item. If worktree
 checks fail after filing, completion journals an ask from that recheck, never
 from the initial inventory's retention proposal. Open-idle-session asks likewise

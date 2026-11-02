@@ -174,7 +174,7 @@ the checklist: return the full `lesson` items to the parent or caller for durabl
 retention. With no parent or sink, report the persistence blocker alongside the
 full proposals; do not claim they were saved or will reach interactive review.
 
-For carried items, the checklist's `lessons` slot presents them at the next interactive
+For carried items, the checklist's native `lessons` step presents them at the next interactive
 `/hippocampus:improve-harness` run; retain pending items until approved and applied. This
 reaches only sessions that resume the handoff, not unrelated future sessions.
 

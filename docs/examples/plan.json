@@ -6,7 +6,6 @@
   "steps": [
     {
       "id": "record",
-      "slot": "record",
       "title": "Reconcile the record",
       "binding": {
         "command": "/record-step",
@@ -18,6 +17,7 @@
         ],
         "instructions": "Write this session's progress, commitments, decisions, and artifact locations to the record."
       },
+      "slot": "record",
       "carried_items": [
         {
           "index": 0,
@@ -34,39 +34,39 @@
     },
     {
       "id": "knowledge",
-      "slot": "knowledge",
       "title": "Capture knowledge",
       "binding": {
-        "command": "/knowledge-step",
+        "command": "/hippocampus:knowledge-capture",
         "consumes": [
           "knowledge"
-        ],
-        "instructions": "Save the knowledge this session produced, asking before anything is written."
+        ]
       },
-      "carried_items": []
+      "native": true,
+      "carried_items": [],
+      "unattended": false
     },
     {
       "id": "lessons",
-      "slot": "lessons",
       "title": "Fold in lessons",
       "binding": {
         "command": "/hippocampus:improve-harness",
         "consumes": [
           "lesson"
-        ],
-        "instructions": "Place each lesson in the rules, skills, or memory it belongs to."
+        ]
       },
-      "carried_items": []
+      "native": true,
+      "carried_items": [],
+      "unattended": false
     },
     {
       "id": "persist",
-      "slot": "persist",
       "title": "Persist",
       "binding": {
         "command": "/persist-step",
         "consumes": [],
         "instructions": "Commit and push every repository this session touched."
       },
+      "slot": "persist",
       "carried_items": []
     },
     {

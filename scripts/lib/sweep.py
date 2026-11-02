@@ -358,7 +358,8 @@ def plan_item(candidate, item, decision, plan, ask):
         checked['ask']['identity'] = item['identity']
     status = checked.pop('status')
     return dict(base, **{k: v for k, v in checked.items() if k != 'item'},
-                outcome='dry run' if status in ('filed', 'dropped') else status)
+                outcome=('carried' if checked.get('binding') in checklist.NATIVE else 'dry run')
+                if status in ('filed', 'dropped') else status)
 
 
 def git_read(directory, *args):
@@ -579,8 +580,9 @@ def add_intent(report, row, directory, operation):
     if operation == 'ask':
         row.update(destination='ask', binding='ask')
         row.update({key: row['ask'].get(key) for key in ('choices', 'ticket')})
-    elif operation == 'file_slot':
-        row['slot'] = row['binding']
+    elif operation == 'native_step':
+        row.update(native_step=row['binding'], unattended=True,
+                   command=checklist.NATIVE[row['binding']]['command'])
     report['work'].append(row)
 
 
@@ -618,13 +620,13 @@ def plan_act(report, discovery, ask, config, path):
                 row = slot_ask(row, directory, ask is not None)
                 section['filing_outcomes'][index] = row
                 section['asks_raised'].append(row)
-            if row['outcome'] != 'dry run':
+            if row['outcome'] != 'dry run' and not (row['outcome'] == 'carried' and row.get('binding') in checklist.NATIVE):
                 continue
             if row['rule'] in ('R1', 'R6'):
                 row['outcome'] = 'dropped'
             elif row.get('binding') != 'ask':
                 operation = {'R2': 'comment', 'R5': 'create_ticket', 'R7': 'edit_document',
-                             'R4': 'file_slot'}[row['rule']]
+                             'R4': 'native_step'}[row['rule']]
                 if operation == 'create_ticket':
                     if created >= config['new_ticket_limit']:
                         row.update(outcome='tripwire', reason='new-ticket limit reached')
@@ -664,11 +666,16 @@ def load_results(path, work, statuses):
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
         raise ValueError('results must be an array of objects')
     known = {row['write_id'] for row in work}
+    native = {row['write_id'] for row in work if row.get('operation') == 'native_step'}
     result = {}
     for row in rows:
         key = row.get('write_id')
         if key not in known or key in result:
             raise ValueError('unknown or duplicate write id')
+        if key in native and row.get('status') in ('written', 'already_written'):
+            raise ValueError('an unattended native step carries items and applies nothing')
+        if key not in native and row.get('status') in ('carried', 'nothing', 'not configured', 'declined'):
+            raise ValueError('native outcomes require a native step')
         if row.get('status') not in statuses:
             raise ValueError('unsupported result status')
         if row['status'] in ('written', 'already_written') and not all(
@@ -699,7 +706,7 @@ def complete_act(config, run_id, results_path, evidence=None):
         return path, report
     rehydrate(report)
     results = load_results(results_path, report['work'],
-                           ('written', 'already_written', 'failed', 'uncertain'))
+                           ('written', 'already_written', 'failed', 'uncertain', 'carried', 'nothing', 'not configured', 'declined'))
     for row in list(report['work']):
         if row['outcome'] != 'intent':
             continue
