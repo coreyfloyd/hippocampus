@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Offline native-plugin CLI contract stub for isolated installer tests."""
+import json
+import os
+from pathlib import Path
+import shutil
+import sys
+
+config = Path(os.environ.get('CLAUDE_CONFIG_DIR', str(Path.home() / '.claude')))
+registry = config / 'plugins/installed_plugins.json'
+args = sys.argv[1:]
+assert args[0] == 'plugin', args
+operation = args[1]
+entries = json.loads(registry.read_text()).get('plugins', {}) if registry.exists() else {}
+if operation == 'install':
+    root = Path(args[args.index('--marketplace') + 1]).resolve()
+    assert (root / '.claude-plugin/marketplace.json').is_file(), 'marketplace missing'
+    assert (root / '.claude-plugin/plugin.json').is_file(), 'plugin metadata missing'
+    entries['hippocampus@hippocampus'] = [{'installPath': str(root), 'scope': 'user'}]
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text(json.dumps({'version': 2, 'plugins': entries}))
+    settings = config / 'settings.json'
+    value = json.loads(settings.read_text()) if settings.exists() else {}
+    value.setdefault('enabledPlugins', {})['hippocampus@hippocampus'] = True
+    settings.write_text(json.dumps(value))
+    print(json.dumps({'outcome': 'ok'}))
+elif operation == 'list':
+    # Model only the settings/scopes exercised by the offline installer tests.
+    project = Path.cwd()
+    enabled = {}
+    for path in (config / 'settings.json', project / '.claude/settings.json',
+                 project / '.claude/settings.local.json'):
+        if path.exists():
+            enabled.update(json.loads(path.read_text()).get('enabledPlugins', {}))
+    print(json.dumps([{'id': key, 'enabled': enabled.get(key) is True, **entry}
+                      for key, rows in entries.items() for entry in rows]))
+elif operation == 'uninstall':
+    entries.pop('hippocampus@hippocampus', None)
+    registry.write_text(json.dumps({'version': 2, 'plugins': entries}))
+    shutil.rmtree(config / 'plugins/data/hippocampus-hippocampus', ignore_errors=True)
+    print(json.dumps({'outcome': 'ok', 'keptData': False}))
+elif operation == 'details':
+    root = Path(entries['hippocampus@hippocampus'][0]['installPath'])
+    names = sorted(p.name for p in (root / 'skills').iterdir() if (p / 'SKILL.md').is_file())
+    print(f'Skills ({len(names)})  ' + ', '.join(names))
+    print('Hooks (5)  SessionStart, PreCompact, UserPromptSubmit, PostToolUse, Stop')
+elif operation == 'validate':
+    root = Path(args[-1])
+    for name in ('plugin', 'marketplace'):
+        json.loads((root / f'.claude-plugin/{name}.json').read_text())
+else:
+    raise SystemExit(f'unsupported stub command: {args}')

@@ -40,11 +40,46 @@ Evidence:
   `install-codex.py` and `install-claude.py` both succeeded (25 skills, six
   hooks; plugin `hippocampus@hippocampus`).
 
-Known issue
+Published 0.13.0 limitation
 ([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80), fix in
 0.13.1): `install.sh --verify` fails after the plugin installation. Running the
 helpers after `install-release.sh` also fails. Install by extracting the
 verified archive and running the two helpers from it.
+
+## Install-route fix intended for 0.13.1
+
+[hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80) prepares one
+supported signed-release route. `VERSION` remains 0.13.0 in this change;
+0.13.1 versioning, signing, publication and fleet rollout follow integration.
+The historical 0.13.0 evidence above does not attest to this fix.
+
+After verifying and bootstrapping with the published `install-release.sh`, run
+only the helpers for the tools you use, from the installed release:
+
+```bash
+python3 ~/.local/share/hippocampus/current/scripts/install-claude.py
+python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
+```
+
+The installed release includes marketplace metadata and its package installer.
+Codex adoption retains the shared versioned `current` symlink. After guided
+profile setup, run:
+
+```bash
+bash ~/.local/share/hippocampus/current/install.sh --verify
+```
+
+This checks manifest integrity and profile readiness, accepting the current
+Claude plugin registration when `claude plugin list --json` reports it enabled
+in the verification directory, or plain Claude links, Codex links, or both tools.
+Claude resolves settings precedence; project/local registrations must belong
+to that directory. A disabled plugin (including missing enablement) is absent:
+verification falls back to plain links or Codex and fails if no client remains.
+Keep the Claude CLI on `PATH` when verifying a registered plugin.
+Plain links from `install.sh` alone remain supported. Broken registrations,
+incomplete or retargeted links and tampered manifests fail. The earlier
+helper-only checkout directory layout and its recovery are documented in
+[INSTALLATION.md](INSTALLATION.md#earlier-helper-only-checkout-installs).
 
 ## Release-note draft
 

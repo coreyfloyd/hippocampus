@@ -10,12 +10,13 @@ same WSL Linux distribution.
 
 ## Combined package with session hooks
 
-From a checkout or a verified, extracted signed release, install the combined
-package for each tool you use:
+First install the versioned package with `install-release.sh` (signed release)
+or `bash install.sh` (an intentionally selected checkout). Then run the helpers
+from the installed runtime for each tool you use:
 
 ```bash
-python3 scripts/install-claude.py
-python3 scripts/install-codex.py
+python3 ~/.local/share/hippocampus/current/scripts/install-claude.py
+python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
 ```
 
 The Claude helper is the supported Claude Code installation command for both
@@ -37,7 +38,7 @@ its plain name into the Claude and Codex skill folders. It registers no hooks
 and does not give Claude Code the `/hippocampus:` names. After it, run the
 helper for each tool you use: `install-claude.py` replaces the plain Claude
 links with the namespaced plugin, and `install-codex.py` adopts the package and
-registers its hooks.
+registers its hooks without replacing the versioned `current` symlink.
 
 ## Prerequisites
 
@@ -88,6 +89,9 @@ Codex:
 │       ├── contracts/
 │       ├── profiles/
 │       ├── scripts/
+│       ├── hooks/
+│       ├── .claude-plugin/
+│       ├── install.sh
 │       └── manifest
 └── current -> releases/<version>
 
@@ -110,15 +114,41 @@ Installation succeeds before a knowledge profile exists so that the
 `hippocampus-set-up` skill is available to guide configuration. The package is
 installed at that point, but it is not ready for workflows that read or write
 the knowledge store. `bash install.sh --verify` remains the combined package
-integrity and configuration-readiness check.
+integrity and configuration-readiness check. Run the installed copy:
+
+```bash
+bash ~/.local/share/hippocampus/current/install.sh --verify
+```
+
+Verification checks the release manifest and profile, then each installed client.
+Claude can have plain skill links or an enabled, registered `hippocampus@hippocampus`
+plugin whose `installPath` resolves to the current release and whose effective
+`enabled` state is true in `claude plugin list --json`. Verification runs this
+read-only CLI command in the directory where you invoke the check, using the
+configured Claude directory. Claude resolves its user, project, local and
+managed settings; project/local registrations must also belong to that
+directory. Run verification from the project directory whose settings you
+intend to check. A missing enablement entry or explicit `false` does not count
+as an active plugin unless a higher-precedence setting enables it. Disabled
+plugins fall back to the plain Claude-link check or an installed Codex client;
+verification fails when no client remains. The Claude CLI must be on `PATH`
+when checking a registered plugin. Codex uses plain
+skill links. Without a Claude plugin, any plain Claude package skill requires
+the complete set. Codex requires the complete set whenever any skill link or
+ownership receipt is present. A valid Claude plugin leaves foreign plain skills
+independent of this verification. A plugin with the wrong
+root, a missing or retargeted link, a tampered manifest, or no installed clients
+fails verification. Claude-only and Codex-only layouts are supported; the
+bootstrap itself creates plain links for both clients.
 
 ## Install from this checkout
 
 A source checkout may contain changes beyond the latest signed release. Use the verified signed-release route for normal live upgrades. An agent must obtain explicit authorization before activating a development checkout in the user's live skill directories; candidate tests use temporary homes. If intentionally installing the development checkout:
 
 ```bash
-python3 scripts/install-claude.py   # Claude Code
-python3 scripts/install-codex.py    # Codex
+bash install.sh
+python3 ~/.local/share/hippocampus/current/scripts/install-claude.py   # Claude Code
+python3 ~/.local/share/hippocampus/current/scripts/install-codex.py    # Codex
 ```
 
 Run only the helper for each tool you use. Then ask your agent to configure it
@@ -133,8 +163,27 @@ configuration, discusses the decisions that belong to you, and shows the exact
 proposed changes before writing. After configuration, verify the result:
 
 ```bash
-bash install.sh --verify
+bash ~/.local/share/hippocampus/current/install.sh --verify
 ```
+
+### Earlier helper-only checkout installs
+
+The 0.13.0 Codex helper, when run directly from a checkout or extracted archive,
+creates `current` as a directory rather than a symlink to `releases/<version>`.
+That is why `install.sh --verify` reports "current pointer" on those installs;
+it is not evidence of a bad knowledge profile. A Claude plugin installed
+straight from that tree can also point outside the versioned runtime.
+
+To adopt the supported route, uninstall with the original Codex helper's
+`--uninstall` flag (preserving profiles and handoffs), install the new signed
+release, and rerun the helpers from `current` as shown above. Reinstalling the
+Claude plugin from `current` replaces its earlier registration. Do not manually
+retarget a runtime that still has active registrations.
+
+The fix also normalizes the release-root comparison when adopting a package
+under a symlinked home directory (including macOS temporary-directory aliases).
+Previously a valid versioned symlink there could be rejected as "existing
+current pointer is not an installer release".
 
 ## Configure a knowledge root manually
 
@@ -212,6 +261,26 @@ requires its fingerprint to match the independently obtained value, verifies
 the detached signature and checksum, extracts the signed payload, and invokes
 the package installer. Reinstalling identical content is safe; a same-version,
 different-content collision fails.
+
+After the bootstrap, register each tool you use from the persistent installed
+release (the bootstrap's temporary extraction has already been removed):
+
+```bash
+python3 ~/.local/share/hippocampus/current/scripts/install-claude.py
+python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
+```
+
+Run `hippocampus-set-up` in your agent to configure the knowledge profile, then:
+
+```bash
+bash ~/.local/share/hippocampus/current/install.sh --verify
+```
+
+These commands apply to the install-route fix intended for 0.13.1. The published
+0.13.0 bootstrap lacks the marketplace metadata in its installed copy; for that
+older release, verify the archive, extract it, and run its helpers from the
+extracted tree instead. Its helper-only layout has the verification limitation
+described above.
 
 The current release-signing public key is
 [`keys/hippocampus-release.asc`](keys/hippocampus-release.asc). Its
