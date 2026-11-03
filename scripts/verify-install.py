@@ -29,8 +29,12 @@ def verify(current: Path, claude: Path, codex: Path) -> None:
                        Path(entry['projectPath']).resolve() == Path.cwd().resolve())] or None
     if plugin is not None:
         for entry in plugin:
-            root = entry.get('installPath')
-            if not root or Path(root).resolve() != current.resolve():
+            # Directory marketplaces are copied into Claude's cache. The CLI
+            # reports their source separately; the cache path alone proves nothing.
+            sourced = 'readFromFolder' in entry
+            root = entry.get('readFromFolder') if sourced else entry.get('installPath')
+            if (not root or Path(root).resolve() != current.resolve() or
+                    sourced and entry.get('version') != (current / 'VERSION').read_text().strip()):
                 raise ValueError(f'claude plugin root is not the current release: {registry}')
     clients = 1 if plugin is not None else 0
     for label, directory in (('claude', claude), ('codex', codex)):

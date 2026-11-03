@@ -94,14 +94,32 @@ def test_signed_release_tool_routes(installed, route):
         run(env, 'bash', current / 'install.sh', '--verify')
 
 
-@pytest.mark.parametrize('damage', ['plugin-root', 'missing-link', 'retargeted-link', 'manifest', 'no-clients'])
+@pytest.mark.parametrize('damage', [
+    'plugin-root', 'cache-only', 'source-release', 'plugin-version',
+    'missing-link', 'retargeted-link', 'manifest', 'no-clients'])
 def test_verify_rejects_broken_release(installed, damage):
     home, env, current = installed
     run(env, sys.executable, current / 'scripts/install-claude.py')
-    if damage == 'plugin-root':
+    if damage in ('plugin-root', 'cache-only', 'source-release', 'plugin-version'):
         registry = home / '.claude/plugins/installed_plugins.json'
         value = json.loads(registry.read_text())
-        value['plugins']['hippocampus@hippocampus'][0]['installPath'] = str(home / 'other')
+        entry = value['plugins']['hippocampus@hippocampus'][0]
+        if damage == 'plugin-version':
+            entry['version'] = '0.0.0'
+        else:
+            sources = home / '.claude/plugins/known_marketplaces.json'
+            if damage in ('plugin-root', 'cache-only'):
+                # Without source metadata, only a direct release root is valid.
+                sources.unlink()
+                if damage == 'plugin-root':
+                    entry['installPath'] = str(home / 'other')
+            else:
+                other = home / '.local/share/hippocampus/releases/other'
+                other.mkdir()
+                value_sources = json.loads(sources.read_text())
+                value_sources['hippocampus']['source']['path'] = str(other)
+                value_sources['hippocampus']['installLocation'] = str(other)
+                sources.write_text(json.dumps(value_sources))
         registry.write_text(json.dumps(value))
     elif damage in ('missing-link', 'retargeted-link'):
         link = home / '.codex/skills/checkpoint'
@@ -218,4 +236,39 @@ def test_disabled_plugin_falls_back_to_available_client(installed, fallback):
     value = json.loads(registry.read_text())
     value['plugins']['hippocampus@hippocampus'][0]['installPath'] = str(home / 'stale')
     registry.write_text(json.dumps(value))
+    (home / '.claude/plugins/known_marketplaces.json').unlink()
     run(env, 'bash', current / 'install.sh', '--verify')
+
+
+def test_legacy_direct_folder_registration(installed):
+    home, env, current = installed
+    run(env, sys.executable, current / 'scripts/install-claude.py')
+    registry = home / '.claude/plugins/installed_plugins.json'
+    value = json.loads(registry.read_text())
+    value['plugins']['hippocampus@hippocampus'][0] = {
+        'installPath': str(current), 'scope': 'user'}
+    registry.write_text(json.dumps(value))
+    (home / '.claude/plugins/known_marketplaces.json').unlink()
+    run(env, 'bash', current / 'install.sh', '--verify')
+
+
+@pytest.mark.skipif(not shutil.which('claude'), reason='the claude command is not installed')
+def test_real_claude_signed_release_verification(installed):
+    home, env, current = installed
+    # Remove the offline stub from PATH; all client state remains in this home.
+    env['PATH'] = os.environ['PATH']
+    env['CLAUDE_CONFIG_DIR'] = str(home / '.claude')
+    run(env, sys.executable, current / 'scripts/install-claude.py', cwd=home)
+    shutil.rmtree(home / '.codex/skills')
+    run(env, 'bash', current / 'install.sh', '--verify', cwd=home)
+    # The cached plugin survives, but its source is no longer the active release.
+    marketplaces = home / '.claude/plugins/known_marketplaces.json'
+    value = json.loads(marketplaces.read_text())
+    other = home / '.local/share/hippocampus/releases/other'
+    shutil.copytree(current.resolve(), other)
+    value['hippocampus']['source']['path'] = str(other)
+    value['hippocampus']['installLocation'] = str(other)
+    marketplaces.write_text(json.dumps(value))
+    result = run(env, 'bash', current / 'install.sh', '--verify', check=False, cwd=home)
+    assert result.returncode != 0
+    assert 'claude plugin root is not the current release' in result.stderr
