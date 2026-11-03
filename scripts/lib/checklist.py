@@ -110,6 +110,19 @@ def load_profile(path: Path) -> dict[str, Any]:
     return profile
 
 
+def load_profiles(user_profile: Path | None, repository_profiles: Sequence[Path]) -> list[dict[str, Any]]:
+    paths = ([user_profile] if user_profile else []) + list(repository_profiles)
+    profiles = [load_profile(path) for path in paths]
+    for path, profile in zip(repository_profiles, profiles[1:] if user_profile else profiles):
+        if "ask" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind ask")
+        if "record_read" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind record_read")
+        if profile.get("bindings"):
+            raise ValueError(f"{path}: repository profiles only add steps; cannot bind {', '.join(profile['bindings'])}")
+    return profiles
+
+
 def record_read_binding(profile: Mapping[str, Any]) -> dict[str, str] | None:
     """The optional user-bound read skill, separate from the writing slots."""
     if "record_read" not in profile:
@@ -271,16 +284,40 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str
             "choices": copy.deepcopy(item.get("choices", []))}
 
 
-def report_asks(handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """List filed and carried asks once, with lesson proposals first."""
+def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
+    """List every recoverable ask, even when another item is malformed or missing."""
     asks = []
     seen = set()
     subject = handoff.get("subject", {})
-    candidates = [row["ask"] for row in handoff.get("filing", {}).get("items", []) if "ask" in row]
-    candidates.extend(ask_payload(item, subject) for item in handoff.get("resume", {}).get("open_loops", [])
+    candidates = []
+    for index, row in enumerate(handoff.get("filing", {}).get("items", [])):
+        if "ask" in row:
+            candidates.append((f"filing.items[{index}].ask", row["ask"], True))
+        elif (row.get("status") in ("unbound", "pending", "failed", "read failed", *NATIVE_STATUSES)
+              and isinstance(row.get("item"), Mapping) and row["item"].get("choices")):
+            candidates.append((f"filing.items[{index}].item", row["item"], False))
+    groups = handoff.get("filing", {}).get("asks", {})
+    if not isinstance(groups, Mapping):
+        problems.append("filing.asks must be an object")
+    else:
+        for directory, payloads in groups.items():
+            if not isinstance(payloads, list):
+                problems.append(f"filing.asks[{directory!r}] must be an array")
+                continue
+            candidates.extend((f"filing.asks[{directory!r}][{index}]", payload, True)
+                              for index, payload in enumerate(payloads))
+    candidates.extend((f"open_loops[{index}]", item, False)
+                      for index, item in enumerate(handoff.get("resume", {}).get("open_loops", []))
                       if item.get("choices"))
-    for ask in candidates:
-        identity = (ask.get("session_id"), ask.get("produced_at"), ask.get("text"))
+    for label, item, is_payload in candidates:
+        try:
+            if not isinstance(item, Mapping):
+                raise ValueError("ask must be an object")
+            ask = item if is_payload else ask_payload(item, subject)
+        except (ValueError, TypeError, AttributeError) as error:
+            problems.append(f"{label}: {error}")
+            continue
+        identity = json.dumps([ask.get("session_id"), ask.get("produced_at"), ask.get("text")], sort_keys=True)
         if identity not in seen:
             asks.append(copy.deepcopy(ask))
             seen.add(identity)
@@ -613,6 +650,103 @@ def session_summary(plan: Sequence[Mapping[str, Any]], summary: str | None,
                 "summary\" or the reason it gave"]
 
 
+def build_report(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect failures independently, then always end the report with its asks.
+
+    A failed check must not prevent another check or hide readable handoff data.
+    Unreadable inputs remain errors; no receipt or successful step is invented.
+    """
+    problems: list[str] = []
+
+    def read(path: Path | None, label: str, default: Any, *, text: bool = False) -> Any:
+        if path is None:
+            return default
+        try:
+            content = path.read_text()
+            return content if text else json.loads(content)
+        except (OSError, ValueError) as error:
+            problems.append(f"{label}: {error}")
+            return default
+
+    def object_rows(value: Any, label: str) -> list[Mapping[str, Any]]:
+        if not isinstance(value, list):
+            problems.append(f"{label} must be an array of objects")
+            return []
+        rows = []
+        for index, row in enumerate(value):
+            if isinstance(row, Mapping):
+                rows.append(row)
+            else:
+                problems.append(f"{label}[{index}] must be an object")
+        return rows
+
+    if not args.results or not args.handoff:
+        problems.append("report requires --results and --handoff")
+    handoff = read(args.handoff, "handoff", {})
+    handoff_problems, _ = _load_handoff_module().lint_data(handoff)
+    problems.extend(f"report handoff invalid: {problem}" for problem in handoff_problems)
+    if not isinstance(handoff, Mapping):
+        handoff = {}
+    results = read(args.results, "results", [])
+    summary_text = read(args.summary, "session summary", None, text=True)
+    summary = ({"summary": summary_text} if summary_text is not None else
+               {"summary": None, "summary_unavailable": args.no_summary or "session summary could not be checked"})
+
+    plan = None
+    ask = None
+    try:
+        profiles = load_profiles(args.user_profile, args.repository_profile)
+        plan = compose(profiles)
+        ask = ask_binding(profiles[0]) if args.user_profile else None
+    except (OSError, ValueError, TypeError, AttributeError) as error:
+        problems.append(f"profiles: {error}")
+    warnings = []
+    if plan is not None:
+        checked_summary, summary_problems = session_summary(plan, summary_text, args.no_summary)
+        problems.extend(summary_problems)
+        if checked_summary:
+            summary = checked_summary
+        problems.extend(check_report(plan, results, args.unattended))
+        try:
+            filing_failures, warnings = filing_check(plan, handoff, ask)
+            problems.extend(filing_failures)
+        except (ValueError, TypeError, AttributeError) as error:
+            problems.append(f"filing report invalid: {error}")
+
+    # Invalid rows still fail the report, but cannot suppress other rows' asks.
+    results = [row for row in results if isinstance(row, Mapping)] if isinstance(results, list) else []
+    filing = handoff.get("filing", {})
+    if not isinstance(filing, Mapping):
+        problems.append("filing report must be an object")
+        filing = {}
+    filing_rows = object_rows(filing.get("items", []), "filing.items")
+    resume = handoff.get("resume", {})
+    resume = resume if isinstance(resume, Mapping) else {}
+    loops = object_rows(resume.get("open_loops", []), "resume.open_loops")
+    subject = handoff.get("subject", {})
+    asks = report_asks({"subject": subject if isinstance(subject, Mapping) else {},
+                        "filing": {"items": filing_rows, "asks": filing.get("asks", {})},
+                        "resume": {"open_loops": loops}}, problems)
+    incomplete = [{"id": r["id"], "status": r["status"], "reason": r.get("error") or r.get("reason")}
+                  for r in results if isinstance(r.get("id"), str) and r["id"] in NATIVE
+                  and r.get("status") in ("failed", "declined", "pending")]
+    for row in filing_rows:
+        native = row.get("native_step") or row.get("binding")
+        if isinstance(native, str) and native in NATIVE and row.get("status") in ("failed", "declined", "pending"):
+            if not any(r["id"] == native for r in incomplete):
+                incomplete.append({"id": native, "status": row["status"],
+                                   "reason": row.get("error") or row.get("reason")})
+    output = {**summary, "report": "failed" if problems else "incomplete" if incomplete else "ok",
+              "pending": [r.get("id") for r in results if r.get("status") == "pending"],
+              "filing": handoff.get("filing", {}), "warnings": warnings}
+    if incomplete:
+        output["incomplete"] = incomplete
+    if problems:
+        output["errors"] = list(dict.fromkeys(problems))
+    output["asks"] = asks
+    return output
+
+
 def _timestamp(value: Any, label: str) -> datetime:
     try:
         stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
@@ -733,15 +867,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         kind = session_kind({})
         if kind != "interactive":
             raise ValueError(f"a {kind} session never runs the checklist or writes a handoff")
+        if args.operation == "report":
+            output = build_report(args)
+            for problem in output.get("errors", []):
+                print(f"checklist: report invalid: {problem}", file=sys.stderr)
+            print(json.dumps(output, indent=2))
+            return 1 if output["report"] == "failed" else 0
         paths = ([args.user_profile] if args.user_profile else []) + args.repository_profile
-        profiles = [load_profile(path) for path in paths]
-        for path, profile in zip(args.repository_profile, profiles[1:] if args.user_profile else profiles):
-            if "ask" in profile:
-                raise ValueError(f"{path}: repository profiles cannot bind ask")
-            if "record_read" in profile:
-                raise ValueError(f"{path}: repository profiles cannot bind record_read")
-            if profile.get("bindings"):
-                raise ValueError(f"{path}: repository profiles only add steps; cannot bind {', '.join(profile['bindings'])}")
+        profiles = load_profiles(args.user_profile, args.repository_profile)
         plan = compose(profiles)
         ask = ask_binding(profiles[0]) if args.user_profile else None
         handoff = json.loads(args.handoff.read_text()) if args.handoff else {}
@@ -792,44 +925,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 marker.unlink(missing_ok=True)
             record = next(step for step in plan if step.get("slot") == "record")
             output = {"wrap": "ok", "record_check": "passed" if record["binding"] else "not run: record unbound"}
-        elif args.operation == "report":
-            if not args.results or not args.handoff:
-                raise ValueError("report requires --results and --handoff")
-            handoff_problems, _ = _load_handoff_module().lint_data(handoff)
-            if handoff_problems:
-                raise ValueError("report handoff invalid: " + "; ".join(handoff_problems))
-            results = json.loads(args.results.read_text())
-            summary, problems = session_summary(
-                plan, args.summary.read_text() if args.summary else None, args.no_summary)
-            problems += check_report(plan, results, args.unattended)
-            for problem in problems:
-                print(f"checklist: report invalid: {problem}", file=sys.stderr)
-            if problems:
-                return 1
-            filing_failures, warnings = filing_check(plan, handoff, ask)
-            for problem in filing_failures:
-                print(f"checklist: report invalid: {problem}", file=sys.stderr)
-            incomplete = [{"id": r["id"], "status": r["status"],
-                           "reason": r.get("error") or r.get("reason")}
-                          for r in results if r["id"] in NATIVE and r["status"] in ("failed", "declined", "pending")]
-            for row in handoff.get("filing", {}).get("items", []):
-                native = row.get("native_step") or row.get("binding")
-                if native in NATIVE and row.get("status") in ("failed", "declined", "pending"):
-                    if not any(r["id"] == native for r in incomplete):
-                        incomplete.append({"id": native, "status": row["status"],
-                                           "reason": row.get("error") or row.get("reason")})
-            # The report starts with the session summary.
-            output = {**summary, "report": "failed" if filing_failures else "incomplete" if incomplete else "ok", "pending": [r["id"] for r in results if r["status"] == "pending"],
-                      "filing": handoff.get("filing", {}), "warnings": warnings}
-            if incomplete:
-                output["incomplete"] = incomplete
-            output["asks"] = report_asks(handoff)
         else:
             if not args.handoff or not args.receipts:
                 raise ValueError("settle requires --handoff and --receipts")
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
-        return 1 if args.operation == "report" and filing_failures else 0
+        return 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)
         return 1

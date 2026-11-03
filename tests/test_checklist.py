@@ -688,6 +688,15 @@ class ChecklistTests(unittest.TestCase):
         self.assertNotIn("when_answer_needed", attended)
 
     def test_completion_entry_points_require_a_written_handoff_in_both_modes(self):
+        def check_failure_output(result, operation):
+            if operation == "report":
+                output = json.loads(result.stdout)
+                self.assertEqual(output["report"], "failed")
+                self.assertTrue(output["errors"])
+                self.assertEqual(output["asks"], [])
+            else:
+                self.assertEqual(result.stdout, "")
+
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             results = root / "results.json"
@@ -707,7 +716,7 @@ class ChecklistTests(unittest.TestCase):
                                                 text=True, capture_output=True)
                         self.assertEqual(result.returncode, 1, result.stdout)
                         self.assertIn("requires", result.stderr)
-                        self.assertEqual(result.stdout, "")
+                        check_failure_output(result, operation)
                 for path in [root / "absent.json", malformed, empty]:
                     for operation, flag, extra in [("report", "--handoff", ["--results", str(results)]),
                                                    ("wrap-check", "--written-handoff", [])]:
@@ -715,7 +724,7 @@ class ChecklistTests(unittest.TestCase):
                             result = subprocess.run([sys.executable, str(ENGINE), operation, *mode,
                                                      flag, str(path), *extra], text=True, capture_output=True)
                             self.assertEqual(result.returncode, 1, result.stdout)
-                            self.assertEqual(result.stdout, "")
+                            check_failure_output(result, operation)
                 # Planning a new session intentionally has no resumed handoff.
                 planned = subprocess.run([sys.executable, str(ENGINE), "plan", *mode, "--session-id", "wrap-session"],
                                          text=True, capture_output=True)

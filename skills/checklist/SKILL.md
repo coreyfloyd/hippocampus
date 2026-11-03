@@ -335,7 +335,9 @@ python3 <checklist-module> report --user-profile <user-profile> \
 ```
 
 `--handoff` is required and must name the valid handoff checkpoint wrote;
-report refuses an omitted, unreadable, malformed, or invalid handoff.
+an omitted, unreadable, malformed, or invalid handoff fails the report. The
+report still shows every ask recoverable from readable handoff fields; invalid
+fields never hide asks held in other fields.
 `--summary` is the file the record binding wrote. When it could not compose
 one, pass `--no-summary <reason>` with its reason instead. When its output has
 no session summary at all (a binding that predates session summaries), pass
@@ -372,4 +374,9 @@ diff, and evidence. Do not replace proposals with pointers or one-line summaries
 Only retained items with user choices belong in this ask list; a lesson's type or
 native status alone does not make it an ask. Never omit a retained approval
 proposal: preserve its full text and choices. The list follows warnings and incomplete-step details. A failed ask write still
-returns this report with `report: "failed"` and a non-zero exit status.
+appears in the report, as do failed record or persist writes, failed record
+reads, and validation or input errors. These failures return `report: "failed"`,
+an `errors` list before the final `asks`, the same errors on stderr, and a
+non-zero exit status. Never stop reporting after an error or omit the asks.
+Native failures and refusals retain their `incomplete` report and existing exit
+status unless another error fails the report.

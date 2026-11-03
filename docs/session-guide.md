@@ -369,11 +369,16 @@ report command output                 # JSON on stdout, checked by the reporting
 ├── filing                            # item outcomes, asks by directory, warnings and failures
 ├── warnings[]                        # unbound destinations and retained item names
 ├── incomplete[]                      # native steps still awaiting completion, when any
+├── errors[]                          # failed writes, reads, inputs or validation, when any
 └── asks[]                            # every filed or carried ask in full, lessons first
 ```
 
-Every attended and unattended report ends with `asks`, including failed ask writes
-(which retain a non-zero exit status). Each ask keeps its complete text and choices;
+Every attended and unattended report ends with `asks`, including runs with failed
+record, persist, or ask writes, failed record reads, or invalid report inputs.
+These failures appear in `errors` and on stderr, with `report: "failed"` and a
+non-zero exit status. Readable asks still appear when another handoff field is
+invalid; an unreadable handoff fails explicitly without inventing missing asks.
+Each ask keeps its complete text and choices;
 lesson asks include the full target file and section, proposed text, and evidence.
 A native lesson proposal awaiting approval keeps its choices on the carried item
 or filing outcome. Native backlog with no user decision stays in the filing
