@@ -77,13 +77,14 @@ def test_full_asks_survive_continuation_and_end_report(tmp_path, unattended, bou
     assert all(asks[0][key] == value for key, value in proposal.items())
 
 
-def test_report_includes_carried_ask_without_filing_report(tmp_path):
+@pytest.mark.parametrize('choices', [['apply', 'decline'], [''], ['apply', ' '], 'apply'])
+def test_report_includes_carried_ask_without_filing_report(tmp_path, choices):
     source = tmp_path / 'handoff.json'
     env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(tmp_path / 'absent.json'),
                HANDOFF_PATH=str(source), HANDOFF_LEDGER_DIR=str(tmp_path / 'ledger'),
                CLAUDE_CODE_ENTRYPOINT='cli')
     item = dict(type='lesson', context='Target: rules.md, section: Evidence\n' + 'Proposed text and evidence. ' * 60,
-                choices=['apply', 'decline'], session_id='producer', produced_at='2026-10-23T12:00:00Z',
+                choices=choices, session_id='producer', produced_at='2026-10-23T12:00:00Z',
                 disposition='carry')
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'checkpoint',
                              '--cwd', str(tmp_path), '--session-id', 'producer'],
@@ -96,5 +97,75 @@ def test_report_includes_carried_ask_without_filing_report(tmp_path):
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/checklist.py'), 'report',
                              '--handoff', str(source), '--results', str(results)], env=env,
                             text=True, capture_output=True)
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)['asks'][0]['text'] == item['context']
+    if choices == ['apply', 'decline']:
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)['asks'][0]['text'] == item['context']
+    else:
+        assert result.returncode == 1
+        assert "an ask requires the user's choices" in result.stderr
+
+
+@pytest.mark.parametrize('unattended', [False, True])
+@pytest.mark.parametrize('status', ['pending', 'declined', 'failed'])
+@pytest.mark.parametrize('choice_source', ['item', 'outcome', 'none'])
+def test_native_lesson_decisions_and_backlog_through_wrap(tmp_path, unattended, status, choice_source):
+    """Native failures keep lessons; only proposals with a user decision are asks."""
+    source = tmp_path / 'source.json'
+    written = tmp_path / 'handoff.json'
+    env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(tmp_path / 'absent.json'),
+               HANDOFF_PATH=str(written), HANDOFF_LEDGER_DIR=str(tmp_path / 'ledger'),
+               HANDOFF_COMPACT_STATE_DIR=str(tmp_path / 'compact'),
+               CHECKLIST_STATE_DIR=str(tmp_path / 'state'), CLAUDE_CODE_ENTRYPOINT='cli',
+               CHECKLIST_USER_PROFILE=str(tmp_path / 'profile.json'))
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'user'}))
+    mode = ['--unattended'] if unattended else []
+
+    def invoke(script, *args, payload=None):
+        result = subprocess.run([sys.executable, str(ROOT / script), *map(str, args)], env=env,
+                                input=json.dumps(payload) if payload is not None else None,
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout) if result.stdout.startswith('{') else result.stdout
+
+    proposal = dict(target_file='rules/evidence.md', section='Verification',
+                    proposed_text='Keep every detail.\n' * 80, evidence=['Observed omission.\n' * 80])
+    choices = ['Apply the full proposal. ' * 50, 'Decline this proposal']
+    lesson = dict(type='lesson', context=json.dumps(proposal), **proposal,
+                  session_id='producer', produced_at='2026-10-23T12:00:00Z', disposition='carry')
+    if choice_source == 'item':
+        lesson['choices'] = choices
+    # Native-step outcomes can carry the choices discovered by the lessons step.
+    row = dict(index=0, rule='R4', status=status, reason='Native lesson remains unsaved')
+    if choice_source == 'outcome':
+        row['choices'] = choices
+    source.write_text(json.dumps({'resume': {'headline': 'Pending native lesson', 'open_loops': [lesson]}}))
+    outcomes = tmp_path / 'outcomes.json'
+    outcomes.write_text(json.dumps([row]))
+    filed = invoke('scripts/lib/checklist.py', 'file', '--handoff', source, '--filing', outcomes, *mode)
+    invoke('scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path, '--session-id', 'producer', payload=filed)
+    invoke('scripts/lib/handoff.py', 'pre-compact', payload={'cwd': str(tmp_path), 'session_id': 'producer'})
+    picked = invoke('skills/pickup/scripts/pickup.py', '--handoff', written, '--json')
+    carried, = picked['resume']['open_loops']
+    assert carried['context'] == lesson['context']
+    assert all(carried[key] == value for key, value in proposal.items())
+    if choice_source != 'none':
+        assert carried['choices'] == choices
+    invoke('scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path, '--session-id', 'producer',
+           '--trigger', 'wrap', payload=picked['handoff'])
+    invoke('scripts/lib/checklist.py', 'wrap-check', '--written-handoff', written, *mode)
+    results = tmp_path / 'results.json'
+    results.write_text(json.dumps([dict(id=step, status='carried' if step in ('record', 'persist') else 'run', writes=[])
+                                  for step in ['record', 'knowledge', 'lessons', 'persist', 'handoff']]))
+    report = invoke('scripts/lib/checklist.py', 'report', '--handoff', written, '--results', results, *mode)
+    assert list(report)[-1] == 'asks'
+    assert report['report'] == 'incomplete'
+    assert report['incomplete'][0]['id'] == 'lessons'
+    assert report['filing']['items'][0]['status'] == status
+    assert report['filing']['items'][0]['item']['context'] == lesson['context']
+    if choice_source == 'none':
+        assert report['asks'] == []
+    else:
+        ask, = report['asks']
+        assert ask['text'] == lesson['context']
+        assert ask['choices'] == choices
+        assert all(ask[key] == value for key, value in proposal.items())

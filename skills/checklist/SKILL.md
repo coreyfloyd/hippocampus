@@ -219,6 +219,10 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `reason`, and a failed row names `error`. Read-dependent rules need
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
+A retained native lesson proposal awaiting user approval also keeps non-empty
+`choices` on its item or R4 outcome, even when its destination is `lessons`.
+Native work retained only because a step failed or was declined needs no ask
+choices; keep it in the filing report and incomplete-step details.
 Use the same profile arguments for the filing pass:
 
 ```bash
@@ -365,5 +369,7 @@ End every report, attended or unattended, with the output's final `asks` list: e
 ask this run filed or carried, complete text and all choices, with lesson asks
 first. Each lesson includes its target file and section, full proposed text or
 diff, and evidence. Do not replace proposals with pointers or one-line summaries.
-The list follows warnings and incomplete-step details. A failed ask write still
+Only retained items with user choices belong in this ask list; a lesson's type or
+native status alone does not make it an ask. Never omit a retained approval
+proposal: preserve its full text and choices. The list follows warnings and incomplete-step details. A failed ask write still
 returns this report with `report: "failed"` and a non-zero exit status.

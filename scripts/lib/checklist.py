@@ -261,6 +261,9 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
 
 def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
+    choices = item.get("choices")
+    if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
+        raise ValueError(f"{item.get('context', str(item))}: an ask requires the user's choices")
     return {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
             "session_id": item.get("session_id") or subject.get("session_id"),
             "directory": subject.get("working_directory"),
@@ -275,7 +278,7 @@ def report_asks(handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
     subject = handoff.get("subject", {})
     candidates = [row["ask"] for row in handoff.get("filing", {}).get("items", []) if "ask" in row]
     candidates.extend(ask_payload(item, subject) for item in handoff.get("resume", {}).get("open_loops", [])
-                      if item.get("choices") or item.get("type") in ("decision", "lesson"))
+                      if item.get("choices"))
     for ask in candidates:
         identity = (ask.get("session_id"), ask.get("produced_at"), ask.get("text"))
         if identity not in seen:
@@ -315,7 +318,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if status not in ("filed", "dropped", "pending", "failed", "read failed", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
-        if binding == "ask":
+        if binding == "ask" or (binding in NATIVE and "choices" in row):
             item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
@@ -334,9 +337,6 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: {rule} requires dropped with a reason")
         else:
             if binding == "ask":
-                choices = item.get("choices")
-                if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
-                    raise ValueError(f"{label}: an ask requires the user's choices")
                 entry["ask"] = ask_payload(item, handoff.get("subject", {}))
                 report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
             if bindings[binding] is None:

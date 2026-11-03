@@ -375,6 +375,9 @@ report command output                 # JSON on stdout, checked by the reporting
 Every attended and unattended report ends with `asks`, including failed ask writes
 (which retain a non-zero exit status). Each ask keeps its complete text and choices;
 lesson asks include the full target file and section, proposed text, and evidence.
+A native lesson proposal awaiting approval keeps its choices on the carried item
+or filing outcome. Native backlog with no user decision stays in the filing
+report and incomplete-step details, without appearing as an ask.
 
 If none was composed, pass `--no-summary` with the record's reason; an older
 binding can be reported as `<command> composed no session summary`. With record
