@@ -122,7 +122,11 @@ bash ~/.local/share/hippocampus/current/install.sh --verify
 
 Verification checks the release manifest and profile, then each installed client.
 Claude can have plain skill links or an enabled, registered `hippocampus@hippocampus`
-plugin whose `installPath` resolves to the current release and whose effective
+plugin whose `readFromFolder` resolves to the current release and whose
+`version` matches that release's `VERSION`. Claude copies directory plugins into
+its cache; that cache path alone does not identify the active release. For older
+CLI registrations without `readFromFolder`, `installPath` must resolve directly
+to the current release. The plugin's effective
 `enabled` state is true in `claude plugin list --json`. Verification runs this
 read-only CLI command in the directory where you invoke the check, using the
 configured Claude directory. Claude resolves its user, project, local and

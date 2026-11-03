@@ -16,9 +16,16 @@ if operation == 'install':
     root = Path(args[args.index('--marketplace') + 1]).resolve()
     assert (root / '.claude-plugin/marketplace.json').is_file(), 'marketplace missing'
     assert (root / '.claude-plugin/plugin.json').is_file(), 'plugin metadata missing'
-    entries['hippocampus@hippocampus'] = [{'installPath': str(root), 'scope': 'user'}]
+    version = json.loads((root / '.claude-plugin/plugin.json').read_text())['version']
+    cache = config / 'plugins/cache/hippocampus/hippocampus' / version
+    shutil.copytree(root, cache, dirs_exist_ok=True)
+    entries['hippocampus@hippocampus'] = [
+        {'installPath': str(cache), 'version': version, 'scope': 'user'}]
     registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text(json.dumps({'version': 2, 'plugins': entries}))
+    marketplaces = config / 'plugins/known_marketplaces.json'
+    marketplaces.write_text(json.dumps({'hippocampus': {
+        'source': {'source': 'directory', 'path': str(root)}, 'installLocation': str(root)}}))
     settings = config / 'settings.json'
     value = json.loads(settings.read_text()) if settings.exists() else {}
     value.setdefault('enabledPlugins', {})['hippocampus@hippocampus'] = True
@@ -32,7 +39,11 @@ elif operation == 'list':
                  project / '.claude/settings.local.json'):
         if path.exists():
             enabled.update(json.loads(path.read_text()).get('enabledPlugins', {}))
-    print(json.dumps([{'id': key, 'enabled': enabled.get(key) is True, **entry}
+    marketplaces = config / 'plugins/known_marketplaces.json'
+    sources = json.loads(marketplaces.read_text()) if marketplaces.exists() else {}
+    source = sources.get('hippocampus', {}).get('source', {}).get('path')
+    print(json.dumps([{'id': key, 'enabled': enabled.get(key) is True, **entry,
+                       **({'readFromFolder': source} if source is not None else {})}
                       for key, rows in entries.items() for entry in rows]))
 elif operation == 'uninstall':
     entries.pop('hippocampus@hippocampus', None)
