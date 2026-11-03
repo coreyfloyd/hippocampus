@@ -276,10 +276,10 @@ Run `hippocampus-set-up` in your agent to configure the knowledge profile, then:
 bash ~/.local/share/hippocampus/current/install.sh --verify
 ```
 
-These commands apply to the install-route fix intended for 0.13.1. The published
-0.13.0 bootstrap lacks the marketplace metadata in its installed copy; for that
-older release, verify the archive, extract it, and run its helpers from the
-extracted tree instead. Its helper-only layout has the verification limitation
+These commands apply to 0.13.1 and later. The published 0.13.0 bootstrap
+lacks the marketplace metadata in its installed copy; for that older release,
+verify the archive, extract it, and run its helpers from the extracted tree
+instead. Its helper-only layout has the verification limitation
 described above.
 
 The current release-signing public key is
