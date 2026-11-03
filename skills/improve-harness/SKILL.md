@@ -174,7 +174,9 @@ Unattended runs carry proposals because approval needs a present user; waiting s
 a `lesson` item for the checklist to carry in the handoff, not one per surface.
 Without an override, do not file tickets. Never self-approve or apply proposals.
 Include the full proposed text or diff, target file and section, and grounding
-evidence. A memory move includes the memory file, target, proposed text,
+evidence, plus the user's complete choices in `choices`. Keep the full proposal
+and choices at any length through checkpoint, compaction, pickup, and wrap.
+A memory move includes the memory file, target, proposed text,
 grounding, and deletion of the original as one proposal.
 
 A routing file's configured durable sink overrides this default: file the full

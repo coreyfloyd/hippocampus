@@ -168,7 +168,7 @@ def test_native_r4_ask_runs_bound_command_and_stays_pending_through_wrap(tmp_pat
         assert data['filing']['asks'][str(tmp_path)] == [payload]
         assert data['filing']['items'][0]['receipt'] == 'ask receipt'
         assert data['filing']['items'][0]['status'] == 'pending'
-        assert data['resume']['open_loops'] == [item]
+        assert data['resume']['open_loops'] == [dict(item, choices=row['choices'])]
         invoke(writer, 'checkpoint', '--cwd', tmp_path, '--session-id', 'producer', '--trigger', 'wrap',
                payload=filed.stdout)
         written = next((tmp_path / 'handoffs').rglob('*.json'))

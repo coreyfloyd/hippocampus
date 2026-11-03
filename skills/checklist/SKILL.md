@@ -196,7 +196,7 @@ that evidence. An information-only R1 can explicitly set `information_only: true
 Run the required bound command for each write and collect explicit receipts.
 For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
-and `choices` (the user's options). An ask is **never filed as a ticket**.
+and `choices` (the user's complete options, with no length limit). An ask is **never filed as a ticket**.
 These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
 an ask acknowledgement does not replace a capture or lesson receipt. Always run
 the bound ask command for R4 `destination: "ask"`, using the complete payload in
@@ -219,6 +219,10 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `reason`, and a failed row names `error`. Read-dependent rules need
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
+A retained native lesson proposal awaiting user approval also keeps non-empty
+`choices` on its item or R4 outcome, even when its destination is `lessons`.
+Native work retained only because a step failed or was declined needs no ask
+choices; keep it in the filing report and incomplete-step details.
 Use the same profile arguments for the filing pass:
 
 ```bash
@@ -235,9 +239,11 @@ without failing wrap. A bound record, persist, or ask write failure retains it a
 A native failure or refusal retains its items and makes the final report
 `incomplete`, without failing wrap validation. `nothing` and `not configured`
 do not make the wrap incomplete. With no
-ask binding, the report's `asks` groups asks under their directory; retain this
+ask binding, `filing.asks` groups asks under their directory; retain this
 report for the sweep report and keep the producing handoff. Do not archive it.
-For a failed write, checkpoint the retained payload before reporting failure.
+Asks retain their complete text, choices, and proposal fields in carried items;
+never shorten them to fit a carried-item limit. For a failed write, checkpoint
+the retained payload before reporting failure.
 
 Write the interactive session's handoff using the
 same checkpoint module as `checkpoint`. Its slash skill is user-only;
@@ -329,7 +335,9 @@ python3 <checklist-module> report --user-profile <user-profile> \
 ```
 
 `--handoff` is required and must name the valid handoff checkpoint wrote;
-report refuses an omitted, unreadable, malformed, or invalid handoff.
+an omitted, unreadable, malformed, or invalid handoff fails the report. The
+report still shows every ask recoverable from readable handoff fields; invalid
+fields never hide asks held in other fields.
 `--summary` is the file the record binding wrote. When it could not compose
 one, pass `--no-summary <reason>` with its reason instead. When its output has
 no session summary at all (a binding that predates session summaries), pass
@@ -358,3 +366,22 @@ The final report returns `report: "incomplete"` and an `incomplete` list naming
 every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
+
+End every report, attended or unattended, with the output's final `asks` list: every
+ask this run filed or carried, complete text and all choices, with lesson asks
+first. Each lesson includes its target file and section, full proposed text or
+diff, and evidence. Do not replace proposals with pointers or one-line summaries.
+Only identical ask payloads appear once; different linked tickets, choices, or
+proposal fields remain separate even with the same producing session, time, and
+text. Validate stored filing asks as well as carried asks: non-empty text and
+non-empty choices are required. A malformed ask fails the report while every
+valid ask still appears in full.
+Only retained items with user choices belong in this ask list; a lesson's type or
+native status alone does not make it an ask. Never omit a retained approval
+proposal: preserve its full text and choices. The list follows warnings and incomplete-step details. A failed ask write still
+appears in the report, as do failed record or persist writes, failed record
+reads, and validation or input errors. These failures return `report: "failed"`,
+an `errors` list before the final `asks`, the same errors on stderr, and a
+non-zero exit status. Never stop reporting after an error or omit the asks.
+Native failures and refusals retain their `incomplete` report and existing exit
+status unless another error fails the report.

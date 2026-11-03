@@ -110,7 +110,8 @@ class ChecklistTests(unittest.TestCase):
                 self.assertEqual(payload["choices"], ["save", "leave"])
                 self.assertEqual(payload["text"], kind + " now")
                 self.assertEqual(payload["session_id"], "wrap-session")
-                self.assertEqual(result["resume"]["open_loops"], source["resume"]["open_loops"])
+                self.assertEqual(result["resume"]["open_loops"],
+                                 [dict(source["resume"]["open_loops"][0], choices=row["choices"])])
                 entry, = result["filing"]["items"]
                 self.assertEqual(entry["binding"], "ask")
                 self.assertEqual(entry["status"], "pending")
@@ -412,7 +413,7 @@ class ChecklistTests(unittest.TestCase):
                     ("R4", "pending", "ask"), ("R6", "dropped", "")])]
         # Pending R4 routes to ask; only an acknowledged ask write removes it.
         result = self.engine.file_items(plan, source, rows, self.engine.ask_binding(profile))
-        self.assertEqual(result["resume"]["open_loops"], [source["resume"]["open_loops"][4]])
+        self.assertEqual(result["resume"]["open_loops"], [dict(source["resume"]["open_loops"][4], choices=["approve", "decline"])])
         self.assertEqual(len(result["filing"]["items"]), 6)
         ask = result["filing"]["items"][1]["ask"]
         self.assertEqual(ask["session_id"], "earlier-session")
@@ -420,7 +421,7 @@ class ChecklistTests(unittest.TestCase):
         self.assertEqual(ask["choices"], ["approve", "decline"])
         self.assertEqual(result["filing"]["items"][4]["binding"], "ask")
         complete = self.engine.file_items(plan, source, [dict(r, status="filed") if r["status"] == "pending" else r for r in rows], self.engine.ask_binding(profile))
-        self.assertEqual(complete["resume"]["open_loops"], [source["resume"]["open_loops"][4]])
+        self.assertEqual(complete["resume"]["open_loops"], [dict(source["resume"]["open_loops"][4], choices=["approve", "decline"])])
         self.assertIn("lesson text", complete["resume"]["next_action"])
         self.assertEqual(source, self.handoff() | {"subject": source["subject"]})
 
@@ -473,7 +474,8 @@ class ChecklistTests(unittest.TestCase):
             result = self.engine.file_items(self.engine.compose([profile]), source,
                 [dict(index=0, rule="R3", status="failed", error="write refused", choices=["approve", "decline"])],
                 self.engine.ask_binding(profile))
-            self.assertEqual(result["resume"]["open_loops"], source["resume"]["open_loops"])
+            self.assertEqual(result["resume"]["open_loops"],
+                             [dict(source["resume"]["open_loops"][0], choices=["approve", "decline"])])
             report = result["filing"]
             self.assertEqual(bool(report["failures"]), bound)
             self.assertEqual(bool(report["warnings"]), not bound)
@@ -686,6 +688,15 @@ class ChecklistTests(unittest.TestCase):
         self.assertNotIn("when_answer_needed", attended)
 
     def test_completion_entry_points_require_a_written_handoff_in_both_modes(self):
+        def check_failure_output(result, operation):
+            if operation == "report":
+                output = json.loads(result.stdout)
+                self.assertEqual(output["report"], "failed")
+                self.assertTrue(output["errors"])
+                self.assertEqual(output["asks"], [])
+            else:
+                self.assertEqual(result.stdout, "")
+
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             results = root / "results.json"
@@ -705,7 +716,7 @@ class ChecklistTests(unittest.TestCase):
                                                 text=True, capture_output=True)
                         self.assertEqual(result.returncode, 1, result.stdout)
                         self.assertIn("requires", result.stderr)
-                        self.assertEqual(result.stdout, "")
+                        check_failure_output(result, operation)
                 for path in [root / "absent.json", malformed, empty]:
                     for operation, flag, extra in [("report", "--handoff", ["--results", str(results)]),
                                                    ("wrap-check", "--written-handoff", [])]:
@@ -713,7 +724,7 @@ class ChecklistTests(unittest.TestCase):
                             result = subprocess.run([sys.executable, str(ENGINE), operation, *mode,
                                                      flag, str(path), *extra], text=True, capture_output=True)
                             self.assertEqual(result.returncode, 1, result.stdout)
-                            self.assertEqual(result.stdout, "")
+                            check_failure_output(result, operation)
                 # Planning a new session intentionally has no resumed handoff.
                 planned = subprocess.run([sys.executable, str(ENGINE), "plan", *mode, "--session-id", "wrap-session"],
                                          text=True, capture_output=True)
@@ -755,7 +766,7 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {"summary": None, "summary_unavailable": "session summary unavailable: HTTP 502",
                                                          "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
-                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}]})
+                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "asks": []})
             path.write_text(json.dumps(wrote))
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 1)

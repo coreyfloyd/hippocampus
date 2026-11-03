@@ -78,7 +78,7 @@ The fixed, ordered table that decides what each carried item becomes: dropped wi
 _Avoid_: disposition (an open loop's own instruction), triage
 
 **Ask**:
-An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept.
+An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors.
 _Avoid_: question, needs-you item
 
 **Abandoned session**:
