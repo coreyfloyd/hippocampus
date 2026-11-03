@@ -259,6 +259,31 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
     return "record"
 
 
+def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep the complete proposal and provenance alongside the ask's text and choices."""
+    return {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
+            "session_id": item.get("session_id") or subject.get("session_id"),
+            "directory": subject.get("working_directory"),
+            "ticket": (item.get("anchor") or {}).get("ticket"),
+            "choices": copy.deepcopy(item.get("choices", []))}
+
+
+def report_asks(handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """List filed and carried asks once, with lesson proposals first."""
+    asks = []
+    seen = set()
+    subject = handoff.get("subject", {})
+    candidates = [row["ask"] for row in handoff.get("filing", {}).get("items", []) if "ask" in row]
+    candidates.extend(ask_payload(item, subject) for item in handoff.get("resume", {}).get("open_loops", [])
+                      if item.get("choices") or item.get("type") in ("decision", "lesson"))
+    for ask in candidates:
+        identity = (ask.get("session_id"), ask.get("produced_at"), ask.get("text"))
+        if identity not in seen:
+            asks.append(copy.deepcopy(ask))
+            seen.add(identity)
+    return sorted(asks, key=lambda ask: ask.get("type") != "lesson")
+
+
 def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                outcomes: Sequence[Mapping[str, Any]], ask: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Bookkeep explicit filing outcomes; never execute commands or infer saved writes.
@@ -290,6 +315,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if status not in ("filed", "dropped", "pending", "failed", "read failed", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
+        if binding == "ask":
+            item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
         entry = {**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding}
@@ -307,13 +334,10 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: {rule} requires dropped with a reason")
         else:
             if binding == "ask":
-                choices = row.get("choices")
+                choices = item.get("choices")
                 if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
                     raise ValueError(f"{label}: an ask requires the user's choices")
-                subject = handoff.get("subject", {})
-                entry["ask"] = {"text": label, "session_id": item.get("session_id") or subject.get("session_id"),
-                                "directory": subject.get("working_directory"),
-                                "ticket": (item.get("anchor") or {}).get("ticket"), "choices": choices}
+                entry["ask"] = ask_payload(item, handoff.get("subject", {}))
                 report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
             if bindings[binding] is None:
                 entry["status"] = "unbound"
@@ -785,8 +809,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             filing_failures, warnings = filing_check(plan, handoff, ask)
             for problem in filing_failures:
                 print(f"checklist: report invalid: {problem}", file=sys.stderr)
-            if filing_failures:
-                return 1
             incomplete = [{"id": r["id"], "status": r["status"],
                            "reason": r.get("error") or r.get("reason")}
                           for r in results if r["id"] in NATIVE and r["status"] in ("failed", "declined", "pending")]
@@ -797,16 +819,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                         incomplete.append({"id": native, "status": row["status"],
                                            "reason": row.get("error") or row.get("reason")})
             # The report starts with the session summary.
-            output = {**summary, "report": "incomplete" if incomplete else "ok", "pending": [r["id"] for r in results if r["status"] == "pending"],
+            output = {**summary, "report": "failed" if filing_failures else "incomplete" if incomplete else "ok", "pending": [r["id"] for r in results if r["status"] == "pending"],
                       "filing": handoff.get("filing", {}), "warnings": warnings}
             if incomplete:
                 output["incomplete"] = incomplete
+            output["asks"] = report_asks(handoff)
         else:
             if not args.handoff or not args.receipts:
                 raise ValueError("settle requires --handoff and --receipts")
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
-        return 0
+        return 1 if args.operation == "report" and filing_failures else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)
         return 1

@@ -15,12 +15,14 @@ or monitor doctrine.
 
 Supply the handoff's judgment-bearing fields: a one-line `resume.headline`, concrete
 `resume.next_action`, a one-line `resume.session_summary` of what this session did,
-short anchored or disposed `resume.open_loops`, `spawned_processes`, and `suggested_skills`.
+anchored or disposed `resume.open_loops`, `spawned_processes`, and `suggested_skills`.
 Pass all unrecorded session items in `session_items`. Each needs `type` (progress,
 commitment, decision, knowledge, lesson, artifact, or open_loop), `context` (at most
-600 characters), `disposition`, `session_id` of its producer, and `produced_at` (ISO
+600 characters except asks and lessons, whose complete text has no length limit), `disposition`, `session_id` of its producer, and `produced_at` (ISO
 timestamp with timezone). Decisions also need `author` and `location` (where decided).
-Lessons carry the lesson text in `context`, not a pointer. Only items already saved in
+Asks keep their complete `choices` alongside `context`. Lessons carry the full
+proposal in `context`: target file and section, proposed text or diff, and evidence,
+not a pointer. Preserve all of this through compaction, pickup, and wrap. Only items already saved in
 the record may have `recorded: true`; those are omitted. Already-carried items stay in
 `resume.open_loops` with their original identity and date until a binding consumes them.
 Preserve `resume.session_history` from a resumed handoff, so earlier summaries keep

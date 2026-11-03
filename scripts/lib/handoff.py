@@ -443,7 +443,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
                 if loop.get("disposition") not in ("keep", "remove"):
                     problems.append(f"{prefix}.disposition must be keep or remove for an artifact")
         context = loop.get("context", "")
-        if isinstance(context, str) and len(context) > 600:
+        full_proposal = loop.get("type") in ("decision", "lesson") or bool(loop.get("choices"))
+        if isinstance(context, str) and len(context) > 600 and not full_proposal:
             problems.append(f"open_loops[{index}].context is {len(context)} chars — that reads like durable progress; put it in the record and leave a pointer here")
         anchor = loop.get("anchor")
         anchored = isinstance(anchor, dict) and bool(anchor.get("ticket") or anchor.get("project"))

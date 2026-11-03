@@ -226,9 +226,11 @@ handoff JSON
 ```
 
 `session_items[]` is checkpoint **input**, not a stored top-level field. Every
-item has `type`, `context` (at most 600 characters), `disposition` (what to do
+item has `type`, `context` (at most 600 characters except asks and lessons), `disposition` (what to do
 next), `session_id` (producer), and `produced_at` (ISO timestamp with timezone).
-All seven types carry those fields:
+Asks and lessons keep complete text and choices at any length through checkpoint,
+compaction, pickup, and wrap. A lesson proposal includes its target file and section,
+proposed text or diff, and evidence. All seven types carry those fields:
 
 ```text
 session_items[] / typed resume.open_loops[]
@@ -362,11 +364,17 @@ bound record's summary text           # binding-defined format, not a package JS
 report command output                 # JSON on stdout, checked by the reporting session
 ├── summary                           # unedited file text, or null
 ├── summary_unavailable               # reason when no summary was composed
-├── report                            # ok after validation
+├── report                            # ok, incomplete, or failed
 ├── pending[]                         # identities of pending steps
 ├── filing                            # item outcomes, asks by directory, warnings and failures
-└── warnings[]                        # unbound destinations and retained item names
+├── warnings[]                        # unbound destinations and retained item names
+├── incomplete[]                      # native steps still awaiting completion, when any
+└── asks[]                            # every filed or carried ask in full, lessons first
 ```
+
+Every attended and unattended report ends with `asks`, including failed ask writes
+(which retain a non-zero exit status). Each ask keeps its complete text and choices;
+lesson asks include the full target file and section, proposed text, and evidence.
 
 If none was composed, pass `--no-summary` with the record's reason; an older
 binding can be reported as `<command> composed no session summary`. With record

@@ -196,7 +196,7 @@ that evidence. An information-only R1 can explicitly set `information_only: true
 Run the required bound command for each write and collect explicit receipts.
 For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
-and `choices` (the user's options). An ask is **never filed as a ticket**.
+and `choices` (the user's complete options, with no length limit). An ask is **never filed as a ticket**.
 These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
 an ask acknowledgement does not replace a capture or lesson receipt. Always run
 the bound ask command for R4 `destination: "ask"`, using the complete payload in
@@ -235,9 +235,11 @@ without failing wrap. A bound record, persist, or ask write failure retains it a
 A native failure or refusal retains its items and makes the final report
 `incomplete`, without failing wrap validation. `nothing` and `not configured`
 do not make the wrap incomplete. With no
-ask binding, the report's `asks` groups asks under their directory; retain this
+ask binding, `filing.asks` groups asks under their directory; retain this
 report for the sweep report and keep the producing handoff. Do not archive it.
-For a failed write, checkpoint the retained payload before reporting failure.
+Asks retain their complete text, choices, and proposal fields in carried items;
+never shorten them to fit a carried-item limit. For a failed write, checkpoint
+the retained payload before reporting failure.
 
 Write the interactive session's handoff using the
 same checkpoint module as `checkpoint`. Its slash skill is user-only;
@@ -358,3 +360,10 @@ The final report returns `report: "incomplete"` and an `incomplete` list naming
 every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
+
+End every report, attended or unattended, with the output's final `asks` list: every
+ask this run filed or carried, complete text and all choices, with lesson asks
+first. Each lesson includes its target file and section, full proposed text or
+diff, and evidence. Do not replace proposals with pointers or one-line summaries.
+The list follows warnings and incomplete-step details. A failed ask write still
+returns this report with `report: "failed"` and a non-zero exit status.
