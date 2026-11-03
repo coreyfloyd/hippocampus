@@ -380,6 +380,11 @@ non-zero exit status. Readable asks still appear when another handoff field is
 invalid; an unreadable handoff fails explicitly without inventing missing asks.
 Each ask keeps its complete text and choices;
 lesson asks include the full target file and section, proposed text, and evidence.
+Identical ask payloads appear once. Asks with different linked tickets, choices,
+or proposal fields remain separate, even when their producing session, time, and
+text match. Every recovered payload must have non-empty text and a non-empty
+array of non-blank choices; an invalid payload fails the report without hiding
+valid asks.
 A native lesson proposal awaiting approval keeps its choices on the carried item
 or filing outcome. Native backlog with no user decision stays in the filing
 report and incomplete-step details, without appearing as an ask.

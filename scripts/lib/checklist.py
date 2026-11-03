@@ -272,16 +272,24 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
     return "record"
 
 
+def validate_ask_payload(ask: Mapping[str, Any]) -> None:
+    """Require complete text and usable choices for both new and stored asks."""
+    if not isinstance(ask.get("text"), str) or not ask["text"].strip():
+        raise ValueError("an ask requires non-empty text")
+    choices = ask.get("choices")
+    if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
+        raise ValueError(f"{ask['text']}: an ask requires the user's choices")
+
+
 def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
-    choices = item.get("choices")
-    if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
-        raise ValueError(f"{item.get('context', str(item))}: an ask requires the user's choices")
-    return {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
-            "session_id": item.get("session_id") or subject.get("session_id"),
-            "directory": subject.get("working_directory"),
-            "ticket": (item.get("anchor") or {}).get("ticket"),
-            "choices": copy.deepcopy(item.get("choices", []))}
+    ask = {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
+           "session_id": item.get("session_id") or subject.get("session_id"),
+           "directory": subject.get("working_directory"),
+           "ticket": (item.get("anchor") or {}).get("ticket"),
+           "choices": copy.deepcopy(item.get("choices", []))}
+    validate_ask_payload(ask)
+    return ask
 
 
 def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
@@ -314,10 +322,14 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
             if not isinstance(item, Mapping):
                 raise ValueError("ask must be an object")
             ask = item if is_payload else ask_payload(item, subject)
+            if is_payload:
+                validate_ask_payload(ask)
         except (ValueError, TypeError, AttributeError) as error:
             problems.append(f"{label}: {error}")
             continue
-        identity = json.dumps([ask.get("session_id"), ask.get("produced_at"), ask.get("text")], sort_keys=True)
+        # The same item identity can carry different tickets, choices, or proposals.
+        # Only identical ask payloads are duplicates across filing and carried items.
+        identity = json.dumps(ask, sort_keys=True)
         if identity not in seen:
             asks.append(copy.deepcopy(ask))
             seen.add(identity)

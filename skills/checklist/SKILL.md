@@ -371,6 +371,11 @@ End every report, attended or unattended, with the output's final `asks` list: e
 ask this run filed or carried, complete text and all choices, with lesson asks
 first. Each lesson includes its target file and section, full proposed text or
 diff, and evidence. Do not replace proposals with pointers or one-line summaries.
+Only identical ask payloads appear once; different linked tickets, choices, or
+proposal fields remain separate even with the same producing session, time, and
+text. Validate stored filing asks as well as carried asks: non-empty text and
+non-empty choices are required. A malformed ask fails the report while every
+valid ask still appears in full.
 Only retained items with user choices belong in this ask list; a lesson's type or
 native status alone does not make it an ask. Never omit a retained approval
 proposal: preserve its full text and choices. The list follows warnings and incomplete-step details. A failed ask write still

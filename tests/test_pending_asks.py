@@ -1,4 +1,5 @@
 """Complete pending asks through the public continuation and report commands."""
+import copy
 import json
 import os
 from pathlib import Path
@@ -437,3 +438,118 @@ def test_applied_native_proposal_is_not_reported_as_pending(failed_wrap, unatten
     output = json.loads(result.stdout)
     assert output['report'] == 'ok'
     assert [ask['text'] for ask in output['asks']] == [failed_wrap.items[0]['context']]
+
+
+@pytest.mark.parametrize('unattended', [False, True])
+@pytest.mark.parametrize('persist_failed', [False, True])
+@pytest.mark.parametrize('difference', ['ticket', 'choices', 'target_file', 'section',
+                                      'proposed_text', 'diff', 'evidence', 'proposal'])
+def test_distinct_asks_with_same_item_identity_survive_report(failed_wrap, unattended, persist_failed, difference):
+    lesson = failed_wrap.items[1]
+    lesson['anchor'] = {'ticket': 'https://example.test/tickets/first'}
+    variant = copy.deepcopy(lesson)
+    if difference == 'ticket':
+        variant['anchor']['ticket'] = 'https://example.test/tickets/second'
+    elif difference == 'choices':
+        variant['choices'] = ['Apply the alternate choice.\n' * 100, 'Defer']
+    elif difference == 'evidence':
+        variant['evidence'] = ['A separate observation.\n' * 100]
+    elif difference == 'proposal':
+        variant['proposal'] = {'text': 'A separate proposal.\n' * 100}
+    else:
+        variant[difference] = 'A separate proposal detail.\n' * 100
+    failed_wrap.items.append(variant)
+    # The second lesson appears as a filed ask, a grouped ask, and a carried item.
+    failed_wrap.rows.append(dict(index=2, rule='R4', status='filed', destination='ask', choices=variant['choices']))
+    failed_wrap.checkpoint()
+    if persist_failed:
+        results = json.loads(failed_wrap.results.read_text())
+        next(row for row in results if row['id'] == 'persist').update(status='failed', error='Push refused')
+        failed_wrap.results.write_text(json.dumps(results))
+    result = failed_wrap.report(unattended)
+    assert result.returncode == int(persist_failed), result.stderr
+    output = json.loads(result.stdout)
+    assert output['report'] == ('failed' if persist_failed else 'incomplete')
+    if persist_failed:
+        assert 'Push refused' in result.stderr
+        assert any('Push refused' in error for error in output['errors'])
+    assert list(output)[-1] == 'asks'
+    asks = output['asks']
+    assert len(asks) == 3
+    assert [ask['type'] for ask in asks] == ['lesson', 'lesson', 'decision']
+    for ask, item in zip(asks, [lesson, variant, failed_wrap.items[0]]):
+        assert ask['text'] == item['context']
+        assert all(ask[key] == value for key, value in item.items())
+        assert ask['ticket'] == item.get('anchor', {}).get('ticket')
+
+
+@pytest.mark.parametrize('unattended', [False, True])
+def test_identical_filed_grouped_and_carried_asks_appear_once(failed_wrap, unattended):
+    failed_wrap.rows[1].update(status='filed', destination='ask')
+    failed_wrap.checkpoint()
+    handoff = json.loads(failed_wrap.handoff.read_text())
+    for directory, asks in handoff['filing']['asks'].items():
+        handoff['filing']['asks'][directory] = [dict(reversed(list(ask.items()))) for ask in asks]
+    handoff['resume']['open_loops'] = [dict(reversed(list(item.items())))
+                                     for item in handoff['resume']['open_loops']]
+    failed_wrap.handoff.write_text(json.dumps(handoff))
+    failed_wrap.assert_asks(failed_wrap.report(unattended), expected=0, status='incomplete')
+
+
+@pytest.mark.parametrize('unattended', [False, True])
+@pytest.mark.parametrize('source', ['item', 'group'])
+@pytest.mark.parametrize('invalid', ['missing choices', 'empty choices', 'blank choice', 'non-string choice',
+                                   'choices not array', 'missing text', 'blank text', 'text not string'])
+def test_invalid_stored_ask_fails_without_hiding_valid_asks(failed_wrap, unattended, source, invalid):
+    handoff = json.loads(failed_wrap.handoff.read_text())
+    payload = copy.deepcopy(handoff['filing']['items'][0]['ask'])
+    if invalid == 'missing choices':
+        del payload['choices']
+    elif invalid == 'empty choices':
+        payload['choices'] = []
+    elif invalid == 'blank choice':
+        payload['choices'] = ['Apply', ' \n']
+    elif invalid == 'non-string choice':
+        payload['choices'] = ['Apply', None]
+    elif invalid == 'choices not array':
+        payload['choices'] = 'Apply'
+    elif invalid == 'missing text':
+        del payload['text']
+    elif invalid == 'blank text':
+        payload['text'] = ' \n'
+    else:
+        payload['text'] = ['Approve?']
+    if source == 'item':
+        row = copy.deepcopy(handoff['filing']['items'][0])
+        row.update(index=2, ask=payload)
+        handoff['filing']['items'].append(row)
+        label = 'filing.items[2].ask'
+    else:
+        handoff['filing']['asks'][payload['directory']].append(payload)
+        label = 'filing.asks['
+    failed_wrap.handoff.write_text(json.dumps(handoff))
+    result = failed_wrap.report(unattended)
+    output = failed_wrap.assert_asks(result)
+    error = 'an ask requires non-empty text' if 'text' in invalid else "an ask requires the user's choices"
+    assert error in result.stderr
+    assert any(label in problem and error in problem for problem in output['errors'])
+
+
+@pytest.mark.parametrize('unattended', [False, True])
+def test_stored_ask_validation_preserves_its_text_and_ticket(failed_wrap, unattended):
+    handoff = json.loads(failed_wrap.handoff.read_text())
+    payload = copy.deepcopy(handoff['filing']['items'][0]['ask'])
+    # Stored text and ticket are already resolved; validation must not rebuild them from item fields.
+    payload.update(text='Approve this separate stored ask?\n' * 100,
+                   ticket='https://example.test/tickets/stored',
+                   directory='/work/original', context='Source context differs',
+                   anchor={'ticket': 'https://example.test/tickets/source'})
+    handoff['filing']['asks'].setdefault(payload['directory'], []).append(payload)
+    failed_wrap.handoff.write_text(json.dumps(handoff))
+    result = failed_wrap.report(unattended)
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    assert output['report'] == 'incomplete'
+    assert list(output)[-1] == 'asks'
+    assert len(output['asks']) == 3
+    assert output['asks'][-1] == payload
