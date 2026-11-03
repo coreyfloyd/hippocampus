@@ -1,136 +1,77 @@
-# Release candidate: 0.13.0
+# Release candidate: 0.13.1
 
 ## Scope
 
-This candidate combines session memory, knowledge workflows and agent-rule
-maintenance in one Hippocampus package. It implements the release preparation
-slice of [hippocampus#64](https://github.com/coreyfloyd/hippocampus/issues/64)
-for [the approved fold](https://github.com/coreyfloyd/hippocampus/issues/57).
+This candidate covers the changes since v0.13.0:
+
+- One supported route from a signed release to both tools, and a `--verify`
+  that passes after it ([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80)).
+  The installed release now keeps `install.sh` and its marketplace metadata, so
+  `install-claude.py` and `install-codex.py` both run from
+  `~/.local/share/hippocampus/current` after `install-release.sh`. Codex
+  adoption keeps the shared versioned `current` symlink.
+- `install.sh --verify` accepts each supported client layout: the Claude
+  plugin `hippocampus@hippocampus` when `claude plugin list --json` reports it
+  enabled with the current release as its root, plain Claude links from
+  `install.sh` alone, Codex links, or both tools. A disabled plugin counts as
+  absent. Wrong plugin roots, missing or retargeted links, tampered manifests
+  and an install with no client fail.
+- Record the v0.13.0 publication in `docs/releases/0.13.0.md`.
 
 ## Compatibility
 
-The Claude Code command rename is breaking: every skill is now
-`/hippocampus:<skill>`, including previously unprefixed knowledge skills.
-Codex retains plain skill names. Setup remains `hippocampus-set-up` in both
-tools; there is no bare `setup` or `continuity:` alias. The Claude installer
-transactionally removes only installer-owned old skill links.
+Profile version remains 4; no profile field is added or changed. Skill names,
+the Claude `hippocampus:` namespace, and installation paths are unchanged.
+Verifying a registered Claude plugin now needs the Claude CLI on `PATH`.
+Installs made with the 0.13.0 helpers directly from a checkout leave `current`
+as a directory, which `--verify` rejects; the recovery is in
+[INSTALLATION.md](INSTALLATION.md#earlier-helper-only-checkout-installs). The
+public signing key and fingerprint are unchanged.
 
-The knowledge profile format (version 4), knowledge root, installation root
-and composer entry point remain compatible. Continuity was never released;
-there is no automatic migration from its installation or data locations.
-Follow the manual steps in [MIGRATION.md](MIGRATION.md#manual-continuity-cutover).
-The public signing key and fingerprint are unchanged.
+## Verification
 
-## Verification and publication state
+Run the exact candidate checks in `RELEASING.md`, the documentation sweep and
+the public commit-range scan. Final commit identifiers and results are recorded
+in the release-session evidence; publication evidence is appended after release
+to avoid a self-referential commit.
 
-Published 2026-11-02: tag `v0.13.0` (annotated) at commit
-`5b364ba7d21497480a1bffdf459e89a638021262`,
-https://github.com/coreyfloyd/hippocampus/releases/tag/v0.13.0 (public, not a
-draft or prerelease). Assets: hippocampus-0.13.0.tar.gz, hippocampus-0.13.0.tar.gz.asc, hippocampus-0.13.0.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
+Previous publication evidence: [0.13.0](docs/releases/0.13.0.md),
+[0.12.0](docs/releases/0.12.0.md).
 
-Evidence:
+## Release-note draft
 
-- All RELEASING.md candidate checks passed in a clean worktree at that commit
-  (pytest 1211 passed, 3 skipped; swift test passed). The documentation sweep
-  passed.
-- The maintainer signed. `verify-release.sh` passed on the local build and on
-  the downloaded assets. The downloaded key and scripts are byte-identical to
-  the repository's. The archive has a single `hippocampus/` root.
-- Installed into clean temporary homes from the extracted downloaded archive:
-  `install-codex.py` and `install-claude.py` both succeeded (25 skills, six
-  hooks; plugin `hippocampus@hippocampus`).
+Hippocampus v0.13.1 fixes installation from a signed release.
 
-Published 0.13.0 limitation
-([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80), fix in
-0.13.1): `install.sh --verify` fails after the plugin installation. Running the
-helpers after `install-release.sh` also fails. Install by extracting the
-verified archive and running the two helpers from it.
-
-## Install-route fix intended for 0.13.1
-
-[hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80) prepares one
-supported signed-release route. `VERSION` remains 0.13.0 in this change;
-0.13.1 versioning, signing, publication and fleet rollout follow integration.
-The historical 0.13.0 evidence above does not attest to this fix.
-
-After verifying and bootstrapping with the published `install-release.sh`, run
-only the helpers for the tools you use, from the installed release:
+In 0.13.0, running the helpers after `install-release.sh` failed in both tools,
+and `install.sh --verify` failed after the documented Claude plugin install.
+Both now work. Verify and bootstrap with the published `install-release.sh`,
+then run the helper for each tool you use from the installed release:
 
 ```bash
 python3 ~/.local/share/hippocampus/current/scripts/install-claude.py
 python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
 ```
 
-The installed release includes marketplace metadata and its package installer.
-Codex adoption retains the shared versioned `current` symlink. After guided
-profile setup, run:
+After guided profile setup, check the install:
 
 ```bash
 bash ~/.local/share/hippocampus/current/install.sh --verify
 ```
 
-This checks manifest integrity and profile readiness, accepting the current
-Claude plugin registration when `claude plugin list --json` reports it enabled
-in the verification directory, or plain Claude links, Codex links, or both tools.
-Claude resolves settings precedence; project/local registrations must belong
-to that directory. A disabled plugin (including missing enablement) is absent:
-verification falls back to plain links or Codex and fails if no client remains.
-Keep the Claude CLI on `PATH` when verifying a registered plugin.
-Plain links from `install.sh` alone remain supported. Broken registrations,
-incomplete or retargeted links and tampered manifests fail. The earlier
-helper-only checkout directory layout and its recovery are documented in
-[INSTALLATION.md](INSTALLATION.md#earlier-helper-only-checkout-installs).
+`--verify` accepts the enabled Claude plugin, plain Claude links, Codex links,
+or both tools, and still fails on a broken install. Keep the Claude CLI on
+`PATH` when verifying the plugin. If you installed 0.13.0 by running the helpers
+from a checkout, see
+[INSTALLATION.md](INSTALLATION.md#earlier-helper-only-checkout-installs) to
+recover.
 
-## Release-note draft
+Nothing else changes: skill names, profiles and the knowledge root are
+compatible with 0.13.0.
 
-Hippocampus v0.13.0 combines session memory, knowledge workflows and agent-rule
-maintenance in one package for Claude Code and Codex.
+## Publication checklist
 
-**Breaking Claude Code rename:** invoke every skill as `/hippocampus:<skill>`
-(for example `/hippocampus:research-topic` and `/hippocampus:checklist`). Codex
-uses plain names, such as `Use checklist`. Setup remains `hippocampus-set-up`:
-`/hippocampus:hippocampus-set-up` in Claude Code and `Use hippocampus-set-up` in
-Codex. Old Claude names are not retained.
-
-Install from a checkout or a signature-verified extracted release with:
-
-```bash
-python3 scripts/install-claude.py
-python3 scripts/install-codex.py
-```
-
-Run only the helper for each tool you use. The Claude helper installs the native
-plugin and replaces installer-owned old links in one transaction. Foreign links
-are retained; failures restore the prior state. Codex registers and verifies
-trusted hooks and retains foreign settings.
-
-**Continuity users:** continuity was never released, so this release ships no
-migration code. Uninstall continuity from both tools before installing
-Hippocampus. Back up your data; move or recreate your checklist profile at
-`~/.config/hippocampus/checklist-profile.md`, manually removing its `knowledge`
-and `lessons` binding blocks. Keep `record`, `persist` and ask bindings. Move
-custom lesson routing to `~/.config/hippocampus/routing.md`; move wanted shared
-configuration and handoffs to the Hippocampus paths described in
-[MIGRATION.md](MIGRATION.md#manual-continuity-cutover). Installation refuses while
-continuity is still installed and prints the uninstall commands.
-
-Knowledge capture and lessons are native checklist steps: knowledge runs
-`knowledge-capture`, and lessons runs `improve-harness`. Lesson destinations
-remain configurable through routing. Without a knowledge root, capture reports
-not configured and continues; setup can configure session memory alone.
-Failures and declines retain carried items and report an incomplete wrap.
-
-The fold's open questions are resolved: existing Claude knowledge skills take
-the `hippocampus:` namespace as a breaking change; lessons are native rather
-than a configurable slot; the continuity snapshot was taken after in-flight
-work reached a clean break, with no code in flight. continuity's history is not
-carried over: it was imported as one squashed snapshot that names its source commit. There is one rule composer and one glossary.
-
-**Known issue:** `install.sh --verify` fails after the documented Claude
-plugin installation because it still expects plain skill links. The
-installation itself works; the fix ships in 0.13.1
-([hippocampus#80](https://github.com/coreyfloyd/hippocampus/issues/80)).
-
-`VERSION` is the package version authority. Claude plugin metadata is generated
-from it and checked by the release suite; Codex install receipts read it directly.
-The existing knowledge profile and root remain compatible.
+- [ ] Verify and commit the candidate; resolve the public commit-history scan.
+- [ ] Merge the reviewed candidate and tag its exact commit as `v0.13.1`.
+- [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
+- [ ] Verify signed assets, publish, and independently verify downloaded assets.
+- [ ] Install from the signed release in a clean home and confirm `install.sh --verify` passes for both tools.
