@@ -34,7 +34,7 @@ def plan(path):
 
 
 def test_clean_home_declined_slots_keep_native_steps(tmp_path):
-    result = write(tmp_path, dict.fromkeys(('record', 'persist')),
+    result = write(tmp_path, dict.fromkeys(('persist',)),
                    '--record-read', '/read-work')
     assert result.returncode == 0, result.stderr
     profile = tmp_path / '.config/hippocampus/checklist-profile.md'
@@ -49,8 +49,7 @@ def test_clean_home_declined_slots_keep_native_steps(tmp_path):
 
 def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path):
     profile = tmp_path / 'profile.md'
-    existing = {'name': 'user', 'bindings': {'record': {'command': '/record-step',
-                'consumes': ['progress'], 'section': 'Record'}},
+    existing = {'name': 'user', 'record_writes': {'tickets': {'command': 'write-tickets'}},
                 'steps': [{'id': 'tidy', 'after': 'persist', 'instructions': 'Tidy up'}]}
     prefix = '# My profile\n\nKeep these notes.\n\n```checklist-profile\n'
     suffix = '\n```\n\n## Record\n\nKeep my record instructions.\n'
@@ -61,7 +60,7 @@ def test_extend_preserves_prose_sections_steps_and_unselected_bindings(tmp_path)
     text = profile.read_text()
     assert text.startswith(prefix) and text.endswith(suffix)
     updated = json.loads(text.split('```checklist-profile\n')[1].split('\n```')[0])
-    assert updated['bindings']['record'] == existing['bindings']['record']
+    assert updated['record_writes'] == existing['record_writes']
     assert updated['steps'] == existing['steps']
     assert plan(profile).returncode == 0
 
@@ -88,7 +87,7 @@ def test_invalid_candidate_in_clean_home_leaves_no_directories(tmp_path, custom_
     args = ('--profile', str(tmp_path / 'custom/deep/profile.json')) if custom_path else ()
     result = write(tmp_path, {'record': {'command': '', 'consumes': []}}, *args)
     assert result.returncode != 0
-    assert 'command' in result.stderr or 'spine step record' in result.stderr
+    assert 'record' in result.stderr
     assert not list(tmp_path.iterdir())
 
 
@@ -199,7 +198,7 @@ def test_legacy_native_bindings_name_blocks_to_delete_and_preserve_profile(tmp_p
 
 def test_setup_can_configure_and_unbind_ask_separately_from_slots(tmp_path):
     profile = tmp_path / 'profile.json'
-    result = write(tmp_path, {'record': None, 'persist': None}, '--profile', str(profile),
+    result = write(tmp_path, {'persist': None}, '--profile', str(profile),
                    '--ask', '{"command":"/ask-step"}')
     assert result.returncode == 0, result.stderr
     output = json.loads(plan(profile).stdout)

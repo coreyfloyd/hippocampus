@@ -352,7 +352,7 @@ def plan_item(candidate, item, decision, plan, ask):
     # ask payload. It only does bookkeeping; no binding command is ever invoked.
     single = dict(candidate['handoff'], subject={'working_directory': candidate['directory'],
                   'session_id': candidate['session_id']}, resume={'open_loops': [validation_item]})
-    checked = checklist.file_items(plan, single, [row], ask)['filing']['items'][0]
+    checked = checklist.file_items(plan, single, [row], ask, execute_writes=False)['filing']['items'][0]
     checked.pop('index', None)
     if 'ask' in checked:
         checked['ask']['identity'] = item['identity']

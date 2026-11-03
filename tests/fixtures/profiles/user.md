@@ -1,17 +1,18 @@
 # User profile: example
 
-A user profile for the checklist tests. It binds the two slots and adds four
+A user profile for the checklist tests. It names record writes and binds persist and adds four
 steps after the persist step. The shared checklist owns their ordering.
 
 ```checklist-profile
 {
   "name": "example-user",
+  "record_writes": {
+    "tickets": {"command": "write-tickets"},
+    "projects": {"command": "write-projects"},
+    "documents": {"command": "write-documents"},
+    "scheduled_jobs": {"command": "write-scheduled-jobs"}
+  },
   "bindings": {
-    "record": {
-      "command": "/record-step",
-      "consumes": ["progress", "commitment", "decision", "artifact"],
-      "section": "Reconcile the record"
-    },
     "persist": {
       "command": "/persist-step",
       "consumes": [],

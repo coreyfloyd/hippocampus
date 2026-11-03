@@ -190,8 +190,9 @@ def failed_wrap(tmp_path):
                               input=json.dumps(payload) if payload is not None else None,
                               env=env, text=True, capture_output=True)
 
-    profile.write_text(json.dumps({'name': 'user', 'ask': {'command': '/ask'}, 'bindings': {
-        slot: {'command': '/' + slot, 'consumes': ['progress']} for slot in ('record', 'persist')}}))
+    profile.write_text(json.dumps({'name': 'user', 'ask': {'command': '/ask'},
+        'record_writes': {'tickets': {'command': [sys.executable, str(ROOT / 'tests/fixtures/record-writes/store.py')]}}, 'bindings': {
+        slot: {'command': '/' + slot, 'consumes': ['progress']} for slot in ('persist',)}}))
     choices = ['Apply with every condition.\n' * 50, 'Decline']
     common = dict(session_id='producer', produced_at='2026-10-23T12:00:00Z', disposition='carry')
     decision = dict(common, type='decision', context='Approve the complete action?\n' * 100,
@@ -209,7 +210,7 @@ def failed_wrap(tmp_path):
         outcomes.write_text(json.dumps(rows))
         filed = invoke('scripts/lib/checklist.py', 'file', '--user-profile', profile,
                        '--handoff', source, '--filing', outcomes)
-        assert filed.returncode == 0, filed.stderr
+        assert filed.returncode == int(any(r.get('rule') == 'R2' and r.get('read_status') == 'ok' and r.get('status') == 'failed' for r in rows)), filed.stderr
         saved = invoke('scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
                        '--session-id', 'producer', '--trigger', 'wrap', payload=json.loads(filed.stdout))
         assert saved.returncode == 0, saved.stderr

@@ -18,7 +18,7 @@ own data area, and survive adapter removal.
 
 ## Skills
 
-Both installers register **25 skills**. Claude Code uses plugin-namespaced
+Both installers register **26 skills**. Claude Code uses plugin-namespaced
 commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 
 | Skill name in Codex | Claude Code command | Role |
@@ -27,6 +27,7 @@ commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 | `checkpoint` | `/hippocampus:checkpoint` | Write and lint the current interactive session's handoff without finishing its work. |
 | `pickup` | `/hippocampus:pickup` | List handoffs after a cold start, select one, and check it against the record. |
 | `checklist` | `/hippocampus:checklist` | Wrap the session through the spine and profile steps, ending with a validated handoff. |
+| `record` | `/hippocampus:record` | File session items through per-kind record writes, mid-session or during wrap. |
 | `handoff-prompt` | `/hippocampus:handoff-prompt` | Produce a portable prompt for deliberately transferring a slice of work to another session. |
 | `sweep` | `/hippocampus:sweep` | Report abandoned sessions; file and archive them when act mode is configured. |
 | `wip` | `/hippocampus:wip` | Report current work, blockers, and pending approvals from verified state. |
@@ -76,9 +77,13 @@ then runs the five-step **spine** in order:
 4. Persist (`persist`).
 5. Write and validate the handoff (`handoff`).
 
-Suppose your user profile binds `record` to the command that updates your tickets
-and documents. That command consumes its acknowledged progress and decisions;
-anything it has not acknowledged goes through the filing rules before wrap. Profiles bind `record` and `persist`, called **slots**, and can add steps without removing the spine.
+Your user profile names optional `record_writes` commands for tickets, projects,
+documents, and scheduled jobs. The package record step applies the filing rules,
+looks up each unchanged item identity before writing, and requires a matching
+receipt to save it. Run `record` on its own mid-session or through checklist.
+Commitments follow these same filing rules; timed or recurring commitments use
+the scheduled-job write when bound, otherwise tickets. Profiles bind `persist`,
+the only **slot**, and can add steps without removing the spine.
 Knowledge and lessons always run the package’s knowledge-capture and improve-harness. Before writing the handoff, apply the
 filing rules: file or drop each remaining item, and send user decisions to the
 profile's one `ask` command. An unbound destination warns and retains its item. The checklist engine composes and checks the plan; the skill runs
@@ -307,7 +312,7 @@ plan JSON
 ├── record_read                        # user command for reading the record, or null
 └── steps[]                            # execution order, including additions at their anchors
     ├── id, title                      # step identity; spine title or optional added title
-    ├── slot                           # only record and persist
+    ├── slot                           # only persist
     ├── binding                        # null if unbound, else command, consumes[], optional instructions
     ├── carries[]                      # only unbound slots: item types for the filing pass
     ├── carried_items[]                 # slot/native inputs selected by binding.consumes
@@ -317,10 +322,10 @@ plan JSON
 
 The spine is `record` (reconcile the record), `knowledge` (capture knowledge),
 `lessons` (fold in lessons), `persist`, then `handoff` (write and validate).
-Only record and persist are slots; knowledge and lessons are native steps
+Only persist is a slot; record is a package step calling record writes; knowledge and lessons are native steps
 marked `native: true`, running the package’s knowledge-capture and improve-harness.
 Knowledge consumes `knowledge` items; lessons consumes `lesson` items.
-With no profile, record and persist are unbound. Unbound destinations retain items with a warning. Profile steps
+With no profile, record has no configured record writes and persist is unbound. Unbound destinations retain items with a warning. Profile steps
 may run `before-spine` or after `record`, `knowledge`, `lessons`, or `persist`;
 only `own-worktree` may follow `handoff`. Additions retain declaration order
 within profile order. Carried open loops go to bindings consuming their types;
@@ -436,7 +441,9 @@ profile loader and composer. [Validated profile input](examples/profile.md).
 ```text
 JSON object, or one checklist-profile JSON fence in Markdown
 ├── name                              # non-empty profile name
-├── bindings                          # user profile only: bind one or both of the two slots
+├── record_writes                     # user profile only: optional tickets, projects, documents, scheduled_jobs commands
+│   └── <kind>: command                # executable argv array or shell-quoted string; null/omitted is unbound
+├── bindings                          # user profile only: bind persist
 │   └── <slot>: command, consumes[], instructions (optional)
 │       # command to run; accepted session-item types; execution guidance
 └── steps[]                           # additive steps, never spine removal or replacement
