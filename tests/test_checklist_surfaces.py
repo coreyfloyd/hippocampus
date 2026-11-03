@@ -80,7 +80,7 @@ def test_filing_through_checkpoint_wrap_and_report_in_both_modes(tmp_path):
             mode = ["--unattended"] if unattended else []
             source = tmp_path / "source.json"
             source.write_text(json.dumps({"subject": {"session_id": "producer", "working_directory": str(tmp_path)},
-                "resume": {"headline": "wrap", "open_loops": [{"type": "decision", "context": "Approve document change",
+                "resume": {"headline": "wrap", "session_summary": "Filed the document decision and retained its approval.", "open_loops": [{"type": "decision", "context": "Approve document change",
                     "session_id": "producer", "produced_at": "2026-10-23T12:00:00Z", "author": "user",
                     "location": "https://example.test/spec", "anchor": {"ticket": "https://example.test/ticket"},
                     "disposition": "carry"}]}}))
@@ -151,7 +151,7 @@ def test_native_r4_ask_runs_bound_command_and_stays_pending_through_wrap(tmp_pat
         item = dict(type=kind, context='Approve capture of ' + kind, session_id='producer',
                     produced_at='2026-10-23T12:00:00Z', disposition='carry')
         source.write_text(json.dumps({'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)},
-                                      'resume': {'headline': 'wrap', 'open_loops': [item]}}))
+                                      'resume': {'headline': 'wrap', 'session_summary': 'Filed the native lesson ask and retained its proposal.', 'open_loops': [item]}}))
         plan = json.loads(invoke(engine, 'plan', *common, '--session-id', 'producer').stdout)
         outcomes = tmp_path / 'outcomes.json'
         row = dict(index=0, rule='R4', status='pending', destination='ask', choices=['capture', 'decline'])

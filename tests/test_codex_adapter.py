@@ -51,7 +51,7 @@ def payload(moment, sandbox, source='interactive', **changes):
 
 def checkpoint(work, sid='captured-session'):
     result = cli(ROOT/'scripts/lib/handoff.py', 'checkpoint', '--cwd', work, '--session-id', sid,
-                 data={'resume': {'headline': 'Continue here', 'next_action': 'Read the record', 'open_loops': []},
+                 data={'resume': {'headline': 'Continue here', 'session_summary': 'Inspected the durable record.', 'next_action': 'Read the record', 'open_loops': []},
                        'spawned_processes': []})
     assert result.returncode == 0, result.stderr
     return next(Path(os.environ['HANDOFF_STATE_DIR']).glob('*.json'))
@@ -566,6 +566,8 @@ def test_owned_commit_without_any_handoff_writes_skeleton_and_allows_stop(sandbo
     path = next(Path(os.environ['HANDOFF_STATE_DIR']).glob('*.json'))
     data = json.loads(path.read_text())
     assert data['resume']['headline'] == ''
+    assert data['skeleton'] is True
+    assert data['resume']['session_history'] == []
     assert data['resume']['open_loops'] == []
 
 

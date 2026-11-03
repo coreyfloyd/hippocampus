@@ -351,6 +351,11 @@ def read_json(path: str) -> Any:
         return json.load(handle)
 
 
+def real_history_text(text: Any) -> bool:
+    return (isinstance(text, str) and bool(text.strip())
+            and text.strip() != "Session checkpoint." and "\n" not in text and "\r" not in text)
+
+
 def lint_data(data: Any) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
@@ -401,18 +406,28 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
                 continue
             for field in ("session_id", "produced_at", "summary"):
                 if not isinstance(entry.get(field), str) or not entry[field].strip():
-                    # Explicit-path legacy controllers have no session identity.
-                    if field != "session_id" or (isinstance(data.get("subject"), dict) and data["subject"].get("session_id")):
-                        problems.append(f"session_history[{index}].{field} must be a non-empty string")
+                    problems.append(f"session_history[{index}].{field} must be a non-empty string")
             try:
                 stamp = datetime.fromisoformat(str(entry.get("produced_at", "")).replace("Z", "+00:00"))
                 if stamp.tzinfo is None:
                     raise ValueError("timezone required")
             except ValueError:
                 problems.append(f"session_history[{index}].produced_at must be an ISO timestamp with timezone")
+            if isinstance(entry.get("summary"), str) and entry["summary"].strip() == "Session checkpoint.":
+                problems.append(f"session_history[{index}] must contain a real history entry")
             summary_text = entry.get("summary", "")
             if isinstance(summary_text, str) and ("\n" in summary_text or "\r" in summary_text):
                 problems.append(f"session_history[{index}].summary must be one line")
+    if data.get("skeleton") is True:
+        if data.get("trigger") != "stop":
+            problems.append("only an automatic stop handoff may be a skeleton")
+    elif version == 2:
+        session_id = data.get("subject", {}).get("session_id") if isinstance(data.get("subject"), dict) else None
+        if not isinstance(history, list) or not any(
+                isinstance(row, dict) and row.get("session_id") == session_id
+                and row.get("produced_at") == data.get("written_at")
+                and real_history_text(row.get("summary")) for row in history):
+            problems.append("a real history entry for this handoff write is required")
     files = data.get("uncommitted_files", [])
     if not isinstance(files, list) or any(not isinstance(path, str) or not os.path.isabs(path) for path in files):
         problems.append("uncommitted_files must be an array of absolute paths")
@@ -491,16 +506,24 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
     branch = branch if branch is not None else (_run_git(subject, "branch", "--show-current") if root else "")
     head = head if head is not None else (_run_git(subject, "rev-parse", "HEAD") if root else "")
     handoff = dict(supplied)
+    stamp = utc_now()
+    handoff["skeleton"] = trigger == "stop"
     resume = supplied.get("resume")
     if isinstance(resume, Mapping):
         resume = dict(resume)
-        resume.setdefault("session_summary", resume.get("headline") or "Session checkpoint.")
         history = resume.get("session_history", [])
         if isinstance(history, list):
-            history = list(history)
-            history = [row for row in history if not isinstance(row, dict) or row.get("session_id") != session_id]
-            history.append({"session_id": session_id, "produced_at": utc_now(),
-                            "summary": resume["session_summary"]})
+            retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))
+                        if row.get("kind") == "history_entry" and isinstance(row.get("entry"), dict)]
+            history = retained + [row for row in history if row not in retained]
+            text = resume.get("session_summary")
+            if trigger == "stop":
+                resume.pop("session_summary", None)
+            elif session_id.strip() and real_history_text(text):
+                history.append({"session_id": session_id, "produced_at": stamp,
+                                "summary": text})
+            elif isinstance(text, str) and text.strip() == "Session checkpoint.":
+                resume.pop("session_summary", None)
             resume["session_history"] = history
         loops = resume.get("open_loops", [])
         items = supplied.get("session_items", [])
@@ -519,7 +542,7 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
     handoff["uncommitted_files"] = uncommitted_files(session_id)
     handoff.update({
         "schema_version": 2,
-        "written_at": utc_now(),
+        "written_at": stamp,
         "trigger": trigger,
         "subject": {"working_directory": subject, "session_id": session_id},
         "git": {"repository_root": root or "", "branch": branch or "", "head": head or ""},
@@ -532,6 +555,15 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     if not path:
         raise ValueError("checkpoint: a session id is required (--session-id or CLAUDE_SESSION_ID)")
     handoff = overlay_checkpoint(supplied, cwd, session_id, trigger)
+    resume = handoff.get("resume")
+    history = resume.get("session_history") if isinstance(resume, Mapping) else None
+    if session_id and isinstance(history, list):
+        existing = [row.get("entry") for row in _ledger_records(ledger_path(session_id))
+                    if row.get("kind") == "history_entry"]
+        for entry in history:
+            if isinstance(entry, dict) and real_history_text(entry.get("summary")) and entry not in existing:
+                append_ledger(session_id, {"kind": "history_entry", "entry": entry})
+                existing.append(entry)
     atomic_write(path, handoff)
     code, lint = lint_output(path)
     if code:

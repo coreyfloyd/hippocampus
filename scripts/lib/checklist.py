@@ -863,6 +863,8 @@ def wrap_check(plan: Sequence[Mapping[str, Any]], handoff_path: Path,
         return [f"handoff invalid: not valid JSON: {error}"]
     failures = [f"handoff invalid: {problem}" for problem in problems]
     data = handoff.read_json(str(handoff_path)) if not problems else {}
+    if data.get("skeleton") is True:
+        failures.append("handoff invalid: wrap requires a real history entry; stop handoff is a skeleton")
     filing_failures, _ = filing_check(plan, data, ask)
     failures.extend(filing_failures)
     record = next(step for step in plan if step.get("id") == "record")

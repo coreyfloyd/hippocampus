@@ -42,7 +42,7 @@ def test_full_asks_survive_continuation_and_end_report(tmp_path, unattended, bou
     lesson = dict(common, type='lesson', context=json.dumps(proposal), **proposal)
     source = tmp_path / 'source.json'
     source.write_text(json.dumps({'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)},
-                                 'resume': {'headline': 'Review pending asks', 'open_loops': [decision, lesson]}}))
+                                 'resume': {'headline': 'Review pending asks', 'session_summary': 'Captured the pending decision and lesson.', 'open_loops': [decision, lesson]}}))
     outcomes = tmp_path / 'outcomes.json'
     outcomes.write_text(json.dumps([
         dict(index=0, rule='R3', status=ask_status, error='Ask store refused write', destination='ask receipt', choices=choices),
@@ -90,7 +90,7 @@ def test_report_includes_carried_ask_without_filing_report(tmp_path, choices):
                 disposition='carry')
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'checkpoint',
                              '--cwd', str(tmp_path), '--session-id', 'producer'],
-                            input=json.dumps({'resume': {'headline': 'Pending proposal', 'open_loops': [item]}}),
+                            input=json.dumps({'resume': {'headline': 'Pending proposal', 'session_summary': 'Captured the complete pending proposal.', 'open_loops': [item]}}),
                             env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
     results = tmp_path / 'results.json'
@@ -140,7 +140,7 @@ def test_native_lesson_decisions_and_backlog_through_wrap(tmp_path, unattended, 
     row = dict(index=0, rule='R4', status=status, reason='Native lesson remains unsaved')
     if choice_source == 'outcome':
         row['choices'] = choices
-    source.write_text(json.dumps({'resume': {'headline': 'Pending native lesson', 'open_loops': [lesson]}}))
+    source.write_text(json.dumps({'resume': {'headline': 'Pending native lesson', 'session_summary': 'Retained the complete native lesson proposal.', 'open_loops': [lesson]}}))
     outcomes = tmp_path / 'outcomes.json'
     outcomes.write_text(json.dumps([row]))
     filed = invoke('scripts/lib/checklist.py', 'file', '--handoff', source, '--filing', outcomes, *mode)
@@ -206,7 +206,7 @@ def failed_wrap(tmp_path):
 
     def checkpoint():
         source.write_text(json.dumps({'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)},
-                                     'resume': {'headline': 'Pending asks', 'open_loops': items}}))
+                                     'resume': {'headline': 'Pending asks', 'session_summary': 'Filed the pending asks and retained their choices.', 'open_loops': items}}))
         outcomes.write_text(json.dumps(rows))
         filed = invoke('scripts/lib/checklist.py', 'file', '--user-profile', profile,
                        '--handoff', source, '--filing', outcomes)

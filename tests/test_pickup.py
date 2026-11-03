@@ -662,6 +662,8 @@ def _handoff(subject, repo, branch, headline, next_action, written_at,
         "git": {"repository_root": repo, "branch": branch},
         "resume": {
             "headline": headline,
+            "session_history": [{"session_id": session_id, "produced_at": written_at,
+                                 "summary": "Prepared the continuation and record pointers."}],
             "next_action": next_action,
             "open_loops": [{"context": "Read the durable record.",
                             "anchor": {"ticket": "alexrivera/#1024"}}],
@@ -1033,10 +1035,11 @@ def test_unrelated_handoff_does_not_suppress_current_directory_transcript_fallba
 
 
 def test_handoff_briefing_shows_owned_files_and_carried_items(tmp_path, monkeypatch):
-    data = {"schema_version": 2, "subject": {"working_directory": str(tmp_path), "session_id": "prior"},
+    data = {"schema_version": 2, "written_at": "2026-10-02T12:00:00Z", "subject": {"working_directory": str(tmp_path), "session_id": "prior"},
             "git": {"repository_root": "", "branch": ""},
             "uncommitted_files": [str(tmp_path / "mine")],
             "resume": {"headline": "Continue", "session_summary": "Implemented capture",
+                       "session_history": [{"session_id": "prior", "produced_at": "2026-10-02T12:00:00Z", "summary": "Implemented capture"}],
                        "open_loops": [{"type": "lesson", "context": "Keep the original author", "session_id": "prior",
                                        "produced_at": "2026-10-02T12:00:00Z", "disposition": "fold into rules"}]}}
     path = tmp_path / "handoff.json"

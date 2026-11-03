@@ -63,7 +63,7 @@ returned, so a broken hook never blocks a session.
 |---|---|
 | `resolve [cwd] [--subject] [--session-id ID]` | Print the handoff path for a directory and session. |
 | `repository-root [cwd]`, `count [cwd]` | The shared repository root, and how many handoffs exist for it. |
-| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, compose subject and git, lint, write atomically, print the resume paste block. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
+| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from the required authored `resume.session_summary`, retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
 | `write PATH` | Low-level atomic write. Refuses a payload that fails the lint. |
 | `lint [PATH] [--session-id ID]` | Validate a handoff. `scripts/lint-handoff.sh` is a thin adapter over this command. |
 | `ledger-file PATH --cwd D --session-id ID` | Record a file a shell-driven edit changed. |
@@ -178,6 +178,11 @@ entry point in `sdk-cli`, `sdk-py`, `sdk-ts`, `sdk`, `mcp`, or `headless`
 `hooks/checklist-actor-guard.sh` is an optional seventh adapter. Registered before a shell
 tool call, it denies a subagent or headless session the checklist and the checkpoint
 writers, using `checklist.py actor-guard`.
+
+An automatic stop handoff is marked `skeleton: true`, carries earlier history
+entries from the ledger, and adds no entry. A skeleton passes handoff lint but
+cannot complete a wrap. Checkpoint and wrap never fill a missing account from a
+headline or placeholder; a missing real history entry fails validation.
 
 The ledger attributes a commit to the session only after a shell call that succeeded: the
 payload's `exit_code` (or `exitCode`) is 0, or, with no exit code, the event is

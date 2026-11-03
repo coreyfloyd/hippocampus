@@ -20,8 +20,11 @@ A read of the existing record through a user-bound skill. It is read-only: it re
 _Avoid_: tracker
 
 **Handoff**:
-The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It holds nothing the record holds. Checkpoint and wrap both end by writing it.
+The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds dated history entries. Checkpoint and wrap both end by writing it.
 _Avoid_: summary, record
+
+**History entry**:
+One handoff write's account of the work since that session's previous entry, with its producing session identity, time, and text. Every checkpoint and wrap adds one real entry. Entries stay in the session ledger through compaction. An automatic stop handoff is marked as a skeleton and adds no entry, while retaining earlier entries.
 
 **Successor**:
 The interactive session that resumed another session's handoff through `pickup`. The session whose handoff it resumed is the **resumed session**, which is never used again. Every contract bound to the resumed session's id — claims, pending approvals, pending replies, granted scopes, and any other record keyed by session id — is carried to the successor's id. See [The successor rule](../skills/pickup/SKILL.md#the-successor-rule) for transfer ownership and the fallback when no transfer tool is available.
@@ -65,7 +68,7 @@ _Avoid_: hook, plugin
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
-The per-session list of what one session touched: one entry for each file it changed and each artifact it published. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
+The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
 _Avoid_: log, history
 
 **Open loop**:
