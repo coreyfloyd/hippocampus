@@ -49,7 +49,7 @@ class ChecklistTests(unittest.TestCase):
 
     def test_native_steps_cannot_be_bound_or_disabled(self):
         plan = self.engine.compose([])
-        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["record", "persist"])
+        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["persist"])
         for identity, command in [("knowledge", "/hippocampus:knowledge-capture"),
                                   ("lessons", "/hippocampus:improve-harness")]:
             step = next(s for s in plan if s["id"] == identity)
@@ -122,17 +122,17 @@ class ChecklistTests(unittest.TestCase):
                         self.engine.file_items(self.engine.compose([]), source, [dict(row, choices=choices)], ask)
 
     def test_bound_record_and_persist_failures_fail_report(self):
-        plan = self.engine.compose([{"name": "user", "bindings": {
-            key: {"command": "/write", "consumes": []} for key in ("record", "persist")}}])
+        plan = self.engine.compose([{"name": "user", "record_writes": {"tickets": {"command": "write"}},
+                                    "bindings": {"persist": {"command": "/write", "consumes": []}}}])
         for identity in ("record", "persist"):
             results = [{"id": s["id"], "status": "failed" if s["id"] == identity else "run",
                         "error": "write denied", "writes": []} for s in plan]
             self.assertIn("write denied", " ".join(self.engine.check_report(plan, results)))
 
-    def test_spine_has_two_slots_native_steps_and_final_handoff(self):
+    def test_spine_has_persist_slot_package_steps_and_final_handoff(self):
         plan = self.engine.compose([])
         self.assertEqual([s["id"] for s in plan], ["record", "knowledge", "lessons", "persist", "handoff"])
-        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["record", "persist"])
+        self.assertEqual([s["slot"] for s in plan if "slot" in s], ["persist"])
         self.assertNotIn("slot", plan[-1])
         self.assertEqual(plan[2]["binding"]["command"], "/hippocampus:improve-harness")
 
@@ -140,7 +140,7 @@ class ChecklistTests(unittest.TestCase):
         user = self.engine.load_profile(PROFILES / "user.md")
         plan = self.engine.compose([user])
         self.assertEqual([s["id"] for s in plan], ["record", "knowledge", "lessons", "persist", "cleanup", "context-health", "session-metadata", "whats-next", "handoff"])
-        self.assertEqual([s["binding"]["command"] for s in plan[:4]], ["/record-step", "/hippocampus:knowledge-capture", "/hippocampus:improve-harness", "/persist-step"])
+        self.assertEqual([s["binding"]["command"] for s in plan[:4]], ["/hippocampus:record", "/hippocampus:knowledge-capture", "/hippocampus:improve-harness", "/persist-step"])
         for step in plan[4:-1]:
             self.assertTrue(step["instructions"])
 
@@ -214,8 +214,8 @@ class ChecklistTests(unittest.TestCase):
         self.assertEqual(record[0]["item"], before["resume"]["open_loops"][0])
         self.assertEqual(self.engine.slot_inputs(plan, "knowledge", handoff)[0]["index"], 3)
         self.assertEqual(self.engine.slot_inputs(plan, "lessons", handoff)[0]["index"], 4)
-        remaining = self.engine.settle(plan, handoff, {"record": [0, 1], "lessons": [4]})
-        self.assertEqual([loop["type"] for loop in remaining["resume"]["open_loops"]], ["decision", "knowledge", "artifact"])
+        remaining = self.engine.settle(plan, handoff, {"lessons": [4]})
+        self.assertEqual([loop["type"] for loop in remaining["resume"]["open_loops"]], ["progress", "commitment", "decision", "knowledge", "artifact"])
         self.assertEqual(remaining["resume"]["session_summary"], "earlier work")
         self.assertEqual(handoff, before)
 
@@ -242,7 +242,7 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(len(output["steps"]), 9)
             self.assertEqual(output["steps"][0]["carried_items"][0]["item"]["session_id"], "earlier-session")
             receipts = Path(directory) / "receipts.json"
-            receipts.write_text('{"record": [0]}')
+            receipts.write_text('{"knowledge": [3]}')
             result = subprocess.run(command + ["settle", "--user-profile", str(user), "--handoff", str(handoff), "--receipts", str(receipts)], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(len(json.loads(result.stdout)["resume"]["open_loops"]), 5)
@@ -258,15 +258,15 @@ class ChecklistTests(unittest.TestCase):
 
     def test_settled_items_leave_the_written_handoff_with_provenance_preserved(self):
         plan = self.engine.compose([self.engine.load_profile(PROFILES / "user.md")])
-        supplied = self.engine.settle(plan, self.handoff(), {"record": [0, 1, 2, 5]})
+        supplied = self.engine.settle(plan, self.handoff(), {"knowledge": [3], "lessons": [4]})
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "wrapped.json"
             environment = dict(os.environ, HANDOFF_PATH=str(target), HANDOFF_STATE_DIR=directory, HANDOFF_LEDGER_DIR=directory)
             result = subprocess.run([sys.executable, str(ROOT / "scripts/lib/handoff.py"), "checkpoint", "--cwd", directory, "--session-id", "resumed-session", "--trigger", "wrap"], input=json.dumps(supplied), text=True, capture_output=True, env=environment)
             self.assertEqual(result.returncode, 0, result.stderr)
             written = json.loads(target.read_text())
-            self.assertEqual([loop["type"] for loop in written["resume"]["open_loops"]], ["knowledge", "lesson"])
-            self.assertEqual(written["resume"]["open_loops"][0], self.handoff()["resume"]["open_loops"][3])
+            self.assertEqual([loop["type"] for loop in written["resume"]["open_loops"]], ["progress", "commitment", "decision", "artifact"])
+            self.assertEqual(written["resume"]["open_loops"][0], self.handoff()["resume"]["open_loops"][0])
 
     def test_no_profile_plan_runs_five_spine_steps_and_carries_unbound_slots(self):
         result = subprocess.run([sys.executable, str(ENGINE), "plan"], text=True, capture_output=True)
@@ -281,7 +281,6 @@ class ChecklistTests(unittest.TestCase):
             ({"skip": ["record"]}, "cannot remove or skip spine step record$"),
             ({"remove": "knowledge"}, "cannot remove or skip spine step knowledge$"),
             ({"spine": ["record", "knowledge", "persist", "handoff"]}, "cannot remove or skip spine step lessons$"),
-            ({"bindings": {"record": {"command": "", "consumes": []}}}, "cannot remove or skip spine step record;"),
             ({"steps": [{"id": "late", "after": "handoff", "instructions": "late"}]}, "cannot add step late after handoff; only own-worktree may follow it"),
         ]
         for profile, message in cases:
@@ -317,7 +316,8 @@ class ChecklistTests(unittest.TestCase):
     def filing_profile(self, ask=True, record=True):
         profile = {"name": "filing", "bindings": {}}
         if record:
-            profile["bindings"]["record"] = {"command": "/record", "consumes": ["progress"]}
+            profile["record_writes"] = {kind: {"command": [sys.executable, str(ROOT / "tests/fixtures/record-writes/store.py")]}
+                                         for kind in ("tickets", "projects", "documents", "scheduled_jobs")}
         if ask:
             profile["ask"] = {"command": "/ask"}
         return profile
@@ -398,7 +398,7 @@ class ChecklistTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(ENGINE), "plan", "--repository-profile", str(path)],
                                     text=True, capture_output=True)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("cannot bind ask", result.stderr)
+            self.assertIn("cannot bind", result.stderr)
 
     def test_filing_outcomes_remove_only_successes_and_report_every_item(self):
         profile = self.filing_profile()
@@ -448,7 +448,7 @@ class ChecklistTests(unittest.TestCase):
                 self.assertEqual(checkpoint.returncode, 0, checkpoint.stderr)
                 self.assertEqual(result.returncode, int(bound), result.stderr)
                 self.assertIn("progress now", result.stderr)
-                self.assertIn("record", result.stderr)
+                self.assertIn("tickets", result.stderr)
                 self.assertTrue(json.loads(target.read_text())["resume"]["open_loops"])
 
     def test_wrap_rejects_lost_unbound_ask_and_unfinished_next_action(self):
@@ -513,11 +513,11 @@ class ChecklistTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _, stale, _ = self.wrap(directory, [], user, "2026-10-06T12:59:00Z", ledger)
             self.assertEqual(stale.returncode, 1)
-            self.assertIn("wrap failed: record stale: /record-step recorded at 2026-10-06T12:59:00Z, older than the session's last change at 2026-10-06T13:00:00Z", stale.stderr)
+            self.assertIn("wrap failed: record stale: /hippocampus:record recorded at 2026-10-06T12:59:00Z, older than the session's last change at 2026-10-06T13:00:00Z", stale.stderr)
         with tempfile.TemporaryDirectory() as directory:
             _, absent, _ = self.wrap(directory, [], user, None, ledger)
             self.assertEqual(absent.returncode, 1)
-            self.assertIn("record not checked: /record-step is bound but no record time was supplied", absent.stderr)
+            self.assertIn("record not checked: /hippocampus:record is bound but no record time was supplied", absent.stderr)
         with tempfile.TemporaryDirectory() as directory:
             _, fresh, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", ledger)
             self.assertEqual(fresh.returncode, 0, fresh.stderr)
@@ -564,7 +564,7 @@ class ChecklistTests(unittest.TestCase):
             self.start(directory, user)
             _, result, _ = self.wrap(directory, [], user, "2026-10-06T11:00:00Z")
             self.assertEqual(result.returncode, 1)
-            self.assertIn("wrap failed: record stale: /record-step recorded at 2026-10-06T11:00:00Z, "
+            self.assertIn("wrap failed: record stale: /hippocampus:record recorded at 2026-10-06T11:00:00Z, "
                           "older than the session's last change at 2026-10-06T12:00:00Z", result.stderr)
 
     def test_only_changes_after_the_latest_start_are_ignored(self):
@@ -797,10 +797,10 @@ class ChecklistTests(unittest.TestCase):
 
             missing = report()
             self.assertEqual(missing.returncode, 1)
-            self.assertIn("checklist: report invalid: session summary: missing; pass --summary <file> from /record-step", missing.stderr)
+            self.assertIn("checklist: report invalid: session summary: missing; pass --summary <file> from /hippocampus:record", missing.stderr)
             # An older record binding composes nothing; the error names the path that still wraps.
-            self.assertIn('--no-summary "/record-step composed no session summary"', missing.stderr)
-            older = report("--no-summary", "/record-step composed no session summary")
+            self.assertIn('--no-summary "/hippocampus:record composed no session summary"', missing.stderr)
+            older = report("--no-summary", "/hippocampus:record composed no session summary")
             self.assertEqual(older.returncode, 0, older.stderr)
             self.assertEqual(list(json.loads(older.stdout))[:2], ["summary", "summary_unavailable"])
 

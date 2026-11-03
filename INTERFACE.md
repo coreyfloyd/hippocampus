@@ -203,20 +203,21 @@ in the same checkout never block.
 ## 6. Checklist engine: `scripts/lib/checklist.py`
 
 Standard library only. The skill (`skills/checklist/SKILL.md`) runs the plan; the engine
-composes and checks it. It writes no handoff and runs no skill.
+composes and checks it and executes record-write commands. It writes no handoff and runs no skill.
 
 | Operation | Purpose |
 |---|---|
 | `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine with the profiles and route a resumed handoff's carried items to their slots. Writes a start marker to the session's ledger. |
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
-| `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; return a handoff payload with a filing report. Executes no binding. |
+| `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
+| `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
 | `wrap-check ... --written-handoff H [--record-at T] [--unattended]` | Fail, with the reason, when the handoff is invalid, a bound item is still carried, a read/write failed, or `record` is bound and its latest write is older than the session's last change. |
 | `report ... --results R --handoff H [--summary F \| --no-summary WHY] [--unattended]` | Require a valid written handoff and check its filing outcomes and the run's step results; the report starts with the session summary. |
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
-`handoff`. Only `record` and `persist` are slots. Knowledge and lessons are native
+`handoff`. Only `persist` is a slot. Record is the package step calling per-kind record writes. Knowledge and lessons are native
 steps running `/hippocampus:knowledge-capture` and `/hippocampus:improve-harness`
 (plain skill names in Codex), consuming `knowledge` and `lesson` respectively.
 Their destinations follow the knowledge profile and lesson routing file.
@@ -232,13 +233,14 @@ bound write failures fail wrap. `handoff` is not a slot and is the last spine st
   "name": "example",
   "record_read": {"command": "/read-work"},
   "ask": {"command": "/ask-step"},
-  "bindings": {"record": {"command": "/record-step", "consumes": ["progress", "decision"]}},
+  "record_writes": {"tickets": {"command": ["write-tickets"]}, "projects": {"command": ["write-projects"]}, "documents": {"command": ["write-documents"]}, "scheduled_jobs": {"command": ["write-jobs"]}},
+  "bindings": {"persist": {"command": "/persist-step", "consumes": []}},
   "steps": [{"id": "tidy", "after": "persist", "instructions": "..."}]
 }
 ```
 
 A binding names a `command` and the item types it `consumes`. A user slot may
-explicitly bind `record` or `persist` to JSON `null` to leave it unbound. This keeps the spine step and carries
+explicitly bind `persist` to JSON `null` to leave it unbound. This keeps the spine step and carries
 its unsaved items; it does not remove or skip the step. A step has a unique `id`, an
 `after` anchor (`before-spine`, `record`, `knowledge`, `lessons`, or `persist`; `handoff`
 only for the step `own-worktree`, which must use it), and
@@ -309,7 +311,7 @@ afresh after an unfinished unattended wrap. Without the section every interactiv
 
 ## 7. Skills
 
-25 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
+26 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
 looks for skills. Each resolves its scripts from its own real directory, never from a
 tool-specific home directory.
 
@@ -319,6 +321,7 @@ tool-specific home directory.
 | `checkpoint` | Checkpoint the current session. `scripts/checkpoint.sh` is the entry point the checklist also calls. |
 | `pickup` | Resume after a cold start. Its engine is `scripts/pickup.py`. |
 | `checklist` | Wrap through the spine plus profile steps. |
+| `record` | Run per-kind record writes mid-session or as checklist’s first step. |
 | `handoff-prompt` | A copy-pasteable prompt that hands a slice of work to another session. |
 | `sweep` | Sweep report and configured filing for abandoned sessions; see [sweep contract](docs/sweep.md). |
 | `wip` | In-flight work, blockers, and pending approvals for the current session. |
@@ -359,7 +362,7 @@ repository. `tests/test_shipped_surface.py` runs the check over the whole tree w
 ## 10. Codex installation and normalization
 
 `python3 scripts/install-codex.py [--codex-home PATH] [--codex PATH]` installs a
-runtime copy, the 25 skill links, six hippocampus hooks and the optional actor
+runtime copy, the 26 skill links, six hippocampus hooks and the optional actor
 guard. The installer owns only the registrations and links recorded in
 `hippocampus-install.json`; other hooks and configuration survive. Its seven
 handlers must match `hooks/list` with `trustStatus: trusted`, or it restores the
@@ -381,7 +384,7 @@ A record read is defined in [the glossary](docs/glossary.md#language). The agent
 runs the skill named by the user profile's `record_read.command`, gives it one
 request below, then validates its JSON response before rendering it. The pickup
 script does not execute this binding; the agent owns this read. The skill is read-only;
-writes remain with the `record` slot. The package supplies no record service.
+writes run through per-kind record writes in the package record step. The package supplies no record service.
 
 Requests and responses have fixed fields. No additional, free-form, or
 tracker-specific fields are permitted. Skill authors put additional context in
@@ -484,7 +487,7 @@ The shared command defaults to watch-only. `sweep.mode: "act"` enables planning
 when `run` receives `--decisions`. Without decisions it writes a watch-only
 inventory, even with act configured. The agent performs every profile binding
 call, following its `command` and `instructions` as during a checklist wrap.
-The package never executes record, record-read, slot or ask bindings. Skill
+The package executes record writes as described in `skills/record/SKILL.md`; it never executes record-read, persist or ask bindings. Skill
 commands need no executable adapter or JSON stdin/stdout protocol.
 `--user-profile` overrides `CHECKLIST_USER_PROFILE`, then
 `$XDG_CONFIG_HOME/hippocampus/checklist-profile.md` (default `~/.config/hippocampus/checklist-profile.md`).

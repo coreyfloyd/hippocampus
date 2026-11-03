@@ -171,8 +171,7 @@ def bound_profile(sandbox):
     binding = {'command': 'sh ' + shlex.quote(str(stub))}
     profile = sandbox[0] / 'profile.json'
     profile.write_text(json.dumps({'name': 'test', 'ask': binding, 'record_read': binding,
-        'bindings': {slot: dict(binding, consumes=[])
-                     for slot in ('record',)}}))
+        'record_writes': {kind: binding for kind in ('tickets', 'projects', 'documents', 'scheduled_jobs')}}))
     return profile
 
 
@@ -329,12 +328,12 @@ def test_duplicate_decisions_for_a_unique_source_identity_are_still_rejected(san
     pytest.param({'rule': 'R4', 'destination': 'ask', 'choices': ['save', 'leave it']},
                  'ask', 'asks_raised', id='R4-pending'),
     pytest.param({'rule': 'R7', 'destination': 'README.md'},
-                 'record', 'documents_changed', id='R7'),
+                 'documents', 'documents_changed', id='R7'),
     pytest.param({'rule': 'R2', 'destination': 'https://example.test/ticket', 'read_status': 'ok'},
-                 'record', 'comments_added', id='R2'),
+                 'tickets', 'comments_added', id='R2'),
     pytest.param({'rule': 'R5', 'destination': 'record', 'read_status': 'ok',
                   'priority': 'p2', 'priority_reason': 'Needed'},
-                 'record', 'new_tickets', id='R5'),
+                 'tickets', 'new_tickets', id='R5'),
     pytest.param({'rule': 'R6', 'reason': 'No stated outcome'},
                  None, 'items_dropped', id='R6'),
 ])
@@ -539,8 +538,7 @@ def test_all_filing_rules_share_checklist_validation_without_binding_calls(sandb
     source(sandbox, loops=items)
     profile = sandbox[0] / 'profile.json'
     profile.write_text(json.dumps({'name': 'test', 'ask': {'command': 'MUST NEVER RUN'},
-        'bindings': {key: {'command': 'MUST NEVER RUN', 'consumes': []}
-                     for key in ('record',)}}))
+        'record_writes': {kind: {'command': 'MUST NEVER RUN'} for kind in ('tickets', 'documents')}}))
     entries = [
         {'rule': 'R1', 'information_only': True, 'reason': 'Information only'},
         {'rule': 'R3', 'destination': 'ask', 'choices': ['approve', 'decline']},
@@ -926,7 +924,7 @@ def test_archive_other_retention_conditions_remain_independent(sandbox, guard):
         profile.write_text(json.dumps(data))
     elif guard == 'unbound-record':
         data = json.loads(profile.read_text())
-        data['bindings']['record'] = None
+        data['record_writes'] = {}
         profile.write_text(json.dumps(data))
     elif guard == 'recorded-files':
         data = json.loads(path.read_text())

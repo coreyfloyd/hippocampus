@@ -197,18 +197,20 @@ A profile is separate from the shared configuration. The user profile is
 `$CHECKLIST_USER_PROFILE`, otherwise
 `${XDG_CONFIG_HOME:-~/.config}/hippocampus/checklist-profile.md`. Repository profiles live
 at `.claude/checklist-profile.md` and add steps. JSON or a Markdown
-`checklist-profile` fence binds the record and persist slots and adds steps around the spine.
-For example, the glossary's profile binds `record` to `/record-step`, consuming
-`progress` and `decision` items; replace that command with your own record
-workflow. See [the profile contract](../INTERFACE.md#6-checklist-engine-scriptslibchecklistpy)
+`checklist-profile` fence names per-kind record writes, binds the persist slot,
+and adds steps around the spine. Optional `record_writes` entries name executable
+commands for tickets, projects, documents, and scheduled_jobs. Each accepts a
+lookup or write request and returns an identity-matched receipt; see the
+[record skill](../skills/record/SKILL.md). The retired `bindings.record` is refused.
+ See [the profile contract](../INTERFACE.md#6-checklist-engine-scriptslibchecklistpy)
 and [glossary](glossary.md) for the full shape and allowed anchors.
 
-Without a profile, `record` and `persist` are unbound; their
+Without a profile, no record writes are configured and `persist` is unbound; their
 items go through the filing rules before wrap; unbound destinations warn and
 retain their items. Knowledge and lessons always run the package’s
 knowledge-capture and improve-harness, using the knowledge profile and routing file. A user profile may
 bind `"ask": {"command": "/ask-step"}` for user decisions and approvals. This
-command is separate from the two slots and never files asks as tickets. A profile
+command is separate from the persist slot and never files asks as tickets. A profile
 cannot remove a spine step. Only `own-worktree` may follow the handoff.
 
 ## Verify the installation
@@ -306,7 +308,7 @@ Codex. Setup is included among the nine installed skills. It is discovered by th
 Claude Code plugin and linked by the Codex installer. Both tools use the same setup
 procedure and user profile.
 
-Setup asks about the two checklist slots, record and persist, and the separate ask binding.
+Setup configures the checklist profile and the separate ask binding.
 It creates a user profile or extends your existing one, preserving notes,
 sections, added steps and unchanged bindings. You can decline either slot or
 leave ask unbound. Unbound slots carry unsaved items into the handoff.
