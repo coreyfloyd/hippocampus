@@ -394,7 +394,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
     summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
-        result.setdefault("resume", {}).update(ticket_module.ticket_facts(result.get("resume", {}), session_id))
+        result.setdefault("resume", {}).update(ticket_module.retain_session_facts(result.get("resume", {}), session_id))
     projects = ticket_module.project_references(result.get("resume", {}))
     for item in loops:
         project = item.get("anchor", {}).get("project")
