@@ -452,7 +452,7 @@ configuration JSON object             # shared settings, not a profile
 ├── checklist_surfaces: string[]      # standing surface-detector candidates
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
-├── timed_checkpoint_minutes: positive number  # interval, default 55 minutes
+├── timed_checkpoint_minutes: positive integer # whole minutes, at least 1; default 55
 ├── timed_checkpoint_token_limit: positive integer # below-limit checkpoint, default 200000
 ├── prune_days: positive integer      # stale-transcript prune age, default 7; PICKUP_PRUNE_DAYS overrides
 ├── cycle_sessions: object            # consumer session-name to home-relative directory mapping
@@ -506,7 +506,8 @@ and composition, not a recommended cleanup or persistence policy.
 ### Timed checkpoint state
 
 Every interactive checkpoint replaces the pending timer for that session. The
-shared configuration sets `timed_checkpoint_minutes` (55 by default) and
+shared configuration sets `timed_checkpoint_minutes` (a whole number of minutes,
+at least 1; 55 by default) and
 `timed_checkpoint_token_limit` (200,000 by default). At the scheduled time the
 agent reads transcript usage with `handoff.py timed-checkpoint-check`; below the
 limit it checkpoints, at or above it the prompt does nothing, and unknown usage
@@ -514,7 +515,10 @@ is reported without guessing.
 
 Claude Code's checkpoint output instructs the agent to delete the previous job,
 create a session-only one-shot CronCreate job pinned to the printed minute with
-`recurring: false`, and record its job ID. Codex automatically starts a detached
+`recurring: false`, and record its job ID. The pinned minute rounds up: it is
+always strictly in the future and never earlier than checkpoint time plus the
+interval, including when restore runs after the original deadline. Fractions
+and non-integer JSON values are refused in both tools. Codex automatically starts a detached
 worker that replaces the per-session deadline and calls `codex queue`. The exact
 prompt has one source, `scripts/lib/timed-checkpoint-prompt.txt`, rendered by
 `handoff.py timed-checkpoint-prompt`. Timer state and delivery receipts live in

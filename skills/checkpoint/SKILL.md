@@ -85,6 +85,9 @@ unchanged; never reconstruct milestone or epic state during checkpoint.
 After every successful checkpoint, replace this session's timed checkpoint. Follow
 its command output: Claude Code must CronDelete the previous job before CronCreate,
 using the printed pinned minute, `recurring: false`, and session-only persistence.
+The interval must be a whole number of minutes, at least 1, in both tools. Claude
+rounds its due minute up so it stays strictly in the future and never precedes
+checkpoint time plus the interval.
 Record the new job ID with the printed `claude-timer-set` command. The exact prompt
 comes from `handoff.py timed-checkpoint-prompt --session-id <session>`; never paraphrase
 it. Codex schedules its detached timer automatically and replaces the pending deadline.

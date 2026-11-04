@@ -45,7 +45,7 @@ an empty configuration.
 | `checklist_surfaces` | list of strings | Standing surfaces the surface detector reports in addition to the session's own repository. |
 | `checklist_suite_baselines_dir` | string | Directory of per-repository suite baseline files the surface detector reports. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
-| `timed_checkpoint_minutes` | positive number | Interval after each checkpoint; default 55 minutes. Fractional minutes are accepted. |
+| `timed_checkpoint_minutes` | positive integer | Whole-minute interval after each checkpoint; at least 1, default 55. Fractional values and other JSON types are refused in both tools. |
 | `timed_checkpoint_token_limit` | positive integer | Timed prompts checkpoint only below this token count; default 200,000. |
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
@@ -219,7 +219,8 @@ tool call, it denies a subagent or headless session the checklist and the checkp
 writers, using `checklist.py actor-guard`.
 
 Every successful interactive checkpoint replaces its timed checkpoint. Claude Code
-receives a pinned local cron minute, `recurring: false`, session-only CronCreate,
+receives a pinned local cron minute rounded up so it is strictly in the future
+and never earlier than checkpoint time plus the interval, `recurring: false`, session-only CronCreate,
 CronDelete of the previous job, and the exact shared prompt. The agent records
 the new job ID with `claude-timer-set`. Codex starts a detached worker that reads
 the session's replaceable deadline and queues the same prompt through

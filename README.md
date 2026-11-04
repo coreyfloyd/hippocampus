@@ -72,7 +72,7 @@ task route you describe in set-up.
 
 Handoffs live outside either tool's data folder, so you can checkpoint in
 Claude Code and pick up in Codex. Each checkpoint schedules a replacement timed
-checkpoint, by default 55 minutes later when context is below 200,000 tokens.
+checkpoint, by default at least 55 minutes later when context is below 200,000 tokens.
 The pre-compaction hook writes a checkpoint itself from retained facts, preserving
 your continuation. Both settings are [configurable](docs/session-installation.md#shared-configuration).
 Hooks also remind you to checkpoint when context

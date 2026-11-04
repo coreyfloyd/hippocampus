@@ -158,14 +158,29 @@ def test_codex_timer_fires_once_after_replacement_and_retains_session_context(ru
     queue.chmod(0o755)
     env['PATH'] = str(commands) + os.pathsep + env['PATH']
     config = directory / 'config.json'
-    config.write_text(json.dumps({'timed_checkpoint_minutes': 0.03}))
+    config.write_text(json.dumps({'timed_checkpoint_minutes': 2}))
     assert run(runtime, 'context-guard', payload=event(runtime)).returncode == 0
     first = checkpoint(runtime)
     assert first.returncode == 0, first.stderr
     time.sleep(0.15)
-    config.write_text(json.dumps({'timed_checkpoint_minutes': 0.008}))
+    config.write_text(json.dumps({'timed_checkpoint_minutes': 1}))
     second = checkpoint(runtime)
     assert second.returncode == 0, second.stderr
+    # Assert the real configured deadlines before advancing only the clock input
+    # in the documented pending state; production intervals remain whole minutes.
+    from datetime import datetime
+    pending = Path(env['HANDOFF_TIMER_DIR']) / 'test.pending.json'
+    state = json.loads(pending.read_text())
+    handoff_path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
+    written = datetime.fromisoformat(json.loads(handoff_path.read_text())['written_at'].replace('Z', '+00:00'))
+    assert state['due_at'] == written.timestamp() + 60
+    import fcntl
+    with pending.with_name('test.schedule.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state['due_at'] = time.time() + 0.3
+        replacement = pending.with_suffix('.replacement')
+        replacement.write_text(json.dumps(state))
+        replacement.replace(pending)
     deadline = time.monotonic() + 5
     while not calls.exists() and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -211,7 +226,10 @@ def test_claude_pinned_minute_is_calculated_from_write_time(runtime):
     assert result.returncode == 0, result.stderr
     path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
     stamp = datetime.fromisoformat(json.loads(path.read_text())['written_at'].replace('Z', '+00:00'))
-    due = (stamp + timedelta(minutes=55)).astimezone()
+    due = stamp + timedelta(minutes=55)
+    if due.second or due.microsecond:
+        due = due.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    due = due.astimezone()
     assert f'cron: {due.minute} {due.hour} {due.day} {due.month} *' in result.stdout
 
 
@@ -229,3 +247,73 @@ def test_pre_compaction_has_bounded_hook_runtime(runtime):
     assert time.monotonic() - started < 9
     assert result.returncode == 0
     assert '8-second budget' in result.stderr
+
+
+@pytest.mark.parametrize('harness', ['claude', 'codex'])
+@pytest.mark.parametrize('value', [0.5, 1.5, 1.0, 0, -1, True, '1', None])
+def test_interval_requires_whole_minutes_in_both_tools(runtime, harness, value):
+    directory, env, _ = runtime
+    env['HIPPOCAMPUS_HARNESS'] = harness
+    (directory / 'config.json').write_text(json.dumps({'timed_checkpoint_minutes': value}))
+    result = run(runtime, 'config-get', 'timed_checkpoint_minutes')
+    assert result.returncode == 2, result.stdout
+    assert 'timed_checkpoint_minutes' in result.stderr
+    assert 'whole number of minutes, at least 1' in result.stderr
+
+
+@pytest.mark.parametrize('harness', ['claude', 'codex'])
+def test_one_minute_is_a_valid_interval(runtime, harness):
+    directory, env, _ = runtime
+    env['HIPPOCAMPUS_HARNESS'] = harness
+    (directory / 'config.json').write_text(json.dumps({'timed_checkpoint_minutes': 1}))
+    result = run(runtime, 'config-get', 'timed_checkpoint_minutes')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == '1\n'
+
+
+@pytest.mark.parametrize('written,now,expected', [
+    ('2026-11-04T12:00:45Z', '2026-11-04T12:00:45Z', '2026-11-04T12:02:00+00:00'),
+    ('2026-11-04T12:00:00Z', '2026-11-04T12:00:00Z', '2026-11-04T12:01:00+00:00'),
+    ('2026-11-04T12:00:00.000001Z', '2026-11-04T12:00:00.000001Z', '2026-11-04T12:02:00+00:00'),
+    ('2026-11-04T12:58:59Z', '2026-11-04T12:58:59Z', '2026-11-04T13:00:00+00:00'),
+    ('2026-11-04T23:58:59Z', '2026-11-04T23:58:59Z', '2026-11-05T00:00:00+00:00'),
+    ('2026-01-31T23:58:59Z', '2026-01-31T23:58:59Z', '2026-02-01T00:00:00+00:00'),
+    ('2026-12-31T23:58:59Z', '2026-12-31T23:58:59Z', '2027-01-01T00:00:00+00:00'),
+    ('2028-02-28T23:58:59Z', '2028-02-28T23:58:59Z', '2028-02-29T00:00:00+00:00'),
+    ('2026-11-04T11:00:00Z', '2026-11-04T12:00:00Z', '2026-11-04T12:01:00+00:00'),
+    ('2026-11-04T11:00:00Z', '2026-11-04T12:00:45Z', '2026-11-04T12:01:00+00:00'),
+])
+def test_claude_due_minute_rounds_up_and_remains_future(runtime, written, now, expected):
+    from datetime import datetime, timedelta
+    directory, env, _ = runtime
+    env['TZ'] = 'UTC'
+    (directory / 'config.json').write_text(json.dumps({'timed_checkpoint_minutes': 1}))
+    # Use the real restore command and replace only its wall clock. Fixed dates
+    # exercise calendar boundaries without waiting for the host's clock.
+    path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({'schema_version': 2, 'trigger': 'pre-compact',
+        'written_at': written, 'resume': {'headline': 'Retained continuation'}}))
+    driver = """
+import sys
+from datetime import datetime, timezone
+sys.path.insert(0, sys.argv[1])
+import handoff
+frozen = datetime.fromisoformat(sys.argv[2].replace('Z', '+00:00'))
+class Clock(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return frozen.astimezone(tz) if tz else frozen.replace(tzinfo=None)
+handoff.datetime = Clock
+raise SystemExit(handoff.main(['post-compact']))
+"""
+    result = subprocess.run([sys.executable, '-c', driver, str(ENGINE.parent), now],
+        cwd=directory, env=env, input=json.dumps(event(runtime, source='compact')),
+        text=True, capture_output=True, timeout=9)
+    assert result.returncode == 0, result.stderr
+    context = json.loads(result.stdout)['hookSpecificOutput']['additionalContext']
+    due = datetime.fromisoformat(expected)
+    assert f'pinned to {due.isoformat(timespec="minutes")}' in context
+    assert f'cron: {due.minute} {due.hour} {due.day} {due.month} *' in context
+    assert due >= datetime.fromisoformat(written.replace('Z', '+00:00')) + timedelta(minutes=1)
+    assert due > datetime.fromisoformat(now.replace('Z', '+00:00'))

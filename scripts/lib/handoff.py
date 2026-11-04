@@ -15,7 +15,6 @@ import argparse
 import fcntl
 import hashlib
 import json
-import math
 import os
 import re
 import shlex
@@ -106,12 +105,12 @@ def read_config() -> dict:
     return data
 
 
-def timed_setting(key: str) -> int | float:
+def timed_setting(key: str) -> int:
     value = read_config().get(key, TIMED_CHECKPOINT_DEFAULTS[key])
-    integer = key == "timed_checkpoint_token_limit"
-    if (type(value) not in ((int,) if integer else (int, float))
-            or not math.isfinite(value) or value <= 0):
-        raise ValueError(f"hippocampus config {config_path()}: {key} must be a positive {'integer' if integer else 'number'}")
+    if type(value) is not int or value < 1:
+        requirement = ("a whole number of minutes, at least 1" if key == "timed_checkpoint_minutes"
+                       else "a positive integer")
+        raise ValueError(f"hippocampus config {config_path()}: {key} must be {requirement}")
     return value
 
 
@@ -161,8 +160,14 @@ def timed_prompt(session_id: str) -> str:
 def claude_schedule(session_id: str, written_at: str) -> str:
     minutes = timed_setting("timed_checkpoint_minutes")
     due = datetime.fromisoformat(written_at.replace("Z", "+00:00")) + timedelta(minutes=minutes)
+    # Never truncate seconds into an earlier (or already elapsed) cron minute.
+    # A delayed restore may be scheduling after the original due time.
+    due = max(due, datetime.now(timezone.utc) + timedelta(microseconds=1)).astimezone(timezone.utc)
+    rounded = due.replace(second=0, microsecond=0)
+    if rounded < due:
+        rounded += timedelta(minutes=1)
     # CronCreate's five-field expression is evaluated in the session's local timezone.
-    local = due.astimezone()
+    local = rounded.astimezone()
     cron = f"{local.minute} {local.hour} {local.day} {local.month} *"
     job_file = timer_file(session_id, ".claude.json")
     previous = read_json(str(job_file)).get("job_id") if job_file.exists() else None
@@ -170,7 +175,7 @@ def claude_schedule(session_id: str, written_at: str) -> str:
     register = shlex.join([sys.executable, str(Path(__file__).resolve()), "claude-timer-set", "--session-id", session_id, "--job-id", "<new-job-id>"])
     return (f"\nTimed checkpoint: {delete} before scheduling its replacement. Use CronCreate now: "
             f"session-only, recurring: false, pinned to {local.isoformat(timespec='minutes')} "
-            f"({minutes:g} minutes after this checkpoint), cron: {cron}. "
+            f"(at least {minutes:g} minutes after this checkpoint, rounded up to a future cron minute), cron: {cron}. "
             f"Use this exact prompt:\n{timed_prompt(session_id)}\n"
             f"After CronCreate succeeds, record its job id: {register}\n")
 
