@@ -14,19 +14,26 @@ as part of a checkpoint. Do not carry a live ticket list, project status, runtim
 or monitor doctrine.
 
 Supply the handoff's judgment-bearing fields: a one-line `resume.headline`, concrete
-`resume.next_action`, a one-line `resume.session_summary` of what this session did,
-short anchored or disposed `resume.open_loops`, `spawned_processes`, and `suggested_skills`.
+`resume.next_action`, a real one-line `resume.session_summary` describing the work since this session's
+previous history entry,
+anchored or disposed `resume.open_loops`, `spawned_processes`, and `suggested_skills`.
 Pass all unrecorded session items in `session_items`. Each needs `type` (progress,
 commitment, decision, knowledge, lesson, artifact, or open_loop), `context` (at most
-600 characters), `disposition`, `session_id` of its producer, and `produced_at` (ISO
+600 characters except asks and lessons, whose complete text has no length limit), `disposition`, `session_id` of its producer, and `produced_at` (ISO
 timestamp with timezone). Decisions also need `author` and `location` (where decided).
-Lessons carry the lesson text in `context`, not a pointer. Only items already saved in
+Asks keep their complete `choices` alongside `context`. Lessons carry the full
+proposal in `context`: target file and section, proposed text or diff, and evidence,
+not a pointer. Preserve all of this through compaction, pickup, and wrap. Only items already saved in
 the record may have `recorded: true`; those are omitted. Already-carried items stay in
 `resume.open_loops` with their original identity and date until a binding consumes them.
-Preserve `resume.session_history` from a resumed handoff, so earlier summaries keep
-their producing session's identity. Update `resume.session_summary` to describe the
-current session: the module records it under the calling session ID, including when
-checkpointing a payload whose subject still names the prior session.
+Supply new account text on every checkpoint and wrap; never use a placeholder or
+fall back to the headline. The module appends one dated history entry under the
+calling session ID and keeps earlier entries in its ledger, so compaction does
+not require the agent to re-supply them. Carried `resume.session_history` entries
+keep their original identities and dates. A missing or blank account fails
+validation: checkpoint still writes and reports the failure; wrap fails.
+The automatic stop-time handoff is marked `skeleton: true`, adds no history
+entry, and retains earlier ledger entries.
 
 Files and published artifacts come from the ledger. Write/Edit hook events record
 file paths. After each shell-driven file change, register its path explicitly:

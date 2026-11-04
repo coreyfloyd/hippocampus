@@ -87,6 +87,7 @@ def source(home):
     # current producer before testing pickup.
     value = json.loads((ROOT / 'docs/examples/handoff.json').read_text())
     value['subject'] = {'working_directory': str(home), 'session_id': 'captured-session'}
+    value['resume']['session_history'][-1]['session_id'] = 'captured-session'
     value['git'] = {'repository_root': '', 'branch': '', 'head': ''}
     value['uncommitted_files'] = []
     value['resume']['open_loops'] = [
@@ -245,7 +246,7 @@ def test_flow_7_session_only_setup_probes_record_and_validates_profile(user):
     probe = run(user[2], sys.executable, root / 'scripts/lib/record_read.py',
                 '--expect', 'ticket_status', data=response)
     assert probe.stdout.strip() == 'valid'
-    setup(user, root, {'record': None, 'persist': None}, '--user-present',
+    setup(user, root, {'persist': None}, '--user-present',
           '--ask', '{"command":"/ask-user"}', '--record-read', '/read-work')
     profile = user[1] / '.config/hippocampus/checklist-profile.md'
     plan = json.loads(engine(user, root, 'plan', '--user-profile', profile, '--session-id', 'captured-session').stdout)
@@ -271,7 +272,7 @@ def test_flow_8_extend_existing_knowledge_profile_preserves_other_choices(user):
                          '---\nKeep knowledge policy.\n')
     run(user[2], sys.executable, root / 'scripts/validate_profile.py', knowledge)
     profile = folder / 'checklist-profile.md'
-    original = {'name': 'user', 'bindings': {'record': {'command': '/keep-record', 'consumes': []}},
+    original = {'name': 'user', 'record_writes': {'tickets': {'command': 'keep-record'}},
                 'steps': [{'id': 'tidy', 'after': 'persist', 'instructions': 'Keep addition'}]}
     profile.write_text('# Keep prose\n```checklist-profile\n' + json.dumps(original) + '\n```\n')
     before = knowledge.read_bytes()
@@ -281,7 +282,7 @@ def test_flow_8_extend_existing_knowledge_profile_preserves_other_choices(user):
     plan = json.loads(engine(user, root, 'plan', '--user-profile', profile, '--session-id', 'captured-session').stdout)
     assert knowledge.read_bytes() == before
     assert profile.read_text().startswith('# Keep prose\n')
-    assert plan['steps'][0]['binding'] == original['bindings']['record']
+    assert plan['steps'][0]['record_writes'] == original['record_writes']
     assert plan['steps'][-2]['id'] == 'tidy'
     assert plan['steps'][3]['binding']['command'] == '/save-work'
     checklist_before = profile.read_bytes()
@@ -308,7 +309,7 @@ def test_flow_9_declined_or_invalid_setup_writes_nothing_unapproved(user):
     result = setup(user, root, {}, check=False)
     assert result.returncode != 0 and 'without writes' in result.stderr
     assert not profile.exists()
-    setup(user, root, {'record': None}, '--user-present')
+    setup(user, root, {'persist': None}, '--user-present')
     before = profile.read_bytes()
     result = setup(user, root, {'record': {'command': '', 'consumes': []}}, '--user-present', check=False)
     assert result.returncode != 0

@@ -19,6 +19,11 @@ LEDGER_HOOK = os.path.join(ROOT, "hooks", "handoff-ledger.sh")
 GUARD_HOOK = os.path.join(ROOT, "hooks", "handoff-staleness-guard.sh")
 
 
+@pytest.fixture(autouse=True)
+def isolated_history_ledger(tmp_path, monkeypatch):
+    monkeypatch.setenv("HANDOFF_LEDGER_DIR", str(tmp_path / "ledger"))
+
+
 def load_module():
     spec = importlib.util.spec_from_file_location("handoff", MODULE)
     module = importlib.util.module_from_spec(spec)
@@ -31,6 +36,7 @@ def valid_payload():
     return {
         "resume": {
             "headline": "Continue the handoff port",
+            "session_summary": "Ported the handoff writer.",
             "next_action": "Run the targeted tests",
             "open_loops": [{"context": "Test module seam", "disposition": "file if needed"}],
         },
@@ -69,7 +75,7 @@ def test_resolve_cli_requires_a_session_id(tmp_path):
     assert "session id" in result.stderr.lower()
 
 
-def test_checkpoint_cli_accepts_explicit_path_without_session_id(tmp_path):
+def test_checkpoint_cli_reports_missing_identity_even_with_explicit_path(tmp_path):
     path = tmp_path / "controller" / "handoff.json"
     env = {key: value for key, value in os.environ.items()
            if key not in ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")}
@@ -81,7 +87,8 @@ def test_checkpoint_cli_accepts_explicit_path_without_session_id(tmp_path):
         capture_output=True,
         env=env,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 1, result.stderr
+    assert "history entry" in result.stderr
     assert f"Handoff file: {path}" in result.stdout
     assert json.loads(path.read_text())["subject"]["session_id"] == ""
 
@@ -761,7 +768,7 @@ def test_carried_summary_keeps_original_session_identity(tmp_path, monkeypatch):
     first = module.overlay_checkpoint(payload, str(tmp_path), "producer", "checkpoint")
     summary = first["resume"]["session_history"][0]
     assert summary["session_id"] == "producer"
-    assert summary["summary"] == payload["resume"]["headline"]
+    assert summary["summary"] == payload["resume"]["session_summary"]
     assert summary["produced_at"]
     second = module.overlay_checkpoint(first, str(tmp_path), "successor", "checkpoint")
     assert summary in second["resume"]["session_history"]
@@ -823,7 +830,8 @@ def test_summary_updates_current_session_without_rewriting_carried_history(tmp_p
     first["resume"]["session_summary"] = "Finished the implementation"
     second = module.overlay_checkpoint(first, str(tmp_path), "s", "checkpoint")
     assert second["resume"]["session_history"][0] == first["resume"]["session_history"][0]
-    assert second["resume"]["session_history"][1]["summary"] == "Finished the implementation"
+    assert second["resume"]["session_history"][1] == first["resume"]["session_history"][1]
+    assert second["resume"]["session_history"][2]["summary"] == "Finished the implementation"
 
 
 def test_summary_timestamp_is_validated(tmp_path, monkeypatch):
@@ -1101,3 +1109,137 @@ def test_config_get_prints_positive_integer_prune_days(tmp_path):
         env=dict(os.environ, HIPPOCAMPUS_CONFIG=str(config)))
     assert result.returncode == 0, result.stderr
     assert result.stdout == "14\n"
+
+
+def checkpoint_cli(tmp_path, payload, trigger="checkpoint"):
+    return subprocess.run(
+        [sys.executable, MODULE, "checkpoint", "--cwd", str(tmp_path),
+         "--session-id", "writer", "--trigger", trigger],
+        input=json.dumps(payload), text=True, capture_output=True,
+        env=os.environ | {"HANDOFF_PATH": str(tmp_path / "handoff.json"),
+                          "HANDOFF_LEDGER_DIR": str(tmp_path / "ledger")})
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+@pytest.mark.parametrize("text", [None, "", "Session checkpoint."])
+def test_checkpoint_requires_real_history_entry(tmp_path, trigger, text):
+    payload = valid_payload()
+    payload["resume"].pop("session_summary", None)
+    if text is not None:
+        payload["resume"]["session_summary"] = text
+    result = checkpoint_cli(tmp_path, payload, trigger)
+    assert result.returncode == 1
+    assert "history entry" in result.stderr
+    data = json.loads((tmp_path / "handoff.json").read_text())
+    assert data["resume"]["session_history"] == []
+    assert data["resume"].get("session_summary") != "Session checkpoint."
+
+
+def test_checkpoint_history_survives_compaction_and_missing_handoff(tmp_path):
+    payload = valid_payload()
+    payload["resume"]["session_summary"] = "Implemented the parser."
+    assert checkpoint_cli(tmp_path, payload).returncode == 0
+    first = json.loads((tmp_path / "handoff.json").read_text())["resume"]["session_history"][0]
+    (tmp_path / "handoff.json").unlink()
+    payload["resume"]["session_summary"] = "Verified parser errors."
+    assert checkpoint_cli(tmp_path, payload, "wrap").returncode == 0
+    data = json.loads((tmp_path / "handoff.json").read_text())
+    assert data["resume"]["session_history"][0] == first
+    assert len(data["resume"]["session_history"]) == 2
+    assert data["resume"]["session_history"][1]["summary"] == "Verified parser errors."
+    (tmp_path / "handoff.json").unlink()
+    result = subprocess.run(
+        [sys.executable, MODULE, "guard-decide", "--path", str(tmp_path / "handoff.json")],
+        input=json.dumps({"cwd": str(tmp_path), "session_id": "writer"}), text=True,
+        capture_output=True, env=os.environ | {"HANDOFF_LEDGER_DIR": str(tmp_path / "ledger")})
+    assert result.returncode == 0, result.stderr
+    skeleton = json.loads((tmp_path / "handoff.json").read_text())
+    assert skeleton["skeleton"] is True
+    assert skeleton["resume"]["session_history"] == data["resume"]["session_history"]
+    assert "session_summary" not in skeleton["resume"]
+
+
+def test_wrap_check_refuses_stop_skeleton_without_account(tmp_path):
+    payload = valid_payload()
+    result = checkpoint_cli(tmp_path, payload, "stop")
+    assert result.returncode == 0, result.stderr
+    data = json.loads((tmp_path / "handoff.json").read_text())
+    assert data["skeleton"] is True
+    assert data["resume"]["session_history"] == []
+    checked = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "scripts/lib/checklist.py"), "wrap-check",
+         "--written-handoff", str(tmp_path / "handoff.json")],
+        text=True, capture_output=True,
+        env=os.environ | {"CLAUDE_CODE_ENTRYPOINT": "cli", "HIPPOCAMPUS_HARNESS": "claude",
+                          "HIPPOCAMPUS_CONFIG": str(tmp_path / "config.json")})
+    assert checked.returncode == 1
+    assert "history entry" in checked.stdout + checked.stderr
+
+
+@pytest.mark.parametrize("resume", [None, [], {"session_history": 3}])
+def test_checkpoint_writes_malformed_history_input_and_reports_it(tmp_path, resume):
+    result = checkpoint_cli(tmp_path, {"resume": resume, "spawned_processes": []})
+    assert result.returncode == 1, result.stderr
+    assert (tmp_path / "handoff.json").exists()
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+@pytest.mark.parametrize("metadata", [
+    {"produced_at": "yesterday"},
+    {"produced_at": "2026-10-01T12:00:00"},
+    {"session_id": ""},
+    {"session_id": 42},
+])
+def test_rejected_history_does_not_poison_later_checkpoints(tmp_path, trigger, metadata):
+    initial = valid_payload()
+    initial["resume"]["session_summary"] = "Verified the original parser."
+    assert checkpoint_cli(tmp_path, initial).returncode == 0
+    path = tmp_path / "handoff.json"
+    original = json.loads(path.read_text())["resume"]["session_history"]
+    ledger = tmp_path / "ledger/session-touched-paths.writer.jsonl"
+    accepted_ledger = ledger.read_bytes()
+    invalid = valid_payload()
+    invalid["resume"]["session_summary"] = "Prepared the rejected checkpoint."
+    invalid["resume"]["session_history"] = [dict(
+        {"session_id": "earlier", "produced_at": "2026-10-01T12:00:00Z",
+         "summary": "Implemented the original parser."}, **metadata)]
+    rejected = checkpoint_cli(tmp_path, invalid, trigger)
+    assert rejected.returncode == 1
+    assert "session_history" in rejected.stderr
+    assert json.loads(path.read_text())["resume"]["session_history"][-2] == invalid["resume"]["session_history"][0]
+    assert ledger.read_bytes() == accepted_ledger
+    corrected = valid_payload()
+    corrected["resume"]["session_summary"] = "Verified the corrected parser."
+    retried = checkpoint_cli(tmp_path, corrected, trigger)
+    assert retried.returncode == 0, retried.stderr
+    history = json.loads(path.read_text())["resume"]["session_history"]
+    assert history[:-1] == original
+    assert history[-1]["summary"] == "Verified the corrected parser."
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+def test_rejected_handoff_does_not_persist_its_valid_history(tmp_path, trigger):
+    invalid = valid_payload() | {"tickets": []}
+    invalid["resume"]["session_summary"] = "Prepared a rejected handoff."
+    rejected = checkpoint_cli(tmp_path, invalid, trigger)
+    assert rejected.returncode == 1
+    assert "banned top-level key" in rejected.stderr
+    assert (tmp_path / "handoff.json").exists()
+    corrected = valid_payload()
+    retried = checkpoint_cli(tmp_path, corrected, trigger)
+    assert retried.returncode == 0, retried.stderr
+    history = json.loads((tmp_path / "handoff.json").read_text())["resume"]["session_history"]
+    assert len(history) == 1
+    assert history[0]["summary"] == corrected["resume"]["session_summary"]
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+def test_failed_handoff_write_does_not_persist_history(tmp_path, trigger):
+    path = tmp_path / "handoff.json"
+    path.mkdir()
+    rejected = checkpoint_cli(tmp_path, valid_payload(), trigger)
+    assert rejected.returncode == 2
+    path.rmdir()
+    retried = checkpoint_cli(tmp_path, valid_payload(), trigger)
+    assert retried.returncode == 0, retried.stderr
+    assert len(json.loads(path.read_text())["resume"]["session_history"]) == 1

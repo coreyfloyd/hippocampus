@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compose the fixed checklist spine and route carried items, using stdlib only.
 
-This module does not execute skills or write handoffs. The skill runs the plan,
+This module executes record-write commands but never writes handoffs. The skill runs the plan,
 collects explicit saved-item receipts, and sends the settled payload to checkpoint.
 Filing judgments come from the skill; source items and provenance pass through intact.
 """
@@ -18,7 +18,11 @@ import re
 import sys
 from typing import Any, Mapping, Sequence
 
-SLOTS = ("record", "persist")
+_record_spec = importlib.util.spec_from_file_location("record_write", Path(__file__).with_name("record_write.py"))
+record_write = importlib.util.module_from_spec(_record_spec)
+_record_spec.loader.exec_module(record_write)
+
+SLOTS = ("persist",)
 NATIVE = {"knowledge": {"command": "/hippocampus:knowledge-capture", "consumes": ["knowledge"]},
           "lessons": {"command": "/hippocampus:improve-harness", "consumes": ["lesson"]}}
 NATIVE_STATUSES = ("nothing", "not configured", "declined")
@@ -28,7 +32,7 @@ SPINE = ("record", "knowledge", "lessons", "persist", "handoff")
 # The one step allowed after the handoff: removing the session's own worktree earlier
 # would leave the handoff naming no repository, so `/hippocampus:pickup` could not find it.
 AFTER_HANDOFF = "own-worktree"
-# What an unbound slot leaves in the handoff: the item types its step exists for.
+# What unbound destinations leave in the handoff: the item types their step exists for.
 CARRIES = {"record": ["progress", "commitment", "decision", "artifact"], "knowledge": ["knowledge"],
            "lessons": ["lesson"], "persist": []}
 # How a step ended, as the run reports it. `carried` is an unbound slot.
@@ -78,8 +82,15 @@ def reject_native_bindings(profile: Mapping[str, Any], label: str, text: str = "
     if obsolete:
         raise ValueError(f"{label}: delete the {', '.join(obsolete)} binding blocks, including their "
                          "command/consumes/instructions lines; knowledge and lessons are native steps. "
-                         "Only record and persist are configurable slots; ask is a separate binding. "
+                         "Only persist is a configurable slot; ask is a separate binding. "
                          "No automatic conversion is performed")
+
+
+def reject_record_binding(profile: Mapping[str, Any]) -> None:
+    if isinstance(profile.get("bindings"), Mapping) and "record" in profile["bindings"]:
+        raise ValueError('retired bindings.record: use record_writes: '
+                         '{"tickets": {"command": "..."}, "projects": {"command": "..."}, '
+                         '"documents": {"command": "..."}, "scheduled_jobs": {"command": "..."}}')
 
 
 def load_profile(path: Path) -> dict[str, Any]:
@@ -94,6 +105,7 @@ def load_profile(path: Path) -> dict[str, Any]:
         profile = json.loads(fences[0])
     if not isinstance(profile, dict):
         raise ValueError(f"{path}: profile must be an object")
+    reject_record_binding(profile)
     reject_native_bindings(profile, str(path), text)
     # A section reference keeps instructions and machine-readable ordering together.
     for entry in [*profile.get("bindings", {}).values(), *profile.get("steps", [])]:
@@ -108,6 +120,21 @@ def load_profile(path: Path) -> dict[str, Any]:
                 raise ValueError(f"{path}: missing instructions section {section}")
             entry["instructions"] = match[1].strip()
     return profile
+
+
+def load_profiles(user_profile: Path | None, repository_profiles: Sequence[Path]) -> list[dict[str, Any]]:
+    paths = ([user_profile] if user_profile else []) + list(repository_profiles)
+    profiles = [load_profile(path) for path in paths]
+    for path, profile in zip(repository_profiles, profiles[1:] if user_profile else profiles):
+        if "record_writes" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind record_writes")
+        if "ask" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind ask")
+        if "record_read" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind record_read")
+        if profile.get("bindings"):
+            raise ValueError(f"{path}: repository profiles only add steps; cannot bind {', '.join(profile['bindings'])}")
+    return profiles
 
 
 def record_read_binding(profile: Mapping[str, Any]) -> dict[str, str] | None:
@@ -138,18 +165,25 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     additions: dict[str, list[dict[str, Any]]] = {anchor: [] for anchor in ("before-spine", *SPINE)}
     seen = set(SPINE)
     bound: set[str] = set()
+    writes = {}
     for profile in profiles:
         if not isinstance(profile, Mapping):
             raise ValueError("profile must be an object")
         name = profile.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("profile requires a name")
-        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "ask"})
+        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "record_writes", "ask"})
         if unknown:
             steps = _removed_spine_steps(profile, unknown)
             if steps:
                 raise ValueError(f"{name}: cannot remove or skip spine step {', '.join(steps)}")
             raise ValueError(f"{name}: unknown profile field {', '.join(unknown)}")
+        reject_record_binding(profile)
+        declared_writes = record_write.bindings(profile)
+        if "record_writes" in profile:
+            if writes:
+                raise ValueError(f"{name}: cannot replace record_writes")
+            writes = declared_writes
         record_read_binding(profile)
         ask_binding(profile)
         declared = profile.get("bindings", {})
@@ -192,14 +226,17 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 raise ValueError(f"{name}: step {identity} requires instructions")
             seen.add(identity)
             additions[anchor].append({**copy.deepcopy(dict(step)), "profile": name})
+    bindings["record"] = {"command": "/hippocampus:record", "consumes": CARRIES["record"]}
     plan = additions["before-spine"][:]
     for slot, title in zip(SPINE[:-1], TITLES):
         step = {"id": slot, "title": title, "binding": bindings[slot]}
-        if slot in NATIVE:
+        if slot == "record":
+            step.update(package=True, record_writes=writes)
+        elif slot in NATIVE:
             step["native"] = True
         else:
             step["slot"] = slot
-        if bindings[slot] is None:
+        if bindings[slot] is None or (slot == "record" and not any(writes.values())):
             step["carries"] = list(CARRIES[slot])
         plan.append(step)
         plan.extend(additions[slot])
@@ -211,11 +248,13 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 def slot_inputs(plan: Sequence[Mapping[str, Any]], slot: str,
                 handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Select indexed carried loops without changing their producing identity."""
-    if slot not in (*SLOTS, *NATIVE):
+    if slot not in ("record", *SLOTS, *NATIVE):
         raise ValueError(f"unknown step {slot}")
     step = next(s for s in plan if s["id"] == slot)
     binding = step.get("binding")
     consumes = binding["consumes"] if binding else []
+    if slot == "record" and not any(step["record_writes"].values()):
+        consumes = []
     resume = handoff.get("resume", {})
     if not isinstance(resume, Mapping) or not isinstance(resume.get("open_loops", []), list):
         raise ValueError("resume.open_loops must be an array")
@@ -236,6 +275,8 @@ def settle(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         raise ValueError("receipts must be an object")
     removed: set[int] = set()
     for slot, indexes in receipts.items():
+        if slot == "record":
+            raise ValueError("record requires per-item record-write receipts; use file or record")
         eligible = {entry["index"] for entry in slot_inputs(plan, slot, handoff)}
         if not isinstance(indexes, list) or any(type(i) is not int or i not in eligible for i in indexes):
             raise ValueError(f"{slot}: receipt includes an item this binding cannot consume")
@@ -259,13 +300,79 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
     return "record"
 
 
+def validate_ask_payload(ask: Mapping[str, Any]) -> None:
+    """Require complete text and usable choices for both new and stored asks."""
+    if not isinstance(ask.get("text"), str) or not ask["text"].strip():
+        raise ValueError("an ask requires non-empty text")
+    choices = ask.get("choices")
+    if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
+        raise ValueError(f"{ask['text']}: an ask requires the user's choices")
+
+
+def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep the complete proposal and provenance alongside the ask's text and choices."""
+    ask = {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
+           "session_id": item.get("session_id") or subject.get("session_id"),
+           "directory": subject.get("working_directory"),
+           "ticket": (item.get("anchor") or {}).get("ticket"),
+           "choices": copy.deepcopy(item.get("choices", []))}
+    validate_ask_payload(ask)
+    return ask
+
+
+def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
+    """List every recoverable ask, even when another item is malformed or missing."""
+    asks = []
+    seen = set()
+    subject = handoff.get("subject", {})
+    candidates = []
+    for index, row in enumerate(handoff.get("filing", {}).get("items", [])):
+        if "ask" in row:
+            candidates.append((f"filing.items[{index}].ask", row["ask"], True))
+        elif (row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES)
+              and isinstance(row.get("item"), Mapping) and row["item"].get("choices")):
+            candidates.append((f"filing.items[{index}].item", row["item"], False))
+    groups = handoff.get("filing", {}).get("asks", {})
+    if not isinstance(groups, Mapping):
+        problems.append("filing.asks must be an object")
+    else:
+        for directory, payloads in groups.items():
+            if not isinstance(payloads, list):
+                problems.append(f"filing.asks[{directory!r}] must be an array")
+                continue
+            candidates.extend((f"filing.asks[{directory!r}][{index}]", payload, True)
+                              for index, payload in enumerate(payloads))
+    candidates.extend((f"open_loops[{index}]", item, False)
+                      for index, item in enumerate(handoff.get("resume", {}).get("open_loops", []))
+                      if item.get("choices"))
+    for label, item, is_payload in candidates:
+        try:
+            if not isinstance(item, Mapping):
+                raise ValueError("ask must be an object")
+            ask = item if is_payload else ask_payload(item, subject)
+            if is_payload:
+                validate_ask_payload(ask)
+        except (ValueError, TypeError, AttributeError) as error:
+            problems.append(f"{label}: {error}")
+            continue
+        # The same item identity can carry different tickets, choices, or proposals.
+        # Only identical ask payloads are duplicates across filing and carried items.
+        identity = json.dumps(ask, sort_keys=True)
+        if identity not in seen:
+            asks.append(copy.deepcopy(ask))
+            seen.add(identity)
+    return sorted(asks, key=lambda ask: ask.get("type") != "lesson")
+
+
 def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
-               outcomes: Sequence[Mapping[str, Any]], ask: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """Bookkeep explicit filing outcomes; never execute commands or infer saved writes.
+               outcomes: Sequence[Mapping[str, Any]], ask: Mapping[str, str] | None = None,
+               *, execute_writes: bool = True) -> dict[str, Any]:
+    """Apply filing judgments and execute record writes with identity lookup.
 
     The skill supplies one row per remaining loop and unrecorded current item.
-    Failed reads and writes keep the source item intact. This is a wrap operation;
-    checkpoint and the earlier saved-slot receipt protocol remain unchanged.
+    Failed reads and writes keep the source item intact. The same pass runs
+    mid-session and at wrap; native steps and asks retain their receipt protocol.
+    Sweep uses execute_writes=False to validate a preview without saving anything.
     """
     loops = handoff.get("resume", {}).get("open_loops", [])
     current = handoff.get("session_items", [])
@@ -279,6 +386,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         raise ValueError("filing requires exactly one outcome for every item")
     bindings = {step["id"]: step.get("binding") for step in plan if "binding" in step}
     bindings["ask"] = ask
+    writes = next(step for step in plan if step["id"] == "record")["record_writes"]
+    bindings.update(writes)
     result = copy.deepcopy(dict(handoff))
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     kept = []
@@ -287,9 +396,14 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         rule, status = row.get("rule"), row.get("status")
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):
             raise ValueError(f"filing: unknown rule {rule!r}")
-        if status not in ("filed", "dropped", "pending", "failed", "read failed", *NATIVE_STATUSES):
+        if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
+        if binding == "record":
+            binding = record_write.kind_for(rule, item, row, writes)
+            bindings.setdefault(binding, None)
+        if binding == "ask" or (binding in NATIVE and "choices" in row):
+            item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
         entry = {**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding}
@@ -307,13 +421,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: {rule} requires dropped with a reason")
         else:
             if binding == "ask":
-                choices = row.get("choices")
-                if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
-                    raise ValueError(f"{label}: an ask requires the user's choices")
-                subject = handoff.get("subject", {})
-                entry["ask"] = {"text": label, "session_id": item.get("session_id") or subject.get("session_id"),
-                                "directory": subject.get("working_directory"),
-                                "ticket": (item.get("anchor") or {}).get("ticket"), "choices": choices}
+                entry["ask"] = ask_payload(item, handoff.get("subject", {}))
                 report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
             if bindings[binding] is None:
                 entry["status"] = "unbound"
@@ -324,6 +432,14 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 if status in ("failed", "declined", "pending", "not configured") and not reason:
                     raise ValueError(f"{binding}: {status} requires a reason or error")
                 kept.append(copy.deepcopy(item))
+            elif binding in record_write.KINDS and execute_writes:
+                if rule == "R5" and (not row.get("priority") or not row.get("priority_reason")):
+                    raise ValueError(f"{label}: a new ticket requires priority and priority_reason")
+                row = record_write.execute(bindings[binding], binding, item, row)
+                entry.update(row)
+                if row["status"] != "filed":
+                    report["failures"].append(f"{label}: {binding} write {row['status']}: {row['error']}")
+                    kept.append(copy.deepcopy(item))
             elif status != "filed":
                 entry["error"] = row.get("error") or "no successful write receipt"
                 report["failures"].append(f"{label}: {binding} write failed: {entry['error']}")
@@ -358,10 +474,17 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     warnings = list(report.get("warnings", []))
     bindings = {step["id"]: step.get("binding") for step in plan if "binding" in step}
     bindings["ask"] = ask
+    writes = next(step for step in plan if step["id"] == "record")["record_writes"]
+    bindings.update(writes)
     loops = data.get("resume", {}).get("open_loops", [])
     for row in report.get("items", []):
         item = row.get("item")
-        if row.get("status") in ("unbound", "pending", "failed", "read failed", *NATIVE_STATUSES) and item not in loops:
+        if row.get("binding") in record_write.KINDS and row.get("status") == "filed":
+            try:
+                record_write.receipt(row, record_write.identity(item))
+            except (ValueError, AttributeError) as error:
+                failures.append(f"record write receipt invalid: {error}")
+        if row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES) and item not in loops:
             failures.append(f"{item.get('context', str(item))}: retained item missing from handoff")
     if "filing" in data and not loops and data.get("resume", {}).get("next_action") != "Session finished.":
         failures.append("resume.next_action must say Session finished. when filing is complete")
@@ -373,7 +496,8 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         binding = entry.get("binding") if entry else (
             "ask" if item.get("type") == "decision" else
             "lessons" if item.get("type") == "lesson" else
-            "knowledge" if item.get("type") == "knowledge" else "record")
+            "knowledge" if item.get("type") == "knowledge" else
+            record_write.kind_for("R2", item, {}, writes))
         if entry and entry.get("status") == "read failed":
             failures.append(f"{label}: read failed: {entry.get('error')}")
         elif entry and entry.get("native_step") in NATIVE and entry.get("ask_status") == "filed":
@@ -467,7 +591,7 @@ def completed_by() -> set[str]:
 
 
 # Commands that run the checklist or write a handoff; only an interactive session may.
-WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|file|wrap-check|report)\b"
+WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|file|record|wrap-check|report)\b"
                           r"|checkpoint\.sh\b|handoff\.py['\"]?\s+checkpoint\b")
 
 
@@ -554,7 +678,7 @@ def check_report(plan: Sequence[Mapping[str, Any]], results: Sequence[Mapping[st
         if step.get("native") and status in ("failed", "declined", "not configured"):
             if not (result.get("reason") or result.get("error")):
                 problems.append(f"{identity}: {status} requires a reason or error")
-        if identity in SLOTS and step.get("binding") and status == "failed":
+        if identity in ("record", *SLOTS) and step.get("binding") and status == "failed":
             problems.append(f"{identity}: bound write failed: {result.get('error') or result.get('reason') or 'unknown error'}")
     handoff = next((r for r in results if r.get("id") == "handoff"), None)
     if unattended and (handoff is None or handoff.get("status") != "run"):
@@ -580,13 +704,110 @@ def session_summary(plan: Sequence[Mapping[str, Any]], summary: str | None,
         if not unavailable.strip():
             return {}, ["session summary: --no-summary names why it is unavailable"]
         return {"summary": None, "summary_unavailable": unavailable.strip()}, []
-    record = next(step for step in plan if step.get("slot") == "record")
-    if record.get("binding") is None:
+    record = next(step for step in plan if step.get("id") == "record")
+    if not any(record["record_writes"].values()):
         return {"summary": None, "summary_unavailable": "record unbound: no binding composes a session summary"}, []
     command = record["binding"]["command"]
     return {}, [f"session summary: missing; pass --summary <file> from {command}, or, when its output has "
                 f"none (an older binding, or a failed compose), --no-summary \"{command} composed no session "
                 "summary\" or the reason it gave"]
+
+
+def build_report(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect failures independently, then always end the report with its asks.
+
+    A failed check must not prevent another check or hide readable handoff data.
+    Unreadable inputs remain errors; no receipt or successful step is invented.
+    """
+    problems: list[str] = []
+
+    def read(path: Path | None, label: str, default: Any, *, text: bool = False) -> Any:
+        if path is None:
+            return default
+        try:
+            content = path.read_text()
+            return content if text else json.loads(content)
+        except (OSError, ValueError) as error:
+            problems.append(f"{label}: {error}")
+            return default
+
+    def object_rows(value: Any, label: str) -> list[Mapping[str, Any]]:
+        if not isinstance(value, list):
+            problems.append(f"{label} must be an array of objects")
+            return []
+        rows = []
+        for index, row in enumerate(value):
+            if isinstance(row, Mapping):
+                rows.append(row)
+            else:
+                problems.append(f"{label}[{index}] must be an object")
+        return rows
+
+    if not args.results or not args.handoff:
+        problems.append("report requires --results and --handoff")
+    handoff = read(args.handoff, "handoff", {})
+    handoff_problems, _ = _load_handoff_module().lint_data(handoff)
+    problems.extend(f"report handoff invalid: {problem}" for problem in handoff_problems)
+    if not isinstance(handoff, Mapping):
+        handoff = {}
+    results = read(args.results, "results", [])
+    summary_text = read(args.summary, "session summary", None, text=True)
+    summary = ({"summary": summary_text} if summary_text is not None else
+               {"summary": None, "summary_unavailable": args.no_summary or "session summary could not be checked"})
+
+    plan = None
+    ask = None
+    try:
+        profiles = load_profiles(args.user_profile, args.repository_profile)
+        plan = compose(profiles)
+        ask = ask_binding(profiles[0]) if args.user_profile else None
+    except (OSError, ValueError, TypeError, AttributeError) as error:
+        problems.append(f"profiles: {error}")
+    warnings = []
+    if plan is not None:
+        checked_summary, summary_problems = session_summary(plan, summary_text, args.no_summary)
+        problems.extend(summary_problems)
+        if checked_summary:
+            summary = checked_summary
+        problems.extend(check_report(plan, results, args.unattended))
+        try:
+            filing_failures, warnings = filing_check(plan, handoff, ask)
+            problems.extend(filing_failures)
+        except (ValueError, TypeError, AttributeError) as error:
+            problems.append(f"filing report invalid: {error}")
+
+    # Invalid rows still fail the report, but cannot suppress other rows' asks.
+    results = [row for row in results if isinstance(row, Mapping)] if isinstance(results, list) else []
+    filing = handoff.get("filing", {})
+    if not isinstance(filing, Mapping):
+        problems.append("filing report must be an object")
+        filing = {}
+    filing_rows = object_rows(filing.get("items", []), "filing.items")
+    resume = handoff.get("resume", {})
+    resume = resume if isinstance(resume, Mapping) else {}
+    loops = object_rows(resume.get("open_loops", []), "resume.open_loops")
+    subject = handoff.get("subject", {})
+    asks = report_asks({"subject": subject if isinstance(subject, Mapping) else {},
+                        "filing": {"items": filing_rows, "asks": filing.get("asks", {})},
+                        "resume": {"open_loops": loops}}, problems)
+    incomplete = [{"id": r["id"], "status": r["status"], "reason": r.get("error") or r.get("reason")}
+                  for r in results if isinstance(r.get("id"), str) and r["id"] in NATIVE
+                  and r.get("status") in ("failed", "declined", "pending")]
+    for row in filing_rows:
+        native = row.get("native_step") or row.get("binding")
+        if isinstance(native, str) and native in NATIVE and row.get("status") in ("failed", "declined", "pending"):
+            if not any(r["id"] == native for r in incomplete):
+                incomplete.append({"id": native, "status": row["status"],
+                                   "reason": row.get("error") or row.get("reason")})
+    output = {**summary, "report": "failed" if problems else "incomplete" if incomplete else "ok",
+              "pending": [r.get("id") for r in results if r.get("status") == "pending"],
+              "filing": handoff.get("filing", {}), "warnings": warnings}
+    if incomplete:
+        output["incomplete"] = incomplete
+    if problems:
+        output["errors"] = list(dict.fromkeys(problems))
+    output["asks"] = asks
+    return output
 
 
 def _timestamp(value: Any, label: str) -> datetime:
@@ -642,10 +863,12 @@ def wrap_check(plan: Sequence[Mapping[str, Any]], handoff_path: Path,
         return [f"handoff invalid: not valid JSON: {error}"]
     failures = [f"handoff invalid: {problem}" for problem in problems]
     data = handoff.read_json(str(handoff_path)) if not problems else {}
+    if data.get("skeleton") is True:
+        failures.append("handoff invalid: wrap requires a real history entry; stop handoff is a skeleton")
     filing_failures, _ = filing_check(plan, data, ask)
     failures.extend(filing_failures)
-    record = next(step for step in plan if step.get("slot") == "record")
-    if record.get("binding") is None:
+    record = next(step for step in plan if step.get("id") == "record")
+    if not any(record["record_writes"].values()):
         return failures
     command = record["binding"]["command"]
     if not record_at:
@@ -674,7 +897,7 @@ def _handoff_session(path: Path) -> str | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("plan", "settle", "file", "wrap-check", "report", "wrap-cadence", "actor-guard",
+    parser.add_argument("operation", choices=("plan", "settle", "file", "record", "wrap-check", "report", "wrap-cadence", "actor-guard",
                                                       "is-completion-command"))
     parser.add_argument("--user-profile", type=Path)
     parser.add_argument("--repository-profile", type=Path, action="append", default=[])
@@ -709,15 +932,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         kind = session_kind({})
         if kind != "interactive":
             raise ValueError(f"a {kind} session never runs the checklist or writes a handoff")
+        if args.operation == "report":
+            output = build_report(args)
+            for problem in output.get("errors", []):
+                print(f"checklist: report invalid: {problem}", file=sys.stderr)
+            print(json.dumps(output, indent=2))
+            return 1 if output["report"] == "failed" else 0
         paths = ([args.user_profile] if args.user_profile else []) + args.repository_profile
-        profiles = [load_profile(path) for path in paths]
-        for path, profile in zip(args.repository_profile, profiles[1:] if args.user_profile else profiles):
-            if "ask" in profile:
-                raise ValueError(f"{path}: repository profiles cannot bind ask")
-            if "record_read" in profile:
-                raise ValueError(f"{path}: repository profiles cannot bind record_read")
-            if profile.get("bindings"):
-                raise ValueError(f"{path}: repository profiles only add steps; cannot bind {', '.join(profile['bindings'])}")
+        profiles = load_profiles(args.user_profile, args.repository_profile)
         plan = compose(profiles)
         ask = ask_binding(profiles[0]) if args.user_profile else None
         handoff = json.loads(args.handoff.read_text()) if args.handoff else {}
@@ -743,7 +965,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                       "ask": ask, "rerun_all_steps": True}
             if args.unattended:
                 output["when_answer_needed"] = UNATTENDED_RULE
-        elif args.operation == "file":
+        elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")
             output = file_items(plan, handoff, json.loads(args.filing.read_text()), ask)
@@ -766,47 +988,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 1
             if marker is not None and args.unattended:
                 marker.unlink(missing_ok=True)
-            record = next(step for step in plan if step.get("slot") == "record")
-            output = {"wrap": "ok", "record_check": "passed" if record["binding"] else "not run: record unbound"}
-        elif args.operation == "report":
-            if not args.results or not args.handoff:
-                raise ValueError("report requires --results and --handoff")
-            handoff_problems, _ = _load_handoff_module().lint_data(handoff)
-            if handoff_problems:
-                raise ValueError("report handoff invalid: " + "; ".join(handoff_problems))
-            results = json.loads(args.results.read_text())
-            summary, problems = session_summary(
-                plan, args.summary.read_text() if args.summary else None, args.no_summary)
-            problems += check_report(plan, results, args.unattended)
-            for problem in problems:
-                print(f"checklist: report invalid: {problem}", file=sys.stderr)
-            if problems:
-                return 1
-            filing_failures, warnings = filing_check(plan, handoff, ask)
-            for problem in filing_failures:
-                print(f"checklist: report invalid: {problem}", file=sys.stderr)
-            if filing_failures:
-                return 1
-            incomplete = [{"id": r["id"], "status": r["status"],
-                           "reason": r.get("error") or r.get("reason")}
-                          for r in results if r["id"] in NATIVE and r["status"] in ("failed", "declined", "pending")]
-            for row in handoff.get("filing", {}).get("items", []):
-                native = row.get("native_step") or row.get("binding")
-                if native in NATIVE and row.get("status") in ("failed", "declined", "pending"):
-                    if not any(r["id"] == native for r in incomplete):
-                        incomplete.append({"id": native, "status": row["status"],
-                                           "reason": row.get("error") or row.get("reason")})
-            # The report starts with the session summary.
-            output = {**summary, "report": "incomplete" if incomplete else "ok", "pending": [r["id"] for r in results if r["status"] == "pending"],
-                      "filing": handoff.get("filing", {}), "warnings": warnings}
-            if incomplete:
-                output["incomplete"] = incomplete
+            record = next(step for step in plan if step.get("id") == "record")
+            output = {"wrap": "ok", "record_check": "passed" if any(record["record_writes"].values()) else "not run: record unbound"}
         else:
             if not args.handoff or not args.receipts:
                 raise ValueError("settle requires --handoff and --receipts")
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
-        return 0
+        return 1 if args.operation in ("file", "record") and any(
+            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain")
+            for row in output.get("filing", {}).get("items", [])) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)
         return 1

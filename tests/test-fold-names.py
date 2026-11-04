@@ -55,7 +55,7 @@ class FoldNames(unittest.TestCase):
         for term in ('Knowledge profile', 'Checklist profile', 'Knowledge root', 'Native step'):
             self.assertIn(term, terms)
         self.assertNotIn('Profile', terms)
-        self.assertIn('There are two: `record` and `persist`', text)
+        self.assertIn('Only `persist` is a slot', text)
 
 if __name__ == '__main__':
     unittest.main()

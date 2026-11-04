@@ -18,7 +18,7 @@ own data area, and survive adapter removal.
 
 ## Skills
 
-Both installers register **25 skills**. Claude Code uses plugin-namespaced
+Both installers register **26 skills**. Claude Code uses plugin-namespaced
 commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 
 | Skill name in Codex | Claude Code command | Role |
@@ -27,6 +27,7 @@ commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 | `checkpoint` | `/hippocampus:checkpoint` | Write and lint the current interactive session's handoff without finishing its work. |
 | `pickup` | `/hippocampus:pickup` | List handoffs after a cold start, select one, and check it against the record. |
 | `checklist` | `/hippocampus:checklist` | Wrap the session through the spine and profile steps, ending with a validated handoff. |
+| `record` | `/hippocampus:record` | File session items through per-kind record writes, mid-session or during wrap. |
 | `handoff-prompt` | `/hippocampus:handoff-prompt` | Produce a portable prompt for deliberately transferring a slice of work to another session. |
 | `sweep` | `/hippocampus:sweep` | Report abandoned sessions; file and archive them when act mode is configured. |
 | `wip` | `/hippocampus:wip` | Report current work, blockers, and pending approvals from verified state. |
@@ -76,9 +77,13 @@ then runs the five-step **spine** in order:
 4. Persist (`persist`).
 5. Write and validate the handoff (`handoff`).
 
-Suppose your user profile binds `record` to the command that updates your tickets
-and documents. That command consumes its acknowledged progress and decisions;
-anything it has not acknowledged goes through the filing rules before wrap. Profiles bind `record` and `persist`, called **slots**, and can add steps without removing the spine.
+Your user profile names optional `record_writes` commands for tickets, projects,
+documents, and scheduled jobs. The package record step applies the filing rules,
+looks up each unchanged item identity before writing, and requires a matching
+receipt to save it. Run `record` on its own mid-session or through checklist.
+Commitments follow these same filing rules; timed or recurring commitments use
+the scheduled-job write when bound, otherwise tickets. Profiles bind `persist`,
+the only **slot**, and can add steps without removing the spine.
 Knowledge and lessons always run the package’s knowledge-capture and improve-harness. Before writing the handoff, apply the
 filing rules: file or drop each remaining item, and send user decisions to the
 profile's one `ask` command. An unbound destination warns and retains its item. The checklist engine composes and checks the plan; the skill runs
@@ -204,7 +209,8 @@ and checklist `plan`, `settle`, and `wrap-check` read it next.
 handoff JSON
 ├── schema_version                     # 2 for current checkpoint output
 ├── written_at                         # UTC checkpoint time
-├── trigger                            # checkpoint, wrap, or manual
+├── trigger                            # checkpoint, wrap, manual, or stop
+├── skeleton                           # true only for automatic stop handoffs
 ├── subject
 │   ├── working_directory              # canonical subject path
 │   └── session_id                     # calling interactive session identity
@@ -215,8 +221,8 @@ handoff JSON
 ├── resume
 │   ├── headline                       # one-line continuation headline
 │   ├── next_action                    # concrete next action
-│   ├── session_summary                # current session's one-line continuation context
-│   ├── session_history[]              # earlier summaries plus the current producer
+│   ├── session_summary                # authored work since the previous entry
+│   ├── session_history[]              # append-only dated history entries
 │   │   └── session_id, produced_at, summary # producer, UTC time, one-line context
 │   └── open_loops[]                   # unconsumed items, with original provenance
 ├── uncommitted_files[]                # absolute changed paths owned by this session in the ledger
@@ -226,9 +232,11 @@ handoff JSON
 ```
 
 `session_items[]` is checkpoint **input**, not a stored top-level field. Every
-item has `type`, `context` (at most 600 characters), `disposition` (what to do
+item has `type`, `context` (at most 600 characters except asks and lessons), `disposition` (what to do
 next), `session_id` (producer), and `produced_at` (ISO timestamp with timezone).
-All seven types carry those fields:
+Asks and lessons keep complete text and choices at any length through checkpoint,
+compaction, pickup, and wrap. A lesson proposal includes its target file and section,
+proposed text or diff, and evidence. All seven types carry those fields:
 
 ```text
 session_items[] / typed resume.open_loops[]
@@ -258,7 +266,9 @@ Location: `session-touched-paths.<URL-encoded-session-id>.jsonl` in the resolved
 ledger directory. The tool hook writes observations and file entries;
 `python3 scripts/lib/handoff.py ledger-file` registers shell-driven edits,
 `ledger-artifact` registers published artifacts, and checklist `plan` appends its
-start marker. Checkpoint and the stop and wrap checks read it next.
+start marker. Every checkpoint and wrap appends its dated history entry;
+automatic stop handoffs read earlier entries without adding one. Checkpoint and
+the stop and wrap checks read the ledger next.
 [Captured ledger](examples/ledger.jsonl).
 
 ```text
@@ -272,6 +282,9 @@ ledger JSONL                          # one JSON object per line
 │       # kind/type=artifact; published location; context="Published artifact";
 │       # keep/remove; pending/recorded/removed; producer; original production time;
 │       # canonical subject; UTC append time
+├── history entry
+│   └── kind, entry
+│       # kind=history_entry; entry holds session_id, produced_at, summary
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start
@@ -305,7 +318,7 @@ plan JSON
 ├── record_read                        # user command for reading the record, or null
 └── steps[]                            # execution order, including additions at their anchors
     ├── id, title                      # step identity; spine title or optional added title
-    ├── slot                           # only record and persist
+    ├── slot                           # only persist
     ├── binding                        # null if unbound, else command, consumes[], optional instructions
     ├── carries[]                      # only unbound slots: item types for the filing pass
     ├── carried_items[]                 # slot/native inputs selected by binding.consumes
@@ -315,10 +328,10 @@ plan JSON
 
 The spine is `record` (reconcile the record), `knowledge` (capture knowledge),
 `lessons` (fold in lessons), `persist`, then `handoff` (write and validate).
-Only record and persist are slots; knowledge and lessons are native steps
+Only persist is a slot; record is a package step calling record writes; knowledge and lessons are native steps
 marked `native: true`, running the package’s knowledge-capture and improve-harness.
 Knowledge consumes `knowledge` items; lessons consumes `lesson` items.
-With no profile, record and persist are unbound. Unbound destinations retain items with a warning. Profile steps
+With no profile, record has no configured record writes and persist is unbound. Unbound destinations retain items with a warning. Profile steps
 may run `before-spine` or after `record`, `knowledge`, `lessons`, or `persist`;
 only `own-worktree` may follow `handoff`. Additions retain declaration order
 within profile order. Carried open loops go to bindings consuming their types;
@@ -362,11 +375,30 @@ bound record's summary text           # binding-defined format, not a package JS
 report command output                 # JSON on stdout, checked by the reporting session
 ├── summary                           # unedited file text, or null
 ├── summary_unavailable               # reason when no summary was composed
-├── report                            # ok after validation
+├── report                            # ok, incomplete, or failed
 ├── pending[]                         # identities of pending steps
 ├── filing                            # item outcomes, asks by directory, warnings and failures
-└── warnings[]                        # unbound destinations and retained item names
+├── warnings[]                        # unbound destinations and retained item names
+├── incomplete[]                      # native steps still awaiting completion, when any
+├── errors[]                          # failed writes, reads, inputs or validation, when any
+└── asks[]                            # every filed or carried ask in full, lessons first
 ```
+
+Every attended and unattended report ends with `asks`, including runs with failed
+record, persist, or ask writes, failed record reads, or invalid report inputs.
+These failures appear in `errors` and on stderr, with `report: "failed"` and a
+non-zero exit status. Readable asks still appear when another handoff field is
+invalid; an unreadable handoff fails explicitly without inventing missing asks.
+Each ask keeps its complete text and choices;
+lesson asks include the full target file and section, proposed text, and evidence.
+Identical ask payloads appear once. Asks with different linked tickets, choices,
+or proposal fields remain separate, even when their producing session, time, and
+text match. Every recovered payload must have non-empty text and a non-empty
+array of non-blank choices; an invalid payload fails the report without hiding
+valid asks.
+A native lesson proposal awaiting approval keeps its choices on the carried item
+or filing outcome. Native backlog with no user decision stays in the filing
+report and incomplete-step details, without appearing as an ask.
 
 If none was composed, pass `--no-summary` with the record's reason; an older
 binding can be reported as `<command> composed no session summary`. With record
@@ -415,7 +447,9 @@ profile loader and composer. [Validated profile input](examples/profile.md).
 ```text
 JSON object, or one checklist-profile JSON fence in Markdown
 ├── name                              # non-empty profile name
-├── bindings                          # user profile only: bind one or both of the two slots
+├── record_writes                     # user profile only: optional tickets, projects, documents, scheduled_jobs commands
+│   └── <kind>: command                # executable argv array or shell-quoted string; null/omitted is unbound
+├── bindings                          # user profile only: bind persist
 │   └── <slot>: command, consumes[], instructions (optional)
 │       # command to run; accepted session-item types; execution guidance
 └── steps[]                           # additive steps, never spine removal or replacement

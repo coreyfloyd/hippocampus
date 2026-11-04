@@ -77,7 +77,7 @@ def test_a_handoff_written_under_one_tool_is_found_from_the_other(clean_home, tm
     work = tmp_path / "work"
     work.mkdir()
     subprocess.run(["git", "init", "-q", str(work)], check=True)
-    payload = {"resume": {"headline": "left off here", "next_action": "carry on", "open_loops": []},
+    payload = {"resume": {"headline": "left off here", "session_summary": "Verified the shared handoff storage.", "next_action": "carry on", "open_loops": []},
                "spawned_processes": []}
     write = subprocess.run([sys.executable, MODULE, "checkpoint", "--cwd", str(work), "--session-id", "written-session"],
                            input=json.dumps(payload), text=True, capture_output=True, env=dict(os.environ, **{writer: "written-session"}))

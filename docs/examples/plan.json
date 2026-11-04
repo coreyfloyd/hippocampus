@@ -8,16 +8,29 @@
       "id": "record",
       "title": "Reconcile the record",
       "binding": {
-        "command": "/record-step",
+        "command": "/hippocampus:record",
         "consumes": [
           "progress",
           "commitment",
           "decision",
           "artifact"
-        ],
-        "instructions": "Write this session's progress, commitments, decisions, and artifact locations to the record."
+        ]
       },
-      "slot": "record",
+      "package": true,
+      "record_writes": {
+        "tickets": {
+          "command": "write-tickets"
+        },
+        "projects": {
+          "command": "write-projects"
+        },
+        "documents": {
+          "command": "write-documents"
+        },
+        "scheduled_jobs": {
+          "command": "write-scheduled-jobs"
+        }
+      },
       "carried_items": [
         {
           "index": 0,

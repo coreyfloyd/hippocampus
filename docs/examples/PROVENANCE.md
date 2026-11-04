@@ -136,10 +136,10 @@ The outlines follow the engines where wording elsewhere is narrower or broader:
   engine actually uses `ambient_session_id`, prioritizing `CODEX_THREAD_ID`
   before either Claude session variable. Capture passes an explicit sandbox ID.
 
-Checkpoint stores unrecorded input `session_items` as `resume.open_loops`, adds
-`resume.session_history`, and removes the top-level input array. The outline
+Checkpoint stores unrecorded input `session_items` as `resume.open_loops`, appends
+`resume.session_history` and retains the dated entries in the ledger, and removes the top-level input array. The outline
 distinguishes input from stored output. The tool hook's repository observations
-have no `kind` field; they are documented separately from the three explicit
+have no `kind` field; they are documented separately from the four explicit
 command-generated entry kinds in the example.
 
 ## Plan refresh, 2026-10-18

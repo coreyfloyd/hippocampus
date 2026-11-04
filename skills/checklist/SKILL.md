@@ -6,10 +6,10 @@ description: "End-of-task wrap-up for any session: run the five-step spine with 
 # Checklist — end-of-task wrap-up
 
 Run one fixed spine: reconcile the record, capture knowledge, fold in lessons,
-persist, then write and validate the handoff. Record and persist are configurable
-slots; knowledge and lessons are native package steps. Profiles bind slots and add steps; the handoff is not a slot, and only an
+persist, then write and validate the handoff. Persist is the only configurable
+slot; record is a package step calling per-kind record writes; knowledge and lessons are native package steps. Profiles bind slots and add steps; the handoff is not a slot, and only an
 `own-worktree` step may follow it.
-Run the named binding skill as the step, preserving its own approval requirements.
+Run package steps and named bindings as planned, preserving their approval requirements.
 
 ## Resolve profiles before running the spine
 
@@ -39,7 +39,7 @@ notes that qualify its steps.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
-optional `steps`, and an optional `ask: {"command": "/ask-step"}`. The ask
+optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/ask-step"}`. The ask
 binding is one user command, not a slot or a spine step. Repository profiles
 cannot bind it. A binding has a `command` and a list of item types it
 `consumes`; a step has a unique `id`, an `after` anchor, and `instructions` (or
@@ -58,7 +58,7 @@ Repeat `--repository-profile` for each additional file. Omit `--handoff` when no
 handoff was resumed. `plan` writes a start marker row to the current session's
 ledger; `--session-id` defaults to the Claude Code session in the environment,
 so pass it in Codex. No profile is also a valid plan: omit the profile arguments, and the plan is the
-five spine steps ending with the handoff. Record and persist are unbound.
+five spine steps ending with the handoff. Record has no bound record writes and persist is unbound.
 Knowledge always runs the package’s knowledge-capture, consuming `knowledge`;
 lessons always runs improve-harness, consuming `lesson`. In Claude Code these
 are `/hippocampus:knowledge-capture` and `/hippocampus:improve-harness`; in Codex
@@ -125,19 +125,28 @@ earlier run's pending results, saved-item receipts, or filing outcomes as the
 new run's results. The composer returns every step without cached statuses
 (`rerun_all_steps: true`). Prior durable writes remain evidence to read under R1.
 
-### 1. Reconcile the record — slot `record`
+### 1. Reconcile the record — package `record` step
 
-Run the bound command with current session items and matching carried items.
-The profile defines the record's stores and policy. If unbound, the step does
-not fail: send its `carries` items through the filing rules before the final handoff. When
-bound, note the UTC time the record write finishes; the wrap check needs it.
+Run this package's record skill (`/hippocampus:record` in Claude Code, `record`
+in Codex). It applies the filing rules and calls the user profile's optional
+record writes for tickets, projects, documents, and scheduled jobs. It can also
+run alone mid-session without the rest of checklist. No separate commitment
+pass runs: commitments follow the same filing rules. Timed or recurring
+commitments use scheduled_jobs when bound, otherwise the ticket path.
 
-A bound record also composes the **session summary** after its ticket step,
-once the session's record writes are final: the bound record's outcomes,
-each project's goal, what shipped, follow-up tickets, and
-decisions. It writes each project's part into that project's session-log entry.
-Keep the summary file it names, or the reason it gives for not composing one;
-the report starts with it.
+The record module looks up each unchanged item identity before every write.
+Only a matching receipt saves an item. Missing bindings warn and keep items;
+failed writes fail wrap. Missing write receipts are uncertain; lookup must
+succeed before any retry. Preserve the returned payload even on failure.
+Note the UTC time the record step finishes for the freshness check when writes
+are configured. Run it again at wrap with the same identities; existing receipts
+are reused without another write.
+
+After its writes are final, retain the existing binding-composed **session
+summary**: record outcomes, each project's goal, what shipped, follow-up tickets,
+and decisions. The configured record writes supply the summary file or the
+reason none could be composed; retain it for the report. The project record
+write keeps each project's part in that project's session-log entry.
 
 ### 2. Capture knowledge — native `knowledge`
 
@@ -180,9 +189,9 @@ the first match decides. Rule numbers are names, not evaluation order.
 | R1 | Already on the ticket or document it names, or information only | Drop with the reason. |
 | R3 | Needs the user's decision, approval, or a destructive action | Ask, linking its ticket if any. Removing a clean, merged worktree and its local branch under the sweep's S6 rule is not destructive: its commits are in the pushed trunk. |
 | R4 | Lesson or knowledge | Pass to `lessons` or `knowledge`; unsaved native items stay carried until their step returns a receipt. |
-| R7 | Changes a project document (spec, design document, README) | Edit through `record`; a change to an approved spec becomes an ask. |
-| R2 | Names an open ticket | Comment on that ticket through `record`. |
-| R5 | Work with a stated outcome and no matching open ticket | New ticket through `record`, with recommended priority and a one-line reason. |
+| R7 | Changes a project document (spec, design document, README) | Edit through the documents record write; a change to an approved spec becomes an ask. |
+| R2 | Names an open ticket | Comment through the tickets record write. |
+| R5 | Work with a stated outcome and no matching open ticket | New ticket through the tickets record write, with recommended priority and a one-line reason. |
 | R6 | Otherwise: optional suggestion, observation, idea with no outcome | Drop with the reason. |
 
 The agent makes the judgment, including R5 versus R6 and whether R7 needs
@@ -193,10 +202,10 @@ is **unknown**, never absence: keep the item with outcome `read failed`, naming
 the item and the error. Never drop it under R1 or create a ticket under R5 on
 that evidence. An information-only R1 can explicitly set `information_only: true`.
 
-Run the required bound command for each write and collect explicit receipts.
+The module runs record writes and collects matching receipts; do not execute them separately. Run the ask command and native steps as before.
 For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
-and `choices` (the user's options). An ask is **never filed as a ticket**.
+and `choices` (the user's complete options, with no length limit). An ask is **never filed as a ticket**.
 These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
 an ask acknowledgement does not replace a capture or lesson receipt. Always run
 the bound ask command for R4 `destination: "ask"`, using the complete payload in
@@ -219,6 +228,10 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `reason`, and a failed row names `error`. Read-dependent rules need
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
+A retained native lesson proposal awaiting user approval also keeps non-empty
+`choices` on its item or R4 outcome, even when its destination is `lessons`.
+Native work retained only because a step failed or was declined needs no ask
+choices; keep it in the filing report and incomplete-step details.
 Use the same profile arguments for the filing pass:
 
 ```bash
@@ -227,7 +240,7 @@ python3 <checklist-module> file --user-profile <user-profile> \
   --filing <filing-outcomes>
 ```
 
-The module does bookkeeping, not command execution. Its output removes only
+The module executes per-kind record-write commands after a successful identity lookup; ask and native outcomes remain supplied by the agent. Its output removes only
 explicitly filed or dropped items and includes a `filing` report listing every
 item, rule, destination or reason, warnings and failures. Keep that report in
 the payload through checkpoint. A missing binding retains the item and warns,
@@ -235,15 +248,21 @@ without failing wrap. A bound record, persist, or ask write failure retains it a
 A native failure or refusal retains its items and makes the final report
 `incomplete`, without failing wrap validation. `nothing` and `not configured`
 do not make the wrap incomplete. With no
-ask binding, the report's `asks` groups asks under their directory; retain this
+ask binding, `filing.asks` groups asks under their directory; retain this
 report for the sweep report and keep the producing handoff. Do not archive it.
-For a failed write, checkpoint the retained payload before reporting failure.
+Asks retain their complete text, choices, and proposal fields in carried items;
+never shorten them to fit a carried-item limit. For a failed write, checkpoint
+the retained payload before reporting failure.
 
 Write the interactive session's handoff using the
 same checkpoint module as `checkpoint`. Its slash skill is user-only;
 call its script directly: `<checkpoint.sh>` is `scripts/checkpoint.sh` in that
 skill's real directory (`../checkpoint/scripts/checkpoint.sh` from this
-one). Use the actual current session identity in either tool.
+one). Use the actual current session identity in either tool. Supply a real
+`resume.session_summary` account of work since this session's previous history
+entry. The writer appends it with the current identity and date and retains
+earlier ledger entries through compaction. A missing account fails wrap;
+an automatic stop skeleton cannot serve as a finished wrap handoff.
 
 ```bash
 bash <checkpoint.sh> <<'JSON'
@@ -274,8 +293,8 @@ the wrap check fails when that time is older than the session's last recorded
 change (an edited file, published artifact, or owned commit) made before the
 latest `plan` start marker. Changes after the marker are the checklist's own
 writes, such as persist's commits and lessons edits, and do not count. With no
-marker in the ledger, every recorded change counts. When `record` is
-unbound, omit `--record-at`; no record check runs. On a non-zero exit, report
+marker in the ledger, every recorded change counts. When no record writes are
+configured, omit `--record-at`; no record check runs. On a non-zero exit, report
 each `wrap failed:` reason and refuse to report checklist completion.
 
 Then a profile's `own-worktree` step may remove the session's own linked
@@ -291,10 +310,10 @@ in the plan **as well as** the current conversation. Each entry has an `index`
 into the original resumed handoff and its complete `item`. Pass that item intact,
 including its producing session identity and time, a decision's author and source,
 lesson text, and artifact location/disposition. Also pass the resumed handoff's
-session summaries to a record binding; earlier history belongs to its producer.
+session summaries to the record step; earlier history belongs to its producer.
 
-Collect explicit saved-item acknowledgements from each slot or native step as JSON:
-`{"record": [0, 2], "knowledge": [3]}`. These are indexes into the original
+Collect explicit saved-item acknowledgements from native steps and persist as JSON:
+`{"knowledge": [3]}`. Record uses per-item receipts through `record` or `file`, never numeric acknowledgements. These are indexes into the original
 input, not into a shrinking list. Do not acknowledge pending, failed, unsupported,
 or merely presented items. If a binding lacks provenance support, report it and
 send the affected loops through the filing rules. Untyped legacy loops also
@@ -329,8 +348,10 @@ python3 <checklist-module> report --user-profile <user-profile> \
 ```
 
 `--handoff` is required and must name the valid handoff checkpoint wrote;
-report refuses an omitted, unreadable, malformed, or invalid handoff.
-`--summary` is the file the record binding wrote. When it could not compose
+an omitted, unreadable, malformed, or invalid handoff fails the report. The
+report still shows every ask recoverable from readable handoff fields; invalid
+fields never hide asks held in other fields.
+`--summary` is the file composed after the record writes. When it could not compose
 one, pass `--no-summary <reason>` with its reason instead. When its output has
 no session summary at all (a binding that predates session summaries), pass
 `--no-summary "<command> composed no session summary"`; the wrap continues. A bound record with
@@ -358,3 +379,22 @@ The final report returns `report: "incomplete"` and an `incomplete` list naming
 every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
+
+End every report, attended or unattended, with the output's final `asks` list: every
+ask this run filed or carried, complete text and all choices, with lesson asks
+first. Each lesson includes its target file and section, full proposed text or
+diff, and evidence. Do not replace proposals with pointers or one-line summaries.
+Only identical ask payloads appear once; different linked tickets, choices, or
+proposal fields remain separate even with the same producing session, time, and
+text. Validate stored filing asks as well as carried asks: non-empty text and
+non-empty choices are required. A malformed ask fails the report while every
+valid ask still appears in full.
+Only retained items with user choices belong in this ask list; a lesson's type or
+native status alone does not make it an ask. Never omit a retained approval
+proposal: preserve its full text and choices. The list follows warnings and incomplete-step details. A failed ask write still
+appears in the report, as do failed record or persist writes, failed record
+reads, and validation or input errors. These failures return `report: "failed"`,
+an `errors` list before the final `asks`, the same errors on stderr, and a
+non-zero exit status. Never stop reporting after an error or omit the asks.
+Native failures and refusals retain their `incomplete` report and existing exit
+status unless another error fails the report.

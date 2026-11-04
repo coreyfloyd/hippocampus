@@ -9,16 +9,22 @@ A session a person starts and can keep prompting after it begins, or one that an
 _Avoid_: chat, one-shot session
 
 **Record**:
-The durable place a session's work is kept: tickets, project status, documents, and their history. It is the primary persistence, and a handoff only points to it. The package names the record but does not provide one; a checklist profile binds the `record` slot to whatever keeps it.
+The durable place a session's work is kept: tickets, project status, documents, and their history. It is the primary persistence, and a handoff only points to it. The package runs the record step and calls the record writes named by the user checklist profile; it provides no record store.
 _Avoid_: handoff, session memory
 
+**Record write**:
+A user-bound command that writes one kind of record change: tickets, projects, documents, or scheduled jobs. The package record step looks up an item by its unchanged producing session, time, and text before writing it. Only a matching receipt proves the item was saved. Each kind is optional in the user checklist profile.
+
 **Record read**:
-A read of the existing record through a user-bound skill. It is read-only: it reports ticket status and work carried by a resumed session without writing to the record. The user checklist profile binds the skill; a repository checklist profile cannot. Writing to the record remains the `record` slot's responsibility.
-_Avoid_: tracker, record write
+A read of the existing record through a user-bound skill. It is read-only: it reports ticket status and work carried by a resumed session without writing to the record. The user checklist profile binds the skill; a repository checklist profile cannot. The package record step calls record writes to save changes.
+_Avoid_: tracker
 
 **Handoff**:
-The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It holds nothing the record holds. Checkpoint and wrap both end by writing it.
+The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds dated history entries. Checkpoint and wrap both end by writing it.
 _Avoid_: summary, record
+
+**History entry**:
+One handoff write's account of the work since that session's previous entry, with its producing session identity, time, and text. Every checkpoint and wrap adds one real entry. Entries stay in the session ledger through compaction. An automatic stop handoff is marked as a skeleton and adds no entry, while retaining earlier entries.
 
 **Successor**:
 The interactive session that resumed another session's handoff through `pickup`. The session whose handoff it resumed is the **resumed session**, which is never used again. Every contract bound to the resumed session's id — claims, pending approvals, pending replies, granted scopes, and any other record keyed by session id — is carried to the successor's id. See [The successor rule](../skills/pickup/SKILL.md#the-successor-rule) for transfer ownership and the fallback when no transfer tool is available.
@@ -55,14 +61,14 @@ The existing `~/.config/hippocampus/profile.md` file that configures the knowled
 The configured root containing retained sources in `raw/`, research artifacts in `output/`, operating records in `docs/`, and an optional compiled `wiki/`.
 
 **Slot**:
-A named spine step that a checklist profile binds to a command. There are two: `record` and `persist`. The ask binding is configurable but is not a spine step. A binding names the session-item types it consumes, including carried open loops of those types. An unbound slot carries its items forward in the handoff.
+A named spine step that a checklist profile binds to a command. Only `persist` is a slot. Record is a package step that calls per-kind record writes. The ask binding is configurable but is not a spine step. A binding names the session-item types it consumes, including carried open loops of those types. An unbound slot carries its items forward in the handoff.
 _Avoid_: hook, plugin
 
 **Native step**:
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
-The per-session list of what one session touched: one entry for each file it changed and each artifact it published. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
+The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
 _Avoid_: log, history
 
 **Open loop**:
@@ -78,7 +84,7 @@ The fixed, ordered table that decides what each carried item becomes: dropped wi
 _Avoid_: disposition (an open loop's own instruction), triage
 
 **Ask**:
-An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept.
+An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors.
 _Avoid_: question, needs-you item
 
 **Abandoned session**:

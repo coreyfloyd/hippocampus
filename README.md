@@ -275,7 +275,7 @@ never released, so there is no automatic migration:
 2. Install Hippocampus as above.
 3. Move your checklist profile to `~/.config/hippocampus/checklist-profile.md`
    and delete its `knowledge` and `lessons` binding blocks. Those steps are now
-   built in. Keep your `record`, `persist` and ask bindings.
+   built in. Replace `record` with per-kind `record_writes`; keep `persist` and ask.
 
 Moving routing, configuration and saved handoffs is optional; the steps are in
 [MIGRATION.md](MIGRATION.md#manual-continuity-cutover).
