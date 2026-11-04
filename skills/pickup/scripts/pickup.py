@@ -273,6 +273,7 @@ def handoff_briefing(path, no_commitments=False):
     report = {
         "version": REPORT_VERSION,
         "source": "handoff",
+        "handoff_path": os.path.realpath(path),
         "notice": "Selected handoff; transcript miner was not used.",
         "session": handoff["subject"].get("session_id"),
         "git": {"branch": branch, "head": head, "exists": exists,

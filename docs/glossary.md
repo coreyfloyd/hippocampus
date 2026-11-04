@@ -32,6 +32,12 @@ One milestone or epic state reported when a ticket closes: kind, title, open or 
 **Touched ticket**:
 A ticket the session read, changed, or closed. Its reference is retained in the session ledger and handoff. At wrap the ticket record write re-reads only touched tickets, including those carried from a resumed chain, and records any closed ticket's missing close outcomes.
 
+**Resumed chain**:
+The sessions continued through pickup, native same-session resume, or compaction. A session started from a brief or pasted prompt without pickup starts its own chain. At pickup, the successor's ledger immediately receives the selected handoff's history entries, close outcomes, touched tickets, and resumed-chain records. Later commands use only that ledger, never the resumed handoff file.
+
+**Resumed-chain record**:
+One session's pickup of a handoff: its path, producing session identity, and resume time. It also retains the handoff's write time and skeleton marker so a successor can identify a session that ended without an account of its work. Records are carried whole through every successor's ledger and handoff.
+
 **Successor**:
 The interactive session that resumed another session's handoff through `pickup`. The session whose handoff it resumed is the **resumed session**, which is never used again. Every contract bound to the resumed session's id — claims, pending approvals, pending replies, granted scopes, and any other record keyed by session id — is carried to the successor's id. See [The successor rule](../skills/pickup/SKILL.md#the-successor-rule) for transfer ownership and the fallback when no transfer tool is available.
 _Avoid_: resumed session (when referring to the successor)
@@ -74,7 +80,7 @@ _Avoid_: hook, plugin
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
-The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, and touched tickets. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
+The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, touched tickets, and resumed-chain records. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
 _Avoid_: log, history
 
 **Open loop**:

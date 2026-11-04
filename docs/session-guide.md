@@ -224,6 +224,10 @@ handoff JSON
 │   ├── session_summary                # authored work since the previous entry
 │   ├── session_history[]              # append-only dated history entries
 │   │   └── session_id, produced_at, summary # producer, UTC time, one-line context
+│   ├── close_outcomes[]               # milestone/epic observations from ticket closes
+│   ├── touched_tickets[]              # references read, changed, or closed in the chain
+│   ├── resumed_chain[]                # selected handoff, producing session, resume time
+│   │   └── handoff, session_id, resumed_at, written_at, skeleton
 │   └── open_loops[]                   # unconsumed items, with original provenance
 ├── uncommitted_files[]                # absolute changed paths owned by this session in the ledger
 ├── spawned_processes[]                # processes to reconcile before adoption or teardown
@@ -269,7 +273,11 @@ ledger directory. The tool hook writes observations and file entries;
 start marker. `ledger-ticket` registers ticket reads, changes, and closes; the
 ticket record write adds close outcomes as it reports them. Every checkpoint and wrap appends its dated history entry;
 automatic stop handoffs read earlier entries without adding one. Checkpoint and
-the stop and wrap checks read the ledger next.
+the stop and wrap checks read the ledger next. Pickup immediately copies a
+selected handoff's history entries, close outcomes, touched tickets, and
+resumed-chain records into the successor ledger, together with its snapshot.
+Later commands never reopen the resumed handoff file. Wrap fails and names each
+history entry or close outcome missing from the final handoff.
 [Captured ledger](examples/ledger.jsonl).
 
 ```text
@@ -293,6 +301,13 @@ ledger JSONL                          # one JSON object per line
 │   └── kind, outcome
 │       # kind=close_outcome; milestone/epic title, state, done, total,
 │       # triggering_ticket, produced_at; retained through compaction
+├── resumed-chain record
+│   └── kind, record
+│       # kind=resumed_chain; selected handoff, producing session, resume time,
+│       # original write time and skeleton marker
+├── resumed handoff snapshot
+│   └── kind, handoff, data
+│       # kind=resumed_handoff; canonical source path and complete selected data
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start
@@ -312,8 +327,12 @@ repository observations are written by the hook, not those capture commands.
 
 Location: JSON on stdout, saved wherever the caller chooses. The command
 `python3 scripts/lib/checklist.py plan` composes it from the user and repository
-profiles, optionally routing a resumed handoff. The checklist skill reads and
-executes it; the engine does not run bindings.
+profiles and the current session's ledger. After pickup it routes the saved
+handoff snapshot's items; optional `--handoff` must match the recorded source
+path but does not read that file. The returned `handoff` payload names the
+current session and carries its ledger facts; use it for later filing and
+settling. A brief or pasted prompt without pickup starts its own chain. The
+checklist skill reads and executes the plan; the engine does not run bindings.
 [Captured plan](examples/plan.json).
 
 ```text
@@ -324,6 +343,7 @@ plan JSON
 ├── ask                                # user command for asks, or null; never a slot
 ├── rerun_all_steps                    # true; no pending results reused from an earlier run
 ├── record_read                        # user command for reading the record, or null
+├── handoff                            # current session payload from its snapshot and ledger
 └── steps[]                            # execution order, including additions at their anchors
     ├── id, title                      # step identity; spine title or optional added title
     ├── slot                           # only persist

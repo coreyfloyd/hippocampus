@@ -50,12 +50,17 @@ order. Paths below are placeholders to replace with the actual resolved files:
 
 ```bash
 python3 <checklist-module> plan --user-profile <user-profile> \
-  --repository-profile <repository-profile> --handoff <resumed-handoff> \
+  --repository-profile <repository-profile> \
   --session-id <current-session-id>
 ```
 
-Repeat `--repository-profile` for each additional file. Omit `--handoff` when no
-handoff was resumed. `plan` writes a start marker row to the current session's
+Repeat `--repository-profile` for each additional file. After pickup, `plan`
+loads the resumed handoff snapshot and chain from the current session's ledger;
+the source file is never read again. Its returned `handoff` payload is the input
+for filing and settling: save it as `<remaining-items>`. Optional `--handoff`
+must name the path pickup recorded, even if that file no longer exists; a
+different path fails. Without pickup, a brief or pasted prompt starts its own
+chain and contributes no earlier history. `plan` writes a start marker row to the current session's
 ledger; `--session-id` defaults to the Claude Code session in the environment,
 so pass it in Codex. No profile is also a valid plan: omit the profile arguments, and the plan is the
 five spine steps ending with the handoff. Record has no bound record writes and persist is unbound.
@@ -328,7 +333,7 @@ Use the same profile arguments to settle the input:
 
 ```bash
 python3 <checklist-module> settle --user-profile <user-profile> \
-  --repository-profile <repository-profile> --handoff <resumed-handoff> \
+  --repository-profile <repository-profile> --handoff <remaining-items> \
   --receipts <saved-item-receipts.json>
 ```
 
@@ -336,6 +341,10 @@ The returned JSON removes only acknowledged loops of types the slot or native st
 It preserves every other field and never rewrites the source handoff. Merge its
 remaining loops with this session's unsaved items, then apply the filing rules
 in step 5 under the current session. Unbound destinations warn without failing.
+
+At wrap, every ledger history entry and close outcome must appear unchanged in
+the final handoff. `wrap-check` fails and names each missing entry or outcome;
+it never reopens the resumed handoff to discover them.
 
 ## Report
 

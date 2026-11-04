@@ -23,8 +23,10 @@ def isolate_user_profile(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolate_codex_identity(monkeypatch):
-    """No test takes its invoking worker's Codex session as an input."""
+def isolate_session_identity(monkeypatch):
+    """No test takes its invoking worker's session as a pickup successor."""
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
     monkeypatch.delenv("HIPPOCAMPUS_HARNESS", raising=False)
 

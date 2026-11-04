@@ -96,6 +96,14 @@ including the wrap-only read of exactly these tickets, is defined in
 [record](skills/record/SKILL.md#ticket-reads-and-close-outcomes).
 Checklist report emits `outcome_line` first, built only from these stored facts.
 
+`resume.resumed_chain[]` retains each selected `handoff` path, its producing
+`session_id`, and timezone-qualified `resumed_at`, plus `written_at` and `skeleton`.
+Pickup copies history entries, close outcomes, touched tickets, and these records
+into the successor ledger immediately. Checkpoint restores them from that ledger
+through compaction; `wrap-check` names every missing history entry or close outcome
+in the final handoff. Only pickup, native same-session resume, and compaction
+continue the chain. A brief or pasted prompt alone starts a new chain.
+
 ## 4. Pickup: `scripts/pickup.sh`
 
 Prints one JSON object. With no arguments it lists handoff candidates for the current
@@ -222,7 +230,7 @@ composes and checks it and executes record-write commands. It writes no handoff 
 
 | Operation | Purpose |
 |---|---|
-| `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine with the profiles and route a resumed handoff's carried items to their slots. Writes a start marker to the session's ledger. |
+| `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine and route carried items from the session ledger snapshot. Returns its `handoff` payload. An optional handoff path must match pickup’s recorded selection; its source file is never reopened. Writes a start marker to the session’s ledger. |
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
