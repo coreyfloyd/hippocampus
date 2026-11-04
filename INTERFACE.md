@@ -63,7 +63,7 @@ returned, so a broken hook never blocks a session.
 |---|---|
 | `resolve [cwd] [--subject] [--session-id ID]` | Print the handoff path for a directory and session. |
 | `repository-root [cwd]`, `count [cwd]` | The shared repository root, and how many handoffs exist for it. |
-| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from the required authored `resume.session_summary`, retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
+| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from `resume.history_entry` (the authored one-line `resume.session_summary` at checkpoints), retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. A wrap stores the complete chain's `resume.session_summary` separately. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
 | `write PATH` | Low-level atomic write. Refuses a payload that fails the lint. |
 | `lint [PATH] [--session-id ID]` | Validate a handoff. `scripts/lint-handoff.sh` is a thin adapter over this command. |
 | `ledger-ticket --ticket T --session-id ID` | Record a ticket the session read, changed, or closed. |
@@ -88,7 +88,12 @@ disposition. An item carried in a handoff keeps its producer's identity and date
 slot binding consumes it.
 
 Checkpoint also retains `resume.close_outcomes[]` and `resume.touched_tickets[]`
-from the session ledger, beside `resume.session_history[]`. A close outcome holds
+from the session ledger, beside `resume.session_history[]` and
+`resume.touched_projects[]`. At wrap the agent supplies `resume.history_entry`
+for the current write and the complete `resume.session_summary` for the report.
+Projects lookups and writes receive `session_summary`, `close_outcomes`, and
+`touched_projects` as additional request fields outside the item identity.
+A close outcome holds
 `kind` (milestone or epic), `title`, `state` (open or closed), integer `done` and
 `total`, `triggering_ticket`, and timezone-qualified `produced_at`. A touched
 ticket is a stable reference string. The shared ticket record-write contract,
@@ -239,7 +244,7 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
 | `wrap-check ... --written-handoff H [--record-at T] [--unattended]` | Fail, with the reason, when the handoff is invalid, a bound item is still carried, a read/write failed, or `record` is bound and its latest write is older than the session's last change. |
-| `report ... --results R --handoff H [--summary F \| --no-summary WHY] [--unattended]` | Require a valid written handoff and check its filing outcomes and the run's step results; the report starts with the session summary. |
+| `report ... --results R --handoff H [--unattended]` | Require a valid written handoff containing the agent-authored `resume.session_summary` and check its filing outcomes and the run's step results; the report starts with the stored outcome line followed by that summary. |
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 

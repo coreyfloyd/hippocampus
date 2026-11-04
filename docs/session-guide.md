@@ -260,9 +260,9 @@ items move into `resume.open_loops`. Pending artifacts are supplied from the
 ledger, preserving their producer and time. Extra session-supplied fields are
 preserved rather than constituting a closed schema.
 
-A handoff never holds anything the record holds: no live ticket list, project
-status, runtime posture, or monitor doctrine. Its short continuation summaries
-are not the bound record's session summary described below.
+A handoff holds continuation context rather than live ticket lists, project
+status, runtime posture, or monitor doctrine. At wrap it also stores the
+agent-authored session summary described below, alongside its history entries.
 
 ### Ledger (one file per session)
 
@@ -390,20 +390,25 @@ their directory when no ask binding can save them; keep their handoff.
 
 ### Session summary
 
-Location: a file named by the bound record, passed to checklist `report --summary`.
-The package does **not** compose it. After its ticket step, a bound record
-composes it from final ticket outcomes and writes each project's durable history
-to its record. The checklist report starts with a stored close-outcome line, followed by that summary unedited. There is
-no example because the bound record writes it, not the package.
+Location: `resume.session_summary` in the final handoff. At wrap, the checklist
+agent writes it from every history entry and close outcome in the chain,
+including current work since the last entry. Every ticket it names includes a
+description of the work. A session with only a skeleton is named with its end
+time as having ended without an account of its work; that gap does not fail wrap.
+The report starts with the stored close-outcome line, followed by this summary
+unedited, even when no record writes are bound. A projects record write receives
+the summary, close outcomes, and touched projects for its durable history.
 
 ```text
-bound record's summary text           # binding-defined format, not a package JSON schema
-└── each project's goal, shipped work, follow-up tickets, and decisions
+final handoff resume
+├── session_summary                   # agent-authored account of the entire chain
+├── session_history[]                 # dated entries under their producing sessions
+├── close_outcomes[]                  # stored milestone and epic states
+└── touched_projects[]                # project references carried through pickup
 
 report command output                 # JSON on stdout, checked by the reporting session
 ├── outcome_line                      # stored milestone/epic outcomes, or explicit none
-├── summary                           # unedited file text, or null
-├── summary_unavailable               # reason when no summary was composed
+├── summary                           # unedited summary from the final handoff
 ├── report                            # ok, incomplete, or failed
 ├── pending[]                         # identities of pending steps
 ├── filing                            # item outcomes, asks by directory, warnings and failures
@@ -429,10 +434,8 @@ A native lesson proposal awaiting approval keeps its choices on the carried item
 or filing outcome. Native backlog with no user decision stays in the filing
 report and incomplete-step details, without appearing as an ask.
 
-If none was composed, pass `--no-summary` with the record's reason; an older
-binding can be reported as `<command> composed no session summary`. With record
-unbound, omit both arguments and the engine supplies that reason. A bound record
-with neither summary nor reason fails validation.
+An absent or empty summary fails report validation and wrap. Record writes
+cannot supply the report's summary or an unavailable-summary fallback.
 
 ### Configuration file
 

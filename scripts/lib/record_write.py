@@ -79,13 +79,16 @@ def receipt(response: Mapping[str, Any], expected: Mapping[str, Any]) -> dict[st
     return value
 
 
-def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row: Mapping[str, Any]) -> dict[str, Any]:
+def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row: Mapping[str, Any],
+            *, context: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """A failed lookup blocks writes. Missing write acknowledgement is uncertain."""
     output = copy.deepcopy(dict(row))
     phase = 'lookup'
     try:
         key = identity(item)
         request = {'operation': 'lookup', 'kind': kind, 'identity': key, 'item': item, 'filing': row}
+        if context is not None:
+            request.update(context)
         found = invoke(binding, request)
         if kind == 'tickets' and 'tickets' in found:
             output['tickets'] = found['tickets']

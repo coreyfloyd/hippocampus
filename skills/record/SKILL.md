@@ -63,9 +63,18 @@ its outcome is uncertain. Retry with the unchanged item: lookup must succeed
 before another write is attempted. Stores must make identity lookup durable and
 make their writes idempotent for that identity, including concurrent requests.
 
-Keep summary composition as checklist currently describes: after the record
-writes, retain the composed session-summary file or the reason none was
-composed for checklist's report. This standalone step does not print a wrap report.
+At wrap the checklist agent composes the session summary from every history
+entry and close outcome in the chain, storing it in `resume.session_summary`.
+Record writes never compose or replace it. A standalone record run does not
+compose a wrap summary or print a wrap report.
+
+Projects requests additionally receive `session_summary`, `close_outcomes`, and
+`touched_projects` from the handoff's resume block. These fields are outside the
+item identity and are passed unchanged to both lookup and write. Project items'
+`anchor.project` references join the carried `resume.touched_projects`; the ledger
+retains these through compaction and pickup. The agent files project session-log
+items after the wrap summary is ready, so project history describes the whole
+chain. At wrap project writes run after ticket writes and the touched-ticket read.
 
 
 ## Ticket reads and close outcomes
@@ -120,4 +129,5 @@ an already-recorded ticket. With no touched tickets no read is made.
 
 The report's first field, `outcome_line`, is composed only from stored close
 outcomes. With none it is exactly: "No milestone or epic closed or moved this
-session." Summary composition follows in the next field as before.
+session." The agent-authored summary stored in the final handoff follows in the
+next field.

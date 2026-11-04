@@ -20,8 +20,8 @@ A read of the existing record through a user-bound skill. It is read-only: it re
 _Avoid_: tracker
 
 **Handoff**:
-The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds dated history entries, close outcomes, and touched tickets. Checkpoint and wrap both end by writing it.
-_Avoid_: summary, record
+The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds the session's dated history entries and session summary, close outcomes, touched tickets, and touched projects. Checkpoint and wrap both end by writing it.
+_Avoid_: record
 
 **History entry**:
 One handoff write's account of the work since that session's previous entry, with its producing session identity, time, and text. Every checkpoint and wrap adds one real entry. Entries stay in the session ledger through compaction. An automatic stop handoff is marked as a skeleton and adds no entry, while retaining earlier entries.
@@ -29,8 +29,14 @@ One handoff write's account of the work since that session's previous entry, wit
 **Close outcome**:
 One milestone or epic state reported when a ticket closes: kind, title, open or closed state, done of total, triggering ticket, and time. The ticket record write reports it; the package stores it in the session ledger beside history entries. The wrap builds its outcome line only from these stored facts, without rediscovering milestone or epic state.
 
+**Session summary**:
+One account the agent writes at wrap from every history entry and close outcome in the resumed chain, including the current session's work. It covers every entry, describes every ticket it names, and names any session that ended with only a skeleton and the time it ended without an account of its work. The final handoff stores it; the report prints it immediately after the outcome line. Record writes never compose it. A projects record write receives it with close outcomes and touched projects.
+
 **Touched ticket**:
 A ticket the session read, changed, or closed. Its reference is retained in the session ledger and handoff. At wrap the ticket record write re-reads only touched tickets, including those carried from a resumed chain, and records any closed ticket's missing close outcomes.
+
+**Touched project**:
+A project the session worked on, identified by a stable reference in `resume.touched_projects` or an item's `anchor.project`. The ledger and handoff retain its reference through compaction and pickup. A projects record write receives all touched projects alongside the session summary and close outcomes.
 
 **Resumed chain**:
 The sessions continued through pickup, native same-session resume, or compaction. A session started from a brief or pasted prompt without pickup starts its own chain. At pickup, the successor's ledger immediately receives the selected handoff's history entries, close outcomes, touched tickets, and resumed-chain records. Later commands use only that ledger, never the resumed handoff file.

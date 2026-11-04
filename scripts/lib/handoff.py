@@ -410,8 +410,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
             elif not _valid_history_time(row["resumed_at"]):
                 problems.append(f"resumed_chain[{index}].resumed_at must be an ISO timestamp with timezone")
     summary = resume.get("session_summary")
-    if summary is not None and (not isinstance(summary, str) or not summary.strip() or "\n" in summary or "\r" in summary):
-        problems.append("resume.session_summary must be a non-empty one-line string")
+    if summary is not None and (not isinstance(summary, str) or not summary.strip()):
+        problems.append("resume.session_summary must be a non-empty string")
     history = resume.get("session_history", [])
     if not isinstance(history, list):
         problems.append("resume.session_history must be an array")
@@ -556,6 +556,8 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
              for outcome in resume.get("close_outcomes", [])]
     rows += [{"kind": "touched_ticket", "ticket": ticket}
              for ticket in resume.get("touched_tickets", [])]
+    rows += [{"kind": "touched_project", "project": project}
+             for project in resume.get("touched_projects", [])]
     rows += [{"kind": "resumed_chain", "record": record} for record in chain]
     rows.append({"kind": "resumed_handoff", "handoff": selected, "data": data})
     existing = _ledger_records(ledger_path(session_id))
@@ -685,6 +687,12 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
             # Like other malformed input, preserve it for post-write lint.
             pass
         resume["resumed_chain"] = resumed_chain(session_id)
+        projects = list(resume.get("touched_projects", []))
+        for fact in _ledger_records(ledger_path(session_id)) if session_id else []:
+            if fact.get("kind") == "touched_project" and fact["project"] not in projects:
+                projects.append(fact["project"])
+        if projects:
+            resume["touched_projects"] = projects
         history = resume.get("session_history", [])
         if isinstance(history, list):
             retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))
@@ -697,7 +705,7 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
                 or row.get("session_id") == session_id
                 or not real_history_text(row.get("summary"))
                 or not _valid_history_time(row.get("produced_at")))]
-            text = resume.get("session_summary")
+            text = resume.pop("history_entry", resume.get("session_summary"))
             if trigger == "stop":
                 resume.pop("session_summary", None)
             elif session_id.strip() and real_history_text(text):
