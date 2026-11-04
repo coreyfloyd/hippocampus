@@ -166,3 +166,130 @@ def test_session_start_without_an_agent_adds_nothing(env, tmp_path):
     payload = json.dumps({"session_id": "s1", "cwd": str(tmp_path), "source": "startup"})
     result = subprocess.run(["bash", RESTORE], input=payload, text=True, capture_output=True, env=env)
     assert result.returncode == 0 and result.stdout == ""
+
+
+def test_default_directory_and_environment_override(env, tmp_path):
+    default_env = {key: value for key, value in env.items() if key != "STANDING_STATE_DIR"}
+    result = run(default_env, "dir")
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(tmp_path / ".local/state/hippocampus/standing")
+    (tmp_path / "config.json").write_text(json.dumps({"standing_dir": "~/configured"}))
+    assert run(default_env, "dir").stdout.strip() == str(tmp_path / "configured")
+    assert run(env, "dir").stdout.strip() == env["STANDING_STATE_DIR"]
+
+
+@pytest.mark.parametrize("name", ["a", "a" * 32, "a0_-"])
+def test_valid_agent_names_and_explicit_identity_wins(env, tmp_path, name):
+    result = run(env, "path", "--agent", name, HIPPOCAMPUS_AGENT="other")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(tmp_path / "standing" / f"{name}.json")
+
+
+@pytest.mark.parametrize("name", ["", "Aide", "1aide", "a" * 33, "a/b", "a\nb"])
+def test_invalid_agent_names_are_refused(env, name):
+    result = run(env, "write", "--agent", name, payload=first_write())
+    assert result.returncode == 2 and "agent name" in result.stderr
+
+
+@pytest.mark.parametrize("field", ["when", "reason"])
+@pytest.mark.parametrize("value", [None, "", "  ", 123])
+def test_each_timer_field_is_required_and_refusal_preserves_bytes(env, tmp_path, field, value):
+    assert run(env, "write", "--agent", "aide", payload=first_write()).returncode == 0
+    path = tmp_path / "standing" / "aide.json"
+    before = path.read_bytes()
+    timer = {"when": "every Monday", "reason": "Prepare the weekly briefing"}
+    timer[field] = value
+    result = run(env, "write", "--agent", "aide", payload={"standing": {"timers": [timer]}})
+    assert result.returncode == 1
+    assert f"standing.timers[0].{field} must be a non-empty string" in result.stderr
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("item_type", ["progress", "commitment", "decision", "knowledge",
+                                       "lesson", "artifact", "open_loop"])
+def test_all_handoff_item_types_and_lint_are_shared(env, tmp_path, item_type):
+    item = {"type": item_type, "context": "An item to file", "session_id": "run-1",
+            "produced_at": STAMP, "disposition": "keep", "author": "owner", "location": "chat"}
+    result = run(env, "write", "--agent", "aide", payload={"session_items": [item]})
+    assert result.returncode == 0, result.stderr
+    shown = json.loads(run(env, "read", "--agent", "aide", "--json").stdout)
+    assert shown["resume"]["open_loops"] == [item]
+    assert run(env, "lint", "--agent", "aide").returncode == 0
+    del item["produced_at"]
+    refused = run(env, "write", "--agent", "aide", payload={"session_items": [item]})
+    assert refused.returncode == 1
+    assert "produced_at must be" in refused.stderr
+
+
+def test_recorded_session_items_are_removed_without_history(env):
+    payload = first_write()
+    item = dict(payload["resume"]["open_loops"][0], recorded=True)
+    payload["resume"]["open_loops"] = [item]
+    payload["session_items"] = [item]
+    assert run(env, "write", "--agent", "aide", payload=payload).returncode == 0
+    for trigger in ("checkpoint", "stop", "run-end"):
+        assert run(env, "write", "--agent", "aide", "--trigger", trigger).returncode == 0
+        state = json.loads(run(env, "read", "--agent", "aide", "--json").stdout)
+        assert state["trigger"] == trigger
+        assert state["resume"]["open_loops"] == []
+        assert state["standing"] == payload["standing"]
+        assert "session_history" not in state and "session_history" not in state["resume"]
+
+
+@pytest.mark.parametrize("adapter", ["claude", "codex"])
+@pytest.mark.parametrize("headless", [False, True])
+def test_start_and_scheduled_runs_read_latest_state_without_reading_headless_handoffs(
+        env, tmp_path, adapter, headless):
+    repository = subprocess.run(["git", "init", "-q", str(tmp_path)], text=True,
+                                capture_output=True, env=env)
+    assert repository.returncode == 0, repository.stderr
+    handoff = os.path.join(ROOT, "scripts", "lib", "handoff.py")
+    handoff_payload = {"resume": {"headline": "Release work", "session_summary": "Checked the build."}}
+    seed = subprocess.run([sys.executable, handoff, "checkpoint", "--session-id", "s1",
+                           "--cwd", str(tmp_path)], input=json.dumps(handoff_payload),
+                          text=True, capture_output=True, env=env)
+    assert seed.returncode == 0, seed.stderr
+    assert run(env, "write", "--agent", "aide", payload=first_write()).returncode == 0
+    command = ["bash", RESTORE] if adapter == "claude" else [sys.executable, CODEX_HOOK, "post-compact"]
+    hook_env = dict(env, HIPPOCAMPUS_AGENT="aide", CODEX_HOME=str(tmp_path / "codex"))
+    if adapter == "codex":
+        sessions = tmp_path / "codex" / "sessions"
+        sessions.mkdir(parents=True)
+        (sessions / "rollout-s1.jsonl").write_text(json.dumps({
+            "type": "session_meta", "payload": {"id": "s1", "source": "exec" if headless else "cli"}
+        }) + "\n")
+    if headless:
+        hook_env["CLAUDE_CODE_ENTRYPOINT"] = "headless"
+    payload = json.dumps({"session_id": "s1", "cwd": str(tmp_path), "source": "startup"})
+    for next_action in ("Read the latest build", "Send the updated briefing"):
+        assert run(env, "write", "--agent", "aide",
+                   payload={"resume": {"next_action": next_action}}).returncode == 0
+        before = (tmp_path / "standing" / "aide.json").read_bytes()
+        result = subprocess.run(command, input=payload, text=True, capture_output=True, env=hook_env)
+        assert result.returncode == 0, result.stderr
+        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert next_action in context
+        assert ("handoff exists" in context) is not headless
+        assert (tmp_path / "standing" / "aide.json").read_bytes() == before
+
+
+def test_concurrent_session_and_run_updates_keep_both_fields(env):
+    assert run(env, "write", "--agent", "aide", payload=first_write()).returncode == 0
+    updates = [({"resume": {"headline": "Session update"}}, "checkpoint"),
+               ({"standing": {"waiting_on": [{"who": "build owner", "context": "Retry"}]}}, "run-end")]
+    processes = []
+    for payload, trigger in updates:
+        process = subprocess.Popen([sys.executable, MODULE, "write", "--agent", "aide",
+                                    "--trigger", trigger], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+        processes.append((process, payload))
+    for process, payload in processes:
+        process.stdin.write(json.dumps(payload))
+        process.stdin.close()
+        process.stdin = None
+    for process, _ in processes:
+        _, stderr = process.communicate(timeout=15)
+        assert process.returncode == 0, stderr
+    state = json.loads(run(env, "read", "--agent", "aide", "--json").stdout)
+    assert state["resume"]["headline"] == "Session update"
+    assert state["standing"]["waiting_on"] == [{"who": "build owner", "context": "Retry"}]
