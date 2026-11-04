@@ -353,6 +353,12 @@ def plan_item(candidate, item, decision, plan, ask):
     single = dict(candidate['handoff'], subject={'working_directory': candidate['directory'],
                   'session_id': candidate['session_id']}, resume={'open_loops': [validation_item]})
     checked = checklist.file_items(plan, single, [row], ask, execute_writes=False)['filing']['items'][0]
+    if checked.get('binding') in checklist.record_write.KINDS:
+        writes = next(step for step in plan if step['id'] == 'record')['record_writes']
+        binding = writes.get(checked['binding'])
+        if binding:
+            # Keep the selected command with its receipt for user-started undo.
+            checked['command'] = binding['command']
     checked.pop('index', None)
     if 'ask' in checked:
         checked['ask']['identity'] = item['identity']

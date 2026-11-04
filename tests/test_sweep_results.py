@@ -607,3 +607,30 @@ def test_native_r4_ask_is_delivered_but_never_consumes_sweep_item(sandbox, kind)
     assert path.exists()
     assert done['directories'][str(sandbox[0])]['unfiled_items']
     assert done['directories'][str(sandbox[0])]['asks_raised'][0]['receipt']
+
+
+@pytest.mark.parametrize('rule,kind', [('R2', 'tickets'), ('R5', 'tickets'), ('R7', 'documents')])
+def test_record_write_command_is_carried_from_filing_through_undo(sandbox, rule, kind):
+    source(sandbox)
+    entry = dict(new_work(), rule=rule, destination='record:target')
+    run = act(sandbox, [entry])
+    work, = run['work']
+    profile = json.loads((sandbox[0] / 'profile.json').read_text())
+    assert work['binding'] == kind
+    assert work['command'] == profile['record_writes'][kind]['command']
+    done = complete(sandbox, run)
+    payload = json.loads(command(sandbox, 'undo', '--run-id', done['run_id'], '--user-started').stdout)
+    undo = read_run(payload['report'])
+    reversal, = undo['work']
+    assert reversal['binding'] == kind and reversal['command'] == work['command']
+    assert reversal['identity'] == work['identity']
+    assert reversal['receipt'] == done['work'][0]['receipt']
+    complete(sandbox, undo, ['reversed'], 'complete-undo')
+
+
+def test_sweep_refuses_retired_record_binding_without_a_report(sandbox):
+    source(sandbox)
+    profile = sandbox[0] / 'profile.json'
+    profile.write_text(json.dumps({'name': 'user', 'bindings': {'record': None}}))
+    result = command(sandbox, 'run', '--scope', 'all', '--user-profile', str(profile), code=1)
+    assert 'retired bindings.record' in result.stderr and 'record_writes' in result.stderr

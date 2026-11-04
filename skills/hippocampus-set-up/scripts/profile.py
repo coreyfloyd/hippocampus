@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--user-present', action='store_true', help='agent confirmed a live setup conversation')
     parser.add_argument('--profile', type=Path)
     parser.add_argument('--bindings', required=True, help='JSON object of only the slot choices being changed')
+    parser.add_argument('--record-writes', help='JSON object of changed per-kind record writes; null unbinds a kind')
     parser.add_argument('--ask', help='JSON ask command object, or null to unbind; omit to preserve')
     parser.add_argument('--record-read', help='command naming the user-owned read skill')
     args = parser.parse_args()
@@ -49,13 +50,19 @@ def main():
         profile = json.loads(match[1])
     if not isinstance(profile, dict):
         raise ValueError('profile must be an object')
+    checklist.reject_record_binding(profile)
     checklist.reject_native_bindings(profile, str(path), original or '')
     choices = json.loads(args.bindings)
     if isinstance(choices, dict):
+        checklist.reject_record_binding({'bindings': choices})
         checklist.reject_native_bindings({'bindings': choices}, 'setup bindings')
     if not isinstance(choices, dict) or set(choices) - set(checklist.SLOTS):
-        raise ValueError('bindings must contain only record and persist; configure ask with --ask')
+        raise ValueError('bindings must contain only persist; configure record_writes with --record-writes and ask with --ask')
     profile.setdefault('bindings', {}).update(choices)
+    if args.record_writes is not None:
+        writes = checklist.record_write.bindings({'record_writes': json.loads(args.record_writes)})
+        existing = checklist.record_write.bindings(profile)
+        profile['record_writes'] = {**existing, **writes}
     if args.ask is not None:
         ask = json.loads(args.ask)
         if ask is None:

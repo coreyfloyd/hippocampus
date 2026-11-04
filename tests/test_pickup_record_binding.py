@@ -332,3 +332,15 @@ def test_helper_failure_reports_installation_reason_not_record_outage(selected, 
     assert report['handoff'] == selected[1]
     assert selected[1]['resume']['headline'] in lines(report)
     assert 'Commitments from handoff:' in lines(report)
+
+
+def test_retired_record_is_refused_with_record_write_shape(selected):
+    profile = Path(selected[2]['CHECKLIST_USER_PROFILE'])
+    profile.write_text(json.dumps({'name': 'user', 'bindings': {'record': None}}))
+    profile.rename(profile.with_suffix('.json'))
+    selected[2]['CHECKLIST_USER_PROFILE'] = str(profile.with_suffix('.json'))
+    report = pickup(selected)
+    assert 'retired bindings.record' in lines(report)
+    assert 'record_writes' in lines(report)
+    assert 'record_read' not in report
+    assert report['handoff'] == selected[1]
