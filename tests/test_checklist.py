@@ -509,7 +509,7 @@ class ChecklistTests(unittest.TestCase):
     def test_bound_record_must_not_predate_the_last_change(self):
         user = ["--user-profile", str(PROFILES / "user.md")]
         ledger = [{"kind": "file", "path": "/x", "checkout": "/", "session_id": "wrap-session", "ts": "2026-10-06T13:00:00Z"},
-                  {"repo_root": "/", "head": "a", "ts": "2026-10-06T15:00:00Z"}]
+                  {"repo_root": "/", "checkout": "/", "head": "a", "ts": "2026-10-06T15:00:00Z"}]
         with tempfile.TemporaryDirectory() as directory:
             _, stale, _ = self.wrap(directory, [], user, "2026-10-06T12:59:00Z", ledger)
             self.assertEqual(stale.returncode, 1)
@@ -562,7 +562,7 @@ class ChecklistTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.edit(directory, "2026-10-06T11:00:00Z")
             self.start(directory, user)
-            commit = {"repo_root": "/", "head": "b", "commit": "b", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
+            commit = {"repo_root": "/", "checkout": "/", "head": "b", "commit": "b", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
             _, result, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", [commit])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["record_check"], "passed")

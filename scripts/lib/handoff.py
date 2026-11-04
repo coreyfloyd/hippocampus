@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -941,7 +942,15 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
             candidates.append(os.path.dirname(os.path.expanduser(value)))
     command = tool_input.get("command")
     if isinstance(command, str):
-        candidates.extend(re.findall(r"(?:^|\s)git\s+-C\s+([^\s;|&]+)", command))
+        try:
+            words = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+            words.whitespace_split = True
+            words.commenters = ""
+            tokens = list(words)
+        except ValueError:
+            tokens = []
+        candidates.extend(os.path.join(str(cwd or os.getcwd()), os.path.expanduser(tokens[index + 2]))
+                          for index in range(len(tokens) - 2) if tokens[index:index + 2] == ["git", "-C"])
     for key in ("file_path", "path"):
         value = tool_input.get(key)
         if isinstance(value, str) and value:
@@ -970,22 +979,28 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
     seen: set[str] = set()
     with open(records_path, "a", encoding="utf-8") as handle:
         for candidate in candidates:
-            root = repository_root(candidate)
-            if not root or root in seen:
+            checkout = _run_git(candidate, "rev-parse", "--show-toplevel")
+            if not checkout:
                 continue
-            seen.add(root)
-            head = _run_git(candidate, "rev-parse", "HEAD")
-            remote_output = _run_git(candidate, "for-each-ref", "refs/remotes", "--format=%(objectname)")
+            checkout = str(Path(checkout).resolve())
+            root = repository_root(checkout)
+            if not root or checkout in seen:
+                continue
+            seen.add(checkout)
+            head = _run_git(checkout, "rev-parse", "HEAD")
+            remote_output = _run_git(checkout, "for-each-ref", "refs/remotes", "--format=%(objectname)")
             if head is None or remote_output is None:
                 print(f"handoff: could not record git state for {root}", file=sys.stderr)
                 continue
             remote_heads = sorted(set(remote_output.splitlines()))
-            previous = next((row for row in reversed(existing) if row.get("repo_root") == root), {})
+            previous = next((row for row in reversed(existing)
+                             if row.get("checkout") == checkout and row.get("head")), {})
             prior = previous.get("head", "")
             previous_remote_heads = [item for item in previous.get("remote_heads", []) if isinstance(item, str)]
-            record: dict[str, Any] = {"repo_root": root, "head": head, "remote_heads": remote_heads, "ts": utc_now()}
+            record: dict[str, Any] = {"repo_root": root, "checkout": checkout, "head": head,
+                                      "remote_heads": remote_heads, "ts": utc_now()}
             if isinstance(command, str) and success and prior and head != prior:
-                ownership = _run_git(candidate, "rev-list", f"{prior}..{head}", "--not", *previous_remote_heads)
+                ownership = _run_git(checkout, "rev-list", f"{prior}..{head}", "--not", *previous_remote_heads)
                 if ownership is None:
                     print(f"handoff: could not determine ownership for {root}", file=sys.stderr)
                 else:
@@ -993,7 +1008,7 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
                     is_pull = bool(re.search(r"(?:^|[;&|]\s*|\s)git\s+(?:-[^\s]+\s+)*(?:pull|fetch)\b", command))
                     new_remote_heads = sorted(set(remote_heads) - set(previous_remote_heads))
                     if is_pull and new_remote_heads:
-                        pulled = _run_git(candidate, "rev-list", *new_remote_heads)
+                        pulled = _run_git(checkout, "rev-list", *new_remote_heads)
                         if pulled is None:
                             print(f"handoff: could not determine pulled commits for {root}", file=sys.stderr)
                             owned = set()

@@ -585,23 +585,29 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     session = data.get("subject", {}).get("session_id", "")
     ledger = module._ledger_records(module.ledger_path(session)) if session else []
     repositories: set[str] = set()
-    subject = data.get("subject", {}).get("working_directory", "")
+    owned_paths: set[str] = set()
+    repository_problems: dict[str, list[str]] = {}
     for row in ledger:
-        checkout = row.get("checkout") or row.get("repo_root")
+        checkout = row.get("checkout")
         if checkout:
-            # repo_root is shared by worktrees; inspect the session's checkout.
-            if subject and module.repository_root(subject) == checkout:
-                checkout = subject
-            repositories.add(checkout)
+            repositories.add(str(Path(checkout).resolve()))
+            if row.get("kind") == "file" and row.get("path"):
+                path = Path(row["path"])
+                owned_paths.add(str(path.parent.resolve() / path.name))
+        elif row.get("repo_root"):
+            # A shared repository root cannot identify which worktree was used.
+            repository_problems[row["repo_root"]] = ["missing checkout in session ledger"]
     for path in data.get("uncommitted_files", []):
-        checkout = module._run_git(str(Path(path).parent), "rev-parse", "--show-toplevel")
-        if checkout:
-            repositories.add(checkout)
-        else:
-            not_saved.append(f"{path}: cannot check repository state")
-    unpushed: list[str] = []
-    persist = next(step for step in plan if step["id"] == "persist").get("binding")
+        candidate = Path(path)
+        if str(candidate.parent.resolve() / candidate.name) not in owned_paths:
+            repository_problems[path] = ["missing checkout in session ledger"]
     for checkout in sorted(repositories):
+        # Git otherwise walks up to a different checkout if this one lost .git.
+        actual = (module._run_git(checkout, "rev-parse", "--show-toplevel")
+                  if Path(checkout).is_dir() else None)
+        if not actual or str(Path(actual).resolve()) != checkout:
+            repository_problems[checkout] = ["cannot check commit and push state: checkout unavailable"]
+            continue
         dirty = module._run_git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
         unpublished = module._run_git(checkout, "rev-list", "HEAD", "--not", "--remotes")
         reasons = []
@@ -613,10 +619,14 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
             if unpublished:
                 reasons.append("changes were not pushed")
         if reasons:
-            if not persist and "changes were not pushed" not in reasons:
-                reasons.append("changes were not pushed")
-            detail = f"{checkout}: " + "; ".join(reasons)
-            (not_saved if persist else unpushed).append(detail)
+            repository_problems[checkout] = reasons
+    unpushed: list[str] = []
+    persist = next(step for step in plan if step["id"] == "persist").get("binding")
+    for checkout, reasons in sorted(repository_problems.items()):
+        if not persist and "changes were not pushed" not in reasons:
+            reasons.append("changes were not pushed")
+        detail = f"{checkout}: " + "; ".join(reasons)
+        (not_saved if persist else unpushed).append(detail)
     not_saved = list(dict.fromkeys(not_saved))
     warnings = list(dict.fromkeys([*warnings, *kept, *unpushed]))
     parts = []
