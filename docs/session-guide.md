@@ -135,7 +135,7 @@ headless sessions and subagents do not receive the hippocampus prompts.
 | Adapter | When it fires | What you see |
 |---|---|---|
 | `scripts/post-compact-restore.sh` | Session start, including after compaction | At startup, a count of repository handoffs; after compaction, this session's handoff and a reminder to revalidate it. |
-| `scripts/pre-compact.sh` | Before compaction | A reminder to reconcile the record and checkpoint continuation; the raw hook input is backed up. |
+| `scripts/pre-compact.sh` | Before compaction | A checkpoint written directly from retained ledger facts and git state, preserving continuation; the raw hook input is also backed up. |
 | `scripts/context-guard.sh` | Prompt submission | A context warning at 50% or above when usable usage data is available, with instructions to reconcile the record and checkpoint. |
 | `hooks/handoff-ledger.sh` | After a file edit or shell tool call | Usually nothing: the ledger tracks touched files and session-owned commits for checkpoint and the stop check. Shell-driven edits need explicit ledger registration. |
 | `hooks/handoff-staleness-guard.sh` | Session stop | If no handoff exists, a skeleton is written without blocking. An existing handoff made stale by this session's own work prompts an update and blocks that stop. |
@@ -174,6 +174,7 @@ of the resolved handoff directory unless its own override is set.
 ├── .local/state/hippocampus/
 │   ├── handoffs/                       # handoff JSON; HANDOFF_STATE_DIR, else handoff_dir
 │   ├── session-touched-paths.<id>.jsonl # per-session ledger; HANDOFF_LEDGER_DIR
+│   ├── timed-checkpoints/              # deadlines, job IDs, transcript locations, queue receipts
 │   ├── compact-state/                  # raw pre-compaction inputs; HANDOFF_COMPACT_STATE_DIR
 │   └── checklist/                      # unattended-wrap markers; CHECKLIST_STATE_DIR, else checklist_state_dir
 ├── .config/hippocampus/config.json      # shared configuration; HIPPOCAMPUS_CONFIG, else XDG_CONFIG_HOME/hippocampus/config.json
@@ -451,6 +452,8 @@ configuration JSON object             # shared settings, not a profile
 ├── checklist_surfaces: string[]      # standing surface-detector candidates
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
+├── timed_checkpoint_minutes: positive number  # interval, default 55 minutes
+├── timed_checkpoint_token_limit: positive integer # below-limit checkpoint, default 200000
 ├── prune_days: positive integer      # stale-transcript prune age, default 7; PICKUP_PRUNE_DAYS overrides
 ├── cycle_sessions: object            # consumer session-name to home-relative directory mapping
 └── unattended: object                # optional unattended-mode integration
@@ -499,6 +502,43 @@ session-item types. Added steps use the anchors listed in the plan outline;
 are read by the skill through their `Slot:` declarations; the engine loader
 requires JSON or a single fence. The example is a loader fixture showing format
 and composition, not a recommended cleanup or persistence policy.
+
+### Timed checkpoint state
+
+Every interactive checkpoint replaces the pending timer for that session. The
+shared configuration sets `timed_checkpoint_minutes` (55 by default) and
+`timed_checkpoint_token_limit` (200,000 by default). At the scheduled time the
+agent reads transcript usage with `handoff.py timed-checkpoint-check`; below the
+limit it checkpoints, at or above it the prompt does nothing, and unknown usage
+is reported without guessing.
+
+Claude Code's checkpoint output instructs the agent to delete the previous job,
+create a session-only one-shot CronCreate job pinned to the printed minute with
+`recurring: false`, and record its job ID. Codex automatically starts a detached
+worker that replaces the per-session deadline and calls `codex queue`. The exact
+prompt has one source, `scripts/lib/timed-checkpoint-prompt.txt`, rendered by
+`handoff.py timed-checkpoint-prompt`. Timer state and delivery receipts live in
+`timed-checkpoints/` beside the handoff directory (`HANDOFF_TIMER_DIR` overrides).
+Only one worker per session can deliver a pending prompt.
+
+```text
+timed-checkpoints/<encoded-session-id>.*
+├── context.json                      # transcript_path, harness
+├── claude.json                       # job_id returned by CronCreate
+├── pending.json                      # session_id, cwd, codex, due_at, prompt
+├── receipt.json                      # queued, exit_code/stdout/stderr or error, fired_at
+├── schedule.lock                     # serializes replacement and delivery
+└── worker.lock                       # one active delivery worker per session
+```
+
+The files use the encoded session ID as a prefix (for example,
+`<encoded-session-id>.pending.json`); locks contain no session data.
+
+Before compaction, the hook itself writes a checkpoint from ledger history,
+touched tickets and projects, and current git state, preserving the agent's last
+continuation. It needs no agent turn and has an eight-second budget inside the
+ten-second hook timeout. Pickup and post-compaction restore read that handoff;
+Claude restore repeats the scheduling instruction for its next timed checkpoint.
 
 ### Pre-compaction backups
 

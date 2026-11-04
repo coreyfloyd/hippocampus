@@ -42,3 +42,14 @@ def isolate_git_configuration(monkeypatch):
     for role in ("AUTHOR", "COMMITTER"):
         monkeypatch.setenv(f"GIT_{role}_NAME", "Test")
         monkeypatch.setenv(f"GIT_{role}_EMAIL", "test@example.com")
+
+
+@pytest.fixture(autouse=True)
+def isolate_timed_checkpoints(tmp_path, monkeypatch):
+    """Test timers cannot survive as future queues into the caller's sessions."""
+    directory = tmp_path / 'timed-checkpoints'
+    monkeypatch.setenv('HANDOFF_TIMER_DIR', str(directory))
+    yield
+    # Workers observe removal under their schedule lock and then exit.
+    for path in directory.glob('*.pending.json'):
+        path.unlink(missing_ok=True)
