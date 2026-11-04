@@ -386,6 +386,25 @@ every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
 
+Immediately before the pending-asks block, print the output's `saved_line`.
+It reads `All saved and pushed` only when every item has a matching record-write
+receipt (including a reused receipt), a drop reason under its filing rule, or an
+ask receipt, and every touched repository is committed and pushed. Otherwise it
+names each kept item and its missing record-write or ask binding. Missing bindings
+warn and pass. With persist unbound it names every unpushed repository under
+`Not pushed:` and says the changes were not pushed; wrap still passes. With
+persist bound, uncommitted or unpushed touched repositories fail wrap. Under
+`Not saved:` it names each failed write, unresolved uncertain write, failed record
+read, pending item without an ask receipt, or repository that failed persistence,
+with its reason. Report and wrap-check use the same saved-state verdict. A native
+step status alone retains its incomplete-report contract; a failed or pending
+filing item without an ask receipt is not saved and fails wrap. The package checks Git
+state itself using the session ledger's touched checkouts and local remote refs;
+a persist step claiming success is not proof of a push.
+
+The saved line is immediately before the asks, even when the wrap fails. Pending
+asks remain the last thing in the report, complete and unabridged.
+
 End every report, attended or unattended, with the output's final `asks` list: every
 ask this run filed or carried, complete text and all choices, with lesson asks
 first. Each lesson includes its target file and section, full proposed text or

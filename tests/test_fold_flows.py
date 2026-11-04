@@ -64,22 +64,25 @@ def engine(user, root, operation, *args, data=None, check=True):
                *args, data=data, check=check)
 
 
-def checkpoint(user, root, source, name='wrapped.json'):
+def checkpoint(user, root, source, name='wrapped.json', expected=0):
     path = user[1] / name
     env = dict(user[2], HANDOFF_PATH=str(path))
     run(env, sys.executable, root / 'scripts/lib/handoff.py', 'checkpoint',
         '--cwd', user[1], '--session-id', 'captured-session', '--trigger', 'wrap', data=source)
-    engine(user, root, 'wrap-check', '--written-handoff', path)
+    checked = engine(user, root, 'wrap-check', '--written-handoff', path, check=False)
+    assert checked.returncode == expected, checked.stderr
     return path
 
 
-def report(user, root, handoff, statuses):
+def report(user, root, handoff, statuses, expected=0):
     rows = [{'id': s, 'status': statuses.get(s, 'run'), 'writes': [],
              'reason': 'explicit fixture outcome', 'error': 'fixture failure' if statuses.get(s) == 'failed' else ''}
             for s in ('record', 'knowledge', 'lessons', 'persist', 'handoff')]
     path = user[1] / 'results.json'
     path.write_text(json.dumps(rows))
-    return json.loads(engine(user, root, 'report', '--handoff', handoff, '--results', path).stdout)
+    result = engine(user, root, 'report', '--handoff', handoff, '--results', path, check=False)
+    assert result.returncode == expected, result.stderr
+    return json.loads(result.stdout)
 
 
 def source(home):
@@ -197,11 +200,12 @@ def test_flow_5_resumed_handoff_reaches_native_steps_and_valid_wrap(user, status
     filing.write_text(json.dumps(rows))
     filed = json.loads(engine(user, root, 'file', '--handoff', path, '--filing', filing).stdout)
     assert filed['resume']['open_loops'] == ([] if status == 'filed' else before['resume']['open_loops'])
-    written = checkpoint(user, root, filed)
+    unsaved = status in ('failed', 'pending')
+    written = checkpoint(user, root, filed, expected=int(unsaved))
     statuses = {'knowledge': 'run' if status == 'filed' else status,
                 'lessons': 'run' if status == 'filed' else 'nothing' if status == 'not configured' else status}
-    result = report(user, root, written, statuses)
-    assert result['report'] == ('incomplete' if status in ('failed', 'declined', 'pending') else 'ok')
+    result = report(user, root, written, statuses, expected=int(unsaved))
+    assert result['report'] == ('failed' if unsaved else 'incomplete' if status == 'declined' else 'ok')
 
 
 def test_flow_6_failed_update_restores_previous_install(user):

@@ -122,11 +122,11 @@ def test_native_lesson_decisions_and_backlog_through_wrap(tmp_path, unattended, 
     (tmp_path / 'profile.json').write_text(json.dumps({'name': 'user'}))
     mode = ['--unattended'] if unattended else []
 
-    def invoke(script, *args, payload=None):
+    def invoke(script, *args, payload=None, expected=0):
         result = subprocess.run([sys.executable, str(ROOT / script), *map(str, args)], env=env,
                                 input=json.dumps(payload) if payload is not None else None,
                                 capture_output=True, text=True)
-        assert result.returncode == 0, result.stderr
+        assert result.returncode == expected, result.stderr
         return json.loads(result.stdout) if result.stdout.startswith('{') else result.stdout
 
     proposal = dict(target_file='rules/evidence.md', section='Verification',
@@ -154,13 +154,14 @@ def test_native_lesson_decisions_and_backlog_through_wrap(tmp_path, unattended, 
         assert carried['choices'] == choices
     invoke('scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path, '--session-id', 'producer',
            '--trigger', 'wrap', payload=picked['handoff'])
-    invoke('scripts/lib/checklist.py', 'wrap-check', '--written-handoff', written, *mode)
+    unsaved = status in ('failed', 'pending')
+    invoke('scripts/lib/checklist.py', 'wrap-check', '--written-handoff', written, *mode, expected=int(unsaved))
     results = tmp_path / 'results.json'
     results.write_text(json.dumps([dict(id=step, status='carried' if step in ('record', 'persist') else 'run', writes=[])
                                   for step in ['record', 'knowledge', 'lessons', 'persist', 'handoff']]))
-    report = invoke('scripts/lib/checklist.py', 'report', '--handoff', written, '--results', results, *mode)
+    report = invoke('scripts/lib/checklist.py', 'report', '--handoff', written, '--results', results, *mode, expected=int(unsaved))
     assert list(report)[-1] == 'asks'
-    assert report['report'] == 'incomplete'
+    assert report['report'] == ('failed' if unsaved else 'incomplete')
     assert report['incomplete'][0]['id'] == 'lessons'
     assert report['filing']['items'][0]['status'] == status
     assert report['filing']['items'][0]['item']['context'] == lesson['context']
@@ -202,7 +203,7 @@ def failed_wrap(tmp_path):
                   proposed_text='Retain every detail.\n' * 100, evidence=['Observed omission.\n' * 100])
     items = [decision, lesson]
     rows = [dict(index=0, rule='R3', status='filed', destination='ask receipt', choices=choices),
-            dict(index=1, rule='R4', status='pending', reason='Approve the lesson', choices=choices)]
+            dict(index=1, rule='R4', status='filed', destination='ask', reason='Approve the lesson', choices=choices)]
 
     def checkpoint():
         source.write_text(json.dumps({'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)},
