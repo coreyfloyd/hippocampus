@@ -25,13 +25,28 @@ tagged and signed but never published (see
   registrations that do not report a source. The installer tests now model the
   CLI's cache, and a test runs the real Claude CLI through the signed-release
   route when it is installed.
+- Session record step: checklist's record step and the new `record` skill
+  (`/hippocampus:record` in Claude Code, `record` in Codex) file session items
+  through per-kind record writes for tickets, projects, documents and scheduled
+  jobs, named by `record_writes` in the user checklist profile
+  ([hippocampus#103](https://github.com/coreyfloyd/hippocampus/issues/103)).
+- Every checkpoint and wrap adds a history entry to the handoff, kept in the
+  session ledger through compaction
+  ([hippocampus#104](https://github.com/coreyfloyd/hippocampus/issues/104)).
+- Every checklist report ends with each filed or carried ask in full, including
+  when the wrap fails
+  ([hippocampus#105](https://github.com/coreyfloyd/hippocampus/issues/105)).
 - Record the v0.13.0 publication in `docs/releases/0.13.0.md` and the
   unpublished 0.13.1 candidate in `docs/releases/0.13.1.md`.
 
 ## Compatibility
 
-Profile version remains 4; no profile field is added or changed. Skill names,
-the Claude `hippocampus:` namespace, and installation paths are unchanged.
+Knowledge profile version remains 4; no knowledge profile field is added or
+changed. The user checklist profile replaces `bindings.record` with
+`record_writes`; a profile that still has `bindings.record` is rejected with
+the replacement shape, and nothing converts it automatically. One skill is
+added, `record`; existing skill names, the Claude `hippocampus:` namespace, and
+installation paths are unchanged.
 Verifying a registered Claude plugin needs the Claude CLI on `PATH`.
 Installs made with the 0.13.0 helpers directly from a checkout leave `current`
 as a directory, which `--verify` rejects; the recovery is in
@@ -76,10 +91,22 @@ installed 0.13.0 by running the helpers from a checkout, see
 [INSTALLATION.md](https://github.com/coreyfloyd/hippocampus/blob/v0.13.2/INSTALLATION.md#earlier-helper-only-checkout-installs)
 to recover.
 
+Session features in this release:
+
+- A new `record` skill files session items through per-kind record writes for
+  tickets, projects, documents and scheduled jobs. Checklist's record step uses
+  the same writes.
+- Every checkpoint and wrap adds a dated history entry to the handoff.
+- Every checklist report ends with each pending ask in full, even when the wrap
+  fails.
+
+If your user checklist profile has `bindings.record`, replace it with
+`record_writes`; checklist rejects the old binding and shows the new shape.
+
 v0.13.1 was tagged but not published; use v0.13.2.
 
-Nothing else changes: skill names, profiles and the knowledge root are
-compatible with 0.13.0.
+Existing skill names, knowledge profiles and the knowledge root are compatible
+with 0.13.0.
 
 ## Publication checklist
 
