@@ -215,6 +215,24 @@ any transfer belongs to the user's own tools.
 
 ### The successor rule
 
+Selecting a handoff copies its history entries, close outcomes, touched tickets,
+and resumed-chain records into the current session's ledger before the command
+returns. It also records the selected handoff, its producing session, and resume
+time, retaining its write time and skeleton marker. Claude Code and Codex use
+the same helper; the current identity comes from `CODEX_THREAD_ID`,
+`CLAUDE_SESSION_ID`, or `CLAUDE_CODE_SESSION_ID`. A standalone inspection without
+an identity has no successor ledger. Listing candidates never copies a chain.
+A copy failure is an error; do not continue as though the chain was saved.
+
+Every later checkpoint, plan, and wrap uses only the successor's own data. The
+selected source file may be deleted. `plan` returns a `handoff` payload from the
+saved snapshot and ledger; use that payload for subsequent filing and settling.
+Passing `plan --handoff` is optional after pickup, but a path that differs from
+the recorded selection fails, even when it names the same producing session.
+A skeleton's earlier entries are copied too. Only pickup, native same-session
+resume, and compaction continue a session; a written brief or pasted prompt
+without pickup starts its own chain. Do not copy earlier history in by hand.
+
 The session running pickup is the **successor**; the session whose handoff it selected is the **resumed session**. Keep carried items' original session identity. Session-bound contracts such as pending approvals, pending replies, granted scopes, and any other record keyed by session id may also need transfer. Pickup makes no record writes; any transfer of session-bound contracts is left to the user's own tools. Listing candidates does not select a session.
 
 ## Distinct from `/hippocampus:wip`

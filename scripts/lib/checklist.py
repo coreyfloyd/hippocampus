@@ -888,6 +888,7 @@ def wrap_check(plan: Sequence[Mapping[str, Any]], handoff_path: Path,
     data = handoff.read_json(str(handoff_path)) if not problems else {}
     if data.get("skeleton") is True:
         failures.append("handoff invalid: wrap requires a real history entry; stop handoff is a skeleton")
+    failures.extend(handoff.missing_chain_facts(data))
     filing_failures, _ = filing_check(plan, data, ask)
     failures.extend(filing_failures)
     record = next(step for step in plan if step.get("id") == "record")
@@ -965,9 +966,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         profiles = load_profiles(args.user_profile, args.repository_profile)
         plan = compose(profiles)
         ask = ask_binding(profiles[0]) if args.user_profile else None
-        handoff = json.loads(args.handoff.read_text()) if args.handoff else {}
+        module = _load_handoff_module()
+        session_id = args.session_id or module.ambient_session_id()
+        recorded = module.resumed_handoff(session_id) if args.operation == "plan" else None
+        if recorded and args.handoff and str(args.handoff.resolve()) != recorded["handoff"]:
+            raise ValueError(f"plan: recorded resumed handoff {recorded['handoff']} disagrees with {args.handoff}")
+        handoff = recorded["data"] if recorded else (json.loads(args.handoff.read_text()) if args.handoff else {})
         if not isinstance(handoff, dict):
             raise ValueError("handoff must be an object")
+        if args.operation == "plan" and session_id:
+            resume = dict(handoff.get("resume", {}))
+            resume.update(module.ticket_facts({}, session_id))
+            resume["session_history"] = [row["entry"] for row in module._ledger_records(module.ledger_path(session_id))
+                                         if row.get("kind") == "history_entry"]
+            resume["resumed_chain"] = module.resumed_chain(session_id)
+            handoff = dict(handoff, resume=resume, subject={
+                "session_id": session_id, "working_directory": str(Path.cwd())})
         if args.operation == "plan":
             session_id = args.session_id or _load_handoff_module().ambient_session_id()
             if session_id:
@@ -985,7 +999,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         step["unattended"] = args.unattended
             output = {"profiles": [str(path) for path in paths], "unattended": args.unattended, "steps": plan,
                       "record_read": record_read_binding(profiles[0]) if args.user_profile else None,
-                      "ask": ask, "rerun_all_steps": True}
+                      "ask": ask, "rerun_all_steps": True, "handoff": handoff}
             if args.unattended:
                 output["when_answer_needed"] = UNATTENDED_RULE
         elif args.operation in ("file", "record"):

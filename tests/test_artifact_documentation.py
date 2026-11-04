@@ -121,6 +121,8 @@ def test_profile_loads_and_plan_recomposes(tmp_path):
                                 "--handoff", EXAMPLES / "handoff.json",
                                 "--session-id", "example-session", env=sandbox_env(tmp_path)))
     actual["profiles"] = ["docs/examples/profile.md"]
+    assert actual["handoff"]["subject"]["working_directory"] == str(Path.cwd())
+    actual["handoff"]["subject"]["working_directory"] = "/workspace/example-repo"
     assert actual == json.loads((EXAMPLES / "plan.json").read_text())
 
 

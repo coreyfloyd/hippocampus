@@ -361,6 +361,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     if not isinstance(data, dict):
         return ["handoff must be a JSON object"], warnings
+    if not isinstance(data.get("written_at"), str) or not _valid_history_time(data["written_at"]):
+        problems.append("written_at must be an ISO timestamp with timezone")
     version = data.get("schema_version")
     if version not in (1, 2):
         problems.append(f"schema_version is {version!r}, expected 1 or 2")
@@ -371,8 +373,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         else:
             if not isinstance(subject.get("working_directory"), str) or not subject["working_directory"]:
                 problems.append("schema_version 2 requires subject.working_directory")
-            if not isinstance(subject.get("session_id"), str):
-                problems.append("schema_version 2 requires subject.session_id")
+            if not isinstance(subject.get("session_id"), str) or not subject["session_id"].strip():
+                problems.append("schema_version 2 requires subject.session_id to be a non-empty string")
         git = data.get("git")
         if not isinstance(git, dict):
             problems.append("schema_version 2 requires a git block")
@@ -397,6 +399,16 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         validate_ticket_facts(resume)
     except (ValueError, TypeError) as error:
         problems.append(str(error))
+    chain = resume.get("resumed_chain", [])
+    if not isinstance(chain, list):
+        problems.append("resume.resumed_chain must be an array")
+    else:
+        for index, row in enumerate(chain):
+            if not isinstance(row, dict) or any(not isinstance(row.get(key), str) or not row[key].strip()
+                                                for key in ("handoff", "session_id", "resumed_at")):
+                problems.append(f"resumed_chain[{index}] requires handoff, session_id, and resumed_at")
+            elif not _valid_history_time(row["resumed_at"]):
+                problems.append(f"resumed_chain[{index}].resumed_at must be an ISO timestamp with timezone")
     summary = resume.get("session_summary")
     if summary is not None and (not isinstance(summary, str) or not summary.strip() or "\n" in summary or "\r" in summary):
         problems.append("resume.session_summary must be a non-empty one-line string")
@@ -498,6 +510,73 @@ def lint_output(path: str) -> tuple[int, str]:
         return 1, "\n".join(lines) + "\n"
     lines.append("lint-handoff: clean" + ("" if not warnings else f" (with {len(warnings)} warning(s))"))
     return 0, "\n".join(lines) + "\n"
+
+
+def _valid_history_time(value: Any) -> bool:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).tzinfo is not None
+    except ValueError:
+        return False
+
+
+def resumed_handoff(session_id: str) -> dict[str, Any] | None:
+    """The selected handoff snapshot, held only in this session's ledger."""
+    return next((row for row in reversed(_ledger_records(ledger_path(session_id)))
+                 if row.get("kind") == "resumed_handoff"), None) if session_id else None
+
+
+def resumed_chain(session_id: str) -> list[dict[str, Any]]:
+    return [row["record"] for row in _ledger_records(ledger_path(session_id))
+            if row.get("kind") == "resumed_chain"] if session_id else []
+
+
+def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
+    """Copy the complete chain before pickup returns; retries add nothing twice."""
+    if not session_id:
+        return  # A standalone inspection has no successor to write to.
+    problems, _ = lint_data(data)
+    if problems:
+        raise ValueError("pickup: invalid handoff: " + "; ".join(problems))
+    selected = str(Path(path).resolve())
+    previous = resumed_handoff(session_id)
+    if previous:
+        if previous["handoff"] != selected:
+            raise ValueError(f"pickup: session already recorded resumed handoff {previous['handoff']}; got {selected}")
+        return
+    if data["subject"]["session_id"] == session_id:
+        return  # Native same-session continuation already owns its ledger.
+    resume = data["resume"]
+    chain = list(resume.get("resumed_chain", []))
+    chain.append({"handoff": selected, "session_id": data["subject"]["session_id"],
+                  "resumed_at": utc_now(), "skeleton": data.get("skeleton", False),
+                  "written_at": data["written_at"]})
+    rows = [{"kind": "history_entry", "entry": entry}
+            for entry in resume.get("session_history", [])]
+    rows += [{"kind": "close_outcome", "outcome": outcome}
+             for outcome in resume.get("close_outcomes", [])]
+    rows += [{"kind": "touched_ticket", "ticket": ticket}
+             for ticket in resume.get("touched_tickets", [])]
+    rows += [{"kind": "resumed_chain", "record": record} for record in chain]
+    rows.append({"kind": "resumed_handoff", "handoff": selected, "data": data})
+    existing = _ledger_records(ledger_path(session_id))
+    rows = [row for row in rows if row not in existing]
+    target = Path(ledger_path(session_id))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
+
+
+def missing_chain_facts(data: Mapping[str, Any]) -> list[str]:
+    """Validate final coverage against the successor's own ledger, never a source file."""
+    session_id = data.get("subject", {}).get("session_id", "")
+    resume = data.get("resume", {})
+    failures = []
+    for row in _ledger_records(ledger_path(session_id)) if session_id else []:
+        if row.get("kind") == "history_entry" and row["entry"] not in resume.get("session_history", []):
+            failures.append("missing history entry: " + json.dumps(row["entry"], ensure_ascii=False))
+        elif row.get("kind") == "close_outcome" and row["outcome"] not in resume.get("close_outcomes", []):
+            failures.append("missing close outcome: " + json.dumps(row["outcome"], ensure_ascii=False))
+    return failures
 
 
 def ticket_facts(resume: Mapping[str, Any], session_id: str) -> dict[str, list]:
@@ -605,11 +684,19 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
         except (ValueError, TypeError):
             # Like other malformed input, preserve it for post-write lint.
             pass
+        resume["resumed_chain"] = resumed_chain(session_id)
         history = resume.get("session_history", [])
         if isinstance(history, list):
             retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))
                         if row.get("kind") == "history_entry" and isinstance(row.get("entry"), dict)]
-            history = retained + [row for row in history if row not in retained]
+            # Foreign valid entries enter only through pickup. Preserve malformed
+            # input for the existing post-write lint contract.
+            history = retained + [row for row in history if row not in retained and (
+                not isinstance(row, dict) or not isinstance(row.get("session_id"), str)
+                or not row.get("session_id", "").strip()
+                or row.get("session_id") == session_id
+                or not real_history_text(row.get("summary"))
+                or not _valid_history_time(row.get("produced_at")))]
             text = resume.get("session_summary")
             if trigger == "stop":
                 resume.pop("session_summary", None)
