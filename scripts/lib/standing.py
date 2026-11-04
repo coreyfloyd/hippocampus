@@ -301,8 +301,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 path = state_path(agent_name(args.agent))
                 if not os.path.isfile(path):
                     return 0
-                sys.stdout.write(json.dumps(handoff.read_json(path)) + "\n")
-                return 0
+                data = handoff.read_json(path)
+                problems, _ = lint_data(data)
+                sys.stdout.write(json.dumps(data) + "\n")
+                return 1 if problems else 0
             code, text = read(agent_name(args.agent))
             sys.stdout.write(text)
             return code
