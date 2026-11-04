@@ -78,3 +78,19 @@ Report that failure; do not imply the handoff is clean.
 Close outcomes and touched tickets are also recovered from the session ledger
 into `resume.close_outcomes` and `resume.touched_tickets`. Preserve those facts
 unchanged; never reconstruct milestone or epic state during checkpoint.
+
+When `HIPPOCAMPUS_AGENT` names an agent, also write that agent's standing state, which
+the next session and every scheduled run of the agent read. Pipe the update (changed
+`resume` fields, changed `standing` fields, and `session_items`) to the standing engine,
+`scripts/lib/standing.py` in the package (two directories above this skill's real
+directory):
+
+```bash
+python3 <package>/scripts/lib/standing.py write --trigger checkpoint <<'JSON'
+<standing update JSON>
+JSON
+```
+
+Mark an open loop `recorded: true` once the filing rules have put it in the record; the
+write drops it. Leave standing fields out to keep them. A refused write leaves the stored
+standing state unchanged; report the refusal. See interface section 13.
