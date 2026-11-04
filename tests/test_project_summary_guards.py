@@ -44,12 +44,16 @@ else:
                          'touched_tickets': ['example/project#7'], 'open_loops': [item]}}
     good = {'status': 'read', 'tickets': [{'ticket': 'example/project#7', 'state': 'open'}]}
 
-    def run(data, ticket_response):
+    def run(data, ticket_response, *, tickets_bound=True, operation="file"):
+        settings = json.loads(profile.read_text())
+        if not tickets_bound:
+            settings["record_writes"].pop("tickets", None)
+        profile.write_text(json.dumps(settings))
         response.write_text(json.dumps(ticket_response))
         handoff, filing = tmp_path / 'source.json', tmp_path / 'filing.json'
         handoff.write_text(json.dumps(data))
         filing.write_text(json.dumps([{'index': 0, 'rule': 'R2', 'status': 'filed', 'read_status': 'ok'}]))
-        result = cli('scripts/lib/checklist.py', 'file', '--user-profile', profile,
+        result = cli('scripts/lib/checklist.py', operation, '--user-profile', profile,
                      '--handoff', handoff, '--filing', filing)
         return result, json.loads(result.stdout)
 
@@ -103,3 +107,46 @@ def test_new_close_outcome_requires_agent_rewrite_before_project_write(project_r
     assert [r['operation'] for r in project_calls] == ['lookup', 'write']
     assert all(r['session_summary'] == revised for r in project_calls)
     assert all(r['close_outcomes'] == saved['resume']['close_outcomes'] for r in project_calls)
+
+
+@pytest.mark.parametrize('summary', [None, '', ' \t\n', 42, 'missing'])
+@pytest.mark.parametrize('operation', ['file', 'record'])
+@pytest.mark.parametrize('tickets_bound', [False, True])
+def test_project_requires_summary_before_lookup_or_write(project_run, summary, operation, tickets_bound):
+    run, source, good, calls = project_run
+    if summary == 'missing':
+        source['resume'].pop('session_summary')
+    else:
+        source['resume']['session_summary'] = summary
+    result, retained = run(source, good, tickets_bound=tickets_bound, operation=operation)
+    assert result.returncode == 1
+    assert retained['resume']['open_loops'] == source['resume']['open_loops']
+    assert retained['filing']['items'][0]['status'] == 'pending'
+    assert 'write a nonempty session summary' in retained['filing']['items'][0]['error']
+    observed = list(map(json.loads, calls.read_text().splitlines())) if calls.exists() else []
+    assert all(r['kind'] != 'projects' for r in observed)
+    retained['resume']['session_summary'] = 'Implemented session history for example/project#7.'
+    retried, saved = run(retained, good, tickets_bound=tickets_bound, operation=operation)
+    assert retried.returncode == 0, retried.stderr
+    assert saved['resume']['open_loops'] == []
+
+
+@pytest.mark.parametrize('tickets_bound', [False, True])
+def test_project_profile_explicitly_uses_reread_or_stored_outcomes(project_run, tickets_bound):
+    run, source, good, calls = project_run
+    stored = {'kind': 'epic', 'title': 'Session history', 'state': 'closed',
+              'done': 1, 'total': 1, 'triggering_ticket': 'example/project#7',
+              'produced_at': '2026-11-01T12:00:00Z'}
+    source['resume']['close_outcomes'] = [stored]
+    response = good if tickets_bound else {'status': 'failed', 'error': 'Must not be called'}
+    result, saved = run(source, response, tickets_bound=tickets_bound)
+    assert result.returncode == 0, result.stderr
+    assert saved['resume']['open_loops'] == []
+    assert saved['filing']['ticket_read']['status'] == ('read' if tickets_bound else 'unbound')
+    requests = list(map(json.loads, calls.read_text().splitlines()))
+    expected = [('tickets', 'read')] if tickets_bound else []
+    assert [(r['kind'], r['operation']) for r in requests] == expected + [
+        ('projects', 'lookup'), ('projects', 'write')]
+    for request in requests[-2:]:
+        assert request['close_outcomes'] == [stored]
+        assert request['session_summary'] == source['resume']['session_summary']

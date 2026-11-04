@@ -147,7 +147,9 @@ Note the UTC time the record step finishes for the freshness check when writes
 are configured. Run it again at wrap with the same identities; existing receipts
 are reused without another write. At wrap use `file`: it re-reads only the
 session's touched tickets (including carried references) through the tickets
-record write and records any closed ticket's missing close outcomes. No other
+record write, when bound, and records any closed ticket's missing close outcomes.
+When tickets is unbound, no reread runs: stored close outcomes are the complete
+known set, and a projects-only profile can write project history using them. No other
 ticket, milestone, or epic is queried. See record's ticket-state contract.
 Record every ticket read, changed, or closed with `ledger-ticket` as it happens;
 close outcomes and touched tickets live in the ledger through compaction.
@@ -285,8 +287,11 @@ items through `file` after composing the summary. Retain `resume.touched_project
 `anchor.project` references are added automatically. Every projects lookup and
 write receives `session_summary`, `close_outcomes`, and `touched_projects` from
 the payload, outside the immutable item identity. Project writes run after ticket
-writes and the touched-ticket read. A failed or malformed reread keeps every
-project item pending without calling its lookup or write. If new close outcomes
+writes and, when tickets is bound and touched tickets exist, a successful
+touched-ticket read. With tickets unbound, use the stored close outcomes without
+a reread. A failed or malformed required reread keeps every project item pending
+without calling its lookup or write. A missing, null, or blank session summary
+also keeps the item pending: write a nonempty summary before retrying. If new close outcomes
 arrive after summary composition, project items also remain pending: rewrite the
 session summary and retry with the retained items and their unchanged identities.
 The payload's `resume.summary_rewrite_required` retains the stale summary until

@@ -93,6 +93,15 @@ from the session ledger, beside `resume.session_history[]` and
 for the current write and the complete `resume.session_summary` for the report.
 Projects lookups and writes receive `session_summary`, `close_outcomes`, and
 `touched_projects` as additional request fields outside the item identity.
+Project items remain pending without a lookup or write when the session summary
+is missing, null, or blank; the agent must write a nonempty summary and retry.
+At wrap, when a tickets record write is bound and touched tickets exist, their
+reread must succeed before project lookup or write. A failed or malformed reread
+keeps project items pending. With no tickets record write bound, no reread runs:
+stored close outcomes are the complete known set, and a projects-only profile
+proceeds with those outcomes and the supplied summary. The filing result records
+`ticket_read.status` as `unbound` for that case, `not_needed` when there are no
+touched tickets, or `read` after a successful reread.
 A close outcome holds
 `kind` (milestone or epic), `title`, `state` (open or closed), integer `done` and
 `total`, `triggering_ticket`, and timezone-qualified `produced_at`. A touched

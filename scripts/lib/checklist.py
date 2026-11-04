@@ -423,7 +423,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         binding = writes.get("tickets")
         result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
         tickets = result["resume"].get("touched_tickets", [])
-        if tickets and binding:
+        if not binding:
+            # Projects may be configured independently: the ledger is the complete
+            # known outcome set when no ticket store can be queried.
+            report["ticket_read"] = {"status": "unbound", "tickets": tickets}
+        elif not tickets:
+            report["ticket_read"] = {"status": "not_needed", "tickets": []}
+        else:
             try:
                 response = record_write.invoke(binding, {"operation": "read", "kind": "tickets", "tickets": tickets})
                 states = response.get("tickets")
@@ -494,12 +500,14 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 if binding == "projects":
                     refresh_tickets()
                     resume = result["resume"]
-                    if report.get("ticket_read", {}).get("status") == "failed":
+                    if reread_tickets and report.get("ticket_read", {}).get("status") not in (
+                            "read", "unbound", "not_needed"):
                         project_error = "ticket reread failed; retry before writing project history"
+                    elif (not isinstance(resume.get("session_summary"), str)
+                          or not resume["session_summary"].strip()):
+                        project_error = "write a nonempty session summary before retrying project history"
                     elif ("summary_rewrite_required" in resume
-                          and (not isinstance(resume.get("session_summary"), str)
-                               or not resume["session_summary"].strip()
-                               or resume["summary_rewrite_required"] == resume["session_summary"])):
+                          and resume["summary_rewrite_required"] == resume["session_summary"]):
                         project_error = "new close outcomes: rewrite the session summary before retrying project history"
                     else:
                         resume.pop("summary_rewrite_required", None)
