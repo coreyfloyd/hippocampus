@@ -266,7 +266,8 @@ Location: `session-touched-paths.<URL-encoded-session-id>.jsonl` in the resolved
 ledger directory. The tool hook writes observations and file entries;
 `python3 scripts/lib/handoff.py ledger-file` registers shell-driven edits,
 `ledger-artifact` registers published artifacts, and checklist `plan` appends its
-start marker. Every checkpoint and wrap appends its dated history entry;
+start marker. `ledger-ticket` registers ticket reads, changes, and closes; the
+ticket record write adds close outcomes as it reports them. Every checkpoint and wrap appends its dated history entry;
 automatic stop handoffs read earlier entries without adding one. Checkpoint and
 the stop and wrap checks read the ledger next.
 [Captured ledger](examples/ledger.jsonl).
@@ -285,6 +286,13 @@ ledger JSONL                          # one JSON object per line
 ├── history entry
 │   └── kind, entry
 │       # kind=history_entry; entry holds session_id, produced_at, summary
+├── touched ticket
+│   └── kind, ticket, ts
+│       # kind=touched_ticket; stable ticket reference; UTC observation time
+├── close outcome
+│   └── kind, outcome
+│       # kind=close_outcome; milestone/epic title, state, done, total,
+│       # triggering_ticket, produced_at; retained through compaction
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start
@@ -365,7 +373,7 @@ their directory when no ask binding can save them; keep their handoff.
 Location: a file named by the bound record, passed to checklist `report --summary`.
 The package does **not** compose it. After its ticket step, a bound record
 composes it from final ticket outcomes and writes each project's durable history
-to its record. The checklist report starts with that summary unedited. There is
+to its record. The checklist report starts with a stored close-outcome line, followed by that summary unedited. There is
 no example because the bound record writes it, not the package.
 
 ```text
@@ -373,6 +381,7 @@ bound record's summary text           # binding-defined format, not a package JS
 └── each project's goal, shipped work, follow-up tickets, and decisions
 
 report command output                 # JSON on stdout, checked by the reporting session
+├── outcome_line                      # stored milestone/epic outcomes, or explicit none
 ├── summary                           # unedited file text, or null
 ├── summary_unavailable               # reason when no summary was composed
 ├── report                            # ok, incomplete, or failed

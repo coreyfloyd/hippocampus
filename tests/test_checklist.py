@@ -764,7 +764,7 @@ class ChecklistTests(unittest.TestCase):
             unavailable = ["--no-summary", "session summary unavailable: HTTP 502", "--handoff", str(written)]
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout), {"summary": None, "summary_unavailable": "session summary unavailable: HTTP 502",
+            self.assertEqual(json.loads(result.stdout), {"outcome_line": "No milestone or epic closed or moved this session.", "summary": None, "summary_unavailable": "session summary unavailable: HTTP 502",
                                                          "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
                                                          "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "asks": []})
             path.write_text(json.dumps(wrote))
@@ -772,8 +772,8 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("checklist: report invalid: knowledge: a pending step writes nothing", result.stderr)
 
-    def test_report_starts_with_the_session_summary(self):
-        """The record binding composes the session summary; the report leads with it."""
+    def test_report_starts_with_outcome_then_session_summary(self):
+        """Stored close outcomes lead the report, before the existing summary."""
         user = ["--user-profile", str(PROFILES / "user.md")]
         plan = self.engine.compose([self.engine.load_profile(PROFILES / "user.md")])
         results = [{"id": step["id"], "status": "run", "writes": []} for step in plan]
@@ -792,7 +792,7 @@ class ChecklistTests(unittest.TestCase):
             result = report("--summary", str(summary))
             self.assertEqual(result.returncode, 0, result.stderr)
             output = json.loads(result.stdout)
-            self.assertEqual(list(output)[0], "summary")
+            self.assertEqual(list(output)[:2], ["outcome_line", "summary"])
             self.assertEqual(output["summary"], text)
 
             missing = report()
@@ -802,7 +802,7 @@ class ChecklistTests(unittest.TestCase):
             self.assertIn('--no-summary "/hippocampus:record composed no session summary"', missing.stderr)
             older = report("--no-summary", "/hippocampus:record composed no session summary")
             self.assertEqual(older.returncode, 0, older.stderr)
-            self.assertEqual(list(json.loads(older.stdout))[:2], ["summary", "summary_unavailable"])
+            self.assertEqual(list(json.loads(older.stdout))[:3], ["outcome_line", "summary", "summary_unavailable"])
 
             both = report("--summary", str(summary), "--no-summary", "why")
             self.assertEqual(both.returncode, 1)

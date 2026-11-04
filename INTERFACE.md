@@ -66,6 +66,7 @@ returned, so a broken hook never blocks a session.
 | `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from the required authored `resume.session_summary`, retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
 | `write PATH` | Low-level atomic write. Refuses a payload that fails the lint. |
 | `lint [PATH] [--session-id ID]` | Validate a handoff. `scripts/lint-handoff.sh` is a thin adapter over this command. |
+| `ledger-ticket --ticket T --session-id ID` | Record a ticket the session read, changed, or closed. |
 | `ledger-file PATH --cwd D --session-id ID` | Record a file a shell-driven edit changed. |
 | `ledger-artifact --location L --disposition keep\|remove [--status pending\|recorded\|removed] --session-id ID --cwd D` | Record, link, or retire a published artifact. The one command any publishing tool calls. |
 | `is-interactive [JSON]` | Exit 0 for an interactive session, 1 for a headless entry point or a subagent (`agent_id` in the payload). |
@@ -85,6 +86,15 @@ characters), `disposition`, the producing `session_id`, and `produced_at`. A dec
 has `author` and `location`; an artifact has `location` and a `keep` or `remove`
 disposition. An item carried in a handoff keeps its producer's identity and date until a
 slot binding consumes it.
+
+Checkpoint also retains `resume.close_outcomes[]` and `resume.touched_tickets[]`
+from the session ledger, beside `resume.session_history[]`. A close outcome holds
+`kind` (milestone or epic), `title`, `state` (open or closed), integer `done` and
+`total`, `triggering_ticket`, and timezone-qualified `produced_at`. A touched
+ticket is a stable reference string. The shared ticket record-write contract,
+including the wrap-only read of exactly these tickets, is defined in
+[record](skills/record/SKILL.md#ticket-reads-and-close-outcomes).
+Checklist report emits `outcome_line` first, built only from these stored facts.
 
 ## 4. Pickup: `scripts/pickup.sh`
 

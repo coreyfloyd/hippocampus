@@ -175,7 +175,7 @@ def test_shipped_sources_use_only_the_current_lessons_skill_name():
 # Assemble the prohibited vocabulary so this guard does not match itself.
 RECORD_CONVENTIONS = re.compile(
     r'\b' + 'g' + r'h\b|claim[\s-]+comment\b|claim[\s-]+comments\b|'
-    + 'host' + r'/|\b' + 'mile' + r'stones?\b|\b' + 'ep' + r'ics?\b', re.I)
+    + 'host' + r'/', re.I)
 
 
 def convention_hits(root):
@@ -195,6 +195,7 @@ def convention_hits(root):
 def test_shipped_files_contain_no_external_record_conventions():
     # The session package must stay record-provider neutral. Knowledge research
     # and the release runbook legitimately describe concrete provider commands.
+    # Milestone and epic are provider-neutral close-outcome kinds in the spec.
     session_roots = ['hooks', 'scripts/lib', 'docs/sweep.md', 'INTERFACE.md',
                      'docs/session-guide.md', 'docs/session-installation.md']
     session_roots += ['skills/' + name for name in (
@@ -209,7 +210,7 @@ def test_shipped_files_contain_no_external_record_conventions():
 
 
 @pytest.mark.parametrize('term', ['g' + 'h', 'claim ' + 'comments', 'claim-' + 'comment',
-                                  'host' + '/example', 'mile' + 'stone', 'ep' + 'ic'])
+                                  'host' + '/example'])
 def test_record_convention_guard_detects_new_shipped_content(tmp_path, term):
     path = tmp_path / 'new.md'
     path.write_text(term)

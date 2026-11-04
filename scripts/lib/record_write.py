@@ -87,11 +87,15 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
         key = identity(item)
         request = {'operation': 'lookup', 'kind': kind, 'identity': key, 'item': item, 'filing': row}
         found = invoke(binding, request)
+        if kind == 'tickets' and 'tickets' in found:
+            output['tickets'] = found['tickets']
         if found.get('status') == 'found':
             saved = receipt(found, key)
         elif found == {'status': 'not_found'}:
             phase = 'write'
             response = invoke(binding, {**request, 'operation': 'write'})
+            if kind == 'tickets' and 'tickets' in response:
+                output['tickets'] = response['tickets']
             if response.get('status') != 'saved':
                 raise ValueError('write ended without a usable receipt')
             saved = receipt(response, key)

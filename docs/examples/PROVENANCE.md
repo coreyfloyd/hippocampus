@@ -4,7 +4,11 @@ Captured on 2026-10-14 with the package engines at base `73d7497`.
 `handoff.json`, `ledger.jsonl`, and `plan.json` are command outputs from one
 temporary sandbox session, not hand-authored examples. Only path redaction was
 applied. Timestamps, commit hashes, field names, values, ordering, and formatting
-otherwise remain those emitted by the engines.
+otherwise remain those emitted by the engines. On 2026-11-03, the handoff
+example gained the empty `resume.close_outcomes` and `resume.touched_tickets`
+arrays now emitted by checkpoint. Its full structure is verified against a
+fresh sandbox capture by `test_handoff_example_round_trips_through_checkpoint`;
+the other captured values remain from the original capture.
 
 `profile.md` and `config.json` are **validated inputs**, not captured outputs:
 the package reads these files and has no command that generates them. The profile

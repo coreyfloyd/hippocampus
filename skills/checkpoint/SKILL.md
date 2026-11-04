@@ -74,3 +74,7 @@ JSON
 
 If lint fails, the checkpoint was still written and the command reports the lint failure.
 Report that failure; do not imply the handoff is clean.
+
+Close outcomes and touched tickets are also recovered from the session ledger
+into `resume.close_outcomes` and `resume.touched_tickets`. Preserve those facts
+unchanged; never reconstruct milestone or epic state during checkpoint.
