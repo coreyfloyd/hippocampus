@@ -555,15 +555,22 @@ def record_ticket_states(session_id: str, states: list[dict[str, Any]],
         record_ticket(session_id, ticket)
         if ticket not in facts["touched_tickets"]:
             facts["touched_tickets"].append(ticket)
-        if state["state"] != "closed" or any(o["triggering_ticket"] == ticket for o in facts["close_outcomes"]):
+        if state["state"] != "closed":
             continue
         rows = state.get("close_outcomes")
         if not isinstance(rows, list):
             raise ValueError("closed ticket requires close_outcomes (empty when none)")
-        outcomes = [{**row, "triggering_ticket": ticket, "produced_at": state.get("closed_at") or utc_now()}
+        stamp = state.get("closed_at") or utc_now()
+        outcomes = [{**row, "triggering_ticket": ticket, "produced_at": stamp}
                     for row in rows]
         validate_ticket_facts({"close_outcomes": outcomes})
         for outcome in outcomes:
+            # Validate the complete response before deduplicating individual facts.
+            # A repeated observation keeps its first recorded time.
+            fields = ("kind", "title", "state", "done", "total", "triggering_ticket")
+            if any(all(stored[key] == outcome[key] for key in fields)
+                   for stored in facts["close_outcomes"]):
+                continue
             append_ledger(session_id, {"kind": "close_outcome", "outcome": outcome})
             facts["close_outcomes"].append(outcome)
     return facts

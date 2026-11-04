@@ -111,8 +111,12 @@ It re-reads only those tickets, including any references carried in the handoff.
 Return the milestone and epic state already reported with each ticket; do not
 query any other ticket, milestone, or epic. A failed or malformed read fails
 wrap and retains the handoff. `record` alone does not do this wrap re-read.
-A closed ticket with missing close outcomes adds them; an already recorded
-close is not duplicated or replaced. With no touched tickets no read is made.
+Every closed-ticket response must supply a valid `close_outcomes` array, even
+when that ticket already has stored outcomes. Both a reported close and a wrap
+re-read validate all returned outcomes before adding any of them. Individual
+outcomes matching the same triggering ticket, kind, title, state, done, and total
+are reused with their original time; distinct outcomes are added, including for
+an already-recorded ticket. With no touched tickets no read is made.
 
 The report's first field, `outcome_line`, is composed only from stored close
 outcomes. With none it is exactly: "No milestone or epic closed or moved this

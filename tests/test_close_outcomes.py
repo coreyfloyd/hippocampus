@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -204,3 +206,55 @@ def test_reported_close_survives_missing_write_receipt(tmp_path):
     assert json.loads(result.stdout)['filing']['items'][0]['status'] == 'uncertain'
     saved = checkpoint(tmp_path, setup(tmp_path)[1])
     assert len(saved['resume']['close_outcomes']) == 2
+
+
+@pytest.mark.parametrize('operation', ['record', 'file'])
+@pytest.mark.parametrize('malformed', ["state.pop('close_outcomes')",
+                                       "state['close_outcomes'] = None",
+                                       "state['close_outcomes'] = [{'kind': 'invalid'}]"])
+def test_existing_close_does_not_bypass_response_validation(tmp_path, operation, malformed):
+    profile, source = setup(tmp_path)
+    source['resume']['touched_tickets'] = ['https://github.com/example/project/issues/7']
+    initial = record(tmp_path, profile, source, operation='file')
+    assert initial.returncode == 0, initial.stderr
+    previous = json.loads(initial.stdout)['resume']['close_outcomes']
+    stub = tmp_path / 'store.py'
+    stub.write_text(stub.read_text().replace("if r['operation'] == 'read':", malformed + "\nif r['operation'] == 'read':"))
+    source['session_items'] = [{'type': 'progress', 'context': 'Record the ticket close again.',
+        'session_id': 'session', 'produced_at': '2026-11-01T13:00:00Z', 'disposition': 'record'}]
+    rows = [{'index': 0, 'rule': 'R2', 'status': 'filed', 'read_status': 'ok'}] if operation == 'record' else []
+    if operation == 'file':
+        source.pop('session_items')
+    result = record(tmp_path, profile, source, operation=operation, rows=rows)
+    assert result.returncode == 1
+    assert 'close' in ' '.join(json.loads(result.stdout)['filing']['failures'])
+    saved = checkpoint(tmp_path, setup(tmp_path)[1])
+    assert saved['resume']['close_outcomes'] == previous
+
+
+@pytest.mark.parametrize('operation', ['record', 'file'])
+def test_existing_ticket_keeps_new_individual_outcome_without_repeating_old_ones(tmp_path, operation):
+    profile, source = setup(tmp_path)
+    source['resume']['touched_tickets'] = ['https://github.com/example/project/issues/7']
+    initial = record(tmp_path, profile, source, operation='file')
+    assert initial.returncode == 0, initial.stderr
+    previous = json.loads(initial.stdout)['resume']['close_outcomes']
+    stub = tmp_path / 'store.py'
+    addition = "state['close_outcomes'].extend([state['close_outcomes'][0], " + repr({
+        'kind': 'epic', 'title': 'Follow-up', 'state': 'open', 'done': 1, 'total': 2}) + "])"
+    stub.write_text(stub.read_text().replace("if r['operation'] == 'read':", addition + "\nif r['operation'] == 'read':"))
+    source['session_items'] = [{'type': 'progress', 'context': 'Record a further outcome for the ticket.',
+        'session_id': 'session', 'produced_at': '2026-11-01T13:00:00Z', 'disposition': 'record'}]
+    rows = [{'index': 0, 'rule': 'R2', 'status': 'filed', 'read_status': 'ok'}] if operation == 'record' else []
+    if operation == 'file':
+        source.pop('session_items')
+    for _ in range(2):
+        result = record(tmp_path, profile, source, operation=operation, rows=rows)
+        assert result.returncode == 0, result.stderr
+        outcomes = json.loads(result.stdout)['resume']['close_outcomes']
+        assert outcomes[:2] == previous
+        assert len(outcomes) == 3
+        assert outcomes[2]['title'] == 'Follow-up'
+    saved = checkpoint(tmp_path, setup(tmp_path)[1])
+    assert saved['resume']['close_outcomes'] == outcomes
+    assert 'Follow-up' in report(tmp_path, saved)['outcome_line']
