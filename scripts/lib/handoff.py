@@ -397,6 +397,7 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         loops = []
     try:
         validate_ticket_facts(resume)
+        project_references(resume)
     except (ValueError, TypeError) as error:
         problems.append(str(error))
     chain = resume.get("resumed_chain", [])
@@ -595,6 +596,13 @@ def ticket_facts(resume: Mapping[str, Any], session_id: str) -> dict[str, list]:
     return {"touched_tickets": tickets, "close_outcomes": outcomes}
 
 
+def project_references(resume: Mapping[str, Any]) -> list[str]:
+    projects = resume.get("touched_projects", [])
+    if not isinstance(projects, list) or any(not isinstance(p, str) or not p.strip() for p in projects):
+        raise ValueError("touched_projects must be an array of non-empty project references")
+    return list(projects)
+
+
 def validate_ticket_facts(resume: Mapping[str, Any]) -> None:
     tickets = resume.get("touched_tickets", [])
     if not isinstance(tickets, list) or any(not isinstance(t, str) or not t.strip() for t in tickets):
@@ -687,12 +695,15 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
             # Like other malformed input, preserve it for post-write lint.
             pass
         resume["resumed_chain"] = resumed_chain(session_id)
-        projects = list(resume.get("touched_projects", []))
-        for fact in _ledger_records(ledger_path(session_id)) if session_id else []:
-            if fact.get("kind") == "touched_project" and fact["project"] not in projects:
-                projects.append(fact["project"])
-        if projects:
-            resume["touched_projects"] = projects
+        try:
+            projects = project_references(resume)
+            for fact in _ledger_records(ledger_path(session_id)) if session_id else []:
+                if fact.get("kind") == "touched_project" and fact["project"] not in projects:
+                    projects.append(fact["project"])
+            if projects:
+                resume["touched_projects"] = projects
+        except ValueError:
+            pass  # Preserve malformed input for the post-write contract check.
         history = resume.get("session_history", [])
         if isinstance(history, list):
             retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))

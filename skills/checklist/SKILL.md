@@ -285,8 +285,13 @@ items through `file` after composing the summary. Retain `resume.touched_project
 `anchor.project` references are added automatically. Every projects lookup and
 write receives `session_summary`, `close_outcomes`, and `touched_projects` from
 the payload, outside the immutable item identity. Project writes run after ticket
-writes and the touched-ticket read. If that read adds facts, revise the summary
-before filing the project session-log items. Record writes save the supplied
+writes and the touched-ticket read. A failed or malformed reread keeps every
+project item pending without calling its lookup or write. If new close outcomes
+arrive after summary composition, project items also remain pending: rewrite the
+session summary and retry with the retained items and their unchanged identities.
+The payload's `resume.summary_rewrite_required` retains the stale summary until
+the agent supplies revised text; retrying unchanged text cannot save project history.
+Record writes save the supplied
 account; they cannot replace it or supply a fallback for the report.
 
 Write the interactive session's handoff using the

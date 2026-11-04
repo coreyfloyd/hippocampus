@@ -848,6 +848,7 @@ class ChecklistTests(unittest.TestCase):
             source["session_items"].append(dict(source["session_items"][0], context="Second project update",
                 anchor={"project": "example/second", "ticket": "example/project#8"}))
             expected_outcomes.append(dict(expected_outcomes[0], triggering_ticket="example/project#8"))
+            source["resume"]["close_outcomes"] = copy.deepcopy(expected_outcomes)
             handoff, filing = root / "source.json", root / "filing.json"
             handoff.write_text(json.dumps(source))
             filing.write_text(json.dumps([dict(index=i, rule="R2", status="filed", read_status="ok") for i in (0, 1)]))

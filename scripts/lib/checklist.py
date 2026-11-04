@@ -392,11 +392,10 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     ticket_module = _load_handoff_module()
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
+    summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
         result.setdefault("resume", {}).update(ticket_module.ticket_facts(result.get("resume", {}), session_id))
-    projects = list(result.get("resume", {}).get("touched_projects", []))
-    if not all(isinstance(project, str) and project.strip() for project in projects):
-        raise ValueError("touched_projects must contain non-empty project references")
+    projects = ticket_module.project_references(result.get("resume", {}))
     for item in loops:
         project = item.get("anchor", {}).get("project")
         if project and project not in projects:
@@ -436,6 +435,9 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
             except (ValueError, TypeError, AttributeError) as error:
                 report["ticket_read"] = {"status": "failed", "error": str(error)}
                 report["failures"].append(f"touched ticket read failed: {error}")
+        result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
+        if any(outcome not in summary_outcomes for outcome in result["resume"].get("close_outcomes", [])):
+            result["resume"]["summary_rewrite_required"] = result["resume"].get("session_summary")
 
     def project_row(row: Mapping[str, Any]) -> bool:
         item = loops[row["index"]]
@@ -488,12 +490,26 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 if rule == "R5" and (not row.get("priority") or not row.get("priority_reason")):
                     raise ValueError(f"{label}: a new ticket requires priority and priority_reason")
                 context = None
+                project_error = None
                 if binding == "projects":
                     refresh_tickets()
+                    resume = result["resume"]
+                    if report.get("ticket_read", {}).get("status") == "failed":
+                        project_error = "ticket reread failed; retry before writing project history"
+                    elif ("summary_rewrite_required" in resume
+                          and (not isinstance(resume.get("session_summary"), str)
+                               or not resume["session_summary"].strip()
+                               or resume["summary_rewrite_required"] == resume["session_summary"])):
+                        project_error = "new close outcomes: rewrite the session summary before retrying project history"
+                    else:
+                        resume.pop("summary_rewrite_required", None)
                     context = {"session_summary": result["resume"].get("session_summary"),
                                "close_outcomes": result["resume"].get("close_outcomes", []),
                                "touched_projects": projects}
-                row = record_write.execute(bindings[binding], binding, item, row, context=context)
+                if project_error:
+                    row = {**row, "status": "pending", "error": project_error}
+                else:
+                    row = record_write.execute(bindings[binding], binding, item, row, context=context)
                 entry.update(row)
                 if binding == "tickets" and "tickets" in row:
                     try:
@@ -1067,7 +1083,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
         return 1 if args.operation in ("file", "record") and (output.get("filing", {}).get("ticket_read", {}).get("status") == "failed" or any(
-            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain")
+            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain", "pending")
             for row in output.get("filing", {}).get("items", []))) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)

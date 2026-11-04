@@ -74,7 +74,11 @@ item identity and are passed unchanged to both lookup and write. Project items'
 `anchor.project` references join the carried `resume.touched_projects`; the ledger
 retains these through compaction and pickup. The agent files project session-log
 items after the wrap summary is ready, so project history describes the whole
-chain. At wrap project writes run after ticket writes and the touched-ticket read.
+chain. At wrap project writes run after ticket writes and a successful touched-ticket
+read. A failed reread makes project items pending without lookup or write. New
+close outcomes also block project writes until the agent rewrites the summary;
+the returned `resume.summary_rewrite_required` keeps that requirement across
+retries. Keep the returned payload and reuse unchanged item identities.
 
 
 ## Ticket reads and close outcomes

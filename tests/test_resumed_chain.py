@@ -207,3 +207,38 @@ def test_pickup_refuses_lint_valid_shape_without_subject_as_unsupported_schema(t
     assert report['error'] == 'invalid_handoff'
     assert 'schema-v2' in report['message']
     assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()
+
+
+@pytest.mark.parametrize('field', ['touched_projects', 'touched_tickets', 'session_history', 'close_outcomes', 'resumed_chain'])
+@pytest.mark.parametrize('value', ['example/project', None, {}, [None], [' ']])
+def test_pickup_rejects_malformed_copied_lists_without_ledger_rows(tmp_path, field, value):
+    source = checkpoint(tmp_path, 'A')
+    source['resume'][field] = value
+    path = tmp_path / 'A.json'
+    path.write_text(json.dumps(source))
+    lint = command(tmp_path, 'B', 'scripts/lib/handoff.py', 'lint', path)
+    assert lint.returncode == 1
+    assert field in lint.stdout or (field == 'close_outcomes' and 'close outcome' in lint.stdout)
+    picked = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', path)
+    assert picked.returncode == 1
+    assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()
+
+
+@pytest.mark.parametrize('value', ['example/project', None, {}, [None], [' ']])
+def test_checkpoint_preserves_invalid_projects_and_reports_contract_error(tmp_path, value):
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', payload={'resume': {'session_summary': 'Recorded project work.',
+                                                             'touched_projects': value}})
+    assert result.returncode == 1
+    assert 'touched_projects' in result.stderr
+    assert json.loads((tmp_path / 'A.json').read_text())['resume']['touched_projects'] == value
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_pickup_copies_whole_project_references(tmp_path, tool):
+    projects = ['example/project', 'example/second']
+    checkpoint(tmp_path, 'A', {'touched_projects': projects})
+    pickup(tmp_path, 'B', tmp_path / 'A.json', tool)
+    planned = command(tmp_path, 'B', 'scripts/lib/checklist.py', 'plan', '--session-id', 'B', tool=tool)
+    assert planned.returncode == 0, planned.stderr
+    assert json.loads(planned.stdout)['handoff']['resume']['touched_projects'] == projects
