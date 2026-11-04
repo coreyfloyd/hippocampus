@@ -1181,3 +1181,65 @@ def test_checkpoint_writes_malformed_history_input_and_reports_it(tmp_path, resu
     result = checkpoint_cli(tmp_path, {"resume": resume, "spawned_processes": []})
     assert result.returncode == 1, result.stderr
     assert (tmp_path / "handoff.json").exists()
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+@pytest.mark.parametrize("metadata", [
+    {"produced_at": "yesterday"},
+    {"produced_at": "2026-10-01T12:00:00"},
+    {"session_id": ""},
+    {"session_id": 42},
+])
+def test_rejected_history_does_not_poison_later_checkpoints(tmp_path, trigger, metadata):
+    initial = valid_payload()
+    initial["resume"]["session_summary"] = "Verified the original parser."
+    assert checkpoint_cli(tmp_path, initial).returncode == 0
+    path = tmp_path / "handoff.json"
+    original = json.loads(path.read_text())["resume"]["session_history"]
+    ledger = tmp_path / "ledger/session-touched-paths.writer.jsonl"
+    accepted_ledger = ledger.read_bytes()
+    invalid = valid_payload()
+    invalid["resume"]["session_summary"] = "Prepared the rejected checkpoint."
+    invalid["resume"]["session_history"] = [dict(
+        {"session_id": "earlier", "produced_at": "2026-10-01T12:00:00Z",
+         "summary": "Implemented the original parser."}, **metadata)]
+    rejected = checkpoint_cli(tmp_path, invalid, trigger)
+    assert rejected.returncode == 1
+    assert "session_history" in rejected.stderr
+    assert json.loads(path.read_text())["resume"]["session_history"][-2] == invalid["resume"]["session_history"][0]
+    assert ledger.read_bytes() == accepted_ledger
+    corrected = valid_payload()
+    corrected["resume"]["session_summary"] = "Verified the corrected parser."
+    retried = checkpoint_cli(tmp_path, corrected, trigger)
+    assert retried.returncode == 0, retried.stderr
+    history = json.loads(path.read_text())["resume"]["session_history"]
+    assert history[:-1] == original
+    assert history[-1]["summary"] == "Verified the corrected parser."
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+def test_rejected_handoff_does_not_persist_its_valid_history(tmp_path, trigger):
+    invalid = valid_payload() | {"tickets": []}
+    invalid["resume"]["session_summary"] = "Prepared a rejected handoff."
+    rejected = checkpoint_cli(tmp_path, invalid, trigger)
+    assert rejected.returncode == 1
+    assert "banned top-level key" in rejected.stderr
+    assert (tmp_path / "handoff.json").exists()
+    corrected = valid_payload()
+    retried = checkpoint_cli(tmp_path, corrected, trigger)
+    assert retried.returncode == 0, retried.stderr
+    history = json.loads((tmp_path / "handoff.json").read_text())["resume"]["session_history"]
+    assert len(history) == 1
+    assert history[0]["summary"] == corrected["resume"]["session_summary"]
+
+
+@pytest.mark.parametrize("trigger", ["checkpoint", "wrap"])
+def test_failed_handoff_write_does_not_persist_history(tmp_path, trigger):
+    path = tmp_path / "handoff.json"
+    path.mkdir()
+    rejected = checkpoint_cli(tmp_path, valid_payload(), trigger)
+    assert rejected.returncode == 2
+    path.rmdir()
+    retried = checkpoint_cli(tmp_path, valid_payload(), trigger)
+    assert retried.returncode == 0, retried.stderr
+    assert len(json.loads(path.read_text())["resume"]["session_history"]) == 1
