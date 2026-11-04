@@ -14,6 +14,7 @@ directory it installs it into, never by importing it: every entry point is a com
 | Ledger (one file per session) | the parent of the handoff directory | `HANDOFF_LEDGER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
 | Checklist state (the unattended-wrap marker) | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, else `checklist_state_dir` in the configuration |
+| Standing states (one file per named agent) | `~/.local/state/hippocampus/standing/` | `STANDING_STATE_DIR`, else `standing_dir` in the configuration |
 
 None of these is inside a tool's own data area (`~/.claude`, `~/.codex`, a plugin's data
 directory), so removing an adapter never removes a handoff. Both tools read and write the
@@ -41,6 +42,7 @@ an empty configuration.
 |---|---|---|
 | `handoff_dir` | string | Where handoffs are stored. `~` is expanded. |
 | `checklist_state_dir` | string | Where the checklist keeps its marker. |
+| `standing_dir` | string | Where standing states are stored. `~` is expanded. Point it at an agent's own home to keep its state there. |
 | `checklist_surfaces` | list of strings | Standing surfaces the surface detector reports in addition to the session's own repository. |
 | `checklist_suite_baselines_dir` | string | Directory of per-repository suite baseline files the surface detector reports. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
@@ -179,7 +181,7 @@ command and exits 0. An adapter registers each in its tool's own format.
 
 | Moment | Adapter | Engine command |
 |---|---|---|
-| Session start | `scripts/post-compact-restore.sh` | `handoff.py post-compact` |
+| Session start | `scripts/post-compact-restore.sh` | `handoff.py post-compact` (also prints the named agent's standing state, section 13) |
 | Before compaction | `scripts/pre-compact.sh` | `handoff.py pre-compact` |
 | Prompt submit | `scripts/context-guard.sh` | `handoff.py context-guard` |
 | After a tool call | `hooks/handoff-ledger.sh` | `handoff.py ledger-record` |
@@ -191,7 +193,9 @@ The payload fields the engine reads: `session_id`, `cwd`, `source` (session star
 `tool_response` (after a tool call), `stop_hook_active` (stop), and `agent_id` (present only
 for a subagent). Hooks act only for an interactive session: a payload with `agent_id`, or an
 entry point in `sdk-cli`, `sdk-py`, `sdk-ts`, `sdk`, `mcp`, or `headless`
-(`CLAUDE_CODE_ENTRYPOINT`), gets no output.
+(`CLAUDE_CODE_ENTRYPOINT`), gets no output. The one exception is the standing state: when
+`HIPPOCAMPUS_AGENT` names an agent, session start prints that agent's standing state to every
+session and run, headless and scheduled included.
 
 `hooks/checklist-actor-guard.sh` is an optional seventh adapter. Registered before a shell
 tool call, it denies a subagent or headless session the checklist and the checkpoint
@@ -669,3 +673,40 @@ Retired `bindings.record` profiles are refused with the `record_writes` shape. `
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.
+
+## 13. Standing state engine: `scripts/lib/standing.py`
+
+A standing state is the never-consumed working set of one named agent: its
+conversational session and every scheduled or headless run share it. Handoffs stay
+interactive-only; a standing state is the named agent's alternative for runs without one.
+Standard library only; exit status 0 done, 1 lint failure, 2 refused or failed.
+
+The file is `<standing dir>/<agent>.json`, where the agent name matches
+`[a-z][a-z0-9_-]{0,31}` and comes from `--agent`, else `HIPPOCAMPUS_AGENT`. It holds
+`kind: "standing"`, `schema_version` 1, `agent`, `written_at`, `trigger` (`checkpoint`,
+`stop`, or `run-end`), `writer` (`session_id`, `working_directory`), a `resume` block
+(`headline`, `next_action`, `open_loops`), and a `standing` block:
+
+| Standing field | Each entry requires |
+|---|---|
+| `watching` | `context` |
+| `waiting_on` | `who`, `context` |
+| `proposed_briefings` | `context` |
+| `timers` | `when` (a time or schedule), `reason` |
+
+Any entry may add `since`, an ISO timestamp with timezone. Open loops use the handoff item
+schema and the same lint (`handoff.py`'s `lint_open_loops`), and the handoff's banned
+top-level keys are banned here too.
+
+| Command | Purpose |
+|---|---|
+| `read [--agent A] [--json]` | Print the state with a re-validate banner, or the stored JSON only. Never moves, archives, or empties it. An absent state prints a note and exits 0. |
+| `write [--agent A] [--trigger T] [--session-id ID] [--cwd D]` | Read an update on stdin and merge it under a lock: supplied `resume` and `standing` keys replace their stored values, omitted keys keep them. `session_items` are appended as open loops. Any item marked `recorded: true` is dropped. A result that fails lint is refused and the stored state is unchanged. |
+| `lint [PATH] [--agent A]` | Validate a standing state. |
+| `path [--agent A]`, `dir` | The agent's state file, and where standing states are stored. |
+
+Read it at session start (the session-start hook does this when `HIPPOCAMPUS_AGENT` is set)
+and before each scheduled run; write it at checkpoint, at stop, and at run end. Promotion
+into the record uses the filing rules on `resume.open_loops` only: the writer marks each
+filed item `recorded: true` on its next write. Standing fields are not filed; they stay
+until the agent replaces them.

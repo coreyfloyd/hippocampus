@@ -160,6 +160,7 @@ These are every key in [INTERFACE.md section 2](../INTERFACE.md#2-configuration)
 |---|---|---|
 | `handoff_dir` | string | Handoff storage directory; expands `~`. `HANDOFF_STATE_DIR` overrides it. |
 | `checklist_state_dir` | string | Checklist marker directory; `CHECKLIST_STATE_DIR` overrides it. |
+| `standing_dir` | string | Standing state directory for named agents; expands `~`. `STANDING_STATE_DIR` overrides it. |
 | `checklist_surfaces` | list of strings | Standing directories the surface detector reports alongside the session's repository. |
 | `checklist_suite_baselines_dir` | string | Per-repository suite baseline directory reported by the surface detector. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
@@ -175,6 +176,7 @@ Default shared storage sits outside both tools' data areas:
 | Ledger | the parent of the handoff directory (`~/.local/state/hippocampus/`) | `HANDOFF_LEDGER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
 | Checklist state | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, then `checklist_state_dir` |
+| Standing states | `~/.local/state/hippocampus/standing/` | `STANDING_STATE_DIR`, then `standing_dir` |
 
 The ledger holds one `session-touched-paths.<session-id>.jsonl` file per session.
 Pre-compaction backups hold raw hook input, not a complete transcript archive.

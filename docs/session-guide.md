@@ -175,7 +175,8 @@ of the resolved handoff directory unless its own override is set.
 │   ├── handoffs/                       # handoff JSON; HANDOFF_STATE_DIR, else handoff_dir
 │   ├── session-touched-paths.<id>.jsonl # per-session ledger; HANDOFF_LEDGER_DIR
 │   ├── compact-state/                  # raw pre-compaction inputs; HANDOFF_COMPACT_STATE_DIR
-│   └── checklist/                      # unattended-wrap markers; CHECKLIST_STATE_DIR, else checklist_state_dir
+│   ├── checklist/                      # unattended-wrap markers; CHECKLIST_STATE_DIR, else checklist_state_dir
+│   └── standing/<agent>.json           # named agents' standing states; STANDING_STATE_DIR, else standing_dir
 ├── .config/hippocampus/config.json      # shared configuration; HIPPOCAMPUS_CONFIG, else XDG_CONFIG_HOME/hippocampus/config.json
 ├── .config/hippocampus/checklist-profile.md        # user profile; CHECKLIST_USER_PROFILE, else XDG_CONFIG_HOME/hippocampus/checklist-profile.md
 └── <repository>/.claude/checklist-profile.md # additive repository profile; explicit --repository-profile arguments
@@ -445,6 +446,7 @@ All keys are optional; absence means an empty configuration.
 configuration JSON object             # shared settings, not a profile
 ├── handoff_dir: string               # handoff storage (~ expands)
 ├── checklist_state_dir: string       # unattended-wrap marker directory
+├── standing_dir: string              # standing state storage for named agents (~ expands)
 ├── checklist_surfaces: string[]      # standing surface-detector candidates
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
@@ -526,6 +528,29 @@ marker file                           # existence keeps the cadence unattended-c
 
 No example is required: this operational marker is not one of the example
 formats. Without optional unattended configuration, it is not used.
+
+### Standing states
+
+Location: `standing/<agent>.json`. `standing.py write` merges an update into it at
+checkpoint, stop, and run end; `standing.py read` and the session-start hook (when
+`HIPPOCAMPUS_AGENT` is set) read it. Nothing consumes or archives it. The
+[standing state contract](../INTERFACE.md#13-standing-state-engine-scriptslibstandingpy)
+is normative.
+
+```text
+standing state JSON object             # kind "standing", schema_version 1
+├── agent, written_at, trigger         # named agent; last write; checkpoint|stop|run-end
+├── writer: session_id, working_directory # session or run that wrote it last
+├── resume                             # headline, next_action, open_loops[] (handoff item schema)
+└── standing                           # never filed; kept until the agent replaces it
+    ├── watching[]: context
+    ├── waiting_on[]: who, context
+    ├── proposed_briefings[]: context
+    └── timers[]: when, reason
+```
+
+No example is required: tests write and read one through the engine. Without a
+named agent, the package writes none.
 
 ## Architecture
 

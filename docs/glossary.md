@@ -23,6 +23,10 @@ _Avoid_: tracker
 The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds dated history entries, close outcomes, and touched tickets. Checkpoint and wrap both end by writing it.
 _Avoid_: summary, record
 
+**Standing state**:
+The working set of one named agent whose work never ends, shared by its conversational session and every scheduled or headless run. Like a handoff it holds a headline, a next action, and open loops with the same item schema; it also holds standing fields: what the agent is watching, who it is waiting on, briefings it has proposed, and timers it has set with their reasons. It is never consumed: every session and run reads it at start and writes it back at checkpoint, stop, and run end. Filing an open loop into the record removes it; standing fields stay until the agent replaces them.
+_Avoid_: handoff, memory, agent state
+
 **History entry**:
 One handoff write's account of the work since that session's previous entry, with its producing session identity, time, and text. Every checkpoint and wrap adds one real entry. Entries stay in the session ledger through compaction. An automatic stop handoff is marked as a skeleton and adds no entry, while retaining earlier entries.
 

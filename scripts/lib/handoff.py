@@ -447,6 +447,22 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
     files = data.get("uncommitted_files", [])
     if not isinstance(files, list) or any(not isinstance(path, str) or not os.path.isabs(path) for path in files):
         problems.append("uncommitted_files must be an array of absolute paths")
+    problems.extend(lint_open_loops(loops))
+    processes = data.get("spawned_processes", [])
+    if not isinstance(processes, list):
+        problems.append("spawned_processes must be an array")
+        processes = []
+    for index, process in enumerate(processes):
+        if not isinstance(process, dict):
+            problems.append(f"spawned_processes[{index}] not an object")
+        elif process.get("pid") is None or not process.get("started_at"):
+            problems.append(f"spawned_processes[{index}] missing pid+started_at — identity reconcile (F4) is impossible without both; kill -0 alone can hit a stranger")
+    return problems, warnings
+
+
+def lint_open_loops(loops: list[Any]) -> list[str]:
+    """Validate carried items; handoffs and standing states share this item schema."""
+    problems: list[str] = []
     for index, loop in enumerate(loops):
         if not isinstance(loop, dict):
             problems.append(f"open_loops[{index}] not an object")
@@ -481,16 +497,7 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         anchored = isinstance(anchor, dict) and bool(anchor.get("ticket") or anchor.get("project"))
         if not anchored and not loop.get("disposition"):
             problems.append(f"open_loops[{index}] has no anchor (ticket|project) and no disposition — an un-anchored loop MUST say where it will be filed")
-    processes = data.get("spawned_processes", [])
-    if not isinstance(processes, list):
-        problems.append("spawned_processes must be an array")
-        processes = []
-    for index, process in enumerate(processes):
-        if not isinstance(process, dict):
-            problems.append(f"spawned_processes[{index}] not an object")
-        elif process.get("pid") is None or not process.get("started_at"):
-            problems.append(f"spawned_processes[{index}] missing pid+started_at — identity reconcile (F4) is impossible without both; kill -0 alone can hit a stranger")
-    return problems, warnings
+    return problems
 
 
 def lint_file(path: str) -> tuple[list[str], list[str]]:
@@ -1095,30 +1102,44 @@ def _emit_hook_context(text: str) -> None:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
 
 
-def post_compact(payload: Mapping[str, Any]) -> None:
+def _standing_context() -> str | None:
+    """A named agent's standing state, read at every session start and run, headless included."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import standing
+    except ImportError:
+        return None
+    return standing.session_start_context()
+
+
+def _handoff_context(payload: Mapping[str, Any]) -> str | None:
     if not is_interactive(payload):
-        return
+        return None
     cwd, source = str(payload.get("cwd") or ""), str(payload.get("source") or "")
     if source != "compact":
         count = count_for_repository(cwd)
         if count:
             noun = "handoff exists" if count == 1 else "handoffs exist"
-            _emit_hook_context(f"{count} {noun} for this repository; pickup lists {'it' if count == 1 else 'them'}.")
-        return
+            return f"{count} {noun} for this repository; pickup lists {'it' if count == 1 else 'them'}."
+        return None
     path = resolve_path(cwd, str(payload.get("session_id") or ""))
     if not path or not os.path.isfile(path):
-        return
+        return None
     try:
         data = read_json(path)
     except (OSError, ValueError, TypeError):
-        _emit_hook_context(f"A handoff exists at {path} but did not parse as JSON. Do NOT trust it. Proceed on your charter and ground truth, and rewrite a clean handoff at your next checkpoint.")
-        return
+        return f"A handoff exists at {path} but did not parse as JSON. Do NOT trust it. Proceed on your charter and ground truth, and rewrite a clean handoff at your next checkpoint."
     raw = json.dumps(data, separators=(",", ":"))
     version = data.get("schema_version") if isinstance(data, dict) else None
     if version in (1, 2):
-        _emit_hook_context("Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down.")
-    else:
-        _emit_hook_context(f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting.")
+        return "Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down."
+    return f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting."
+
+
+def post_compact(payload: Mapping[str, Any]) -> None:
+    parts = [text for text in (_standing_context(), _handoff_context(payload)) if text]
+    if parts:
+        _emit_hook_context("\n\n".join(parts))
 
 
 def context_guard(payload: Mapping[str, Any]) -> None:
