@@ -393,6 +393,10 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
     if not isinstance(loops, list):
         problems.append("resume.open_loops must be an array")
         loops = []
+    try:
+        validate_ticket_facts(resume)
+    except (ValueError, TypeError) as error:
+        problems.append(str(error))
     summary = resume.get("session_summary")
     if summary is not None and (not isinstance(summary, str) or not summary.strip() or "\n" in summary or "\r" in summary):
         problems.append("resume.session_summary must be a non-empty one-line string")
@@ -496,6 +500,91 @@ def lint_output(path: str) -> tuple[int, str]:
     return 0, "\n".join(lines) + "\n"
 
 
+def ticket_facts(resume: Mapping[str, Any], session_id: str) -> dict[str, list]:
+    """Merge carried ticket facts with this session's compaction-safe ledger."""
+    validate_ticket_facts(resume)
+    tickets = list(resume.get("touched_tickets", []))
+    outcomes = list(resume.get("close_outcomes", []))
+    for row in _ledger_records(ledger_path(session_id)) if session_id else []:
+        if row.get("kind") == "touched_ticket" and row["ticket"] not in tickets:
+            tickets.append(row["ticket"])
+        elif row.get("kind") == "close_outcome" and row["outcome"] not in outcomes:
+            outcomes.append(row["outcome"])
+    validate_ticket_facts({"touched_tickets": tickets, "close_outcomes": outcomes})
+    return {"touched_tickets": tickets, "close_outcomes": outcomes}
+
+
+def validate_ticket_facts(resume: Mapping[str, Any]) -> None:
+    tickets = resume.get("touched_tickets", [])
+    if not isinstance(tickets, list) or any(not isinstance(t, str) or not t.strip() for t in tickets):
+        raise ValueError("touched_tickets must be an array of non-empty ticket references")
+    outcomes = resume.get("close_outcomes", [])
+    if not isinstance(outcomes, list):
+        raise ValueError("close_outcomes must be an array")
+    for outcome in outcomes:
+        if not isinstance(outcome, dict):
+            raise ValueError("close outcome must be an object")
+        if outcome.get("kind") not in ("milestone", "epic") or outcome.get("state") not in ("open", "closed"):
+            raise ValueError("close outcome requires milestone or epic kind and open or closed state")
+        for key in ("title", "triggering_ticket", "produced_at"):
+            if not isinstance(outcome.get(key), str) or not outcome[key].strip():
+                raise ValueError(f"close outcome requires {key}")
+        if any(type(outcome.get(k)) is not int or outcome[k] < 0 for k in ("done", "total")) or outcome["done"] > outcome["total"]:
+            raise ValueError("close outcome requires valid done of total counts")
+        stamp = datetime.fromisoformat(outcome["produced_at"].replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            raise ValueError("close outcome time requires timezone")
+
+
+def record_ticket(session_id: str, ticket: str) -> None:
+    if not isinstance(ticket, str) or not ticket.strip():
+        raise ValueError("a ticket reference is required")
+    if ticket not in ticket_facts({}, session_id)["touched_tickets"]:
+        append_ledger(session_id, {"kind": "touched_ticket", "ticket": ticket, "ts": utc_now()})
+
+
+def record_ticket_states(session_id: str, states: list[dict[str, Any]],
+                         resume: Mapping[str, Any]) -> dict[str, list]:
+    facts = ticket_facts(resume, session_id)
+    if not isinstance(states, list):
+        raise ValueError("tickets response must be an array")
+    for state in states:
+        if not isinstance(state, dict) or state.get("state") not in ("open", "closed"):
+            raise ValueError("ticket response requires open or closed state")
+        ticket = state.get("ticket")
+        record_ticket(session_id, ticket)
+        if ticket not in facts["touched_tickets"]:
+            facts["touched_tickets"].append(ticket)
+        if state["state"] != "closed":
+            continue
+        rows = state.get("close_outcomes")
+        if not isinstance(rows, list):
+            raise ValueError("closed ticket requires close_outcomes (empty when none)")
+        stamp = state.get("closed_at") or utc_now()
+        outcomes = [{**row, "triggering_ticket": ticket, "produced_at": stamp}
+                    for row in rows]
+        validate_ticket_facts({"close_outcomes": outcomes})
+        for outcome in outcomes:
+            # Validate the complete response before deduplicating individual facts.
+            # A repeated observation keeps its first recorded time.
+            fields = ("kind", "title", "state", "done", "total", "triggering_ticket")
+            if any(all(stored[key] == outcome[key] for key in fields)
+                   for stored in facts["close_outcomes"]):
+                continue
+            append_ledger(session_id, {"kind": "close_outcome", "outcome": outcome})
+            facts["close_outcomes"].append(outcome)
+    return facts
+
+
+def outcome_line(resume: Mapping[str, Any]) -> str:
+    validate_ticket_facts(resume)
+    outcomes = resume.get("close_outcomes", [])
+    if not outcomes:
+        return "No milestone or epic closed or moved this session."
+    return "; ".join(" ".join(f"{o['kind'].capitalize()} {o['title']}: {o['state']}, {o['done']} of {o['total']} done".split())
+                     for o in outcomes) + "."
+
+
 def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str,
                        repository_root: str | None = None, branch: str | None = None,
                        head: str | None = None) -> dict[str, Any]:
@@ -511,6 +600,11 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
     resume = supplied.get("resume")
     if isinstance(resume, Mapping):
         resume = dict(resume)
+        try:
+            resume.update(ticket_facts(resume, session_id))
+        except (ValueError, TypeError):
+            # Like other malformed input, preserve it for post-write lint.
+            pass
         history = resume.get("session_history", [])
         if isinstance(history, list):
             retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))
@@ -563,6 +657,13 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     # A failed write or invalid handoff must never add history to the ledger.
     resume = handoff.get("resume")
     history = resume.get("session_history") if isinstance(resume, Mapping) else None
+    if session_id:
+        facts = ticket_facts({}, session_id)
+        for ticket in resume.get("touched_tickets", []):
+            record_ticket(session_id, ticket)
+        for outcome in resume.get("close_outcomes", []):
+            if outcome not in facts["close_outcomes"]:
+                append_ledger(session_id, {"kind": "close_outcome", "outcome": outcome})
     if session_id and isinstance(history, list):
         existing = [row.get("entry") for row in _ledger_records(ledger_path(session_id))
                     if row.get("kind") == "history_entry"]
@@ -845,6 +946,17 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
         value = tool_input.get(key)
         if isinstance(value, str) and value:
             record_file(str(cwd or os.getcwd()), session_id, value)
+    # Provider-neutral record tools can supply ticket references directly.
+    # Other ticket tools must register each reference through ledger-ticket.
+    for source in (tool_input, payload.get("tool_response")):
+        if not isinstance(source, Mapping):
+            continue
+        references = source.get("touched_tickets", [])
+        if isinstance(references, list):
+            for ticket in references:
+                record_ticket(session_id, ticket)
+        if isinstance(source.get("ticket"), str):
+            record_ticket(session_id, source["ticket"])
     records_path = ledger_path(session_id)
     os.makedirs(os.path.dirname(records_path), exist_ok=True)
     existing = _ledger_records(records_path)
@@ -1015,6 +1127,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument("--session-id", default=ambient_session_id()); check.add_argument("--trigger", default=os.environ.get("HANDOFF_TRIGGER", "checkpoint"))
     interactive = sub.add_parser("is-interactive"); interactive.add_argument("payload", nargs="?")
     sub.add_parser("ledger-record")
+    ticket = sub.add_parser("ledger-ticket", help="Record a ticket read, changed, or closed")
+    ticket.add_argument("--ticket", required=True)
+    ticket.add_argument("--session-id", default=ambient_session_id())
     file_record = sub.add_parser("ledger-file", help="Record a file edited by a shell/publishing tool")
     file_record.add_argument("path")
     artifact = sub.add_parser("ledger-artifact", help="Record or retire a published artifact")
@@ -1097,6 +1212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = json.loads(args.payload) if args.payload else _read_stdin_json()
             return 0 if is_interactive(payload) else 1
         elif args.command == "ledger-record": ledger_record(_read_stdin_json())
+        elif args.command == "ledger-ticket": record_ticket(args.session_id, args.ticket)
         elif args.command == "ledger-file": record_file(args.cwd, args.session_id, args.path)
         elif args.command == "ledger-artifact":
             record_artifact(args.cwd, args.session_id, args.location, args.disposition, args.status)

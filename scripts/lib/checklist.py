@@ -390,9 +390,17 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     bindings.update(writes)
     result = copy.deepcopy(dict(handoff))
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
+    ticket_module = _load_handoff_module()
+    session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
+    if execute_writes:
+        result.setdefault("resume", {}).update(ticket_module.ticket_facts(result.get("resume", {}), session_id))
     kept = []
     for row in sorted(outcomes, key=lambda row: row["index"]):
         item = loops[row["index"]]
+        if execute_writes and session_id:
+            ticket = item.get("anchor", {}).get("ticket") or item.get("ticket")
+            if ticket:
+                ticket_module.record_ticket(session_id, ticket)
         rule, status = row.get("rule"), row.get("status")
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):
             raise ValueError(f"filing: unknown rule {rule!r}")
@@ -437,6 +445,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                     raise ValueError(f"{label}: a new ticket requires priority and priority_reason")
                 row = record_write.execute(bindings[binding], binding, item, row)
                 entry.update(row)
+                if binding == "tickets" and "tickets" in row:
+                    try:
+                        result["resume"].update(ticket_module.record_ticket_states(
+                            session_id, row.get("tickets", []), result["resume"]))
+                    except (ValueError, TypeError) as error:
+                        row.update(status="failed", error=f"ticket facts: {error}")
+                        entry.update(row)
                 if row["status"] != "filed":
                     report["failures"].append(f"{label}: {binding} write {row['status']}: {row['error']}")
                     kept.append(copy.deepcopy(item))
@@ -461,6 +476,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         "Unfiled items: " + "; ".join(item.get("context", str(item)) for item in kept))
     result.pop("session_items", None)
     result["filing"] = report
+    if execute_writes:
+        result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
     return result
 
 
@@ -799,7 +816,13 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             if not any(r["id"] == native for r in incomplete):
                 incomplete.append({"id": native, "status": row["status"],
                                    "reason": row.get("error") or row.get("reason")})
-    output = {**summary, "report": "failed" if problems else "incomplete" if incomplete else "ok",
+    try:
+        facts = _load_handoff_module().ticket_facts(resume, handoff.get("subject", {}).get("session_id", ""))
+        line = _load_handoff_module().outcome_line(facts)
+    except (ValueError, TypeError) as error:
+        problems.append(f"close outcomes: {error}")
+        line = "Close outcomes unavailable."
+    output = {"outcome_line": line, **summary, "report": "failed" if problems else "incomplete" if incomplete else "ok",
               "pending": [r.get("id") for r in results if r.get("status") == "pending"],
               "filing": handoff.get("filing", {}), "warnings": warnings}
     if incomplete:
@@ -969,6 +992,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")
             output = file_items(plan, handoff, json.loads(args.filing.read_text()), ask)
+            if args.operation == "file":
+                binding = next(step for step in plan if step["id"] == "record")["record_writes"].get("tickets")
+                module = _load_handoff_module()
+                session_id = handoff.get("subject", {}).get("session_id") or module.ambient_session_id()
+                tickets = output["resume"].get("touched_tickets", [])
+                if tickets and binding:
+                    try:
+                        response = record_write.invoke(binding, {"operation": "read", "kind": "tickets", "tickets": tickets})
+                        states = response.get("tickets")
+                        if (response.get("status") != "read" or not isinstance(states, list)
+                                or sorted(s.get("ticket", "") for s in states) != sorted(tickets)):
+                            raise ValueError("ticket read must return exactly the touched tickets")
+                        output["resume"].update(module.record_ticket_states(session_id, states, output["resume"]))
+                        output["filing"]["ticket_read"] = {"status": "read", "tickets": tickets}
+                    except (ValueError, TypeError, AttributeError) as error:
+                        output["filing"]["ticket_read"] = {"status": "failed", "error": str(error)}
+                        output["filing"]["failures"].append(f"touched ticket read failed: {error}")
         elif args.operation == "wrap-check":
             if not args.written_handoff:
                 raise ValueError("wrap-check requires --written-handoff")
@@ -995,9 +1035,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("settle requires --handoff and --receipts")
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
-        return 1 if args.operation in ("file", "record") and any(
+        return 1 if args.operation in ("file", "record") and (output.get("filing", {}).get("ticket_read", {}).get("status") == "failed" or any(
             row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain")
-            for row in output.get("filing", {}).get("items", [])) else 0
+            for row in output.get("filing", {}).get("items", []))) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)
         return 1

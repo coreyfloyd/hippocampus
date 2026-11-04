@@ -3,7 +3,10 @@ import json
 import sys
 
 request = json.load(sys.stdin)
-if request['operation'] == 'lookup':
+if request['operation'] == 'read':
+    print(json.dumps({'status': 'read', 'tickets': [
+        {'ticket': ticket, 'state': 'open'} for ticket in request['tickets']]}))
+elif request['operation'] == 'lookup':
     print(json.dumps({'status': 'not_found'}))
 elif request['filing'].get('status') == 'failed':
     print(json.dumps({'status': 'failed', 'error': request['filing']['error']}))

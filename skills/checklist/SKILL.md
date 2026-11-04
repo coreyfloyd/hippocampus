@@ -140,7 +140,12 @@ failed writes fail wrap. Missing write receipts are uncertain; lookup must
 succeed before any retry. Preserve the returned payload even on failure.
 Note the UTC time the record step finishes for the freshness check when writes
 are configured. Run it again at wrap with the same identities; existing receipts
-are reused without another write.
+are reused without another write. At wrap use `file`: it re-reads only the
+session's touched tickets (including carried references) through the tickets
+record write and records any closed ticket's missing close outcomes. No other
+ticket, milestone, or epic is queried. See record's ticket-state contract.
+Record every ticket read, changed, or closed with `ledger-ticket` as it happens;
+close outcomes and touched tickets live in the ledger through compaction.
 
 After its writes are final, retain the existing binding-composed **session
 summary**: record outcomes, each project's goal, what shipped, follow-up tickets,
@@ -334,9 +339,10 @@ in step 5 under the current session. Unbound destinations warn without failing.
 
 ## Report
 
-Start the report with the session summary from step 1, unedited, in Claude
-Code and Codex alike. When none was composed, start with the one line saying
-why. Then name the user and repository profiles resolved. Report each planned step in its
+Start the report with `outcome_line` from stored close outcomes, then the
+session summary from step 1, unedited, in Claude Code and Codex alike. When no
+summary was composed, follow the outcome line with the reason. Then name the
+user and repository profiles resolved. Report each planned step in its
 execution order, its bound command if any, and its result: run, carried (an
 unbound slot), pending, or failed. Check the results with the same profile
 arguments before reporting completion:
@@ -357,7 +363,7 @@ no session summary at all (a binding that predates session summaries), pass
 `--no-summary "<command> composed no session summary"`; the wrap continues. A bound record with
 neither fails the check, so the summary is never silently left out. With record
 unbound, omit both: nothing composes a summary, and the output says so. The
-output's first field is the summary.
+output's first field is `outcome_line`, followed by the summary.
 
 `<results.json>` is an array, in execution order, of
 `{"id": <step>, "status": <result>, "writes": [<paths or locations>], "reason": <text>}`.

@@ -66,3 +66,58 @@ make their writes idempotent for that identity, including concurrent requests.
 Keep summary composition as checklist currently describes: after the record
 writes, retain the composed session-summary file or the reason none was
 composed for checklist's report. This standalone step does not print a wrap report.
+
+
+## Ticket reads and close outcomes
+
+Record every ticket read, changed, or closed as touched as it happens, including
+reads through the record-read binding. Both tools use the shared ledger command:
+
+```bash
+python3 <package>/scripts/lib/handoff.py ledger-ticket --session-id <current-session> \
+  --ticket <durable-ticket-reference>
+```
+
+The shared tool hook also records a string `ticket` or a `touched_tickets`
+array of references from structured tool input or output. For tools without
+these fields, call the ledger command for every ticket read, changed, or closed.
+Keep one stable reference per ticket. Ticket items' `anchor.ticket` is recorded
+automatically when the package files them. No provider-specific command parsing
+or ticket discovery runs in the package.
+
+A ticket write or found lookup may additionally return `tickets`, an array of
+states for every ticket it read, changed, or closed. Each state has `ticket`
+(the same stable reference) and `state` (`open` or `closed`). A closed state
+must include `close_outcomes`, empty when it has no milestone or epic:
+
+```json
+{"ticket": "https://github.com/example/project/issues/7", "state": "closed",
+ "close_outcomes": [
+   {"kind": "milestone", "title": "Launch", "state": "closed", "done": 4, "total": 4},
+   {"kind": "epic", "title": "Session records", "state": "open", "done": 3, "total": 5}
+ ]}
+```
+
+The package adds `triggering_ticket` and `produced_at` to each close outcome,
+using the optional state's `closed_at` timestamp or the current time, and writes
+it to the session ledger immediately. Lookup must return the ticket facts with
+a reused receipt too. Checkpoint retains ledger facts in `resume.close_outcomes`
+and `resume.touched_tickets`, so compaction needs no agent-supplied copy.
+
+At wrap, `file` also sends the ticket record write exactly
+`{"operation": "read", "kind": "tickets", "tickets": [<touched references>]}`.
+It must return `{"status": "read", "tickets": [<one state per requested ticket>]}`.
+It re-reads only those tickets, including any references carried in the handoff.
+Return the milestone and epic state already reported with each ticket; do not
+query any other ticket, milestone, or epic. A failed or malformed read fails
+wrap and retains the handoff. `record` alone does not do this wrap re-read.
+Every closed-ticket response must supply a valid `close_outcomes` array, even
+when that ticket already has stored outcomes. Both a reported close and a wrap
+re-read validate all returned outcomes before adding any of them. Individual
+outcomes matching the same triggering ticket, kind, title, state, done, and total
+are reused with their original time; distinct outcomes are added, including for
+an already-recorded ticket. With no touched tickets no read is made.
+
+The report's first field, `outcome_line`, is composed only from stored close
+outcomes. With none it is exactly: "No milestone or epic closed or moved this
+session." Summary composition follows in the next field as before.
