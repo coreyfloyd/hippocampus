@@ -279,7 +279,7 @@ def test_lint_rules_reject_written_shapes(tmp_path, mutate, message):
 
 def test_lint_accepts_v1_and_v2_and_ignores_unknown_keys(tmp_path):
     handoff = load_module()
-    v1 = {"schema_version": 1, "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []}
+    v1 = {"schema_version": 1, "written_at": "2026-11-01T12:00:00Z", "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []}
     v2 = handoff.overlay_checkpoint(valid_payload(), str(tmp_path), "s", "checkpoint")
     v2["unknown"] = {"accepted": True}
     for name, data in (("v1", v1), ("v2", v2)):
@@ -427,7 +427,7 @@ def test_each_cli_subcommand_executes(tmp_path):
     assert resolved.returncode == 0
     path = resolved.stdout.strip()
     assert invoke("repository-root", str(repo)).stdout.strip() == str(repo.resolve())
-    assert invoke("write", path, stdin=json.dumps({"schema_version": 1, "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []})).returncode == 0
+    assert invoke("write", path, stdin=json.dumps({"schema_version": 1, "written_at": "2026-11-01T12:00:00Z", "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []})).returncode == 0
     assert invoke("lint", path).returncode == 0
     assert invoke("count", str(repo), env={"HANDOFF_STATE_DIR": str(state)}).returncode == 0
     assert invoke("checkpoint", "--cwd", str(repo), "--session-id", "session",

@@ -361,6 +361,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     if not isinstance(data, dict):
         return ["handoff must be a JSON object"], warnings
+    if not isinstance(data.get("written_at"), str) or not _valid_history_time(data["written_at"]):
+        problems.append("written_at must be an ISO timestamp with timezone")
     version = data.get("schema_version")
     if version not in (1, 2):
         problems.append(f"schema_version is {version!r}, expected 1 or 2")
@@ -371,8 +373,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         else:
             if not isinstance(subject.get("working_directory"), str) or not subject["working_directory"]:
                 problems.append("schema_version 2 requires subject.working_directory")
-            if not isinstance(subject.get("session_id"), str):
-                problems.append("schema_version 2 requires subject.session_id")
+            if not isinstance(subject.get("session_id"), str) or not subject["session_id"].strip():
+                problems.append("schema_version 2 requires subject.session_id to be a non-empty string")
         git = data.get("git")
         if not isinstance(git, dict):
             problems.append("schema_version 2 requires a git block")

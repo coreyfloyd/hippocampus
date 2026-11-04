@@ -144,3 +144,66 @@ def test_successor_of_stop_before_any_checkpoint(tmp_path):
     assert [row['session_id'] for row in b['resume']['session_history']] == ['B']
     assert b['resume']['resumed_chain'][0]['skeleton'] is True
     assert b['resume']['resumed_chain'][0]['written_at'] == a['written_at']
+
+
+@pytest.mark.parametrize('field,value,remove', [
+    ('written_at', None, True),
+    ('written_at', None, False),
+    ('written_at', '', False),
+    ('written_at', 42, False),
+    ('written_at', 'yesterday', False),
+    ('written_at', '2026-11-01T12:00:00', False),
+    ('session_id', None, True),
+    ('session_id', None, False),
+    ('session_id', '', False),
+    ('session_id', '   ', False),
+])
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_pickup_names_invalid_skeleton_metadata_without_copying(tmp_path, field, value, remove, tool):
+    skeleton = checkpoint(tmp_path, 'A', trigger='stop')
+    target = skeleton['subject'] if field == 'session_id' else skeleton
+    if remove:
+        target.pop(field)
+    else:
+        target[field] = value
+    path = tmp_path / 'A.json'
+    path.write_text(json.dumps(skeleton))
+    lint = command(tmp_path, 'B', 'scripts/lib/handoff.py', 'lint', path, tool=tool)
+    assert lint.returncode == 1
+    assert field in lint.stdout
+    result = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', path, tool=tool)
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report['error'] == 'chain_copy_failed'
+    assert field in report['message']
+    assert 'KeyError' not in result.stderr
+    assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_stop_guard_skeleton_has_valid_time_and_can_be_copied(tmp_path, tool):
+    path = tmp_path / 'A.json'
+    guard = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'guard-decide', '--path', path,
+                    payload={'session_id': 'A', 'cwd': str(tmp_path)}, tool=tool)
+    assert guard.returncode == 0, guard.stderr
+    skeleton = json.loads(path.read_text())
+    assert skeleton['skeleton'] is True
+    lint = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'lint', path, tool=tool)
+    assert lint.returncode == 0, lint.stdout
+    pickup(tmp_path, 'B', path, tool)
+    successor = checkpoint(tmp_path, 'B')
+    assert successor['resume']['resumed_chain'][0]['written_at'] == skeleton['written_at']
+
+
+def test_pickup_refuses_lint_valid_shape_without_subject_as_unsupported_schema(tmp_path):
+    path = tmp_path / 'legacy.json'
+    path.write_text(json.dumps({'schema_version': 1, 'written_at': '2026-11-01T12:00:00Z',
+                               'resume': {'headline': 'Work', 'open_loops': []}}))
+    lint = command(tmp_path, 'B', 'scripts/lib/handoff.py', 'lint', path)
+    assert lint.returncode == 0, lint.stdout
+    result = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', path)
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report['error'] == 'invalid_handoff'
+    assert 'schema-v2' in report['message']
+    assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()

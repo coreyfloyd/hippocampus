@@ -308,6 +308,15 @@ def handoff_briefing(path, no_commitments=False):
         result = subprocess.run(args, input=json.dumps(report), text=True,
                                 capture_output=True, timeout=30)
         if result.returncode != 0:
+            # The copy contract rejects malformed handoffs with a named error.
+            # Preserve that diagnostic rather than replacing it with a helper crash.
+            try:
+                failed = json.loads(result.stdout)
+            except ValueError:
+                failed = None
+            if (isinstance(failed, dict) and failed.get("error") == "chain_copy_failed"
+                    and isinstance(failed.get("message"), str) and failed["message"].strip()):
+                return failed
             reason = " ".join(result.stderr.split()) or "no diagnostic on stderr"
             raise ValueError("exited %s: %s" % (result.returncode, reason))
         try:

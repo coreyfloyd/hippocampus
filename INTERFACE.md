@@ -198,9 +198,13 @@ tool call, it denies a subagent or headless session the checklist and the checkp
 writers, using `checklist.py actor-guard`.
 
 An automatic stop handoff is marked `skeleton: true`, carries earlier history
-entries from the ledger, and adds no entry. A skeleton passes handoff lint but
-cannot complete a wrap. Checkpoint and wrap never fill a missing account from a
-headline or placeholder; a missing real history entry fails validation.
+entries from the ledger, and adds no entry. Every handoff, including a skeleton,
+requires a timezone-qualified ISO `written_at`; a schema-v2 subject requires a non-empty `session_id`. The stop
+writer supplies the timestamp through the shared checkpoint composer. Pickup
+refuses invalid copy metadata with `chain_copy_failed` and names the invalid
+field, preserving that diagnostic across its helper boundary. A valid skeleton
+passes handoff lint but cannot complete a wrap. Checkpoint and wrap never fill a
+missing account from a headline or placeholder; a missing real history entry fails validation.
 
 The ledger attributes a commit to the session only after a shell call that succeeded: the
 payload's `exit_code` (or `exitCode`) is 0, or, with no exit code, the event is
