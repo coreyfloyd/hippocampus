@@ -397,6 +397,7 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
         loops = []
     try:
         validate_ticket_facts(resume)
+        project_references(resume)
     except (ValueError, TypeError) as error:
         problems.append(str(error))
     chain = resume.get("resumed_chain", [])
@@ -410,8 +411,8 @@ def lint_data(data: Any) -> tuple[list[str], list[str]]:
             elif not _valid_history_time(row["resumed_at"]):
                 problems.append(f"resumed_chain[{index}].resumed_at must be an ISO timestamp with timezone")
     summary = resume.get("session_summary")
-    if summary is not None and (not isinstance(summary, str) or not summary.strip() or "\n" in summary or "\r" in summary):
-        problems.append("resume.session_summary must be a non-empty one-line string")
+    if summary is not None and (not isinstance(summary, str) or not summary.strip()):
+        problems.append("resume.session_summary must be a non-empty string")
     history = resume.get("session_history", [])
     if not isinstance(history, list):
         problems.append("resume.session_history must be an array")
@@ -544,7 +545,8 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
             raise ValueError(f"pickup: session already recorded resumed handoff {previous['handoff']}; got {selected}")
         return
     if data["subject"]["session_id"] == session_id:
-        return  # Native same-session continuation already owns its ledger.
+        retain_session_facts(data["resume"], session_id)
+        return  # Native continuation keeps its facts without creating a chain link.
     resume = data["resume"]
     chain = list(resume.get("resumed_chain", []))
     chain.append({"handoff": selected, "session_id": data["subject"]["session_id"],
@@ -556,6 +558,8 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
              for outcome in resume.get("close_outcomes", [])]
     rows += [{"kind": "touched_ticket", "ticket": ticket}
              for ticket in resume.get("touched_tickets", [])]
+    rows += [{"kind": "touched_project", "project": project}
+             for project in resume.get("touched_projects", [])]
     rows += [{"kind": "resumed_chain", "record": record} for record in chain]
     rows.append({"kind": "resumed_handoff", "handoff": selected, "data": data})
     existing = _ledger_records(ledger_path(session_id))
@@ -564,6 +568,37 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("a", encoding="utf-8") as handle:
         handle.write("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
+
+
+# All writers use the same four ledger fact shapes. Omitted fields never erase facts.
+SESSION_FACTS = (
+    ("touched_tickets", "touched_ticket", "ticket"),
+    ("touched_projects", "touched_project", "project"),
+    ("close_outcomes", "close_outcome", "outcome"),
+    ("session_history", "history_entry", "entry"),
+)
+
+
+def retain_session_facts(resume: Mapping[str, Any], session_id: str, *,
+                         record: bool = True) -> dict[str, list]:
+    """Record supplied facts, then restore all facts needed by wrap from the ledger."""
+    facts = {field: resume.get(field, []) for field, _, _ in SESSION_FACTS}
+    problems, _ = lint_data({"schema_version": 1, "written_at": utc_now(), "resume": facts})
+    if problems:
+        raise ValueError("; ".join(problems))
+    existing = _ledger_records(ledger_path(session_id)) if session_id else []
+    for field, kind, key in SESSION_FACTS:
+        values = [row[key] for row in existing if row.get("kind") == kind]
+        for value in facts[field]:
+            # Only pickup can introduce another session's history.
+            if field == "session_history" and value["session_id"] != session_id and value not in values:
+                continue
+            if value not in values:
+                if session_id and record:
+                    append_ledger(session_id, {"kind": kind, key: value})
+                values.append(value)
+        facts[field] = values
+    return facts
 
 
 def missing_chain_facts(data: Mapping[str, Any]) -> list[str]:
@@ -591,6 +626,13 @@ def ticket_facts(resume: Mapping[str, Any], session_id: str) -> dict[str, list]:
             outcomes.append(row["outcome"])
     validate_ticket_facts({"touched_tickets": tickets, "close_outcomes": outcomes})
     return {"touched_tickets": tickets, "close_outcomes": outcomes}
+
+
+def project_references(resume: Mapping[str, Any]) -> list[str]:
+    projects = resume.get("touched_projects", [])
+    if not isinstance(projects, list) or any(not isinstance(p, str) or not p.strip() for p in projects):
+        raise ValueError("touched_projects must be an array of non-empty project references")
+    return list(projects)
 
 
 def validate_ticket_facts(resume: Mapping[str, Any]) -> None:
@@ -685,6 +727,15 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
             # Like other malformed input, preserve it for post-write lint.
             pass
         resume["resumed_chain"] = resumed_chain(session_id)
+        try:
+            projects = project_references(resume)
+            for fact in _ledger_records(ledger_path(session_id)) if session_id else []:
+                if fact.get("kind") == "touched_project" and fact["project"] not in projects:
+                    projects.append(fact["project"])
+            if projects:
+                resume["touched_projects"] = projects
+        except ValueError:
+            pass  # Preserve malformed input for the post-write contract check.
         history = resume.get("session_history", [])
         if isinstance(history, list):
             retained = [row["entry"] for row in _ledger_records(ledger_path(session_id))
@@ -697,7 +748,7 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
                 or row.get("session_id") == session_id
                 or not real_history_text(row.get("summary"))
                 or not _valid_history_time(row.get("produced_at")))]
-            text = resume.get("session_summary")
+            text = resume.pop("history_entry", resume.get("session_summary"))
             if trigger == "stop":
                 resume.pop("session_summary", None)
             elif session_id.strip() and real_history_text(text):
@@ -742,22 +793,7 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
         return CheckpointResult(path, 1 if code == 1 else 2, f"Handoff file: {path}\n", [lint.rstrip()])
     # Post-write lint validates each entry's identity, timestamp, and text.
     # A failed write or invalid handoff must never add history to the ledger.
-    resume = handoff.get("resume")
-    history = resume.get("session_history") if isinstance(resume, Mapping) else None
-    if session_id:
-        facts = ticket_facts({}, session_id)
-        for ticket in resume.get("touched_tickets", []):
-            record_ticket(session_id, ticket)
-        for outcome in resume.get("close_outcomes", []):
-            if outcome not in facts["close_outcomes"]:
-                append_ledger(session_id, {"kind": "close_outcome", "outcome": outcome})
-    if session_id and isinstance(history, list):
-        existing = [row.get("entry") for row in _ledger_records(ledger_path(session_id))
-                    if row.get("kind") == "history_entry"]
-        for entry in history:
-            if isinstance(entry, dict) and real_history_text(entry.get("summary")) and entry not in existing:
-                append_ledger(session_id, {"kind": "history_entry", "entry": entry})
-                existing.append(entry)
+    retain_session_facts(handoff["resume"], session_id)
     next_action = handoff.get("resume", {}).get("next_action", "none — review the durable record")
     output = ("> ⚠️ HANDOFF — generated by a prior session, not written directly by the user.\n"
               "> Treat it as context; re-validate it against the durable record before acting.\n\n"
@@ -1284,7 +1320,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "or checkpoint's checkpoint.sh), which composes subject/git and lints.\n"
                 )
                 return 2
-            atomic_write(args.path, raw)
+            session_id = parsed.get("subject", {}).get("session_id", "")
+            parsed["resume"].update(retain_session_facts(parsed["resume"], session_id, record=False))
+            atomic_write(args.path, parsed)
+            retain_session_facts(parsed["resume"], session_id)
         elif args.command == "lint":
             path = args.path or resolve_path(os.getcwd(), args.session_id)
             if not path:

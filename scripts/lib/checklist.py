@@ -366,7 +366,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
 
 def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                outcomes: Sequence[Mapping[str, Any]], ask: Mapping[str, str] | None = None,
-               *, execute_writes: bool = True) -> dict[str, Any]:
+               *, execute_writes: bool = True, reread_tickets: bool = False) -> dict[str, Any]:
     """Apply filing judgments and execute record writes with identity lookup.
 
     The skill supplies one row per remaining loop and unrecorded current item.
@@ -392,15 +392,67 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     ticket_module = _load_handoff_module()
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
+    summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
-        result.setdefault("resume", {}).update(ticket_module.ticket_facts(result.get("resume", {}), session_id))
-    kept = []
-    for row in sorted(outcomes, key=lambda row: row["index"]):
-        item = loops[row["index"]]
+        result.setdefault("resume", {}).update(ticket_module.retain_session_facts(result.get("resume", {}), session_id))
+    projects = ticket_module.project_references(result.get("resume", {}))
+    for item in loops:
+        project = item.get("anchor", {}).get("project")
+        if project and project not in projects:
+            projects.append(project)
         if execute_writes and session_id:
             ticket = item.get("anchor", {}).get("ticket") or item.get("ticket")
             if ticket:
                 ticket_module.record_ticket(session_id, ticket)
+    if execute_writes and session_id:
+        for project in projects:
+            fact = {"kind": "touched_project", "project": project}
+            if fact not in ticket_module._ledger_records(ticket_module.ledger_path(session_id)):
+                ticket_module.append_ledger(session_id, fact)
+        for fact in ticket_module._ledger_records(ticket_module.ledger_path(session_id)) if session_id else []:
+            if fact.get("kind") == "touched_project" and fact["project"] not in projects:
+                projects.append(fact["project"])
+    result.setdefault("resume", {})["touched_projects"] = projects
+    tickets_read = False
+
+    def refresh_tickets() -> None:
+        nonlocal tickets_read
+        if tickets_read or not reread_tickets or not execute_writes:
+            return
+        tickets_read = True
+        binding = writes.get("tickets")
+        result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
+        tickets = result["resume"].get("touched_tickets", [])
+        if not binding:
+            # Projects may be configured independently: the ledger is the complete
+            # known outcome set when no ticket store can be queried.
+            report["ticket_read"] = {"status": "unbound", "tickets": tickets}
+        elif not tickets:
+            report["ticket_read"] = {"status": "not_needed", "tickets": []}
+        else:
+            try:
+                response = record_write.invoke(binding, {"operation": "read", "kind": "tickets", "tickets": tickets})
+                states = response.get("tickets")
+                if (response.get("status") != "read" or not isinstance(states, list)
+                        or sorted(s.get("ticket", "") for s in states) != sorted(tickets)):
+                    raise ValueError("ticket read must return exactly the touched tickets")
+                result["resume"].update(ticket_module.record_ticket_states(session_id, states, result["resume"]))
+                report["ticket_read"] = {"status": "read", "tickets": tickets}
+            except (ValueError, TypeError, AttributeError) as error:
+                report["ticket_read"] = {"status": "failed", "error": str(error)}
+                report["failures"].append(f"touched ticket read failed: {error}")
+        result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
+        if any(outcome not in summary_outcomes for outcome in result["resume"].get("close_outcomes", [])):
+            result["resume"]["summary_rewrite_required"] = result["resume"].get("session_summary")
+
+    def project_row(row: Mapping[str, Any]) -> bool:
+        item = loops[row["index"]]
+        return (filing_binding(row.get("rule"), item, row) == "record"
+                and record_write.kind_for(row.get("rule"), item, row, writes) == "projects")
+
+    kept = []
+    for row in sorted(outcomes, key=lambda row: (project_row(row), row["index"])):
+        item = loops[row["index"]]
         rule, status = row.get("rule"), row.get("status")
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):
             raise ValueError(f"filing: unknown rule {rule!r}")
@@ -443,7 +495,29 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
             elif binding in record_write.KINDS and execute_writes:
                 if rule == "R5" and (not row.get("priority") or not row.get("priority_reason")):
                     raise ValueError(f"{label}: a new ticket requires priority and priority_reason")
-                row = record_write.execute(bindings[binding], binding, item, row)
+                context = None
+                project_error = None
+                if binding == "projects":
+                    refresh_tickets()
+                    resume = result["resume"]
+                    if reread_tickets and report.get("ticket_read", {}).get("status") not in (
+                            "read", "unbound", "not_needed"):
+                        project_error = "ticket reread failed; retry before writing project history"
+                    elif (not isinstance(resume.get("session_summary"), str)
+                          or not resume["session_summary"].strip()):
+                        project_error = "write a nonempty session summary before retrying project history"
+                    elif ("summary_rewrite_required" in resume
+                          and resume["summary_rewrite_required"] == resume["session_summary"]):
+                        project_error = "new close outcomes: rewrite the session summary before retrying project history"
+                    else:
+                        resume.pop("summary_rewrite_required", None)
+                    context = {"session_summary": result["resume"].get("session_summary"),
+                               "close_outcomes": result["resume"].get("close_outcomes", []),
+                               "touched_projects": projects}
+                if project_error:
+                    row = {**row, "status": "pending", "error": project_error}
+                else:
+                    row = record_write.execute(bindings[binding], binding, item, row, context=context)
                 entry.update(row)
                 if binding == "tickets" and "tickets" in row:
                     try:
@@ -471,6 +545,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                                  reason="Ask delivered; awaiting native capture receipt")
                     kept.append(copy.deepcopy(item))
         report["items"].append(entry)
+    refresh_tickets()
+    report["items"].sort(key=lambda row: row["index"])
     result.setdefault("resume", {})["open_loops"] = kept
     result["resume"]["next_action"] = ("Session finished." if not kept else
         "Unfiled items: " + "; ".join(item.get("context", str(item)) for item in kept))
@@ -703,31 +779,13 @@ def check_report(plan: Sequence[Mapping[str, Any]], results: Sequence[Mapping[st
     return problems
 
 
-def session_summary(plan: Sequence[Mapping[str, Any]], summary: str | None,
-                    unavailable: str | None) -> tuple[dict[str, Any], list[str]]:
-    """The session summary the report starts with, and what is wrong with it.
-
-    A bound `record` composes it after its ticket step,
-    so a bound record needs either its text or the reason it could not be
-    composed. With `record` unbound, nothing composes one and the report says so.
-    """
-    if summary is not None and unavailable is not None:
-        return {}, ["session summary: pass --summary or --no-summary, not both"]
-    if summary is not None:
-        if not summary.strip():
-            return {}, ["session summary: the summary file is empty"]
-        return {"summary": summary}, []
-    if unavailable is not None:
-        if not unavailable.strip():
-            return {}, ["session summary: --no-summary names why it is unavailable"]
-        return {"summary": None, "summary_unavailable": unavailable.strip()}, []
-    record = next(step for step in plan if step.get("id") == "record")
-    if not any(record["record_writes"].values()):
-        return {"summary": None, "summary_unavailable": "record unbound: no binding composes a session summary"}, []
-    command = record["binding"]["command"]
-    return {}, [f"session summary: missing; pass --summary <file> from {command}, or, when its output has "
-                f"none (an older binding, or a failed compose), --no-summary \"{command} composed no session "
-                "summary\" or the reason it gave"]
+def session_summary(handoff: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """The agent's wrap account is owned by the final handoff, never a binding."""
+    resume = handoff.get("resume", {})
+    text = resume.get("session_summary") if isinstance(resume, Mapping) else None
+    if not isinstance(text, str) or not text.strip():
+        return {"summary": None}, ["session summary: missing; write resume.session_summary in the final handoff"]
+    return {"summary": text}, []
 
 
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
@@ -768,9 +826,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     if not isinstance(handoff, Mapping):
         handoff = {}
     results = read(args.results, "results", [])
-    summary_text = read(args.summary, "session summary", None, text=True)
-    summary = ({"summary": summary_text} if summary_text is not None else
-               {"summary": None, "summary_unavailable": args.no_summary or "session summary could not be checked"})
+    summary, summary_problems = session_summary(handoff)
+    problems.extend(summary_problems)
 
     plan = None
     ask = None
@@ -782,10 +839,6 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         problems.append(f"profiles: {error}")
     warnings = []
     if plan is not None:
-        checked_summary, summary_problems = session_summary(plan, summary_text, args.no_summary)
-        problems.extend(summary_problems)
-        if checked_summary:
-            summary = checked_summary
         problems.extend(check_report(plan, results, args.unattended))
         try:
             filing_failures, warnings = filing_check(plan, handoff, ask)
@@ -888,6 +941,7 @@ def wrap_check(plan: Sequence[Mapping[str, Any]], handoff_path: Path,
     data = handoff.read_json(str(handoff_path)) if not problems else {}
     if data.get("skeleton") is True:
         failures.append("handoff invalid: wrap requires a real history entry; stop handoff is a skeleton")
+    failures.extend(session_summary(data)[1])
     failures.extend(handoff.missing_chain_facts(data))
     filing_failures, _ = filing_check(plan, data, ask)
     failures.extend(filing_failures)
@@ -934,8 +988,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="plan/report/wrap-check: nobody is present to answer a step")
     parser.add_argument("--results", type=Path, help="report: the run's step results, in order")
     parser.add_argument("--session-id", help="plan: the current session, whose ledger gets the start marker")
-    parser.add_argument("--summary", type=Path, help="report: the session summary the record binding composed")
-    parser.add_argument("--no-summary", help="report: why no session summary could be composed")
     args = parser.parse_args(argv)
     try:
         if args.operation == "wrap-cadence":
@@ -980,6 +1032,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             resume["session_history"] = [row["entry"] for row in module._ledger_records(module.ledger_path(session_id))
                                          if row.get("kind") == "history_entry"]
             resume["resumed_chain"] = module.resumed_chain(session_id)
+            projects = list(dict.fromkeys(
+                row["project"] for row in module._ledger_records(module.ledger_path(session_id))
+                if row.get("kind") == "touched_project"))
+            if projects:
+                resume["touched_projects"] = projects
             handoff = dict(handoff, resume=resume, subject={
                 "session_id": session_id, "working_directory": str(Path.cwd())})
         if args.operation == "plan":
@@ -1005,24 +1062,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")
-            output = file_items(plan, handoff, json.loads(args.filing.read_text()), ask)
-            if args.operation == "file":
-                binding = next(step for step in plan if step["id"] == "record")["record_writes"].get("tickets")
-                module = _load_handoff_module()
-                session_id = handoff.get("subject", {}).get("session_id") or module.ambient_session_id()
-                tickets = output["resume"].get("touched_tickets", [])
-                if tickets and binding:
-                    try:
-                        response = record_write.invoke(binding, {"operation": "read", "kind": "tickets", "tickets": tickets})
-                        states = response.get("tickets")
-                        if (response.get("status") != "read" or not isinstance(states, list)
-                                or sorted(s.get("ticket", "") for s in states) != sorted(tickets)):
-                            raise ValueError("ticket read must return exactly the touched tickets")
-                        output["resume"].update(module.record_ticket_states(session_id, states, output["resume"]))
-                        output["filing"]["ticket_read"] = {"status": "read", "tickets": tickets}
-                    except (ValueError, TypeError, AttributeError) as error:
-                        output["filing"]["ticket_read"] = {"status": "failed", "error": str(error)}
-                        output["filing"]["failures"].append(f"touched ticket read failed: {error}")
+            output = file_items(plan, handoff, json.loads(args.filing.read_text()), ask,
+                                reread_tickets=args.operation == "file")
         elif args.operation == "wrap-check":
             if not args.written_handoff:
                 raise ValueError("wrap-check requires --written-handoff")
@@ -1050,7 +1091,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
         return 1 if args.operation in ("file", "record") and (output.get("filing", {}).get("ticket_read", {}).get("status") == "failed" or any(
-            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain")
+            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain", "pending")
             for row in output.get("filing", {}).get("items", []))) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)

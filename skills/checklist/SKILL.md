@@ -147,16 +147,18 @@ Note the UTC time the record step finishes for the freshness check when writes
 are configured. Run it again at wrap with the same identities; existing receipts
 are reused without another write. At wrap use `file`: it re-reads only the
 session's touched tickets (including carried references) through the tickets
-record write and records any closed ticket's missing close outcomes. No other
+record write, when bound, and records any closed ticket's missing close outcomes.
+When tickets is unbound, no reread runs: stored close outcomes are the complete
+known set, and a projects-only profile can write project history using them. No other
 ticket, milestone, or epic is queried. See record's ticket-state contract.
 Record every ticket read, changed, or closed with `ledger-ticket` as it happens;
 close outcomes and touched tickets live in the ledger through compaction.
 
-After its writes are final, retain the existing binding-composed **session
-summary**: record outcomes, each project's goal, what shipped, follow-up tickets,
-and decisions. The configured record writes supply the summary file or the
-reason none could be composed; retain it for the report. The project record
-write keeps each project's part in that project's session-log entry.
+The agent writes the **session summary** at wrap; record writes never compose
+it. First finish ticket writes and the wrap's touched-ticket read, retaining
+all returned close outcomes. Keep project session-log items for the final pass,
+after summary composition in step 5. Mid-session record runs do not compose the
+wrap summary.
 
 ### 2. Capture knowledge — native `knowledge`
 
@@ -264,14 +266,50 @@ Asks retain their complete text, choices, and proposal fields in carried items;
 never shorten them to fit a carried-item limit. For a failed write, checkpoint
 the retained payload before reporting failure.
 
+Before the final project writes and handoff, write one **session summary** in
+`resume.session_summary`, in Claude Code and Codex alike. Read every
+`resume.session_history` entry and `resume.close_outcomes` from the current
+session's payload and ledger, including the chain copied by pickup. Include the
+current session's work since its last entry. Cover the work of every entry and
+the stored close outcomes in connected prose; do not print a raw list of history
+entries. Every ticket named needs a description of its work, not only a number.
+The summary must read on its own without opening a ticket. It may span paragraphs.
+
+For each `resume.resumed_chain` row marked `skeleton` whose session has no history
+entry, say that the named session ended at its `written_at` time without an
+account of its work. A skeleton gap is part of the summary, not a wrap failure.
+
+When a projects record write is named, create a project session-log item for each
+project touched, capturing its item identity once for this wrap account and
+reusing it unchanged on retries. Pass these
+items through `file` after composing the summary. Retain `resume.touched_projects`
+(the complete project references, including carried projects); item
+`anchor.project` references are added automatically. Every projects lookup and
+write receives `session_summary`, `close_outcomes`, and `touched_projects` from
+the payload, outside the immutable item identity. Project writes run after ticket
+writes and, when tickets is bound and touched tickets exist, a successful
+touched-ticket read. With tickets unbound, use the stored close outcomes without
+a reread. A failed or malformed required reread keeps every project item pending
+without calling its lookup or write. A missing, null, or blank session summary
+also keeps the item pending: write a nonempty summary before retrying. If new close outcomes
+arrive after summary composition, project items also remain pending: rewrite the
+session summary and retry with the retained items and their unchanged identities.
+The payload's `resume.summary_rewrite_required` retains the stale summary until
+the agent supplies revised text; retrying unchanged text cannot save project history.
+Record writes save the supplied
+account; they cannot replace it or supply a fallback for the report.
+
 Write the interactive session's handoff using the
 same checkpoint module as `checkpoint`. Its slash skill is user-only;
 call its script directly: `<checkpoint.sh>` is `scripts/checkpoint.sh` in that
 skill's real directory (`../checkpoint/scripts/checkpoint.sh` from this
 one). Use the actual current session identity in either tool. Supply a real
-`resume.session_summary` account of work since this session's previous history
-entry. The writer appends it with the current identity and date and retains
-earlier ledger entries through compaction. A missing account fails wrap;
+`resume.history_entry` account of work since this session's previous history
+entry alongside the complete `resume.session_summary`. The writer appends the
+one-line history entry with the current identity and date and retains earlier
+ledger entries through compaction. The final handoff stores the complete summary
+separately from those entries; `history_entry` is consumed as write input and
+is not carried to a successor. A missing account fails wrap;
 an automatic stop skeleton cannot serve as a finished wrap handoff.
 
 ```bash
@@ -319,8 +357,8 @@ At each slot or native step, present carried items first and consume the typed o
 in the plan **as well as** the current conversation. Each entry has an `index`
 into the original resumed handoff and its complete `item`. Pass that item intact,
 including its producing session identity and time, a decision's author and source,
-lesson text, and artifact location/disposition. Also pass the resumed handoff's
-session summaries to the record step; earlier history belongs to its producer.
+lesson text, and artifact location/disposition. Also pass all carried history
+entries and close outcomes to the record step; earlier history belongs to its producer.
 
 Collect explicit saved-item acknowledgements from native steps and persist as JSON:
 `{"knowledge": [3]}`. Record uses per-item receipts through `record` or `file`, never numeric acknowledgements. These are indexes into the original
@@ -349,8 +387,8 @@ it never reopens the resumed handoff to discover them.
 ## Report
 
 Start the report with `outcome_line` from stored close outcomes, then the
-session summary from step 1, unedited, in Claude Code and Codex alike. When no
-summary was composed, follow the outcome line with the reason. Then name the
+session summary stored in the final handoff, unedited, in Claude Code and Codex
+alike. The agent composes it in step 5 even when no record writes are bound. Then name the
 user and repository profiles resolved. Report each planned step in its
 execution order, its bound command if any, and its result: run, carried (an
 unbound slot), pending, or failed. Check the results with the same profile
@@ -359,20 +397,17 @@ arguments before reporting completion:
 ```bash
 python3 <checklist-module> report --user-profile <user-profile> \
   --repository-profile <repository-profile> --results <results.json> \
-  --summary <summary-file> --handoff <written-handoff> [--unattended]
+  --handoff <written-handoff> [--unattended]
 ```
 
 `--handoff` is required and must name the valid handoff checkpoint wrote;
 an omitted, unreadable, malformed, or invalid handoff fails the report. The
 report still shows every ask recoverable from readable handoff fields; invalid
 fields never hide asks held in other fields.
-`--summary` is the file composed after the record writes. When it could not compose
-one, pass `--no-summary <reason>` with its reason instead. When its output has
-no session summary at all (a binding that predates session summaries), pass
-`--no-summary "<command> composed no session summary"`; the wrap continues. A bound record with
-neither fails the check, so the summary is never silently left out. With record
-unbound, omit both: nothing composes a summary, and the output says so. The
-output's first field is `outcome_line`, followed by the summary.
+The report reads `resume.session_summary` only from this handoff. An absent or
+empty summary fails the report and wrap; there is no binding-supplied summary or
+unavailable-summary fallback. The output's first field is `outcome_line`, followed
+by `summary`. It still ends with every pending ask on a failed wrap.
 
 `<results.json>` is an array, in execution order, of
 `{"id": <step>, "status": <result>, "writes": [<paths or locations>], "reason": <text>}`.

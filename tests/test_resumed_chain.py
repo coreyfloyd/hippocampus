@@ -207,3 +207,106 @@ def test_pickup_refuses_lint_valid_shape_without_subject_as_unsupported_schema(t
     assert report['error'] == 'invalid_handoff'
     assert 'schema-v2' in report['message']
     assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()
+
+
+@pytest.mark.parametrize('field', ['touched_projects', 'touched_tickets', 'session_history', 'close_outcomes', 'resumed_chain'])
+@pytest.mark.parametrize('value', ['example/project', None, {}, [None], [' ']])
+def test_pickup_rejects_malformed_copied_lists_without_ledger_rows(tmp_path, field, value):
+    source = checkpoint(tmp_path, 'A')
+    source['resume'][field] = value
+    path = tmp_path / 'A.json'
+    path.write_text(json.dumps(source))
+    lint = command(tmp_path, 'B', 'scripts/lib/handoff.py', 'lint', path)
+    assert lint.returncode == 1
+    assert field in lint.stdout or (field == 'close_outcomes' and 'close outcome' in lint.stdout)
+    picked = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', path)
+    assert picked.returncode == 1
+    assert not (tmp_path / 'ledger/session-touched-paths.B.jsonl').exists()
+
+
+@pytest.mark.parametrize('value', ['example/project', None, {}, [None], [' ']])
+def test_checkpoint_preserves_invalid_projects_and_reports_contract_error(tmp_path, value):
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', payload={'resume': {'session_summary': 'Recorded project work.',
+                                                             'touched_projects': value}})
+    assert result.returncode == 1
+    assert 'touched_projects' in result.stderr
+    assert json.loads((tmp_path / 'A.json').read_text())['resume']['touched_projects'] == value
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_pickup_copies_whole_project_references(tmp_path, tool):
+    projects = ['example/project', 'example/second']
+    checkpoint(tmp_path, 'A', {'touched_projects': projects})
+    pickup(tmp_path, 'B', tmp_path / 'A.json', tool)
+    planned = command(tmp_path, 'B', 'scripts/lib/checklist.py', 'plan', '--session-id', 'B', tool=tool)
+    assert planned.returncode == 0, planned.stderr
+    assert json.loads(planned.stdout)['handoff']['resume']['touched_projects'] == projects
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+@pytest.mark.parametrize('writer', ['checkpoint', 'write', 'pickup', 'same-session-pickup', 'file', 'record'])
+def test_every_writer_retains_wrap_facts_after_compaction(tmp_path, tool, writer):
+    # Build input independently of the writer under test's ledger.
+    source = checkpoint(tmp_path, 'A', {**facts(), 'touched_projects': ['example/project']})
+    import shutil
+    shutil.rmtree(tmp_path / 'ledger')
+    session = 'B' if writer == 'pickup' else 'A'
+    if writer in ('pickup', 'same-session-pickup'):
+        pickup(tmp_path, session, tmp_path / 'A.json', tool)
+    elif writer == 'checkpoint':
+        checkpoint(tmp_path, session, source['resume'])
+    elif writer == 'write':
+        result = command(tmp_path, session, 'scripts/lib/handoff.py', 'write',
+                         tmp_path / 'A.json', payload=source, tool=tool)
+        assert result.returncode == 0, result.stderr
+    else:
+        filing = tmp_path / 'filing.json'
+        filing.write_text('[]')
+        result = command(tmp_path, session, 'scripts/lib/checklist.py', writer,
+                         '--handoff', tmp_path / 'A.json', '--filing', filing, tool=tool)
+        assert result.returncode == 0, result.stderr
+    if writer == 'write':
+        omitted = json.loads(json.dumps(source))
+        for field in ('touched_tickets', 'touched_projects', 'close_outcomes'):
+            omitted['resume'].pop(field)
+        omitted['resume']['session_history'] = [dict(source['resume']['session_history'][0],
+                                                     summary='Continued through a direct write.')]
+        result = command(tmp_path, session, 'scripts/lib/handoff.py', 'write',
+                         tmp_path / 'A.json', payload=omitted, tool=tool)
+        assert result.returncode == 0, result.stderr
+        written = json.loads((tmp_path / 'A.json').read_text())
+        assert written['resume']['touched_projects'] == ['example/project']
+        assert source['resume']['session_history'][0] in written['resume']['session_history']
+    compacted = checkpoint(tmp_path, session, {'session_summary': 'Continued the implementation.'})
+    for field in ('touched_projects', 'touched_tickets', 'close_outcomes'):
+        assert compacted['resume'][field] == source['resume'][field]
+    assert source['resume']['session_history'][0] in compacted['resume']['session_history']
+    # A second write omits every fact; the project binding still gets the whole context.
+    compacted = checkpoint(tmp_path, session, {'session_summary': 'Completed the implementation.'})
+    item = {'type': 'progress', 'context': 'Record completed project work',
+            'record_kind': 'projects', 'session_id': session,
+            'produced_at': '2026-11-01T12:00:00Z', 'disposition': 'record'}
+    compacted['resume']['open_loops'] = [item]
+    source_path = tmp_path / 'filing-source.json'
+    source_path.write_text(json.dumps(compacted))
+    calls = tmp_path / 'calls.jsonl'
+    store = tmp_path / 'store.py'
+    store.write_text("import json, sys\nfrom pathlib import Path\nr=json.load(sys.stdin)\n"
+        "with Path(sys.argv[1]).open('a') as f: f.write(json.dumps(r)+'\\n')\n"
+        "print(json.dumps({'status':'not_found'} if r['operation']=='lookup' else "
+        "{'status':'saved','receipt':{'identity':r['identity'],'destination':'project history'}}))\n")
+    profile = tmp_path / 'writes.json'
+    profile.write_text(json.dumps({'name': 'test', 'record_writes': {'projects': {
+        'command': [sys.executable, str(store), str(calls)]}}}))
+    filing = tmp_path / 'filing.json'
+    filing.write_text(json.dumps([{'index': 0, 'rule': 'R2', 'status': 'filed', 'read_status': 'ok'}]))
+    result = command(tmp_path, session, 'scripts/lib/checklist.py', 'file', '--handoff',
+                     source_path, '--filing', filing, '--user-profile', profile, tool=tool)
+    assert result.returncode == 0, result.stderr
+    requests = list(map(json.loads, calls.read_text().splitlines()))
+    assert [r['operation'] for r in requests] == ['lookup', 'write']
+    for request in requests:
+        assert request['touched_projects'] == ['example/project']
+        assert request['close_outcomes'] == facts()['close_outcomes']
+        assert request['session_summary'] == 'Completed the implementation.'
