@@ -15,10 +15,13 @@ import pickup
 def test_selected_handoff_preserves_pointers_and_carried_commitments_without_tools(tmp_path, monkeypatch, tool_present):
     payload = {
         'schema_version': 2,
+        'written_at': '2026-10-18T12:00:00Z',
         'subject': {'working_directory': str(tmp_path), 'session_id': 'previous'},
         'git': {'repository_root': '', 'branch': ''},
         'uncommitted_files': [],
         'resume': {
+            'session_history': [{'session_id': 'previous', 'produced_at': '2026-10-18T12:00:00Z',
+                                 'summary': 'Captured the deployment verification commitment.'}],
             'headline': 'Continue the work', 'next_action': 'Verify the result',
             'open_loops': [{'type': 'commitment', 'context': 'Check the deployment',
                             'anchor': {'ticket': 'example/project#12'},

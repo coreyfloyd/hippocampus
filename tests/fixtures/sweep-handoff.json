@@ -65,6 +65,13 @@
           "ticket": "https://example.test/ticket"
         }
       }
+    ],
+    "session_history": [
+      {
+        "session_id": "redacted-session",
+        "produced_at": "2026-10-01T00:00:00Z",
+        "summary": "Captured commitments and progress for review."
+      }
     ]
   },
   "spawned_processes": [],

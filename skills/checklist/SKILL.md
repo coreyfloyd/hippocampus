@@ -258,7 +258,11 @@ Write the interactive session's handoff using the
 same checkpoint module as `checkpoint`. Its slash skill is user-only;
 call its script directly: `<checkpoint.sh>` is `scripts/checkpoint.sh` in that
 skill's real directory (`../checkpoint/scripts/checkpoint.sh` from this
-one). Use the actual current session identity in either tool.
+one). Use the actual current session identity in either tool. Supply a real
+`resume.session_summary` account of work since this session's previous history
+entry. The writer appends it with the current identity and date and retains
+earlier ledger entries through compaction. A missing account fails wrap;
+an automatic stop skeleton cannot serve as a finished wrap handoff.
 
 ```bash
 bash <checkpoint.sh> <<'JSON'

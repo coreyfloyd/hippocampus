@@ -209,7 +209,8 @@ and checklist `plan`, `settle`, and `wrap-check` read it next.
 handoff JSON
 ├── schema_version                     # 2 for current checkpoint output
 ├── written_at                         # UTC checkpoint time
-├── trigger                            # checkpoint, wrap, or manual
+├── trigger                            # checkpoint, wrap, manual, or stop
+├── skeleton                           # true only for automatic stop handoffs
 ├── subject
 │   ├── working_directory              # canonical subject path
 │   └── session_id                     # calling interactive session identity
@@ -220,8 +221,8 @@ handoff JSON
 ├── resume
 │   ├── headline                       # one-line continuation headline
 │   ├── next_action                    # concrete next action
-│   ├── session_summary                # current session's one-line continuation context
-│   ├── session_history[]              # earlier summaries plus the current producer
+│   ├── session_summary                # authored work since the previous entry
+│   ├── session_history[]              # append-only dated history entries
 │   │   └── session_id, produced_at, summary # producer, UTC time, one-line context
 │   └── open_loops[]                   # unconsumed items, with original provenance
 ├── uncommitted_files[]                # absolute changed paths owned by this session in the ledger
@@ -265,7 +266,9 @@ Location: `session-touched-paths.<URL-encoded-session-id>.jsonl` in the resolved
 ledger directory. The tool hook writes observations and file entries;
 `python3 scripts/lib/handoff.py ledger-file` registers shell-driven edits,
 `ledger-artifact` registers published artifacts, and checklist `plan` appends its
-start marker. Checkpoint and the stop and wrap checks read it next.
+start marker. Every checkpoint and wrap appends its dated history entry;
+automatic stop handoffs read earlier entries without adding one. Checkpoint and
+the stop and wrap checks read the ledger next.
 [Captured ledger](examples/ledger.jsonl).
 
 ```text
@@ -279,6 +282,9 @@ ledger JSONL                          # one JSON object per line
 │       # kind/type=artifact; published location; context="Published artifact";
 │       # keep/remove; pending/recorded/removed; producer; original production time;
 │       # canonical subject; UTC append time
+├── history entry
+│   └── kind, entry
+│       # kind=history_entry; entry holds session_id, produced_at, summary
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start

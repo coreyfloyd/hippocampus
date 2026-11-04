@@ -73,6 +73,7 @@ def source(sandbox, name='source', directory=None, loops=None, version=2):
     data['subject'] = {'working_directory': str(directory or base), 'session_id': name}
     data['git'] = {'repository_root': '', 'branch': 'main', 'head': ''}
     data['schema_version'] = version
+    data['resume']['session_history'][-1]['session_id'] = name
     data['uncommitted_files'] = []
     data['resume']['open_loops'] = loops if loops is not None else [
         {'context': 'Optional observation', 'disposition': 'consider'}]

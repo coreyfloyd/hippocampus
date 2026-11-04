@@ -90,7 +90,7 @@ def new_repo(path):
 
 
 def checkpoint(cwd, session_id, env, headline, plugin_root=ROOT):
-    continuation = {"resume": {"headline": headline, "next_action": "Run the focused test",
+    continuation = {"resume": {"headline": headline, "session_summary": "Prepared the continuation and focused test.", "next_action": "Run the focused test",
                                "open_loops": []}, "spawned_processes": []}
     result = subprocess.run([sys.executable, os.path.join(plugin_root, "scripts", "lib", "handoff.py"),
                              "checkpoint", "--cwd", str(cwd), "--session-id", session_id],

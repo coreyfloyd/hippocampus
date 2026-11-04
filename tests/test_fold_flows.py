@@ -87,6 +87,7 @@ def source(home):
     # current producer before testing pickup.
     value = json.loads((ROOT / 'docs/examples/handoff.json').read_text())
     value['subject'] = {'working_directory': str(home), 'session_id': 'captured-session'}
+    value['resume']['session_history'][-1]['session_id'] = 'captured-session'
     value['git'] = {'repository_root': '', 'branch': '', 'head': ''}
     value['uncommitted_files'] = []
     value['resume']['open_loops'] = [

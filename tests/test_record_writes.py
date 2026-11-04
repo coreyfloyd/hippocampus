@@ -47,7 +47,7 @@ def item(text='change', **extra):
 
 
 def payload(items):
-    return {'subject': {'session_id': 'successor'}, 'resume': {'open_loops': items}}
+    return {'subject': {'session_id': 'successor'}, 'resume': {'session_summary': 'Reconciled the session items with the record stores.', 'open_loops': items}}
 
 
 def row(index=0, rule='R2', **extra):
