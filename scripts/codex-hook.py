@@ -124,7 +124,9 @@ def main():
     if operation == 'actor-guard':
         result = command('checklist.py','actor-guard',payload)
     else:
-        if command('handoff.py','is-interactive',payload).returncode != 0:
+        # Session start also serves a named agent's standing state to headless runs;
+        # the engine applies the interactive check to the handoff part itself.
+        if operation != 'post-compact' and command('handoff.py','is-interactive',payload).returncode != 0:
             return
         response = payload.get('tool_response')
         if isinstance(response, str):
