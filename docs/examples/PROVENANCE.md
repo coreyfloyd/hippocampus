@@ -13,10 +13,11 @@ the other captured values remain from the original capture.
 `profile.md` and `config.json` are **validated inputs**, not captured outputs:
 the package reads these files and has no command that generates them. The profile
 is an unchanged copy of `tests/fixtures/profiles/user.md`. The configuration is
-the existing `{"handoff_dir": "~/state/session-handoffs"}` literal from
-`test_configured_handoff_dir_places_handoffs_and_ledger` in `tests/test_handoff.py`,
-serialized with two-space indentation and a trailing newline. Its shape and key
-are defined by `INTERFACE.md` section 2. No private configuration was copied.
+a documented handoff-directory override and enforcement-reference path, plus the
+55-minute timed checkpoint interval and 200,000-token limit defaults. It is
+serialized with two-space indentation and a trailing newline. Its shape and keys
+are defined by `INTERFACE.md` section 2 and round-trip through `config-get` in
+`test_configuration_example_is_read_by_config_get`. No private configuration was copied.
 
 ## Sandbox and exact capture commands
 

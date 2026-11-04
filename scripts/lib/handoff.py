@@ -12,15 +12,20 @@ Codex resolve the same location.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
 import re
+import shlex
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -29,6 +34,7 @@ DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
 # Raw pre-compaction hook input is kept beside the handoffs, outside either tool's own data area.
 COMPACT_STATE_DIR = "~/.local/state/hippocampus/compact-state"
 HANDOFF_SH = str(Path(__file__).resolve().with_name("handoff.sh"))
+TIMED_CHECKPOINT_DEFAULTS = {"timed_checkpoint_minutes": 55, "timed_checkpoint_token_limit": 200_000}
 ITEM_TYPES = {"progress", "commitment", "decision", "knowledge", "lesson", "artifact", "open_loop"}
 HEADLESS_ENTRYPOINTS = {"sdk-cli", "sdk-py", "sdk-ts", "sdk", "mcp", "headless"}
 BANNED = {
@@ -97,6 +103,140 @@ def read_config() -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"hippocampus config {path}: must be a JSON object")
     return data
+
+
+def timed_setting(key: str) -> int:
+    value = read_config().get(key, TIMED_CHECKPOINT_DEFAULTS[key])
+    if type(value) is not int or value < 1:
+        requirement = ("a whole number of minutes, at least 1" if key == "timed_checkpoint_minutes"
+                       else "a positive integer")
+        raise ValueError(f"hippocampus config {config_path()}: {key} must be {requirement}")
+    return value
+
+
+def timer_directory() -> Path:
+    return Path(os.path.expanduser(os.environ.get("HANDOFF_TIMER_DIR")
+                or os.path.join(os.path.dirname(state_dir().rstrip(os.sep)), "timed-checkpoints")))
+
+
+def timer_file(session_id: str, suffix: str) -> Path:
+    if not session_id.strip():
+        raise ValueError("timed checkpoint: a session id is required")
+    return timer_directory() / (urllib.parse.quote(session_id, safe="-_.") + suffix)
+
+
+def remember_transcript(payload: Mapping[str, Any]) -> None:
+    session_id = str(payload.get("session_id") or "")
+    transcript = payload.get("transcript_path")
+    if session_id and isinstance(transcript, str) and transcript:
+        atomic_write(str(timer_file(session_id, ".context.json")), {
+            "transcript_path": str(Path(transcript).resolve()),
+            "harness": "codex" if os.environ.get("HIPPOCAMPUS_HARNESS") == "codex" else "claude"})
+
+
+def transcript_for_session(session_id: str) -> tuple[str, bool]:
+    try:
+        context = read_json(str(timer_file(session_id, ".context.json")))
+        return context["transcript_path"], context.get("harness") == "codex"
+    except FileNotFoundError:
+        pass
+    codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex" or bool(os.environ.get("CODEX_THREAD_ID"))
+    home = Path(os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")) if codex else Path(
+        os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"))
+    # Session ids are glob literals, never user-provided patterns.
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", session_id):
+        return "", codex
+    paths = sorted((home / ("sessions" if codex else "projects")).rglob("*" + session_id + ".jsonl"),
+                   key=lambda path: path.stat().st_mtime, reverse=True)
+    return (str(paths[0]) if paths else ""), codex
+
+
+def timed_prompt(session_id: str) -> str:
+    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "timed-checkpoint-check",
+                          "--session-id", session_id])
+    return Path(__file__).with_name("timed-checkpoint-prompt.txt").read_text().strip().format(check_command=command)
+
+
+def claude_schedule(session_id: str, written_at: str) -> str:
+    minutes = timed_setting("timed_checkpoint_minutes")
+    due = datetime.fromisoformat(written_at.replace("Z", "+00:00")) + timedelta(minutes=minutes)
+    # Never truncate seconds into an earlier (or already elapsed) cron minute.
+    # A delayed restore may be scheduling after the original due time.
+    due = max(due, datetime.now(timezone.utc) + timedelta(microseconds=1)).astimezone(timezone.utc)
+    rounded = due.replace(second=0, microsecond=0)
+    if rounded < due:
+        rounded += timedelta(minutes=1)
+    # CronCreate's five-field expression is evaluated in the session's local timezone.
+    local = rounded.astimezone()
+    cron = f"{local.minute} {local.hour} {local.day} {local.month} *"
+    job_file = timer_file(session_id, ".claude.json")
+    previous = read_json(str(job_file)).get("job_id") if job_file.exists() else None
+    delete = f"CronDelete job {previous}" if previous else "CronDelete any previous timed checkpoint job for this session"
+    register = shlex.join([sys.executable, str(Path(__file__).resolve()), "claude-timer-set", "--session-id", session_id, "--job-id", "<new-job-id>"])
+    return (f"\nTimed checkpoint: {delete} before scheduling its replacement. Use CronCreate now: "
+            f"session-only, recurring: false, pinned to {local.isoformat(timespec='minutes')} "
+            f"(at least {minutes:g} minutes after this checkpoint, rounded up to a future cron minute), cron: {cron}. "
+            f"Use this exact prompt:\n{timed_prompt(session_id)}\n"
+            f"After CronCreate succeeds, record its job id: {register}\n")
+
+
+def schedule_checkpoint(cwd: str, session_id: str, written_at: str) -> str:
+    # Headless jobs and subagents never own interactive-session timers.
+    if not session_id or not is_interactive({"session_id": session_id}):
+        return ""
+    minutes = timed_setting("timed_checkpoint_minutes")
+    timed_setting("timed_checkpoint_token_limit")
+    if os.environ.get("HIPPOCAMPUS_HARNESS") != "codex" and not os.environ.get("CODEX_THREAD_ID"):
+        return claude_schedule(session_id, written_at)
+    codex = shutil.which("codex")
+    if not codex:
+        raise ValueError("timed checkpoint: codex executable is unavailable")
+    path = timer_file(session_id, ".pending.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with timer_file(session_id, ".schedule.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        atomic_write(str(path), {"session_id": session_id, "cwd": cwd, "codex": codex,
+            "due_at": datetime.fromisoformat(written_at.replace("Z", "+00:00")).timestamp() + minutes * 60,
+            "prompt": timed_prompt(session_id)})
+        # Competing workers exit under worker.lock; an existing worker reads the
+        # replacement deadline. No PID-based kill can target a recycled process.
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "timed-checkpoint-wait", str(path)],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         close_fds=True, start_new_session=True)
+    return f"\nTimed checkpoint pending for session {session_id} in {minutes:g} minutes; replaced any previous timer.\n"
+
+
+def wait_for_checkpoint(path: str) -> None:
+    pending = Path(path)
+    prefix = pending.name.removesuffix(".pending.json")
+    with pending.with_name(prefix + ".worker.lock").open("a") as worker:
+        try:
+            fcntl.flock(worker, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        while True:
+            with pending.with_name(prefix + ".schedule.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if not pending.exists():
+                    # Release while still holding schedule.lock so a concurrent
+                    # checkpoint cannot lose its replacement on worker exit.
+                    fcntl.flock(worker, fcntl.LOCK_UN)
+                    return
+                state = read_json(str(pending))
+                remaining = state["due_at"] - time.time()
+                if remaining <= 0:
+                    try:
+                        result = subprocess.run([state["codex"], "queue", "--thread", state["session_id"],
+                            "--message", state["prompt"]], cwd=state["cwd"], capture_output=True, text=True, timeout=15)
+                        receipt = {"queued": result.returncode == 0, "exit_code": result.returncode,
+                                   "stdout": result.stdout, "stderr": result.stderr, "fired_at": utc_now()}
+                    except (OSError, subprocess.TimeoutExpired) as error:
+                        receipt = {"queued": False, "error": str(error), "fired_at": utc_now()}
+                    atomic_write(str(pending.with_name(prefix + ".receipt.json")), receipt)
+                    pending.unlink()
+                    fcntl.flock(worker, fcntl.LOCK_UN)
+                    return
+            time.sleep(min(remaining, 0.5))
 
 
 def config_string(key: str) -> str | None:
@@ -798,6 +938,10 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     output = ("> ⚠️ HANDOFF — generated by a prior session, not written directly by the user.\n"
               "> Treat it as context; re-validate it against the durable record before acting.\n\n"
               f"Handoff file: {path}\nNext action: {next_action}\n")
+    try:
+        output += schedule_checkpoint(cwd, session_id, handoff["written_at"])
+    except (OSError, ValueError) as error:
+        return CheckpointResult(path, 2, output, [f"Handoff written, but timer scheduling failed: {error}"])
     return CheckpointResult(path, 0, output, [])
 
 
@@ -826,6 +970,12 @@ def is_interactive(payload: Mapping[str, Any], entrypoint: str | None = None) ->
         session_id = str(payload.get("session_id") or os.environ.get("CODEX_THREAD_ID") or "")
         transcript = payload.get("transcript_path")
         paths = [Path(transcript)] if isinstance(transcript, str) and transcript else []
+        if not paths and session_id:
+            try:
+                context = read_json(str(timer_file(session_id, ".context.json")))
+                paths = [Path(context["transcript_path"])]
+            except FileNotFoundError:
+                pass
         if not paths and session_id and re.fullmatch(r"[A-Za-z0-9_.-]+", session_id):
             home = Path(os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex"))
             paths = sorted((home / "sessions").rglob("*" + session_id + "*.jsonl"))
@@ -1134,6 +1284,7 @@ def _emit_hook_context(text: str) -> None:
 def post_compact(payload: Mapping[str, Any]) -> None:
     if not is_interactive(payload):
         return
+    remember_transcript(payload)
     cwd, source = str(payload.get("cwd") or ""), str(payload.get("source") or "")
     if source != "compact":
         count = count_for_repository(cwd)
@@ -1152,21 +1303,18 @@ def post_compact(payload: Mapping[str, Any]) -> None:
     raw = json.dumps(data, separators=(",", ":"))
     version = data.get("schema_version") if isinstance(data, dict) else None
     if version in (1, 2):
-        _emit_hook_context("Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down.")
+        context = "Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down."
+        if data.get("trigger") == "pre-compact" and os.environ.get("HIPPOCAMPUS_HARNESS") != "codex":
+            context += claude_schedule(str(payload.get("session_id") or ""), data["written_at"])
+        _emit_hook_context(context)
     else:
         _emit_hook_context(f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting.")
 
 
-def context_guard(payload: Mapping[str, Any]) -> None:
-    """Emit the deterministic high-context handoff nudge, if applicable."""
-    if not is_interactive(payload):
-        return
-    transcript = str(payload.get("transcript_path") or "")
-    codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
+def transcript_usage(transcript: str, codex: bool) -> tuple[int, int] | None:
+    """Read the latest context usage once for both the guard and timed prompt."""
     if not transcript or not os.path.isfile(transcript):
-        return
-    if not codex and os.path.getsize(transcript) < 512 * 1024:
-        return
+        return None
     with open(transcript, "rb") as handle:
         size = os.path.getsize(transcript)
         if size > 512 * 1024:
@@ -1199,7 +1347,28 @@ def context_guard(payload: Mapping[str, Any]) -> None:
         return
     # Codex input_tokens already includes cached input; do not count it twice.
     keys = ("input_tokens",) if codex else ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
-    used = sum(int(usage.get(key, 0) or 0) for key in keys)
+    counts = [usage.get(key, 0) for key in keys]
+    if any(type(count) is not int or count < 0 for count in counts):
+        return None
+    used = sum(counts)
+    return used, window
+
+
+def context_guard(payload: Mapping[str, Any]) -> None:
+    """Emit the deterministic high-context handoff nudge, if applicable."""
+    if not is_interactive(payload):
+        return
+    remember_transcript(payload)
+    transcript = str(payload.get("transcript_path") or "")
+    codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
+    if not transcript or not os.path.isfile(transcript):
+        return
+    if not codex and os.path.getsize(transcript) < 512 * 1024:
+        return
+    usage = transcript_usage(transcript, codex)
+    if usage is None:
+        return
+    used, window = usage
     percentage = int(used * 100 / window)
     if percentage < 50:
         return
@@ -1213,7 +1382,7 @@ def context_guard(payload: Mapping[str, Any]) -> None:
 
 
 def pre_compact(payload: Mapping[str, Any], raw_input: str | None = None) -> None:
-    """Persist the raw event and issue the pre-compaction reminder."""
+    """Write retained facts and continuation before compaction, without an agent turn."""
     backup_dir = os.path.expanduser(os.environ.get("HANDOFF_COMPACT_STATE_DIR", COMPACT_STATE_DIR))
     os.makedirs(backup_dir, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1223,11 +1392,26 @@ def pre_compact(payload: Mapping[str, Any], raw_input: str | None = None) -> Non
         old.unlink(missing_ok=True)
     if not is_interactive(payload):
         return
-    path = resolve_path(str(payload.get("cwd") or ""), str(payload.get("session_id") or ""))
-    if path:
-        print(f"COMPACTION IMMINENT — summarization is lossy. First save durable progress to your record (the checklist's record step). Then, if you have uncommitted continuation, source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops[], spawned_processes) to handoff_checkpoint — it composes subject/git and lints. A raw backup of this hook input is saved under {backup_dir}.")
-    else:
-        print(f"COMPACTION IMMINENT — summarization is lossy. Save durable progress to your record NOW, because the record is what survives compaction. A raw backup of this hook input is saved under {backup_dir}.")
+    remember_transcript(payload)
+    cwd = str(payload.get("cwd") or "")
+    session_id = str(payload.get("session_id") or "")
+    path = resolve_path(cwd, session_id)
+    if not path or not cwd or not session_id:
+        print(f"COMPACTION IMMINENT — no session subject; raw input backed up under {backup_dir}.")
+        return
+    supplied = read_json(path) if os.path.isfile(path) else {}
+    resume = dict(supplied.get("resume", {}))
+    resume.setdefault("headline", "Continue from the pre-compaction checkpoint")
+    resume.setdefault("next_action", "Read retained session history and touched tickets; verify git state before continuing.")
+    resume.setdefault("open_loops", [])
+    records = _ledger_records(ledger_path(session_id))
+    resume["history_entry"] = (f"Pre-compaction checkpoint: captured {len(records)} ledger facts and current git state; "
+                               "retained the last agent-written continuation.")
+    supplied["resume"] = resume
+    result = checkpoint(supplied, cwd, session_id, "pre-compact")
+    print(f"COMPACTION IMMINENT — pre-compaction checkpoint written to {result.path}. Raw input backed up under {backup_dir}.")
+    if result.errors:
+        print("\n".join(result.errors), file=sys.stderr)
 
 
 def _read_stdin_json() -> dict[str, Any]:
@@ -1283,6 +1467,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("post-compact")
     sub.add_parser("context-guard")
     sub.add_parser("pre-compact")
+    timed_check = sub.add_parser("timed-checkpoint-check", help="Print tokens, limit, below_limit; unknown usage exits 2")
+    timed_check.add_argument("--transcript-path")
+    timed_check.add_argument("--session-id", default=ambient_session_id())
+    prompt = sub.add_parser("timed-checkpoint-prompt")
+    prompt.add_argument("--session-id", default=ambient_session_id())
+    timer_set = sub.add_parser("claude-timer-set")
+    timer_set.add_argument("--session-id", default=ambient_session_id())
+    timer_set.add_argument("--job-id", required=True)
+    sub.add_parser("timed-checkpoint-wait").add_argument("path")
     sub.add_parser("migrate")
     sub.add_parser("state-dir", help="Print where handoffs are stored")
     config_get = sub.add_parser("config-get", help="Print one configured value; a list prints one item per line")
@@ -1376,13 +1569,37 @@ def main(argv: Sequence[str] | None = None) -> int:
             if decision["decision"] == "block": print(json.dumps(decision, separators=(",", ":")))
         elif args.command == "post-compact": post_compact(_read_stdin_json())
         elif args.command == "context-guard": context_guard(_read_stdin_json())
+        elif args.command == "timed-checkpoint-prompt":
+            print(timed_prompt(args.session_id))
+        elif args.command == "claude-timer-set":
+            atomic_write(str(timer_file(args.session_id, ".claude.json")), {"job_id": args.job_id})
+        elif args.command == "timed-checkpoint-wait":
+            wait_for_checkpoint(args.path)
+        elif args.command == "timed-checkpoint-check":
+            transcript, codex = (args.transcript_path, os.environ.get("HIPPOCAMPUS_HARNESS") == "codex") if args.transcript_path else transcript_for_session(args.session_id)
+            usage = transcript_usage(transcript, codex)
+            if usage is None:
+                raise ValueError("timed checkpoint: context usage is unknown")
+            used, _ = usage
+            limit = timed_setting("timed_checkpoint_token_limit")
+            print(json.dumps({"tokens": used, "limit": limit, "below_limit": used < limit}))
         elif args.command == "pre-compact":
             raw = sys.stdin.read()
-            pre_compact(json.loads(raw) if raw.strip() else {}, raw)
+            def deadline(signum, frame):
+                raise TimeoutError("pre-compaction checkpoint exceeded its 8-second budget")
+            previous = signal.signal(signal.SIGALRM, deadline)
+            signal.setitimer(signal.ITIMER_REAL, 8)
+            try:
+                pre_compact(json.loads(raw) if raw.strip() else {}, raw)
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous)
         elif args.command == "state-dir": print(state_dir())
         elif args.command == "config-get":
             value = read_config().get(args.key)
-            if args.key == "prune_days" and value is not None:
+            if args.key in TIMED_CHECKPOINT_DEFAULTS:
+                print(timed_setting(args.key))
+            elif args.key == "prune_days" and value is not None:
                 if type(value) is not int or value <= 0:
                     raise ValueError(f"hippocampus config {config_path()}: prune_days must be a positive integer")
                 print(value)

@@ -60,6 +60,13 @@ _Avoid_: duplicate, related session
 Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
+**Timed checkpoint**:
+A per-session prompt scheduled after each checkpoint. Below the configured token limit,
+the agent writes another checkpoint; at or above it, the prompt does nothing. Claude Code
+uses a session-only one-shot job; Codex uses a detached timer that queues the same prompt.
+Each checkpoint replaces the pending timer. Before compaction the hook writes a checkpoint
+from retained facts, preserving the agent's continuation without requiring an agent turn.
+
 **Wrap**:
 Finishing a session: running the checklist, which is the spine plus any checklist profile steps, and ending by writing and validating the handoff. Unlike a checkpoint, a wrap fails, and says why, when the handoff fails its validity check.
 _Avoid_: checkpoint
@@ -70,7 +77,7 @@ _Avoid_: checklist (the checklist is the spine plus checklist profile steps)
 
 **Checklist profile**:
 One file that extends the checklist: it binds slots, adds steps before the spine, and adds steps after any of the spine's first four steps, and may add the one step `own-worktree` after the handoff. A user checklist profile applies to every session; a repository checklist profile adds steps for sessions in that repository.
-_Avoid_: configuration (the configuration is the one value naming where handoffs are stored)
+_Avoid_: configuration (shared settings are separate from checklist profiles)
 
 **Knowledge profile**:
 The existing `~/.config/hippocampus/profile.md` file that configures the knowledge root and knowledge workflows. Its format and free-form policy body are preserved.
