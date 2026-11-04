@@ -74,6 +74,26 @@ def test_reading_never_consumes_the_state(env, tmp_path):
     assert first == second and json.loads(first)["kind"] == "standing"
 
 
+@pytest.mark.parametrize("corruption", ["kind", "timer", "root"])
+def test_json_read_preserves_lint_failure_status_and_stored_state(env, tmp_path, corruption):
+    assert run(env, "write", "--agent", "aide", payload=first_write()).returncode == 0
+    path = tmp_path / "standing" / "aide.json"
+    data = json.loads(path.read_text())
+    if corruption == "kind":
+        data["kind"] = "handoff"
+    elif corruption == "timer":
+        data["standing"]["timers"] = [{"when": "tomorrow"}]
+    else:
+        data = []
+    path.write_text(json.dumps(data))
+    before = path.read_bytes()
+    assert run(env, "read", "--agent", "aide").returncode == 1
+    result = run(env, "read", "--agent", "aide", "--json")
+    assert result.returncode == 1
+    assert json.loads(result.stdout) == data
+    assert path.read_bytes() == before
+
+
 def test_a_scheduled_run_end_keeps_fields_it_did_not_supply(env, tmp_path):
     run(env, "write", "--agent", "aide", "--session-id", "s1", "--cwd", str(tmp_path), payload=first_write())
     update = {"resume": {"next_action": "Wait for the retry"},
