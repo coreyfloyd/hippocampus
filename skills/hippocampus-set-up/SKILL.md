@@ -210,23 +210,34 @@ and lessons are native steps. Stop and show the validator's file and line number
 with the instruction to delete those complete binding blocks before retrying.
 Do not convert bindings or silently delete configuration. Keep the file unchanged.
 
-## Offer the two slots and the ask binding
+## Offer record writes, persist and the ask binding
 
-Explain and offer both configurable slots, including keeping an existing
-binding. Ask which available skill they want, or whether they decline:
+Explain that the package runs the record step and calls one optional record
+write for each kind of change. Offer each independently, including keeping an
+existing command or declining it:
 
-| Slot | What its binding does | Usual consumed item types |
-|---|---|---|
-| `record` | Write progress, commitments, decisions and artifact locations to their durable record. | `progress`, `commitment`, `decision`, `artifact` |
-| `persist` | Persist changes through the user's chosen workflow. | an empty list unless their skill consumes specific item types |
+| Record write | What it saves |
+|---|---|
+| `tickets` | Ticket creation, comments and ticket changes. |
+| `projects` | Project status and history. |
+| `documents` | Document changes and artifact locations. |
+| `scheduled_jobs` | Scheduled work and recurring commitments. |
 
-Use skills the user actually has. Explain missing capabilities without inventing
-commands. Confirm consumed types against the chosen skill. For each accepted
-binding prepare `{"command": "<actual skill invocation>", "consumes": [<types>]}`.
-For a declined slot use JSON `null`. Unbound slots still run their spine step and carry
-unsaved items as open loops. Declining a replacement for an existing binding
-means keep it unless the user explicitly chooses to unbind it; explain that
-choice before changing it.
+Prepare `record_writes` entries as `{"command": "<actual command>"}` or
+`{"command": ["<executable>", "<argument>"]}`, without `consumes`. Use only
+commands the user actually has; explain missing capabilities without inventing
+commands. Each kind is optional. An unbound kind keeps its items in the handoff
+with a warning. Never offer the retired single `record` binding. If the existing
+profile contains `bindings.record`, stop with the validator's `record_writes`
+shape; leave the file unchanged and have the user replace the retired block.
+
+Offer `persist`, the only configurable slot. Confirm its consumed types against
+the chosen skill and prepare `{"command": "<actual skill invocation>",
+"consumes": [<types>]}`. For an explicit decline use JSON `null`. Unbound
+persist still runs its spine step and carries unsaved items as open loops.
+Declining a replacement means keep the existing value unless the user explicitly
+chooses to unbind it. Show the exact per-kind and persist changes and write only
+approved choices under the existing approval rule.
 
 Knowledge and lessons always run the package's knowledge-capture and
 improve-harness. Configure their destinations through the knowledge profile and
@@ -265,7 +276,7 @@ Return only the specified JSON response fields. Use the record's actual state
 and progress; an empty successful read and an unavailable read differ. Return
 `{"kind": "error", "reason": "<actual reason>"}` for access or tool failures.
 Require read-only operations: never create, update, transfer, or close work.
-Writing belongs to the separate `record` slot. Use the actual discovered skill
+Writing belongs to the per-kind record writes. Use the actual discovered skill
 invocation in `record_read.command`, with the same behavior in both tools.
 
 ## Prove the read before binding it
@@ -291,7 +302,7 @@ does not prove completeness or accuracy. Do not bind a failed new skill.
 ## Merge and check the profile
 
 Show the proposed choices in plain language, including the read skill's path
-and invocation. Once the user's choices are settled, pass only changed slots
+and invocation. Once the user's choices are settled, pass only changed slots and record-write kinds
 to the helper. It preserves other bindings and all existing profile content
 outside the JSON block, validates the candidate with the composer, and writes
 atomically. Before successful replacement, any failure removes its temporary
@@ -301,11 +312,14 @@ profile is created when none exists.
 ```bash
 python3 <setup-directory>/scripts/profile.py --user-present \
   --bindings '<JSON object of accepted bindings and explicit null declines>' \
+  --record-writes '<JSON object of approved per-kind commands and explicit null declines>' \
   --ask '<JSON ask command object, or null to unbind>' \
   --record-read '<actual user-owned skill invocation>'
 ```
 
-`--bindings` accepts only `record` and `persist`. Omit `--ask` to preserve its
+`--bindings` accepts only `persist`. `--record-writes` merges only the named
+kinds (`tickets`, `projects`, `documents`, `scheduled_jobs`); JSON `null` unbinds
+one kind. Omit the option to preserve all existing record writes. Omit `--ask` to preserve its
 current value; an explicit JSON `null` removes it. Invalid ask objects are refused
 without changing the profile. Legacy native binding blocks are refused with
 manual deletion instructions, including when changing an unrelated slot.
@@ -328,7 +342,7 @@ On any composition error report setup incomplete; keep existing content intact.
 
 ## Report
 
-Name the user profile and user-owned read skill; list both slot choices and the ask binding,
+Name the user profile and user-owned read skill; list the four record-write choices, persist and the ask binding,
 including unbound destinations. Include the request kind, validator verdict and exit
 code, composer result, and outstanding access or user decisions. Report success
 only after the new skill ran successfully, its response passed validation, and

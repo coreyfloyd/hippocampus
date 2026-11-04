@@ -236,7 +236,10 @@ The plan includes stable write ids, operations, identities, sources and
 operation fields. The agent performs record reads and the open-ticket search
 before choosing R5: one match becomes R2, several become an R3 ask. Successful
 `read_status` is agent evidence; the engine does not repeat the read or search.
-Before every write the agent checks the record or ask binding's durable identity
+The R5 search uses `record_writes.tickets`. Filing uses that same ticket record
+write for new tickets and comments, and `record_writes.documents` for document
+changes. The plan carries the selected command; undo retains it with the receipt.
+Before every write the agent checks the selected record write or ask binding's durable identity
 index. Bindings store the identity with each write, covering closed destinations
 and successor handoffs, and prevent concurrent or delayed duplicates. Found
 identities return `already_written` with their original receipt and destination.
@@ -326,7 +329,8 @@ Undo reads the completed act report and journals a reversal work list plus
 archive restorations. Planning performs no reversal or restore. Confirmed record
 and slot writes belonging to this run are included; preexisting identities,
 failed/uncertain writes and asks are excluded. The agent uses the original
-profile's bindings and checks each target immediately before reversing it:
+per-kind record write carried in the undo work entry and checks each target
+immediately before reversing it:
 close a ticket the run created as not planned, edit a comment to a stub, or
 restore a document/slot preimage. The comment stub consists of the line
 `Removed by sweep undo <run_id>`, followed by a blank line, then the original

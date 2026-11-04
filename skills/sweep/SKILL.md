@@ -21,7 +21,8 @@ Take the requested directory or `all` as scope. If none is given, use the
 working directory. Read the user checklist profile at `$CHECKLIST_USER_PROFILE`,
 else `hippocampus/checklist-profile.md` under `$XDG_CONFIG_HOME` (default `~/.config`). Omit
 `--user-profile` when absent. The existing profile binds `record_read`, the
-record and persist slots, and the one ask command; do not invent bindings.
+per-kind record writes, persist slot, and the one ask command; do not invent bindings. A retired `bindings.record` profile is refused with
+the `record_writes` shape; never convert it silently.
 
 ## Inspect and decide
 
@@ -72,7 +73,7 @@ For an untyped legacy item going to a native step under R4, set `destination` to
 the original item and identity stay unchanged. Other rules need no added type.
 
 Use the profile's read-only `record_read` skill for R1 already-recorded checks
-and R2 ticket status, and the record binding for R5 matching searches. A failed, unbound, unsupported or
+and R2 ticket status, and `record_writes.tickets` for R5 matching searches. A failed, unbound, unsupported or
 malformed read is unknown: supply `read_status: "failed"` and the error. Never
 write as part of those reads. For multiple plausible matches, choose R3 with
 choices naming the candidates; one matching open ticket becomes R2. Give R5
@@ -115,7 +116,7 @@ producer, directory, source handoff, rule, destination and operation fields.
 Keep this run id and the work list through all results rounds.
 
 Before **each** write, including a retry, slot work, ask or successor carrying
-the same identity, ask its record or ask binding whether that identity was
+the same identity, ask its selected record write or ask binding whether that identity was
 already written. Bindings must store the identity, original run id, receipt
 and destination with every write and prevent duplicate identities. If found,
 return `already_written` with that receipt and destination. If lookup fails,
@@ -123,8 +124,10 @@ do not write; report failed with the lookup error. Do not infer absence from
 an unsupported lookup. For R5, the successful open-ticket search was performed
 before deciding: one match is R2 and several are an R3 ask. Never skip it.
 
-For absent identities, perform the operation through the profile's record,
-ask or named slot binding. Invoke skill commands as skills; follow inline
+For absent identities, use the record-write command carried in the intent:
+`record_writes.tickets` for new tickets and comments,
+`record_writes.documents` for document changes. Deliver asks through the profile's
+ask binding. Invoke skill commands as skills; follow inline
 instructions where supplied. No executable adapter is needed. Preserve the
 item identity, linked ticket, choices, priority and reason. A comment inherits
 the destination ticket's priority. An ask is never a ticket. For an interactive
@@ -180,8 +183,8 @@ python3 <package>/scripts/lib/sweep.py undo --run-id <run-id> --user-started --u
 
 Undo prints JSON with the journaled reversal work and proposed archive
 restorations; planning changes no destination or archive. For each work entry,
-check its target immediately before reversing it through the original record
-or slot binding. A ticket created by the run is closed as not planned; a
+check its target immediately before reversing it through the original per-kind record write
+whose command is carried in the undo work entry. A ticket created by the run is closed as not planned; a
 comment is edited to a stub; a document or slot edit restores the saved
 preimage. The comment stub consists of the line `Removed by sweep undo <run_id>`,
 followed by a blank line, then the original record marker, unchanged. Never

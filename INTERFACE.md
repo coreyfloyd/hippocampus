@@ -520,19 +520,20 @@ outcome `intent`, and returns JSON containing `run_id`, `report`, `phase` and
 `work`. No archive or worktree removal happens at this step. Each work entry
 contains a stable `write_id`, `operation`, unchanged `identity`, producing
 `session_id`, `directory`, `source_handoff`, `text`, `rule` and `destination`.
-Identity consists of the producing session, production time and text, never
+Record-write work also carries the selected `command`, retained with its receipt
+for undo through the same record write. Identity consists of the producing session, production time and text, never
 position. A successor keeps the original identity. Per-operation fields are:
 
 | Operation | Agent uses | Additional fields |
 |---|---|---|
-| `create_ticket` | record binding | `priority`, `priority_reason` |
-| `comment` | record binding | destination ticket; inherits its priority |
-| `edit_document` | record binding | destination document |
+| `create_ticket` | `record_writes.tickets` | `priority`, `priority_reason` |
+| `comment` | `record_writes.tickets` | destination ticket; inherits its priority |
+| `edit_document` | `record_writes.documents` | destination document |
 | `native_step` | package skill in unattended mode | `native_step`: `lessons` or `knowledge`; `command`; `unattended: true` |
 | `ask` | ask binding, or direct presentation for interactive open sessions | `ticket` (possibly null), `choices`; open sessions also carry `activity_at` |
 
 R1/R2 reads use the profile's `record_read`; the agent searches open tickets
-through the record binding before choosing R5. One match becomes R2 and its
+through `record_writes.tickets` before choosing R5. One match becomes R2 and its
 `destination` names that match; several become R3 with choices listing the
 candidates. The engine treats `read_status: "ok"` as agent evidence, without
 performing a read or search. Missing, failed, unsupported or malformed reads
@@ -578,7 +579,7 @@ creations against that plan's capacity too.
 
 ### Binding identity obligation
 
-Record and ask bindings store the unchanged item identity with every write,
+Record writes and ask bindings store the unchanged item identity with every write,
 with its original receipt, destination and originating run id. The agent asks
 the appropriate binding whether that identity exists **before every write**,
 including retries, slots, asks and successor handoffs. An existing identity
@@ -649,7 +650,10 @@ retention remains a separate operation, off by default; see
 [usage](docs/sweep.md#undo-and-retention).
 
 Checklist setup's `skills/hippocampus-set-up/scripts/profile.py` accepts only
-`record` and `persist` in `--bindings`. `--ask` accepts the JSON command object or
+`persist` in `--bindings`. `--record-writes` accepts an object of changed
+`tickets`, `projects`, `documents` and `scheduled_jobs` commands, with JSON
+`null` unbinding an individual kind. Omission preserves existing record writes.
+Retired `bindings.record` profiles are refused with the `record_writes` shape. `--ask` accepts the JSON command object or
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.

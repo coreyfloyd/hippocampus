@@ -210,3 +210,46 @@ def test_setup_can_configure_and_unbind_ask_separately_from_slots(tmp_path):
         assert profile.read_bytes() == before
     assert write(tmp_path, {}, '--profile', str(profile), '--ask', 'null').returncode == 0
     assert json.loads(plan(profile).stdout)['ask'] is None
+
+
+@pytest.mark.parametrize('kind', ['tickets', 'projects', 'documents', 'scheduled_jobs'])
+def test_setup_authors_each_record_write_and_preserves_read_and_other_kinds(tmp_path, kind):
+    profile = tmp_path / 'profile.json'
+    existing = {'name': 'user', 'record_read': {'command': '/read-work'},
+                'record_writes': {'tickets': {'command': '/tickets'},
+                                  'documents': {'command': '/documents'}}}
+    profile.write_text(json.dumps(existing))
+    result = write(tmp_path, {}, '--profile', str(profile), '--record-writes',
+                   json.dumps({kind: {'command': ['/save', kind]}}))
+    assert result.returncode == 0, result.stderr
+    expected = {**existing['record_writes'], kind: {'command': ['/save', kind]}}
+    updated = json.loads(profile.read_text())
+    assert updated['record_writes'] == expected
+    assert updated['record_read'] == existing['record_read']
+    assert json.loads(plan(profile).stdout)['record_read'] == existing['record_read']
+    assert write(tmp_path, {}, '--profile', str(profile), '--record-writes',
+                 json.dumps({kind: None})).returncode == 0
+    assert json.loads(profile.read_text())['record_writes'][kind] is None
+
+
+@pytest.mark.parametrize('writes', ['null', '[]', '{"unknown":null}',
+                                  '{"tickets":{"command":""}}',
+                                  '{"tickets":{"command":"/save","consumes":[]}}'])
+def test_invalid_record_writes_preserve_existing_profile(tmp_path, writes):
+    profile = tmp_path / 'profile.json'
+    profile.write_text('{"name":"user"}')
+    before = profile.read_bytes()
+    result = write(tmp_path, {}, '--profile', str(profile), '--record-writes', writes)
+    assert result.returncode == 1
+    assert 'record_writes' in result.stderr
+    assert profile.read_bytes() == before
+
+
+def test_setup_refuses_retired_record_even_when_replacing_it(tmp_path):
+    profile = tmp_path / 'profile.json'
+    profile.write_text(json.dumps({'name': 'user', 'bindings': {'record': None}}))
+    before = profile.read_bytes()
+    result = write(tmp_path, {'record': None}, '--profile', str(profile))
+    assert result.returncode == 1
+    assert 'retired bindings.record' in result.stderr and 'record_writes' in result.stderr
+    assert profile.read_bytes() == before
