@@ -7,9 +7,10 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import tempfile
+import sys
 
-from lib.install_conflicts import refuse_standalone
+from lib import install_recovery as recovery
+from lib.install_conflicts import refuse_foreign_marketplace, refuse_standalone
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -24,11 +25,23 @@ def owned_link(path, home):
             target.parent.parent.parent == root / 'releases')
 
 
-def remove(path):
-    if path.is_symlink() or path.is_file():
-        path.unlink()
-    elif path.exists():
-        shutil.rmtree(path)
+def rollback(paths, links, backup):
+    """Restore every path and link it can; return what it could not restore."""
+    problems, leftovers = [], []
+    for path, target in links.items():
+        if not os.path.lexists(path):
+            recovery.attempt(problems, f'skill link {path} -> {target}', path.symlink_to, target)
+    for path in paths:
+        saved = backup / path.name
+        if not os.path.lexists(saved):
+            recovery.attempt(leftovers, str(path), recovery.remove, path)
+            continue
+        recovery.restore(saved, path, problems)
+        if saved.is_dir() and path.is_dir():
+            recovery.prune(saved, path, leftovers)
+    for leftover in leftovers:
+        print(f'hippocampus install: left in place: {leftover}', file=sys.stderr)
+    return problems
 
 
 def main():
@@ -42,38 +55,39 @@ def main():
         parser.error('claude executable is required')
     home = Path.home()
     config = Path(os.environ.get('CLAUDE_CONFIG_DIR', home / '.claude')).expanduser().resolve()
+    if not args.uninstall:
+        refuse_foreign_marketplace(config, ROOT)
     config.mkdir(parents=True, exist_ok=True)
     lock = config / '.hippocampus-install-lock'
     lock.mkdir()  # Refuse overlapping cutovers rather than snapshotting a partial state.
     try:
-        with tempfile.TemporaryDirectory(prefix='hippocampus-install-') as directory:
-            backup = Path(directory)
-            paths = [config / 'plugins', config / 'settings.json']
-            links = {p: os.readlink(p) for p in (config / 'skills').glob('*') if owned_link(p, home)}
-            for index, path in enumerate(paths):
-                if path.is_symlink():
-                    raise ValueError(f'cannot transactionally replace symlinked plugin settings: {path}')
-                if path.is_dir():
-                    shutil.copytree(path, backup / str(index), symlinks=True)
-                elif path.exists():
-                    shutil.copy2(path, backup / str(index))
+        recovery.refuse_pending(config)
+        paths = [config / 'plugins', config / 'settings.json']
+        links = {p: os.readlink(p) for p in (config / 'skills').glob('*') if owned_link(p, home)}
+        for path in paths:
+            if path.is_symlink():
+                raise ValueError(f'cannot transactionally replace symlinked plugin settings: {path}')
+        backup = recovery.create(config)
+        try:
+            for path in paths:
+                recovery.snapshot(path, backup / path.name)
+        except BaseException:
+            recovery.discard(backup)  # Nothing has changed yet.
+            raise
+        try:
+            for path in links:
+                path.unlink()
+            command = (['uninstall', 'hippocampus@hippocampus'] if args.uninstall else
+                       ['install', 'hippocampus', '--marketplace', str(ROOT)])
+            subprocess.run([args.claude, 'plugin', *command], check=True)
+        except BaseException:
+            problems = ['the restore was interrupted']
             try:
-                for path in links:
-                    path.unlink()
-                command = (['uninstall', 'hippocampus@hippocampus'] if args.uninstall else
-                           ['install', 'hippocampus', '--marketplace', str(ROOT)])
-                subprocess.run([args.claude, 'plugin', *command], check=True)
-            except BaseException:
-                for index, path in enumerate(paths):
-                    remove(path)
-                    saved = backup / str(index)
-                    if saved.is_dir():
-                        shutil.copytree(saved, path, symlinks=True)
-                    elif saved.exists():
-                        shutil.copy2(saved, path)
-                for path, target in links.items():
-                    path.symlink_to(target)
-                raise
+                problems = rollback(paths, links, backup)
+            finally:
+                recovery.close(backup, problems)
+            raise
+        recovery.discard(backup)
     finally:
         lock.rmdir()
     return 0

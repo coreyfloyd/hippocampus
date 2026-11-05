@@ -22,7 +22,17 @@ python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
 The Claude helper is the supported Claude Code installation command for both
 routes. It invokes the native plugin CLI and removes installer-owned old skill
 links in that transaction.
-Foreign links survive; a CLI failure restores the links and plugin settings.
+Foreign links survive; a CLI failure restores the links, plugin directory and
+settings. Running Claude Code sessions write into `~/.claude/plugins`, so the
+helper never deletes that directory: it copies back only what is missing or
+changed, and removes only new `hippocampus` entries. If the restore cannot
+finish, the helper keeps the backup under the Claude configuration folder and
+prints its path; the next run refuses until that backup is resolved. The Codex
+helper does the same under its own home.
+A `hippocampus` marketplace registered from another folder, including an earlier
+release, stops the Claude helper before it changes anything. Run
+`claude plugin marketplace remove hippocampus`, which also uninstalls the plugin
+and can delete its saved options and data, then run the helper again.
 The Codex installer links all skills, records ownership, and verifies hook trust
 with `codex app-server` `hooks/list`; failed verification restores the prior install.
 Both installers refuse while the old standalone package remains installed in

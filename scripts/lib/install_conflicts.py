@@ -7,6 +7,7 @@ from pathlib import Path
 import shlex
 
 OLD_PACKAGE = 'continuity'
+MARKETPLACE = 'hippocampus'
 
 
 def read_object(path):
@@ -73,3 +74,33 @@ def refuse_standalone(*, claude_home=None, codex_home=None):
         blockers.append(f'{path}: uninstall the old Codex package with {uninstall}; remove stale registrations/links if its runtime is missing')
     if blockers:
         raise ValueError(f'old standalone {OLD_PACKAGE} package is installed; remove it before installing hippocampus:\n' + '\n'.join(blockers))
+
+
+def describe_source(source):
+    if isinstance(source, dict):
+        kind = source.get('source')
+        if kind == 'directory' and source.get('path'):
+            return 'dir:' + str(source['path'])
+        if kind == 'github' and source.get('repo'):
+            return 'github:' + str(source['repo'])
+    return json.dumps(source)
+
+
+def refuse_foreign_marketplace(claude_home, root):
+    """Report a same-named marketplace from another source before any change.
+
+    Claude Code compares a directory source as written, so this does too: the
+    same folder through a different path also fails its add step.
+    """
+    entry = read_object(claude_home/'plugins/known_marketplaces.json').get(MARKETPLACE)
+    if entry is None:
+        return
+    source = entry.get('source') if isinstance(entry, dict) else entry
+    if source == {'source': 'directory', 'path': str(root)}:
+        return
+    raise ValueError(
+        f'a {MARKETPLACE} marketplace is already registered from another source '
+        f'({describe_source(source)}); nothing was changed.\n'
+        f'To install from {root}, run: claude plugin marketplace remove {MARKETPLACE}\n'
+        'That also uninstalls the hippocampus plugin and can delete its saved options '
+        'and data. Then run this helper again.')
