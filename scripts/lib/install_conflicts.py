@@ -7,6 +7,8 @@ from pathlib import Path
 import shlex
 
 OLD_PACKAGE = 'continuity'
+MARKETPLACE = 'hippocampus'
+PLUGIN = 'hippocampus@hippocampus'
 
 
 def read_object(path):
@@ -73,3 +75,43 @@ def refuse_standalone(*, claude_home=None, codex_home=None):
         blockers.append(f'{path}: uninstall the old Codex package with {uninstall}; remove stale registrations/links if its runtime is missing')
     if blockers:
         raise ValueError(f'old standalone {OLD_PACKAGE} package is installed; remove it before installing hippocampus:\n' + '\n'.join(blockers))
+
+
+def describe_source(source):
+    if isinstance(source, dict):
+        kind = source.get('source')
+        if kind == 'directory' and source.get('path'):
+            return 'dir:' + str(source['path'])
+        if kind == 'github' and source.get('repo'):
+            return 'github:' + str(source['repo'])
+    return json.dumps(source)
+
+
+def marketplace_plan(claude_home, source, runtime):
+    """Classify the registered marketplace before any change; refuse a foreign one.
+
+    Claude Code compares a directory source as written, so `registered` needs the
+    same text. A source under the runtime root is an earlier hippocampus release.
+    """
+    entry = read_object(claude_home/'plugins/known_marketplaces.json').get(MARKETPLACE)
+    if entry is None:
+        return 'absent'
+    registered = entry.get('source') if isinstance(entry, dict) else entry
+    path = registered.get('path') if isinstance(registered, dict) and registered.get('source') == 'directory' else None
+    if path == str(source):
+        return 'registered'
+    if path and Path(path).resolve().is_relative_to(runtime.resolve()):
+        rows = read_object(claude_home/'plugins/installed_plugins.json').get('plugins', {}).get(PLUGIN, [])
+        scopes = sorted({row.get('scope') for row in rows} - {'user'}, key=str)
+        if scopes:
+            # Removing the marketplace would delete those installs and their data.
+            raise ValueError(f'{PLUGIN} is installed at {scopes[0]} scope; nothing was changed.\n'
+                             f'Run claude plugin uninstall {PLUGIN} --keep-data --scope {scopes[0]} '
+                             'in that project, then run this helper again.')
+        return 'earlier-release'
+    raise ValueError(
+        f'a {MARKETPLACE} marketplace is already registered from another source '
+        f'({describe_source(registered)}); nothing was changed.\n'
+        f'To install from {source}, run: claude plugin marketplace remove {MARKETPLACE}\n'
+        'That also uninstalls the hippocampus plugin and can delete its saved options '
+        'and data. Then run this helper again.')

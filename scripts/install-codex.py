@@ -13,6 +13,7 @@ import shutil
 import sys
 
 from lib import codex_trust as trust
+from lib import install_recovery as recovery
 from lib.install_conflicts import refuse_standalone
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -184,6 +185,23 @@ def copy_package(destination):
         shutil.copy2(ROOT/name,destination/name)
 
 
+def snapshot_files(home, paths):
+    """Keep the replaced files on disk until the run or its restore finishes."""
+    files=recovery.create(home)
+    try:
+        for path in paths:
+            recovery.snapshot(path,files/path.name)
+    except BaseException:
+        recovery.discard(files)  # Nothing has changed yet.
+        raise
+    return files
+
+
+def put_runtime_back(package, backup):
+    recovery.remove(package)
+    backup.rename(package)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--codex-home',type=Path,default=Path(os.environ.get('CODEX_HOME') or os.path.expanduser('~/.codex')))
@@ -245,7 +263,8 @@ def main():
     # Keep runtime renames on its filesystem, even when CODEX_HOME is another mount.
     backup=package.parent/'hippocampus-install-backup'
     if os.path.lexists(backup):
-        raise ValueError('an earlier install backup needs recovery before installing')
+        raise ValueError(f'an earlier install backup needs recovery before installing: {backup}')
+    recovery.refuse_pending(home)
     newlinks=[]
     foreign_hashes = relocate_trust(hooks, cleaned, old_config or '', target) if saved else {}
     if args.uninstall:
@@ -253,6 +272,7 @@ def main():
             print('hippocampus is not installed');return 0
         removed = {}
         moved = False
+        files=snapshot_files(home,(target,config))
         try:
             trust.atomic_write(target,json.dumps(cleaned,indent=2)+'\n')
             trust.atomic_write(config,trust.update_config_text(clean_config,foreign_hashes) if foreign_hashes else clean_config)
@@ -268,15 +288,21 @@ def main():
                 package.symlink_to(previous_runtime)
             manifest.unlink()
         except BaseException:
-            trust.restore_file(target,old_hooks);trust.restore_file(config,old_config)
-            for path, destination in removed.items():
-                if not os.path.lexists(path):
-                    path.symlink_to(destination)
-            if moved:
-                if package.is_symlink():
-                    package.unlink()
-                backup.rename(package)
+            problems=['the restore was interrupted']
+            try:
+                failed=[]
+                recovery.attempt(failed,str(target),trust.restore_file,target,old_hooks)
+                recovery.attempt(failed,str(config),trust.restore_file,config,old_config)
+                for path, destination in removed.items():
+                    if not os.path.lexists(path):
+                        recovery.attempt(failed,f'skill link {path} -> {destination}',path.symlink_to,destination)
+                if moved:
+                    recovery.attempt(failed,str(package),put_runtime_back,package,backup)
+                problems=failed
+            finally:
+                recovery.close(files,problems,[backup] if os.path.lexists(backup) else [])
             raise
+        recovery.discard(files)
         if backup.is_symlink():
             backup.unlink()
         elif backup.exists():
@@ -291,6 +317,7 @@ def main():
         clean_config=remove_trust(old_config or '',set(saved['trust_keys']),hashes)
     moved = False
     copying = False
+    files=snapshot_files(home,(target,config))
     try:
         if not shared_runtime:
             if os.path.lexists(package):
@@ -310,15 +337,25 @@ def main():
                                                   'skill_links':{name:str(package/'skills'/name) for name in SKILLS},
                                                   'previous_runtime':previous_runtime,'shared_runtime':shared_runtime},indent=2)+'\n')
     except BaseException:
-        trust.restore_file(target,old_hooks);trust.restore_file(config,old_config)
-        for link in newlinks:
-            link.unlink()
-        for link, destination in oldlinks.items():
-            if not link.is_symlink():
-                link.symlink_to(destination)
-        if copying and package.exists():shutil.rmtree(package)
-        if moved:backup.rename(package)
+        problems=['the restore was interrupted']
+        try:
+            failed=[]
+            recovery.attempt(failed,str(target),trust.restore_file,target,old_hooks)
+            recovery.attempt(failed,str(config),trust.restore_file,config,old_config)
+            for link in newlinks:
+                recovery.attempt(failed,str(link),link.unlink)
+            for link, destination in oldlinks.items():
+                if not link.is_symlink():
+                    recovery.attempt(failed,f'skill link {link} -> {destination}',link.symlink_to,destination)
+            if moved:
+                recovery.attempt(failed,str(package),put_runtime_back,package,backup)
+            elif copying:
+                recovery.attempt(failed,str(package),recovery.remove,package)
+            problems=failed
+        finally:
+            recovery.close(files,problems,[backup] if os.path.lexists(backup) else [])
         raise
+    recovery.discard(files)
     if backup.is_symlink():
         backup.unlink()
     elif backup.exists():
