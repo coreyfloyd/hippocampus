@@ -49,7 +49,31 @@ tracked in [hippocampus#144](https://github.com/coreyfloyd/hippocampus/issues/14
 
 ## Verification and publication state
 
-Not yet published.
+Published 2026-11-05: tag `v0.14.0` (annotated, tag object
+`aecbeaeae2319dbe08b4916bda713a605be2a6cf`) at commit
+`6f900310f70786715a3e4f75a2e647f5aa0402d5`,
+https://github.com/coreyfloyd/hippocampus/releases/tag/v0.14.0 (public, not a
+draft or prerelease). Assets: hippocampus-0.14.0.tar.gz, hippocampus-0.14.0.tar.gz.asc, hippocampus-0.14.0.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
+Archive sha256: `be306997daf80dd08b8cca72e248a401e71be25d3e1add9a96ef8b3fc5d1d20e`.
+
+Evidence:
+
+- All RELEASING.md candidate checks passed locally on the candidate (pytest 1758
+  passed, 3 skipped; swift test passed). CI was not used: a runner was
+  restarting, and the maintainer directed local verification with
+  administrator merges. The public commit-range scan was clean before every push.
+- The documentation sweep found one stale sentence calling the checkpoint skill
+  user-only; it was fixed before tagging.
+- The maintainer signed. `verify-release.sh` passed on the local build and on
+  the downloaded assets. The downloaded archive is byte-identical to the local
+  build, and the downloaded key and scripts are byte-identical to the
+  repository's. The archive has a single `hippocampus/` root (357 entries).
+- Installed from the downloaded assets with `install-release.sh`, then
+  `install-claude.py` and `install-codex.py`; `install.sh --verify` passed with
+  the plugin `hippocampus@hippocampus` at 0.14.0 read from `releases/0.14.0`.
+  The first `install-claude.py` attempt failed on a marketplace registered from
+  another source, and its rollback removed the Claude plugin directory; tracked
+  in [hippocampus#151](https://github.com/coreyfloyd/hippocampus/issues/151).
 
 Previous records: [0.13.2](docs/releases/0.13.2.md),
 [0.13.1 (not published)](docs/releases/0.13.1.md),
