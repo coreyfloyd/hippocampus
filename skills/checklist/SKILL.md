@@ -206,9 +206,11 @@ python3 <checklist-module> deliver-lessons --user-profile <user-profile> \
 Keep its output as `<remaining-items>`. A commit the bound command pushed needs
 nothing more. Otherwise the module pushes the branch; when the remote moved it merges
 the remote's commits and pushes again, once. A repository that refuses a direct push,
-or that the routing file's `lesson-pull-requests` names, gets each lesson on its own
-branch cut from the remote, and the routing file's `lesson-pull-request-command` opens a
-pull request that merges through the repository's checks. A lesson still not pushed is `committed, not pushed` with its error. With
+or that the routing file's `lesson-pull-requests` names, gets the wrap's lessons for that
+checkout on one lesson branch cut from the remote, one commit each, and the routing file's
+`lesson-pull-request-command` opens one pull request that merges through the repository's
+checks; the local commit keeps a delivered mark so later wraps do not count it as unpushed.
+A lesson still not pushed is `committed, not pushed` with its error. With
 persist unbound nothing is pushed, and the existing `Not pushed:` rule applies.
 
 ### 5. Write and validate the handoff — fixed
@@ -236,9 +238,10 @@ is **unknown**, never absence: keep the item with outcome `read failed`, naming
 the item and the error. Never drop it under R1 or create a ticket under R5 on
 that evidence. An information-only R1 can explicitly set `information_only: true`.
 
-An applied lesson still in `resume.open_loops` (`applied: true`) needs an ask: run the
-ask command with its payload from `lesson_asks` and give it an R3 row with the receipt.
-It has no choices, so it files without any, and its ask receipt settles it. Never apply it again.
+An applied lesson still in `resume.open_loops` or `session_items` (`applied: true`), carried
+or found this wrap, needs an ask: run the ask command with its payload from `lesson_asks` and
+give it an R3 row with the receipt. It has no choices, whatever the lesson was carried with,
+so it files without any, and its ask receipt settles it. Never apply it again.
 A lesson that failed to apply gets an R4 row with status `failed` and its error; it stays
 carried, the report is `incomplete`, and the wrap passes.
 

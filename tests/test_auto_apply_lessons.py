@@ -61,9 +61,10 @@ def row(index, target, new='Run the suite first.\n', **changes):
 class Wrap:
     """One wrap's environment: profile, configuration, routing and the module's commands."""
 
-    def __init__(self, tmp_path, tool, setting=True, persist=True, ask=True, routing=None):
+    def __init__(self, tmp_path, tool, setting=True, persist=True, ask=True, routing=None, session=SESSION):
         self.tmp = tmp_path
         self.tool = tool
+        self.session = session
         self.home = tmp_path / 'home'
         self.home.mkdir(exist_ok=True)
         config = {'auto_apply_lessons': True} if setting else {}
@@ -82,14 +83,14 @@ class Wrap:
                     'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger'), 'HANDOFF_PATH': str(self.handoff_path),
                     'HANDOFF_STATE_DIR': str(tmp_path / 'state'), 'CHECKLIST_STATE_DIR': str(tmp_path / 'checklist'),
                     'HANDOFF_COMPACT_STATE_DIR': str(tmp_path / 'compact'), 'CLAUDE_CONFIG_DIR': str(tmp_path / 'claude'),
-                    'CODEX_HOME': str(tmp_path / 'codex'), 'CLAUDE_SESSION_ID': SESSION,
-                    'CLAUDE_CODE_SESSION_ID': SESSION, 'CODEX_THREAD_ID': '', 'HIPPOCAMPUS_HARNESS': tool}
+                    'CODEX_HOME': str(tmp_path / 'codex'), 'CLAUDE_SESSION_ID': session,
+                    'CLAUDE_CODE_SESSION_ID': session, 'CODEX_THREAD_ID': '', 'HIPPOCAMPUS_HARNESS': tool}
         if tool == 'codex':
-            self.env['CODEX_THREAD_ID'] = SESSION
-            transcript = tmp_path / f'codex/sessions/{SESSION}.jsonl'
+            self.env['CODEX_THREAD_ID'] = session
+            transcript = tmp_path / f'codex/sessions/{session}.jsonl'
             transcript.parent.mkdir(parents=True, exist_ok=True)
             transcript.write_text(json.dumps({'type': 'session_meta',
-                                              'payload': {'id': SESSION, 'source': 'cli'}}) + '\n')
+                                              'payload': {'id': session, 'source': 'cli'}}) + '\n')
 
     def run(self, operation, *args):
         return subprocess.run([sys.executable, str(CLI), operation, '--user-profile', str(self.profile), *map(str, args)],
@@ -100,18 +101,19 @@ class Wrap:
         path.write_text(json.dumps(data))
         return path
 
-    def payload(self, items):
-        return {'schema_version': 1, 'subject': {'session_id': SESSION, 'working_directory': str(self.tmp)},
+    def payload(self, items, session_items=()):
+        return {'schema_version': 1, 'subject': {'session_id': self.session, 'working_directory': str(self.tmp)},
+                'session_items': list(session_items),
                 'resume': {'headline': 'Worked', 'next_action': 'Continue', 'open_loops': items,
                            'session_summary': 'Worked on the rules.', 'history_entry': 'Worked on the rules.'}}
 
     def plan(self):
-        result = self.run('plan', '--session-id', SESSION)
+        result = self.run('plan', '--session-id', self.session)
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
 
-    def apply(self, items, rows):
-        result = self.run('apply-lessons', '--handoff', self.save('items.json', self.payload(items)),
+    def apply(self, items, rows, session_items=()):
+        result = self.run('apply-lessons', '--handoff', self.save('items.json', self.payload(items, session_items)),
                           '--lessons', self.save('lessons.json', rows))
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
@@ -130,7 +132,7 @@ class Wrap:
     def finish(self, data):
         """Write the handoff, then return the report and the wrap check."""
         written = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'checkpoint', '--cwd',
-                                  str(self.tmp), '--session-id', SESSION, '--trigger', 'wrap'],
+                                  str(self.tmp), '--session-id', self.session, '--trigger', 'wrap'],
                                  input=json.dumps(data), text=True, capture_output=True, env=self.env)
         assert written.returncode == 0, written.stderr
         results = self.save('results.json', [{'id': step, 'status': 'run', 'writes': []} for step in STEPS])
@@ -240,10 +242,11 @@ def test_always_loaded_target_is_applied_and_raises_a_text_ask(tmp_path, tool, k
                    '      regeneration command: "make rules"\n')
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, target)]))
+    data = wrap.deliver(wrap.apply([lesson(choices=['approve', 'decline'])], [row(0, target)]))
     commit = data['lesson_outcomes'][0]['commit']
     [ask] = data['lesson_asks']
     assert ask['choices'] == []
+    assert 'choices' not in data['resume']['open_loops'][0]
     filed = wrap.file(data, [{'index': 0, 'rule': 'R3', 'status': 'filed', 'destination': 'ask receipt 7'}])
     report, check, handoff = wrap.finish(filed)
     assert check.returncode == 0, check.stderr
@@ -253,7 +256,28 @@ def test_always_loaded_target_is_applied_and_raises_a_text_ask(tmp_path, tool, k
                  'already applied', 'reverting that commit', "repository's normal delivery"):
         assert text in raised['text']
     assert raised['choices'] == []
+    assert 'approve' not in json.dumps(report)
     assert report['saved_line'].startswith('All saved and pushed:')
+
+
+def test_a_new_lesson_found_during_the_wrap_raises_its_ask(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    target = checkout / 'AGENTS.md'
+    found = lesson('Found this wrap.')
+    data = wrap.apply([], [row(0, target, always_loaded=True)], session_items=[found])
+    assert data['resume']['open_loops'] == [] and data['session_items'][0]['applied'] is True
+    data = wrap.deliver(data)
+    [ask] = data['lesson_asks']
+    assert ask['choices'] == [] and 'already applied' in ask['text']
+    assert ask['text'] == data['session_items'][0]['ask_text']
+    filed = wrap.file(data, [{'index': 0, 'rule': 'R3', 'status': 'filed', 'destination': 'ask receipt 9'}])
+    report, check, handoff = wrap.finish(filed)
+    assert check.returncode == 0, check.stderr
+    assert [raised['text'] for raised in report['asks']] == [ask['text']]
+    assert handoff['resume']['open_loops'] == []
+    assert wrap.plan()['handoff']['resume']['open_loops'] == []
 
 
 def test_dictated_rule_for_an_always_loaded_target_still_raises_the_ask(tmp_path, tool):
@@ -382,18 +406,92 @@ def assert_pull_request_delivery(report, check, checkout, remote, log, target_li
     assert report['saved_line'].startswith('All saved and pushed:')
 
 
-def test_refused_direct_push_goes_to_its_own_branch_and_pull_request(tmp_path, tool):
-    checkout, remote, _ = clone_pair(tmp_path)
+def refuse_main(remote):
     hook = remote / 'hooks/update'
     hook.write_text('#!/bin/sh\nif [ "$1" = refs/heads/main ]; then\n'
                     'echo "Changes must be made through a pull request." >&2\nexit 1\nfi\n')
     hook.chmod(0o755)
+
+
+def test_refused_direct_push_goes_to_its_own_branch_and_pull_request(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
     log, routing = pull_request_command(tmp_path)
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
     data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert_pull_request_delivery(report, check, checkout, remote, log)
+
+
+def test_several_lessons_for_one_file_all_reach_the_pull_request(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    target = checkout / 'AGENTS.md'
+    data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
+        row(0, target, 'First rule.\n', change='Add the first rule'),
+        row(1, target, 'Second rule.\n', change='Add the second rule')]))
+    report, check, _ = wrap.finish(wrap.file(data))
+    assert check.returncode == 0, check.stderr
+    applied = report['lessons']['applied']
+    assert [(r['change'], r['delivery'], r['pull_request']) for r in applied] == [
+        ('Add the first rule', 'pull request', 'https://example.invalid/pull/7'),
+        ('Add the second rule', 'pull request', 'https://example.invalid/pull/7')]
+    [branch] = {r['lesson_branch'] for r in applied}
+    shown = git(remote, 'show', f'{branch}:AGENTS.md')
+    assert 'First rule.' in shown and 'Second rule.' in shown
+    assert git(remote, 'log', '--format=%s', 'main..' + branch).splitlines() == [
+        'lesson: Add the second rule', 'lesson: Add the first rule']
+    assert git(remote, 'rev-parse', branch) == applied[1]['commit']
+    assert git(remote, 'rev-parse', branch + '^') == applied[0]['commit']
+    [request] = [json.loads(line) for line in log.read_text().splitlines() if line]
+    assert request['title'] == 'lessons: 2 applied at wrap'
+    assert [entry['commit'] for entry in request['lessons']] == [r['commit'] for r in applied]
+    assert report['saved_line'].startswith('All saved and pushed:')
+
+
+def test_a_later_wrap_passes_after_pull_request_delivery(tmp_path, tool):
+    checkout, remote, other = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    report, check, _ = wrap.finish(wrap.file(data))
+    assert_pull_request_delivery(report, check, checkout, remote, log)
+    [first] = report['lessons']['applied']
+    # The local commit stays on main (re-applied in the same second it may even share its SHA).
+    assert set(git(checkout, 'rev-list', 'HEAD', '--not', '--remotes').split()) <= {first['local_commit']}
+    assert git(checkout, 'rev-parse', f"refs/hippocampus/delivered/{first['local_commit']}") == first['commit']
+
+    # A later session wraps in the same checkout before the request merges.
+    later = Wrap(tmp_path, tool, routing=routing, session='later-session')
+    later.plan()
+    data = later.deliver(later.apply([lesson('Later.')], [row(0, checkout / 'other.md', 'Later rule.\n')]))
+    report, check, _ = later.finish(later.file(data))
+    assert check.returncode == 0, check.stderr
+    assert report['saved_line'].startswith('All saved and pushed:')
+    assert report['lessons']['applied'][0]['delivery'] == 'pull request'
+
+    # The first request merges as a squash and its branch is deleted.
+    git(other, 'fetch', '-q', 'origin')
+    git(other, 'merge', '-q', '--squash', 'origin/' + first['lesson_branch'])
+    git(other, 'commit', '-qm', 'squash lesson')
+    hook = remote / 'hooks/update'
+    hook.unlink()
+    git(other, 'push', '-q', 'origin', 'main')
+    git(other, 'push', '-q', 'origin', '--delete', first['lesson_branch'])
+    refuse_main(remote)
+    git(checkout, 'fetch', '-q', '--prune', 'origin')
+    last = Wrap(tmp_path, tool, routing=routing, session='last-session')
+    last.plan()
+    data = last.deliver(last.apply([lesson('Last.')], [row(0, checkout / 'other.md', 'Last rule.\n')]))
+    report, check, _ = last.finish(last.file(data))
+    assert check.returncode == 0, check.stderr
+    assert report['saved_line'].startswith('All saved and pushed:')
 
 
 def test_refused_push_with_no_pull_request_command_is_reported_not_saved(tmp_path, tool):
@@ -420,9 +518,10 @@ def test_routing_file_requires_a_pull_request_for_a_repository(tmp_path, tool):
     data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
         row(0, checkout / 'AGENTS.md'), row(1, checkout / 'other.md', 'Second rule.\n')]))
     assert [r['delivery'] for r in data['lesson_outcomes']] == ['pull request', 'pull request']
-    branches = [r['lesson_branch'] for r in data['lesson_outcomes']]
-    assert 'Second rule.' not in git(remote, 'show', f'{branches[0]}:other.md')
-    assert 'Run the suite first.' not in git(remote, 'show', f'{branches[1]}:AGENTS.md')
+    first, second = data['lesson_outcomes']
+    assert first['lesson_branch'] == second['lesson_branch']
+    assert git(remote, 'show', '--format=', '--name-only', first['commit']).split() == ['AGENTS.md']
+    assert git(remote, 'show', '--format=', '--name-only', second['commit']).split() == ['other.md']
     report, check, _ = wrap.finish(wrap.file(data))
     assert check.returncode == 0, check.stderr
     assert report['saved_line'].startswith('All saved and pushed:')

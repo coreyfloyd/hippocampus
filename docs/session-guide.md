@@ -116,9 +116,12 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
   The ask has no choices.
 - The persist step pushes the commits with the wrap's others, and when the remote moved
   brings in its commits and pushes once more. A repository that refuses a direct push gets
-  each lesson on its own branch with a pull request, opened by the routing file's
-  `lesson-pull-request-command`, which you set up to merge through the repository's checks.
-  With no such command the lesson is `committed, not pushed`. With persist unbound nothing is pushed.
+  the wrap's lessons for that checkout on one lesson branch, one commit each, with a pull
+  request opened by the routing file's `lesson-pull-request-command`, which you set up to
+  merge through the repository's checks. The local commit stays on your branch with a
+  delivered mark, so a later wrap in that checkout does not count it as unpushed, before or
+  after the request merges. With no such command the lesson is `committed, not pushed`.
+  With persist unbound nothing is pushed.
 - The report lists each applied lesson with its target, change and commit, each dropped
   lesson with its reason, and each failure with its error. A failed lesson stays carried.
   A lesson `committed, not pushed` counts as not saved.

@@ -22,6 +22,7 @@ SETTING = "auto_apply_lessons"
 OUTCOME = "lesson_outcome"
 NOT_PUSHED = "committed, not pushed"
 PULL_REQUEST = "pull request"
+DELIVERED_REFS = "refs/hippocampus/delivered/"
 IN_PROGRESS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")
 GENERATED_MARK = b"<!-- hippocampus-rules: generated"
 INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md")
@@ -94,7 +95,7 @@ def report_section(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[dict[str
     section: dict[str, list[dict[str, Any]]] = {"applied": [], "dropped": [], "failed": []}
     for row in rows:
         section[row["status"]].append({key: value for key, value in row.items()
-                                       if key not in ("identity", "status") and value is not None})
+                                       if key not in ("identity", "status", "edits") and value is not None})
     return section
 
 
@@ -241,6 +242,10 @@ def _commit(checkout: Path, path: Path, before: bytes | None, edits: Sequence[Ma
     return result
 
 
+def _message(change: str) -> str:
+    return f"lesson: {' '.join(change.split())}"
+
+
 def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
     target = Path(row["target"]).expanduser()
     if not target.is_absolute():
@@ -261,14 +266,17 @@ def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
     branch = _git(checkout, "symbolic-ref", "--short", "HEAD")
     if branch.returncode:
         raise LessonError("the checkout has no branch checked out (detached HEAD)")
-    subject = " ".join(row["change"].split())
-    committed = _commit(checkout, source, before, row["edits"], f"lesson: {subject}")
+    committed = _commit(checkout, source, before, row["edits"], _message(row["change"]))
     return {**outcome, **committed, "checkout": str(checkout), "branch": _text(branch), "delivery": None}
 
 
 def _with_ask(item: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
-    """Mark a carried lesson as applied, so no later wrap or successor applies it again."""
-    return {**item, "applied": True, "commit": outcome.get("commit"), "ask_text": ask_text(outcome)}
+    """Mark a carried lesson as applied, so no later wrap or successor applies it again.
+
+    Its ask is text only, so choices the lesson was carried with do not travel with it.
+    """
+    kept = {key: value for key, value in item.items() if key != "choices"}
+    return {**kept, "applied": True, "commit": outcome.get("commit"), "ask_text": ask_text(outcome)}
 
 
 def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module: Any,
@@ -328,7 +336,8 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             removed.append(item)
         else:
             added = " ".join(edit["new"].strip() for edit in row["edits"])
-            outcome.update(change=row["change"], added=added, dictated=bool(row.get("dictated")))
+            outcome.update(change=row["change"], added=added, dictated=bool(row.get("dictated")),
+                           edits=[{key: edit[key] for key in ("old", "new") if edit.get(key)} for edit in row["edits"]])
             try:
                 outcome.update(_apply_one(row, routing), status="applied")
             except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
@@ -413,40 +422,96 @@ def _push(checkout: Path, remote: str, branch: str) -> tuple[bool, str, int]:
     return second.returncode == 0, _error(second) if second.returncode else "", 2
 
 
-def _pull_request(checkout: Path, remote: str, outcome: Mapping[str, Any], command: str | None) -> dict[str, str]:
-    """Deliver one lesson on its own branch, cut from the remote, with a pull request.
+def _lesson_branch(session_id: str) -> str:
+    return "lesson/" + re.sub(r"[^A-Za-z0-9._-]", "-", session_id)[:12]
 
-    The branch is built in a temporary worktree, so the user's checkout is not touched.
-    The user's command opens the request and owns how it merges; the package never merges.
-    It reads one JSON request on stdin and prints the pull request's reference last.
+
+def _mark_delivered(checkout: Path, local_commit: str, delivered: str) -> None:
+    """Record in the checkout that a local lesson commit was delivered by pull request.
+
+    The mark is a ref under `refs/hippocampus/delivered/`, so every later wrap's saved line
+    leaves the local commit out of the commits it counts as not pushed.
+    """
+    _must(checkout, "update-ref", f"{DELIVERED_REFS}{local_commit}", delivered)
+
+
+def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[Mapping[str, Any]],
+                   command: str | None) -> list[dict[str, Any]]:
+    """Deliver a wrap's lessons for one checkout on one lesson branch, with one pull request.
+
+    The branch is cut from the remote's copy of the base branch, or continues the session's
+    existing lesson branch, in a temporary worktree, so the user's checkout is not touched.
+    Each lesson is re-applied from its edits as one commit of its own; the lessons stack, so
+    two of them for one file do not conflict with each other when they merge. The user's
+    command opens the request and owns how it merges; the package never merges. It reads one
+    JSON request on stdin and prints the pull request's reference last.
     """
     if not command:
         raise LessonError("a pull request is required, but the routing file names no lesson-pull-request-command")
-    branch, commit = outcome["branch"], outcome["commit"]
-    _must(checkout, "fetch", remote, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}")
-    lesson_branch = f"lesson/{commit[:12]}"
+    base = rows[0]["branch"]
+    lesson_branch = _lesson_branch(session_id)
+    _must(checkout, "fetch", remote, f"+refs/heads/{base}:refs/remotes/{remote}/{base}")
+    existing = f"refs/remotes/{remote}/{lesson_branch}"
+    continued = _git(checkout, "fetch", remote, f"+refs/heads/{lesson_branch}:{existing}").returncode == 0
+    updates: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory() as directory:
         worktree = str(Path(directory) / "lesson")
-        _must(checkout, "worktree", "add", "--detach", worktree, f"refs/remotes/{remote}/{branch}")
+        _must(checkout, "worktree", "add", "--detach", worktree, existing if continued else f"refs/remotes/{remote}/{base}")
         try:
-            _must(worktree, "cherry-pick", commit)
-            delivered = _must(worktree, "rev-parse", "HEAD")
-            _must(worktree, "push", remote, f"HEAD:refs/heads/{lesson_branch}")
+            for row in rows:
+                update: dict[str, Any] = {"lesson_branch": lesson_branch}
+                if continued and row.get("lesson_commit") and _git(
+                        worktree, "merge-base", "--is-ancestor", row["lesson_commit"], "HEAD").returncode == 0:
+                    update["lesson_commit"] = row["lesson_commit"]
+                else:
+                    try:
+                        update["lesson_commit"] = _reapply(checkout, worktree, row)
+                    except LessonError as error:
+                        update.update(delivery=NOT_PUSHED, error=f"{lesson_branch}: {error}")
+                updates.append(update)
+            if any("lesson_commit" in update for update in updates):
+                _must(worktree, "push", remote, f"HEAD:refs/heads/{lesson_branch}")
+                _git(checkout, "fetch", remote, f"+refs/heads/{lesson_branch}:{existing}")
         finally:
             _git(checkout, "worktree", "remove", "--force", worktree)
-    request = {"checkout": str(checkout), "remote": remote, "base": branch, "branch": lesson_branch,
-               "title": f"lesson: {' '.join(outcome['change'].split())}",
-               "body": f"Lesson applied at wrap to `{Path(outcome['target']).relative_to(checkout).as_posix()}`."}
+    delivered = [(row, update) for row, update in zip(rows, updates) if "lesson_commit" in update]
+    for row, update in delivered:
+        _mark_delivered(checkout, row["commit"], update["lesson_commit"])
+    if not delivered:
+        return updates
+    paths = [Path(row["target"]).relative_to(checkout).as_posix() for row, _ in delivered]
+    request = {"checkout": str(checkout), "remote": remote, "base": base, "branch": lesson_branch,
+               "title": _message(delivered[0][0]["change"]) if len(delivered) == 1
+               else f"lessons: {len(delivered)} applied at wrap",
+               "body": "\n".join(f"- {_message(row['change'])} (`{path}`, {update['lesson_commit'][:12]})"
+                                 for (row, update), path in zip(delivered, paths)),
+               "lessons": [{"title": _message(row["change"]), "path": path, "commit": update["lesson_commit"]}
+                           for (row, update), path in zip(delivered, paths)]}
     try:
         opened = subprocess.run(shlex.split(command), cwd=str(checkout), input=json.dumps(request),
                                 capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise LessonError(f"pushed {lesson_branch}, but no pull request was opened: {error}") from error
-    reference = opened.stdout.strip().splitlines()[-1] if opened.stdout.strip() else ""
-    if opened.returncode or not reference:
-        raise LessonError(f"pushed {lesson_branch}, but no pull request was opened: {opened.stderr.strip()}")
-    return {"commit": delivered, "local_commit": commit, "lesson_branch": lesson_branch,
-            "pull_request": reference, "delivery": PULL_REQUEST}
+        reference = opened.stdout.strip().splitlines()[-1] if opened.stdout.strip() else ""
+        if opened.returncode or not reference:
+            raise LessonError(opened.stderr.strip() or f"the command exited {opened.returncode} with no reference")
+    except (OSError, subprocess.SubprocessError, LessonError) as error:
+        for _, update in delivered:
+            update.update(delivery=NOT_PUSHED, error=f"pushed {lesson_branch}, but no pull request was opened: {error}")
+        return updates
+    for row, update in delivered:
+        update.update(commit=update.pop("lesson_commit"), local_commit=row["commit"],
+                      pull_request=reference, delivery=PULL_REQUEST, error=None)
+    return updates
+
+
+def _reapply(checkout: Path, worktree: str, row: Mapping[str, Any]) -> str:
+    """Commit one lesson's edits on the lesson branch, from the branch's own copy of the file."""
+    relative = Path(row["target"]).relative_to(checkout)
+    path = Path(worktree) / relative
+    before = path.read_bytes() if path.exists() else b""
+    _write(path, before, _edited(before, row["edits"], "remote's file"))
+    _must(worktree, "add", "--", relative.as_posix())
+    _must(worktree, "commit", "-q", "-m", _message(row["change"]))
+    return _must(worktree, "rev-parse", "HEAD")
 
 
 def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -454,6 +519,7 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
     rows = [row for row in outcomes(module, session_id) if row["status"] == "applied" and row.get("commit")
             and row.get("delivery") in (None, NOT_PUSHED)]
     pushes: dict[tuple[str, str], tuple[bool, str, int]] = {}
+    requests: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for row in rows:
         checkout, branch = Path(row["checkout"]), row["branch"]
         update: dict[str, Any] = {}
@@ -481,10 +547,18 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
                 if pushed:
                     update.update(delivery="pushed", attempts=attempts, error=None)
                 elif attempts == 0 or REFUSED_DIRECT.search(error):
-                    update.update(_pull_request(checkout, remote, row, rules["command"]), error=None)
+                    requests.setdefault((str(checkout), branch, remote), []).append({**row, **update})
+                    continue
                 else:
                     update.update(delivery=NOT_PUSHED, attempts=attempts, error=error)
         except (LessonError, OSError, subprocess.SubprocessError) as error:
             update.update(delivery=NOT_PUSHED, error=str(error))
         _record(module, session_id, {**row, **update})
+    for (checkout, _, remote), group in requests.items():
+        try:
+            updates = _pull_requests(Path(checkout), remote, session_id, group, rules["command"])
+        except (LessonError, OSError, subprocess.SubprocessError) as error:
+            updates = [{"delivery": NOT_PUSHED, "error": str(error)} for _ in group]
+        for row, update in zip(group, updates):
+            _record(module, session_id, {**row, **update})
     return outcomes(module, session_id)

@@ -329,7 +329,7 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str
            "session_id": item.get("session_id") or subject.get("session_id"),
            "directory": subject.get("working_directory"),
            "ticket": (item.get("anchor") or {}).get("ticket"),
-           "choices": copy.deepcopy(item.get("choices", []))}
+           "choices": [] if item.get("applied") else copy.deepcopy(item.get("choices", []))}
     validate_ask_payload(ask)
     return ask
 
@@ -701,8 +701,6 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     scope = []
     repository_problems: dict[str, list[str]] = {}
     applied = data.get("filing", {}).get("lessons", {}).get("applied", [])
-    # A commit delivered by pull request stays on the local branch until that request merges.
-    delivered = {row["local_commit"] for row in applied if row.get("local_commit")}
     for checkout in sorted(repositories):
         # Git otherwise walks up to a different checkout if this one lost .git.
         actual = (module._run_git(checkout, "rev-parse", "--show-toplevel")
@@ -713,6 +711,10 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         branch = module._run_git(checkout, "symbolic-ref", "--short", "HEAD") or "detached HEAD"
         scope.append(f"{checkout} ({branch})")
         dirty = module._run_git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
+        # A lesson commit delivered by pull request, in this wrap or an earlier one, stays on
+        # the local branch; its delivered mark says it is not waiting for a push.
+        marks = module._run_git(checkout, "for-each-ref", "--format=%(refname)", lessons.DELIVERED_REFS)
+        delivered = {ref.rsplit("/", 1)[-1] for ref in (marks or "").splitlines()}
         unpublished = module._run_git(checkout, "rev-list", *(["--no-merges"] if delivered else []),
                                       "HEAD", "--not", "--remotes")
         if unpublished and delivered:
@@ -1262,11 +1264,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 persist = next(step for step in plan if step["id"] == "persist").get("binding")
                 rows = lessons.deliver(module, session_id, bool(persist), lessons.routing_rules())
+                # An applied lesson may be a carried open loop or one found during this wrap.
+                items = [*handoff.get("resume", {}).get("open_loops", []),
+                         *(item for item in handoff.get("session_items", []) if item.get("recorded") is not True)]
                 output = {**handoff, "lesson_outcomes": rows,
                           "lesson_asks": [ask_payload({**item, "ask_text": lessons.ask_text(row)},
                                                       handoff.get("subject", {}))
-                                          for item in handoff.get("resume", {}).get("open_loops", [])
-                                          for row in rows if item.get("applied")
+                                          for item in items for row in rows if item.get("applied")
                                           and tuple(row["identity"]) == module.session_item_identity(item)]}
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
