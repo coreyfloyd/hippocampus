@@ -12,10 +12,12 @@ args = sys.argv[1:]
 assert args[0] == 'plugin', args
 operation = args[1]
 entries = json.loads(registry.read_text()).get('plugins', {}) if registry.exists() else {}
-if operation == 'install':
-    root = Path(args[args.index('--marketplace') + 1]).resolve()
-    assert (root / '.claude-plugin/marketplace.json').is_file(), 'marketplace missing'
-    assert (root / '.claude-plugin/plugin.json').is_file(), 'plugin metadata missing'
+marketplaces = config / 'plugins/known_marketplaces.json'
+sources = json.loads(marketplaces.read_text()) if marketplaces.exists() else {}
+settings = config / 'settings.json'
+
+
+def record(root):
     version = json.loads((root / '.claude-plugin/plugin.json').read_text())['version']
     cache = config / 'plugins/cache/hippocampus/hippocampus' / version
     shutil.copytree(root, cache, dirs_exist_ok=True)
@@ -23,14 +25,38 @@ if operation == 'install':
         {'installPath': str(cache), 'version': version, 'scope': 'user'}]
     registry.parent.mkdir(parents=True, exist_ok=True)
     registry.write_text(json.dumps({'version': 2, 'plugins': entries}))
-    marketplaces = config / 'plugins/known_marketplaces.json'
+
+
+if operation == 'install':
+    # The native CLI keeps the source as written and compares it the same way.
+    written = args[args.index('--marketplace') + 1]
+    root = Path(written).resolve()
+    assert (root / '.claude-plugin/marketplace.json').is_file(), 'marketplace missing'
+    assert (root / '.claude-plugin/plugin.json').is_file(), 'plugin metadata missing'
+    known = sources.get('hippocampus', {}).get('source', {}).get('path')
+    if known not in (None, written):
+        raise SystemExit(f'Marketplace "hippocampus" is already added from a different source (dir:{known})')
+    if 'hippocampus@hippocampus' not in entries:
+        record(root)
     marketplaces.write_text(json.dumps({'hippocampus': {
-        'source': {'source': 'directory', 'path': str(root)}, 'installLocation': str(root)}}))
-    settings = config / 'settings.json'
+        'source': {'source': 'directory', 'path': written}, 'installLocation': written}}))
     value = json.loads(settings.read_text()) if settings.exists() else {}
     value.setdefault('enabledPlugins', {})['hippocampus@hippocampus'] = True
     settings.write_text(json.dumps(value))
     print(json.dumps({'outcome': 'ok'}))
+elif operation == 'update':
+    record(Path(sources['hippocampus']['source']['path']).resolve())
+elif operation == 'disable':
+    value = json.loads(settings.read_text())
+    value['enabledPlugins']['hippocampus@hippocampus'] = False
+    settings.write_text(json.dumps(value))
+elif operation == 'marketplace':
+    if args[2] == 'remove':
+        assert 'hippocampus@hippocampus' not in entries, 'stub models only an emptied marketplace'
+        sources.pop('hippocampus')
+        marketplaces.write_text(json.dumps(sources))
+    else:
+        assert args[2] == 'update', args
 elif operation == 'list':
     # Model only the settings/scopes exercised by the offline installer tests.
     project = Path.cwd()
@@ -39,8 +65,6 @@ elif operation == 'list':
                  project / '.claude/settings.local.json'):
         if path.exists():
             enabled.update(json.loads(path.read_text()).get('enabledPlugins', {}))
-    marketplaces = config / 'plugins/known_marketplaces.json'
-    sources = json.loads(marketplaces.read_text()) if marketplaces.exists() else {}
     source = sources.get('hippocampus', {}).get('source', {}).get('path')
     print(json.dumps([{'id': key, 'enabled': enabled.get(key) is True, **entry,
                        **({'readFromFolder': source} if source is not None else {})}
@@ -48,8 +72,15 @@ elif operation == 'list':
 elif operation == 'uninstall':
     entries.pop('hippocampus@hippocampus', None)
     registry.write_text(json.dumps({'version': 2, 'plugins': entries}))
-    shutil.rmtree(config / 'plugins/data/hippocampus-hippocampus', ignore_errors=True)
-    print(json.dumps({'outcome': 'ok', 'keptData': False}))
+    kept = '--keep-data' in args
+    if not kept:
+        shutil.rmtree(config / 'plugins/data/hippocampus-hippocampus', ignore_errors=True)
+    if settings.exists():
+        value = json.loads(settings.read_text())
+        for field in ('enabledPlugins', 'pluginConfigs'):
+            value.get(field, {}).pop('hippocampus@hippocampus', None)
+        settings.write_text(json.dumps(value))
+    print(json.dumps({'outcome': 'ok', 'keptData': kept}))
 elif operation == 'details':
     root = Path(entries['hippocampus@hippocampus'][0]['installPath'])
     names = sorted(p.name for p in (root / 'skills').iterdir() if (p / 'SKILL.md').is_file())

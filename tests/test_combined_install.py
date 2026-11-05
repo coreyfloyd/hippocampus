@@ -79,7 +79,8 @@ def test_claude_cutover_and_failure_restore(tmp_path):
         if fail:
             assert result.returncode != 0
             assert owned.is_symlink()
-            assert not (home / '.claude/plugins').exists()
+            # Only installer-owned entries go; this file may be another session's.
+            assert (home / '.claude/plugins/test').is_file()
         else:
             assert result.returncode == 0, result.stderr
             assert not owned.is_symlink()

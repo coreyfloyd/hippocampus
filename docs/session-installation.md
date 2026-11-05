@@ -144,6 +144,14 @@ Use `python3 scripts/install-claude.py` for Claude Code from either tree.
 The helper is the supported installation path; a bare native plugin command or
 in-session marketplace action bypasses the required transaction.
 
+An installed release registers through `~/.local/share/hippocampus/current`, so
+upgrades need no marketplace change: install the new release, then run the helper
+from `current`. A registration from an earlier release folder moves to `current`
+and keeps the plugin's options and data. A marketplace from outside that runtime
+root stops at a read-only check that names the source. Run
+`claude plugin marketplace remove hippocampus`, which also uninstalls the plugin
+and can delete its saved options and data, then run the helper again.
+
 No release assets exist until the release is published; their exact route is
 checked in the release's verification procedure in [RELEASING.md](../RELEASING.md).
 
