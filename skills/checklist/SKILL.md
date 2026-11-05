@@ -20,22 +20,23 @@ profile and composer. When no user profile file exists, run with none: that is a
 configured-nothing user. The user profile may name further profile files to pass
 as repository profiles for some surfaces; follow it.
 
-Then identify every repository this session touched. The candidate detector is
-this package's `scripts/checklist-surfaces.sh` (resolve the path from this
-skill's real directory: `../../scripts/checklist-surfaces.sh`):
+Identify touched repositories from the same checked-checkout list the saved line uses:
 
 ```bash
-bash <checklist-surfaces.sh>
+python3 <package-root>/scripts/lib/handoff.py touched-checkouts --session-id <session-id>
 ```
 
-It lists the session's own repository plus the standing surfaces named by
-`checklist_surfaces` in the hippocampus configuration (none by default).
+Add any checkout you remember working in with repeatable `--add <checkout>`
+arguments. Naming is best effort; additions persist in this session's ledger and
+cannot remove recorded checkouts. The list includes each tool call's working-directory
+checkout and each edit-tool file's checkout. Read each listed checkout's additive
+`.claude/checklist-profile.md` completely, including notes qualifying its steps.
 
-Treat output as candidates: exclude another session's changes, and include your
-own work even if already committed and pushed. For a linked worktree, read its
-profile first if it differs from the main checkout's. A repository profile at
-`.claude/checklist-profile.md` is additive. Read each complete file, including
-notes that qualify its steps.
+The saved-state check does not parse shell command text, inspect other worktrees or local
+branches, or carry a predecessor's checked scope. A shell-only target not named
+by the agent is an accepted limit. Each listed checkout is checked for all
+uncommitted changes (including deletions) and current-HEAD commits absent from
+all remote-tracking branches.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
@@ -429,6 +430,27 @@ The final report returns `report: "incomplete"` and an `incomplete` list naming
 every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
+
+Immediately before the pending-asks block, print the output's `saved_line`.
+It reads `All saved and pushed: <checkout> (<branch>), ...` only when every item has a matching record-write
+receipt (including a reused receipt), a drop reason under its filing rule, or an
+ask receipt, and every listed checkout is committed and pushed. The claim covers only that list;
+with no checkouts it says `All saved and pushed: no checkouts listed`. Otherwise it
+names each kept item and its missing record-write or ask binding. Missing bindings
+warn and pass. With persist unbound it names every unpushed repository under
+`Not pushed:` and says the changes were not pushed; wrap still passes. With
+persist bound, uncommitted or unpushed touched repositories fail wrap. Under
+`Not saved:` it names each failed write, unresolved uncertain write, failed record
+read, pending item without an ask receipt, or repository that failed persistence,
+with its reason. An uninspectable checkout is not saved even with persist unbound.
+Report and wrap-check use the same saved-state verdict. A native
+step status alone retains its incomplete-report contract; a failed or pending
+filing item without an ask receipt is not saved and fails wrap. The package checks Git
+state itself using the session ledger's touched checkouts and local remote refs;
+a persist step claiming success is not proof of a push.
+
+The saved line is immediately before the asks, even when the wrap fails. Pending
+asks remain the last thing in the report, complete and unabridged.
 
 End every report, attended or unattended, with the output's final `asks` list: every
 ask this run filed or carried, complete text and all choices, with lesson asks

@@ -82,7 +82,8 @@ class ChecklistTests(unittest.TestCase):
                     self.assertEqual(checkpoint.returncode, 0, checkpoint.stderr)
                     checked = subprocess.run([sys.executable, str(ENGINE), "wrap-check", "--written-handoff", str(target)],
                                              text=True, capture_output=True, env=environment)
-                    self.assertEqual(checked.returncode, 0, checked.stderr)
+                    unsaved = status in ("failed", "pending")
+                    self.assertEqual(checked.returncode, int(unsaved), checked.stderr)
                     results = [{"id": s["id"], "status": "run", "writes": []} for s in plan]
                     results[1 if kind == "knowledge" else 2].update(
                         status="run" if status == "filed" else status, reason="native reason", error="native error")
@@ -90,9 +91,9 @@ class ChecklistTests(unittest.TestCase):
                     path.write_text(json.dumps(results))
                     report = subprocess.run([sys.executable, str(ENGINE), "report", "--handoff", str(target),
                         "--results", str(path)], text=True, capture_output=True, env=environment)
-                    self.assertEqual(report.returncode, 0, report.stderr)
+                    self.assertEqual(report.returncode, int(unsaved), report.stderr)
                     output = json.loads(report.stdout)
-                    self.assertEqual(output["report"], "incomplete" if status in ("failed", "declined", "pending") else "ok")
+                    self.assertEqual(output["report"], "failed" if unsaved else "incomplete" if status == "declined" else "ok")
                     if status in ("failed", "declined", "pending"):
                         self.assertEqual(output["incomplete"][0]["id"], identity)
                         self.assertTrue(output["incomplete"][0]["reason"])
@@ -298,9 +299,8 @@ class ChecklistTests(unittest.TestCase):
         """Checkpoint as step 5 does, then run the wrap check through the CLI."""
         target = Path(directory) / "wrapped.json"
         environment = dict(os.environ, HANDOFF_PATH=str(target), HANDOFF_STATE_DIR=directory, HANDOFF_LEDGER_DIR=directory)
-        with open(Path(directory) / "session-touched-paths.wrap-session.jsonl", "a") as handle:
-            for row in ledger:
-                handle.write(json.dumps(row) + "\n")
+        for row in ledger:
+            self.append_ledger(directory, row)
         supplied = dict(self.handoff(), session_items=session_items)
         supplied["resume"]["headline"] = "wrap"
         supplied["resume"]["open_loops"] = []
@@ -509,7 +509,7 @@ class ChecklistTests(unittest.TestCase):
     def test_bound_record_must_not_predate_the_last_change(self):
         user = ["--user-profile", str(PROFILES / "user.md")]
         ledger = [{"kind": "file", "path": "/x", "checkout": "/", "session_id": "wrap-session", "ts": "2026-10-06T13:00:00Z"},
-                  {"repo_root": "/", "head": "a", "ts": "2026-10-06T15:00:00Z"}]
+                  {"repo_root": "/", "checkout": "/", "head": "a", "ts": "2026-10-06T15:00:00Z"}]
         with tempfile.TemporaryDirectory() as directory:
             _, stale, _ = self.wrap(directory, [], user, "2026-10-06T12:59:00Z", ledger)
             self.assertEqual(stale.returncode, 1)
@@ -534,6 +534,26 @@ class ChecklistTests(unittest.TestCase):
         return self.append_ledger(directory, {"kind": "file", "path": "/x", "checkout": "/", "session_id": "wrap-session", "ts": ts})
 
     def append_ledger(self, directory, row):
+        # Freshness fixtures need a real, pushed repository now that wrap checks Git.
+        if row.get("checkout") == "/" or row.get("repo_root") == "/":
+            repository = Path(directory) / "repository"
+            if not repository.exists():
+                repository.mkdir()
+                remote = Path(directory) / "remote.git"
+                commands = [["git", "init", "--bare", "-q", str(remote)],
+                            ["git", "init", "-q", str(repository)],
+                            ["git", "-C", str(repository), "-c", "user.name=Test", "-c",
+                             "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "Initial"],
+                            ["git", "-C", str(repository), "remote", "add", "origin", str(remote)],
+                            ["git", "-C", str(repository), "push", "-u", "origin", "HEAD"]]
+                for command in commands:
+                    subprocess.run(command, check=True, capture_output=True)
+            row = dict(row)
+            for key in ("checkout", "repo_root"):
+                if row.get(key) == "/":
+                    row[key] = str(repository)
+            if row.get("path", "").startswith("/"):
+                row["path"] = str(repository / row["path"].lstrip("/"))
         with open(Path(directory) / "session-touched-paths.wrap-session.jsonl", "a") as handle:
             handle.write(json.dumps(row) + "\n")
 
@@ -766,7 +786,7 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {"outcome_line": "No milestone or epic closed or moved this session.", "summary": "earlier work",
                                                          "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
-                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "asks": []})
+                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "saved_line": "All saved and pushed: no checkouts listed", "asks": []})
             path.write_text(json.dumps(wrote))
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 1)

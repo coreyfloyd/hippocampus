@@ -607,6 +607,101 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     return list(dict.fromkeys(failures)), list(dict.fromkeys(warnings))
 
 
+def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
+                ask: Mapping[str, str] | None = None) -> tuple[str, list[str], list[str]]:
+    """Use receipts and current Git state for the report and wrap verdict alike."""
+    failures, warnings = filing_check(plan, data, ask)
+    kept: list[str] = []
+    not_saved: list[str] = list(failures)
+    rows = data.get("filing", {}).get("items", [])
+    writes = next(step for step in plan if step["id"] == "record")["record_writes"]
+    for row in rows:
+        item = row.get("item", {})
+        label = item.get("context", str(item))
+        status, binding = row.get("status"), row.get("binding")
+        reason = row.get("error") or row.get("reason") or "no successful write receipt"
+        if binding == "ask" and (status == "filed" or row.get("ask_status") == "filed"):
+            if not isinstance(row.get("destination"), str) or not row["destination"].strip():
+                not_saved.append(f"{label}: pending with no ask receipt")
+        elif status in ("failed", "uncertain", "read failed", "pending"):
+            not_saved.append(f"{label}: {status}: {reason}")
+        elif status == "filed":
+            if binding not in record_write.KINDS and not row.get("destination"):
+                not_saved.append(f"{label}: no successful write receipt")
+        elif status == "dropped":
+            if not row.get("reason"):
+                not_saved.append(f"{label}: dropped without a filing reason")
+        elif status == "unbound":
+            configured = ask if binding == "ask" else writes.get(binding)
+            if configured is not None:
+                not_saved.append(f"{label}: pending with no {binding} receipt")
+            else:
+                kept.append(f"{label}: missing {binding} binding")
+        elif binding in NATIVE:
+            # Native capture outcomes retain their incomplete-report contract.
+            kept.append(f"{label}: native {binding} item kept in handoff ({reason})")
+        else:
+            not_saved.append(f"{label}: {status or 'pending'}: {reason}")
+    for item in data.get("resume", {}).get("open_loops", []):
+        if not isinstance(item, Mapping) or any(row.get("item") == item for row in rows):
+            continue
+        label = item.get("context", str(item))
+        binding = ("ask" if item.get("type") == "decision" else
+                   "lessons" if item.get("type") == "lesson" else
+                   "knowledge" if item.get("type") == "knowledge" else
+                   record_write.kind_for("R2", item, {}, writes))
+        configured = ask if binding == "ask" else writes.get(binding)
+        if binding in NATIVE or configured is None:
+            kept.append(f"{label}: " + (f"native {binding} item kept in handoff" if binding in NATIVE
+                                       else f"missing {binding} binding"))
+        else:
+            not_saved.append(f"{label}: pending with no {binding} receipt")
+
+    module = _load_handoff_module()
+    session = data.get("subject", {}).get("session_id", "")
+    repositories = module.touched_checkouts(session)
+    scope = []
+    repository_problems: dict[str, list[str]] = {}
+    for checkout in sorted(repositories):
+        # Git otherwise walks up to a different checkout if this one lost .git.
+        actual = (module._run_git(checkout, "rev-parse", "--show-toplevel")
+                  if Path(checkout).is_dir() else None)
+        if not actual or str(Path(actual).resolve()) != checkout:
+            repository_problems[checkout] = ["cannot check commit and push state: checkout unavailable"]
+            continue
+        branch = module._run_git(checkout, "symbolic-ref", "--short", "HEAD") or "detached HEAD"
+        scope.append(f"{checkout} ({branch})")
+        dirty = module._run_git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
+        unpublished = module._run_git(checkout, "rev-list", "HEAD", "--not", "--remotes")
+        reasons = []
+        if dirty is None or unpublished is None:
+            reasons.append("cannot check commit and push state")
+        else:
+            if dirty:
+                reasons.append("uncommitted changes")
+            if unpublished:
+                reasons.append("changes were not pushed")
+        if reasons:
+            repository_problems[checkout] = reasons
+    unpushed: list[str] = []
+    persist = next(step for step in plan if step["id"] == "persist").get("binding")
+    for checkout, reasons in sorted(repository_problems.items()):
+        if not persist and "changes were not pushed" not in reasons:
+            reasons.append("changes were not pushed")
+        detail = f"{checkout}: " + "; ".join(reasons)
+        (not_saved if persist or any("cannot check" in reason for reason in reasons) else unpushed).append(detail)
+    not_saved = list(dict.fromkeys(not_saved))
+    warnings = list(dict.fromkeys([*warnings, *kept, *unpushed]))
+    parts = []
+    if kept:
+        parts.append("Kept: " + "; ".join(dict.fromkeys(kept)))
+    if unpushed:
+        parts.append("Not pushed: " + "; ".join(unpushed))
+    if not_saved:
+        parts.append("Not saved: " + "; ".join(not_saved))
+    return " | ".join(parts) or ("All saved and pushed: " + (", ".join(scope) or "no checkouts listed")), not_saved, warnings
+
+
 def _load_handoff_module() -> Any:
     spec = importlib.util.spec_from_file_location("handoff", Path(__file__).with_name("handoff.py"))
     module = importlib.util.module_from_spec(spec)
@@ -838,12 +933,14 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     except (OSError, ValueError, TypeError, AttributeError) as error:
         problems.append(f"profiles: {error}")
     warnings = []
+    saved_line = "Not saved: profiles could not be checked"
     if plan is not None:
         problems.extend(check_report(plan, results, args.unattended))
         try:
-            filing_failures, warnings = filing_check(plan, handoff, ask)
+            saved_line, filing_failures, warnings = saved_state(plan, handoff, ask)
             problems.extend(filing_failures)
-        except (ValueError, TypeError, AttributeError) as error:
+        except (ValueError, TypeError, AttributeError, KeyError, OSError) as error:
+            saved_line = "Not saved: saved state could not be checked"
             problems.append(f"filing report invalid: {error}")
 
     # Invalid rows still fail the report, but cannot suppress other rows' asks.
@@ -882,6 +979,9 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         output["incomplete"] = incomplete
     if problems:
         output["errors"] = list(dict.fromkeys(problems))
+    if problems and "Not saved:" not in saved_line:
+        saved_line = (saved_line + " | " if not saved_line.startswith("All saved and pushed:") else "") + "Not saved: " + "; ".join(dict.fromkeys(problems))
+    output["saved_line"] = saved_line
     output["asks"] = asks
     return output
 
@@ -943,7 +1043,7 @@ def wrap_check(plan: Sequence[Mapping[str, Any]], handoff_path: Path,
         failures.append("handoff invalid: wrap requires a real history entry; stop handoff is a skeleton")
     failures.extend(session_summary(data)[1])
     failures.extend(handoff.missing_chain_facts(data))
-    filing_failures, _ = filing_check(plan, data, ask)
+    _, filing_failures, _ = saved_state(plan, data, ask)
     failures.extend(filing_failures)
     record = next(step for step in plan if step.get("id") == "record")
     if not any(record["record_writes"].values()):

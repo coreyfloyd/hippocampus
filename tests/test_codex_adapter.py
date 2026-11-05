@@ -602,7 +602,7 @@ def test_codex_session_file_edit_blocks_and_active_stop_does_not_loop(sandbox):
     _, work = sandbox
     path = checkpoint(work)
     edited = work / 'own.txt'; edited.write_text('x')
-    event = payload('PostToolUse', sandbox, tool_input={'file_path': str(edited)}, tool_response={'exit_code': 0})
+    event = payload('PostToolUse', sandbox, tool_name='Edit', tool_input={'file_path': str(edited)}, tool_response={'exit_code': 0})
     assert cli(ADAPTER, 'ledger-record', data=event).returncode == 0
     stamp = path.stat().st_mtime + 10; os.utime(edited, (stamp, stamp))
     stop = payload('Stop', sandbox)
@@ -622,7 +622,7 @@ def test_codex_stop_retains_renamed_file_ownership(sandbox, owned, newer, expect
     path = checkpoint(work)
     source.write_text(source.read_text() + 'session edit\n')
     if owned:
-        event = payload('PostToolUse', sandbox, tool_input={'file_path': str(source)}, tool_response={'exit_code': 0})
+        event = payload('PostToolUse', sandbox, tool_name='Edit', tool_input={'file_path': str(source)}, tool_response={'exit_code': 0})
         assert cli(ADAPTER, 'ledger-record', data=event).returncode == 0
     subprocess.run(['git', '-C', str(work), 'mv', source.name, destination.name], check=True)
     status = subprocess.run(['git', '-C', str(work), 'status', '--porcelain=v1', '-z'], capture_output=True, check=True).stdout

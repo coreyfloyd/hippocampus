@@ -1034,6 +1034,21 @@ def append_ledger(session_id: str, record: Mapping[str, Any]) -> None:
         handle.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
+def touched_checkouts(session_id: str, named: Sequence[str] = ()) -> list[str]:
+    """Recorded checkouts plus additive agent names; no inferred shell targets."""
+    paths = {str(Path(row["checkout"]).resolve())
+             for row in _ledger_records(ledger_path(session_id)) if row.get("checkout")} if session_id else set()
+    for name in named:
+        path = str(Path(name).expanduser().resolve())
+        checkout = _run_git(path, "rev-parse", "--show-toplevel")
+        path = str(Path(checkout).resolve()) if checkout else path
+        if path not in paths:
+            append_ledger(session_id, {"kind": "repository", "checkout": path,
+                                      "session_id": session_id, "ts": utc_now()})
+            paths.add(path)
+    return sorted(paths)
+
+
 def record_file(cwd: str, session_id: str, path: str) -> None:
     candidate = Path(os.path.expanduser(path))
     if not candidate.is_absolute():
@@ -1198,6 +1213,9 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
     return {"decision": "allow"}
 
 
+EDIT_TOOLS = {"Write", "Edit"}
+
+
 def ledger_record(payload: Mapping[str, Any]) -> None:
     """Append this hook event's touched repositories and owned HEAD transition."""
     session_id = str(payload.get("session_id") or "")
@@ -1207,16 +1225,23 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
     cwd = payload.get("cwd")
     if isinstance(cwd, str):
         candidates.append(cwd)
+    # Saved-state scope records cwd separately from legacy commit observations.
+    checkout = _run_git(cwd, "rev-parse", "--show-toplevel") if isinstance(cwd, str) else None
+    if checkout:
+        append_ledger(session_id, {"kind": "repository", "checkout": str(Path(checkout).resolve()),
+                                  "session_id": session_id, "ts": utc_now()})
     tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
-    for key in ("file_path", "path"):
-        value = tool_input.get(key)
+    # Every tool records its working directory; only an edit tool's file names a
+    # checkout. A Read of a file elsewhere must not widen the saved-state scope.
+    file_paths = [tool_input.get(key) for key in ("file_path", "path")
+                  if payload.get("tool_name") in EDIT_TOOLS]
+    for value in file_paths:
         if isinstance(value, str):
             candidates.append(os.path.dirname(os.path.expanduser(value)))
     command = tool_input.get("command")
     if isinstance(command, str):
         candidates.extend(re.findall(r"(?:^|\s)git\s+-C\s+([^\s;|&]+)", command))
-    for key in ("file_path", "path"):
-        value = tool_input.get(key)
+    for value in file_paths:
         if isinstance(value, str) and value:
             record_file(str(cwd or os.getcwd()), session_id, value)
     # Provider-neutral record tools can supply ticket references directly.
@@ -1434,6 +1459,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument("--session-id", default=ambient_session_id()); check.add_argument("--trigger", default=os.environ.get("HANDOFF_TRIGGER", "checkpoint"))
     interactive = sub.add_parser("is-interactive"); interactive.add_argument("payload", nargs="?")
     sub.add_parser("ledger-record")
+    touched = sub.add_parser("touched-checkouts")
+    touched.add_argument("--session-id", default=ambient_session_id())
+    touched.add_argument("--add", action="append", default=[])
     ticket = sub.add_parser("ledger-ticket", help="Record a ticket read, changed, or closed")
     ticket.add_argument("--ticket", required=True)
     ticket.add_argument("--session-id", default=ambient_session_id())
@@ -1530,6 +1558,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "is-interactive":
             payload = json.loads(args.payload) if args.payload else _read_stdin_json()
             return 0 if is_interactive(payload) else 1
+        elif args.command == "touched-checkouts":
+            print(json.dumps(touched_checkouts(args.session_id, args.add)))
         elif args.command == "ledger-record": ledger_record(_read_stdin_json())
         elif args.command == "ledger-ticket": record_ticket(args.session_id, args.ticket)
         elif args.command == "ledger-file": record_file(args.cwd, args.session_id, args.path)
