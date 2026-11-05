@@ -1,7 +1,6 @@
 ---
 name: pickup
 description: "Resume work after a cold start: lists durable handoff candidates with transcript fallback. Use for 'where was I?' or 'pick up where I left off'; not within-session status."
-disable-model-invocation: true
 ---
 
 # Pickup
