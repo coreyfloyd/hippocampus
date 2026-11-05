@@ -453,6 +453,46 @@ def test_several_lessons_for_one_file_all_reach_the_pull_request(tmp_path, tool)
     assert report['saved_line'].startswith('All saved and pushed:')
 
 
+def test_a_duplicate_index_is_rejected_before_anything_is_applied(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    target = checkout / 'AGENTS.md'
+    head = git(checkout, 'rev-parse', 'HEAD')
+    for rows in ([row(0, target), row(0, target)],
+                 [{'index': 0, 'recommend': 'skip', 'reason': 'Noise'}, row(0, target)]):
+        result = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson()])),
+                          '--lessons', wrap.save('lessons.json', rows))
+        assert result.returncode == 1 and 'index 0 appears more than once' in result.stderr
+    assert git(checkout, 'rev-parse', 'HEAD') == head
+    assert 'Run the suite first.' not in target.read_text()
+
+
+def test_a_later_local_merge_is_still_unpushed_after_a_delivered_mark(tmp_path, tool):
+    checkout, remote, other = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    report, check, _ = wrap.finish(wrap.file(data))
+    assert_pull_request_delivery(report, check, checkout, remote, log)
+
+    # The user merges a local topic branch into main; that merge commit is not on any remote.
+    git(checkout, 'switch', '-q', '-c', 'topic')
+    (checkout / 'topic.md').write_text('topic\n')
+    git(checkout, 'add', '.')
+    git(checkout, 'commit', '-qm', 'topic work')
+    git(checkout, 'switch', '-q', 'main')
+    git(checkout, 'merge', '-q', '--no-ff', '--no-edit', 'topic')
+    later = Wrap(tmp_path, tool, routing=routing, session='later-session')
+    later.plan()
+    data = later.deliver(later.apply([lesson('Later.')], [row(0, checkout / 'other.md', 'Later rule.\n')]))
+    report, check, _ = later.finish(later.file(data))
+    assert check.returncode == 1
+    assert 'Not saved:' in report['saved_line'] and 'changes were not pushed' in report['saved_line']
+
+
 def test_a_later_wrap_passes_after_pull_request_delivery(tmp_path, tool):
     checkout, remote, other = clone_pair(tmp_path)
     refuse_main(remote)

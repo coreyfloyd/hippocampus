@@ -715,8 +715,8 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         # the local branch; its delivered mark says it is not waiting for a push.
         marks = module._run_git(checkout, "for-each-ref", "--format=%(refname)", lessons.DELIVERED_REFS)
         delivered = {ref.rsplit("/", 1)[-1] for ref in (marks or "").splitlines()}
-        unpublished = module._run_git(checkout, "rev-list", *(["--no-merges"] if delivered else []),
-                                      "HEAD", "--not", "--remotes")
+        # Merge commits stay in the query: only the marked commits themselves are left out.
+        unpublished = module._run_git(checkout, "rev-list", "HEAD", "--not", "--remotes")
         if unpublished and delivered:
             unpublished = "\n".join(line for line in unpublished.splitlines() if line not in delivered)
         reasons = []

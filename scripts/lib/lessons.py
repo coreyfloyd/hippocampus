@@ -294,6 +294,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     items = [*loops, *current]
     if not isinstance(rows, list) or not all(isinstance(row, Mapping) for row in rows):
         raise ValueError("lessons must be an array of objects")
+    indices = [row.get("index") for row in rows]
+    if len(set(indices)) != len(indices):
+        duplicates = sorted({index for index in indices if indices.count(index) > 1}, key=repr)
+        raise ValueError(f"lessons: one row per lesson; index {duplicates[0]!r} appears more than once")
     for row in rows:
         index = row.get("index")
         if type(index) is not int or not 0 <= index < len(items) or items[index].get("type") != "lesson":
@@ -414,12 +418,18 @@ def _push(checkout: Path, remote: str, branch: str) -> tuple[bool, str, int]:
     fetched = _git(checkout, "fetch", remote, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}")
     if fetched.returncode:
         return False, _error(fetched), 1
+    before = _text(_git(checkout, "rev-parse", "HEAD"))
     merged = _git(checkout, "merge", "--no-edit", f"refs/remotes/{remote}/{branch}")
     if merged.returncode:
         _git(checkout, "merge", "--abort")
         return False, f"could not bring in the remote's commits: {_error(merged)}", 1
     second = _git(checkout, "push", remote, f"refs/heads/{branch}:refs/heads/{branch}")
-    return second.returncode == 0, _error(second) if second.returncode else "", 2
+    error = _error(second) if second.returncode else ""
+    if REFUSED_DIRECT.search(error) and before:
+        # The branch takes pull requests only, so the merge made for the retry could never
+        # be pushed; undo it and leave the branch as it was, with the user's other changes.
+        _git(checkout, "reset", "--merge", before)
+    return second.returncode == 0, error, 2
 
 
 def _lesson_branch(session_id: str) -> str:
