@@ -313,8 +313,12 @@ def test_edit_tool_records_file_checkout_and_every_tool_records_cwd(tmp_path, to
     repo = pushed_repository(tmp_path)
     linked = tmp_path / 'edited checkout'
     git(repo, 'worktree', 'add', '-qb', 'edited', str(linked))
+    # A Read of a file in another dirty, unpushed checkout does not add that checkout.
+    read_only = tmp_path / 'read-only checkout'
+    git(repo, 'worktree', 'add', '-qb', 'read-only', str(read_only))
+    (read_only / 'folder/change.txt').write_text('Someone else\'s uncommitted work')
     script = 'scripts/codex-hook.py' if tool_flow == 'codex' else 'scripts/lib/handoff.py'
-    for tool, inputs in [('Read', {'file_path': str(repo / 'folder/change.txt')}),
+    for tool, inputs in [('Read', {'file_path': str(read_only / 'folder/change.txt')}),
                          ('Edit', {'file_path': str(linked / 'folder/change.txt')})]:
         event = dict(session_id='successor', cwd=str(repo), hook_event_name='PostToolUse',
             tool_name=tool, tool_input=inputs, tool_response={},

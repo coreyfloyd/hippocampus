@@ -1213,6 +1213,9 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
     return {"decision": "allow"}
 
 
+EDIT_TOOLS = {"Write", "Edit"}
+
+
 def ledger_record(payload: Mapping[str, Any]) -> None:
     """Append this hook event's touched repositories and owned HEAD transition."""
     session_id = str(payload.get("session_id") or "")
@@ -1228,15 +1231,17 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
         append_ledger(session_id, {"kind": "repository", "checkout": str(Path(checkout).resolve()),
                                   "session_id": session_id, "ts": utc_now()})
     tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
-    for key in ("file_path", "path"):
-        value = tool_input.get(key)
+    # Every tool records its working directory; only an edit tool's file names a
+    # checkout. A Read of a file elsewhere must not widen the saved-state scope.
+    file_paths = [tool_input.get(key) for key in ("file_path", "path")
+                  if payload.get("tool_name") in EDIT_TOOLS]
+    for value in file_paths:
         if isinstance(value, str):
             candidates.append(os.path.dirname(os.path.expanduser(value)))
     command = tool_input.get("command")
     if isinstance(command, str):
         candidates.extend(re.findall(r"(?:^|\s)git\s+-C\s+([^\s;|&]+)", command))
-    for key in ("file_path", "path"):
-        value = tool_input.get(key)
+    for value in file_paths:
         if isinstance(value, str) and value:
             record_file(str(cwd or os.getcwd()), session_id, value)
     # Provider-neutral record tools can supply ticket references directly.

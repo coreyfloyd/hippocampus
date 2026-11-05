@@ -137,7 +137,7 @@ headless sessions and subagents do not receive the hippocampus prompts.
 | `scripts/post-compact-restore.sh` | Session start, including after compaction | At startup, a count of repository handoffs; after compaction, this session's handoff and a reminder to revalidate it. |
 | `scripts/pre-compact.sh` | Before compaction | A checkpoint written directly from retained ledger facts and git state, preserving continuation; the raw hook input is also backed up. |
 | `scripts/context-guard.sh` | Prompt submission | A context warning at 50% or above when usable usage data is available, with instructions to reconcile the record and checkpoint. |
-| `hooks/handoff-ledger.sh` | After every tool call | Usually nothing: the ledger records the working-directory checkout, file paths, and existing commit ownership for checkpoint and the stop check. Shell-driven file edits need explicit ledger registration. |
+| `hooks/handoff-ledger.sh` | After every tool call | Usually nothing: the ledger records every tool call's working-directory checkout, edit-tool (Write, Edit) file paths, and existing commit ownership for checkpoint and the stop check. A Read of a file elsewhere adds no checkout. Shell-driven file edits need explicit ledger registration. |
 | `hooks/handoff-staleness-guard.sh` | Session stop | If no handoff exists, a skeleton is written without blocking. An existing handoff made stale by this session's own work prompts an update and blocks that stop. |
 | `hooks/checklist-nudge.sh` | After a shell tool call signaling commit, push, or passing tests | A once-per-session checklist reminder when that wraps a unit of work; configured unattended work uses checkpoint until the whole slate finishes. |
 
