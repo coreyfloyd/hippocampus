@@ -6,7 +6,9 @@ is copied back. A backup stays on disk until the restore has finished.
 """
 from __future__ import annotations
 
+import contextlib
 import filecmp
+import json
 import os
 from pathlib import Path
 import shutil
@@ -14,8 +16,13 @@ import stat
 import sys
 import tempfile
 
+from lib.codex_trust import atomic_write
+
 PREFIX = 'hippocampus-install-backup-'
 OWNED_NAME = 'hippocampus'
+PLUGIN = 'hippocampus@hippocampus'
+REGISTRIES = ('known_marketplaces.json', 'installed_plugins.json')
+REGISTRY_FIELDS = ('plugins', 'enabledPlugins', 'extraKnownMarketplaces', 'pluginConfigs')
 
 
 def refuse_pending(directory):
@@ -107,11 +114,40 @@ def prune(saved, live, leftovers, parents=()):
     for entry in entries:
         names = (*parents, entry.name)
         kept = saved / entry.name
-        if os.path.lexists(kept):
-            if entry.is_dir() and not entry.is_symlink() and kept.is_dir() and not kept.is_symlink():
-                prune(kept, entry, leftovers, names)
-        elif any(OWNED_NAME in name for name in names):
+        new = not os.path.lexists(kept)
+        if new and any(OWNED_NAME in name for name in names):
             attempt(leftovers, str(entry), remove, entry)
+        elif entry.is_dir() and not entry.is_symlink():
+            prune(kept, entry, leftovers, names)
+            if new:  # A folder made only for owned entries goes with them.
+                with contextlib.suppress(OSError):
+                    entry.rmdir()
+
+
+def forget_registrations(path):
+    """Remove exactly the hippocampus entries from a file the run created."""
+    if not path.exists():
+        return
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise ValueError(f'expected configuration object: {path}')
+    fields = [field for field in REGISTRY_FIELDS if isinstance(value.get(field), dict)]
+    for container in (value, *(value[field] for field in fields)):
+        container.pop(OWNED_NAME, None)
+        container.pop(PLUGIN, None)
+    for field in fields:
+        if not value[field]:
+            del value[field]
+    if set(value) <= {'version'}:
+        path.unlink()
+    else:
+        atomic_write(path, json.dumps(value, indent=2) + '\n')
+
+
+def write_plugin_options(path, options):
+    value = json.loads(path.read_text())
+    value.setdefault('pluginConfigs', {})[PLUGIN] = options
+    atomic_write(path, json.dumps(value, indent=2) + '\n')
 
 
 def discard(backup):

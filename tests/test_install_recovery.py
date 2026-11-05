@@ -214,6 +214,251 @@ def test_uninstall_is_not_blocked_by_another_source(claude):
     assert claude.called.exists()
 
 
+def test_failed_first_install_keeps_the_directory_and_other_sessions_state(tmp_path):
+    claude = ClaudeHome(tmp_path)
+    shutil.rmtree(claude.plugins)
+    cli = claude.home / 'claude-stub'
+    cli.write_text("""#!/bin/sh
+mkdir -p "$HOME/.claude/plugins/data/other" "$HOME/.claude/plugins/cache/hippocampus"
+touch "$HOME/.claude/plugins/data/other/session.json" "$HOME/.claude/plugins/cache/hippocampus/partial"
+exit 1
+""")
+    cli.chmod(0o755)
+    assert claude.run(cli).returncode != 0
+    assert (claude.plugins / 'data/other/session.json').is_file()
+    assert not (claude.plugins / 'cache/hippocampus').exists()
+    assert os.readlink(claude.link) == str(claude.target)
+
+
+def test_failed_first_install_with_nothing_else_leaves_no_directory(tmp_path):
+    claude = ClaudeHome(tmp_path)
+    shutil.rmtree(claude.plugins)
+    cli = claude.home / 'claude-stub'
+    cli.write_text('#!/bin/sh\nmkdir -p "$HOME/.claude/plugins/cache/hippocampus"\nexit 1\n')
+    cli.chmod(0o755)
+    assert claude.run(cli).returncode != 0
+    assert not claude.plugins.exists()
+
+
+HIPPOCAMPUS_ONLY = """cat > known_marketplaces.json <<'J'
+{"hippocampus": {"source": {"source": "directory", "path": "/somewhere"}}}
+J
+cat > installed_plugins.json <<'J'
+{"version": 2, "plugins": {"hippocampus@hippocampus": [{"scope": "user"}]}}
+J
+exit 1"""
+
+
+def test_failed_install_leaves_no_registration_in_registries_it_created(claude):
+    (claude.plugins / 'installed_plugins.json').unlink()
+    claude.before = tree(claude.plugins)
+    assert claude.run(claude.stub(HIPPOCAMPUS_ONLY)).returncode != 0
+    assert tree(claude.plugins) == claude.before
+
+
+def test_new_registry_keeps_entries_another_tool_added(claude):
+    (claude.plugins / 'installed_plugins.json').unlink()
+    stub = """cat > known_marketplaces.json <<'J'
+{"hippocampus": {"source": {}}, "market": {"source": {"source": "github", "repo": "someone/market"}}}
+J
+cat > installed_plugins.json <<'J'
+{"version": 2, "plugins": {"hippocampus@hippocampus": [], "other@market": [{"scope": "user"}]}}
+J
+exit 1"""
+    assert claude.run(claude.stub(stub)).returncode != 0
+    assert list(json.loads((claude.plugins / 'known_marketplaces.json').read_text())) == ['market']
+    assert list(json.loads((claude.plugins / 'installed_plugins.json').read_text())['plugins']) == ['other@market']
+
+
+def test_failed_install_restores_registries_that_existed(claude):
+    registry = claude.plugins / 'known_marketplaces.json'
+    registry.write_text('{"market": {"source": {"source": "github", "repo": "someone/market"}}}')
+    claude.before = tree(claude.plugins)
+    assert claude.run(claude.stub(HIPPOCAMPUS_ONLY)).returncode != 0
+    assert tree(claude.plugins) == claude.before
+
+
+def test_failed_install_removes_only_its_entries_from_new_settings(claude):
+    claude.settings.unlink()
+    body = """cat > "$HOME/.claude/settings.json" <<'J'
+{"enabledPlugins": {"hippocampus@hippocampus": true, "other@market": true},
+ "extraKnownMarketplaces": {"hippocampus": {"source": {}}}}
+J
+exit 1"""
+    assert claude.run(claude.stub(body)).returncode != 0
+    assert json.loads(claude.settings.read_text()) == {'enabledPlugins': {'other@market': True}}
+
+
+class Releases:
+    """Two real release folders under one runtime root, driven through their helpers."""
+
+    def __init__(self, base, cli):
+        self.base = base
+        self.home = base / 'home'
+        self.home.mkdir()
+        self.runtime = self.home / '.local/share/hippocampus'
+        self.current = self.runtime / 'current'
+        self.config = self.home / '.claude'
+        self.cli = cli
+        path = os.environ['PATH'] if cli == 'claude' else str(ROOT / 'tests/fixtures/install-route') + os.pathsep + os.environ['PATH']
+        env = {k: v for k, v in os.environ.items() if not k.startswith(('CLAUDE_', 'CODEX_', 'XDG_'))}
+        self.env = dict(env, HOME=str(self.home), PATH=path, CODEX_HOME=str(self.home / '.codex'),
+                        XDG_CONFIG_HOME=str(self.home / '.config'), XDG_DATA_HOME=str(self.home / '.local/share'),
+                        CLAUDE_CODE_ENTRYPOINT='cli')
+
+    def activate(self, version):
+        tree_root = self.base / f'source-{version}'
+        shutil.copytree(ROOT, tree_root, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__', '.pytest_cache'))
+        (tree_root / 'VERSION').write_text(version + '\n')
+        manifest = tree_root / '.claude-plugin/plugin.json'
+        manifest.write_text(json.dumps(dict(json.loads(manifest.read_text()), version=version)))
+        self.run('bash', tree_root / 'install.sh')
+        knowledge = self.home / 'knowledge'
+        if not knowledge.exists():
+            for folder in ('raw', 'wiki', 'output', 'docs'):
+                (knowledge / folder).mkdir(parents=True)
+            for name in ('wiki/hot.md', 'docs/log.md', 'docs/DECISIONS.md'):
+                (knowledge / name).touch()
+            (self.home / '.config/hippocampus/profile.md').write_text(
+                (ROOT / 'profiles/karpathy-wiki.example.md').read_text().replace('/absolute/path/to/knowledge', str(knowledge)))
+
+    def run(self, *command, check=True):
+        result = subprocess.run([str(part) for part in command], env=self.env, cwd=self.home,
+                                capture_output=True, text=True, timeout=180)
+        assert not check or result.returncode == 0, result.stdout + result.stderr
+        return result
+
+    def helper(self, cli=None, check=True):
+        return self.run(sys.executable, self.current / 'scripts/install-claude.py', '--claude', cli or self.cli, check=check)
+
+    def register_old_style(self, version):
+        """What 0.14.0 helpers left behind: the marketplace on the release folder."""
+        self.run(self.cli, 'plugin', 'install', 'hippocampus', '--marketplace', self.runtime / 'releases' / version)
+        links = self.config / 'skills'
+        shutil.rmtree(links)
+        links.mkdir()
+
+    def add_state(self):
+        data = self.config / 'plugins/data/hippocampus-hippocampus/state'
+        data.parent.mkdir(parents=True)
+        data.write_text('kept')
+        settings = self.config / 'settings.json'
+        value = json.loads(settings.read_text())
+        value['pluginConfigs'] = {'hippocampus@hippocampus': {'options': {'retention': 'long'}}}
+        settings.write_text(json.dumps(value))
+
+    def assert_state(self):
+        assert (self.config / 'plugins/data/hippocampus-hippocampus/state').read_text() == 'kept'
+        value = json.loads((self.config / 'settings.json').read_text())
+        assert value['pluginConfigs']['hippocampus@hippocampus'] == {'options': {'retention': 'long'}}
+
+    def plugin(self):
+        rows = json.loads(self.run(self.cli, 'plugin', 'list', '--json').stdout)
+        return next(row for row in rows if row['id'] == 'hippocampus@hippocampus')
+
+
+CLIS = pytest.mark.parametrize('cli', ['stub', 'claude'])
+
+
+def releases_for(tmp_path, cli):
+    if cli == 'claude' and not shutil.which('claude'):
+        pytest.skip('claude command unavailable')
+    return Releases(tmp_path, 'claude') if cli == 'claude' else Releases(tmp_path, str(ROOT / 'tests/fixtures/install-route/claude'))
+
+
+@CLIS
+@pytest.mark.parametrize('start', ['stable-source', 'release-folder'])
+def test_upgrade_completes_unattended_and_keeps_options_and_data(tmp_path, cli, start):
+    releases = releases_for(tmp_path, cli)
+    releases.activate('9.0.0')
+    if start == 'stable-source':
+        releases.helper()
+    else:
+        releases.register_old_style('9.0.0')
+    releases.add_state()
+    releases.activate('9.0.1')
+    releases.helper()
+    releases.assert_state()
+    row = releases.plugin()
+    assert row['version'] == '9.0.1' and row['enabled'] is True
+    assert row['readFromFolder'] == str(releases.current)
+    registered = json.loads((releases.config / 'plugins/known_marketplaces.json').read_text())
+    assert registered['hippocampus']['source']['path'] == str(releases.current)
+    releases.run('bash', releases.current / 'install.sh', '--verify')
+    assert not list(releases.config.glob('hippocampus-install-backup-*'))
+    # The next upgrade runs from the stable source.
+    releases.activate('9.0.2')
+    releases.helper()
+    releases.assert_state()
+    assert releases.plugin()['version'] == '9.0.2'
+    releases.run('bash', releases.current / 'install.sh', '--verify')
+
+
+@CLIS
+def test_move_to_the_stable_source_keeps_a_disabled_plugin_disabled(tmp_path, cli):
+    releases = releases_for(tmp_path, cli)
+    releases.activate('9.0.0')
+    releases.register_old_style('9.0.0')
+    releases.run(releases.cli, 'plugin', 'disable', 'hippocampus@hippocampus')
+    releases.activate('9.0.1')
+    releases.helper()
+    assert releases.plugin()['enabled'] is False
+
+
+@pytest.mark.parametrize('failing', ['install', 'update'])
+@pytest.mark.parametrize('start', ['stable-source', 'release-folder'])
+def test_failed_upgrade_restores_the_registration(tmp_path, start, failing):
+    releases = releases_for(tmp_path, 'stub')
+    releases.activate('9.0.0')
+    if start == 'stable-source':
+        releases.helper()
+    else:
+        releases.register_old_style('9.0.0')
+    releases.add_state()
+    plugins = releases.config / 'plugins'
+    before = {name: (plugins / name).read_text() for name in ('known_marketplaces.json', 'installed_plugins.json')}
+    settings = (releases.config / 'settings.json').read_text()
+    releases.activate('9.0.1')
+    wrapper = tmp_path / 'failing-claude'
+    # The move from a release folder has no update step, so its last step fails instead.
+    step = failing if start == 'stable-source' else 'install'
+    wrapper.write_text(f'#!/bin/sh\n[ "$2" = {step} ] && exit 1\nexec "{releases.cli}" "$@"\n')
+    wrapper.chmod(0o755)
+    result = releases.helper(wrapper, check=False)
+    assert result.returncode != 0
+    assert {name: (plugins / name).read_text() for name in before} == before
+    assert (releases.config / 'settings.json').read_text() == settings
+    releases.assert_state()
+    assert not (plugins / 'cache/hippocampus/hippocampus/9.0.1').exists()
+    assert (plugins / 'cache/hippocampus/hippocampus/9.0.0').is_dir()
+
+
+def test_inactive_release_is_refused_before_any_change(tmp_path):
+    releases = releases_for(tmp_path, 'stub')
+    releases.activate('9.0.0')
+    releases.activate('9.0.1')
+    result = releases.run(sys.executable, releases.runtime / 'releases/9.0.0/scripts/install-claude.py',
+                          '--claude', releases.cli, check=False)
+    assert result.returncode != 0
+    assert 'run the helper from' in result.stderr
+    assert not (releases.config / 'plugins').exists()
+
+
+def test_project_scope_install_is_reported_before_the_move(tmp_path):
+    releases = releases_for(tmp_path, 'stub')
+    releases.activate('9.0.0')
+    releases.register_old_style('9.0.0')
+    registry = releases.config / 'plugins/installed_plugins.json'
+    value = json.loads(registry.read_text())
+    value['plugins']['hippocampus@hippocampus'][0]['scope'] = 'project'
+    registry.write_text(json.dumps(value))
+    releases.activate('9.0.1')
+    result = releases.helper(check=False)
+    assert result.returncode != 0
+    assert '--keep-data --scope project' in result.stderr
+    assert json.loads(registry.read_text()) == value
+
+
 def test_real_claude_conflict_is_caught_and_the_printed_command_resolves_it(tmp_path):
     cli = shutil.which('claude')
     if not cli:
