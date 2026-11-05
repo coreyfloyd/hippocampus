@@ -301,8 +301,7 @@ Record writes save the supplied
 account; they cannot replace it or supply a fallback for the report.
 
 Write the interactive session's handoff using the
-same checkpoint module as `checkpoint`. Its slash skill is user-only;
-call its script directly: `<checkpoint.sh>` is `scripts/checkpoint.sh` in that
+same checkpoint module as `checkpoint`; call its script directly: `<checkpoint.sh>` is `scripts/checkpoint.sh` in that
 skill's real directory (`../checkpoint/scripts/checkpoint.sh` from this
 one). Use the actual current session identity in either tool. Supply a real
 `resume.history_entry` account of work since this session's previous history
