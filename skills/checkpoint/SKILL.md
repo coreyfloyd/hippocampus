@@ -26,6 +26,11 @@ proposal in `context`: target file and section, proposed text or diff, and evide
 not a pointer. Preserve all of this through compaction, pickup, and wrap. Only items already saved in
 the record may have `recorded: true`; those are omitted. Already-carried items stay in
 `resume.open_loops` with their original identity and date until a binding consumes them.
+Checkpoint retains each item, other than an artifact, in the session ledger; later
+checkpoints, compaction, the stop skeleton and wrap restore it without your supplying it
+again, until the wrap files or drops it. Items an earlier checkpoint saved need not be
+supplied again; a re-supplied item is held once. Add a lesson as soon as it is learned,
+not only at wrap.
 Supply new account text on every checkpoint and wrap; never use a placeholder or
 fall back to the headline. At wrap, checklist supplies the complete chain's
 `resume.session_summary` and a separate one-line `resume.history_entry` for the

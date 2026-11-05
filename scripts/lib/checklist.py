@@ -283,7 +283,12 @@ def settle(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         removed.update(indexes)
     result = copy.deepcopy(dict(handoff))
     if "resume" in result and "open_loops" in result["resume"]:
-        result["resume"]["open_loops"] = [loop for i, loop in enumerate(result["resume"]["open_loops"]) if i not in removed]
+        loops = result["resume"]["open_loops"]
+        result["resume"]["open_loops"] = [loop for i, loop in enumerate(loops) if i not in removed]
+        # A saved item is settled, so no later checkpoint restores it from the ledger.
+        module = _load_handoff_module()
+        session_id = result.get("subject", {}).get("session_id") or module.ambient_session_id()
+        module.settle_session_items([loop for i, loop in enumerate(loops) if i in removed], session_id)
     return result
 
 
@@ -552,6 +557,12 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         "Unfiled items: " + "; ".join(item.get("context", str(item)) for item in kept))
     result.pop("session_items", None)
     result["filing"] = report
+    if execute_writes and session_id:
+        # Filed and dropped items are settled; kept items stay retained.
+        kept_identities = {ticket_module.session_item_identity(item) for item in kept}
+        ticket_module.settle_session_items(
+            [item for item in loops if ticket_module.session_item_identity(item) not in kept_identities],
+            session_id)
     if execute_writes:
         result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
     return result
@@ -1137,6 +1148,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if row.get("kind") == "touched_project"))
             if projects:
                 resume["touched_projects"] = projects
+            loops = resume.get("open_loops", [])
+            if isinstance(loops, list):
+                # The lessons and knowledge steps see every unsettled retained item,
+                # including a successor's own, without reading the transcript.
+                _, settled = module._session_item_rows(session_id)
+                resume["open_loops"] = module.merge_session_items(
+                    [loop for loop in loops if module.session_item_identity(loop) not in settled], session_id)
             handoff = dict(handoff, resume=resume, subject={
                 "session_id": session_id, "working_directory": str(Path.cwd())})
         if args.operation == "plan":

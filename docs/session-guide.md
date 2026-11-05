@@ -257,7 +257,15 @@ session_items[] / typed resume.open_loops[]
 An optional `anchor` with `ticket` or `project` points at the record; legacy
 untyped loops need an anchor or disposition. Only an item already saved in the
 record may have `recorded: true` in the input; checkpoint omits it. Other input
-items move into `resume.open_loops`. Pending artifacts are supplied from the
+items move into `resume.open_loops`. Checkpoint retains each well-formed item other
+than an artifact in the session ledger, keyed by `session_id`, `produced_at`, `type`
+and `context`, and every later checkpoint, pre-compaction write, stop skeleton and
+wrap restores it, once, without the agent supplying it again. The wrap settles an
+item when it files or drops it or a native step returns its receipt; a later input
+copy with `recorded: true` settles it too. A settled item is not restored. Another
+session's items enter only through pickup. The stale-handoff guard and the
+context-usage warning both ask for new lessons, decisions and knowledge in
+`session_items`. Pending artifacts are supplied from the
 ledger, preserving their producer and time. Extra session-supplied fields are
 preserved rather than constituting a closed schema.
 
@@ -275,8 +283,9 @@ start marker. `ledger-ticket` registers ticket reads, changes, and closes; the
 ticket record write adds close outcomes as it reports them. Every checkpoint and wrap appends its dated history entry;
 automatic stop handoffs read earlier entries without adding one. Checkpoint and
 the stop and wrap checks read the ledger next. Pickup immediately copies a
-selected handoff's history entries, close outcomes, touched tickets, and
-resumed-chain records into the successor ledger, together with its snapshot.
+selected handoff's history entries, close outcomes, touched tickets, unsettled
+retained session items, and resumed-chain records into the successor ledger,
+together with its snapshot.
 Later commands never reopen the resumed handoff file. Wrap fails and names each
 history entry or close outcome missing from the final handoff.
 [Captured ledger](examples/ledger.jsonl).
@@ -302,6 +311,15 @@ ledger JSONL                          # one JSON object per line
 │   └── kind, outcome
 │       # kind=close_outcome; milestone/epic title, state, done, total,
 │       # triggering_ticket, produced_at; retained through compaction
+├── retained session item
+│   └── kind, identity, items[]
+│       # kind=session_item; identity=[session_id, produced_at, type, context];
+│       # items holds every distinct complete copy of that identity from the
+│       # latest write that supplied it
+├── settled session item
+│   └── kind, identity
+│       # kind=session_item_settled; [session_id, produced_at, type, context]
+│       # of an item the wrap filed or dropped; never restored again
 ├── resumed-chain record
 │   └── kind, record
 │       # kind=resumed_chain; selected handoff, producing session, resume time,

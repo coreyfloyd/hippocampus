@@ -92,7 +92,13 @@ commitment, decision, knowledge, lesson, artifact, or open_loop), `context` (at 
 characters), `disposition`, the producing `session_id`, and `produced_at`. A decision also
 has `author` and `location`; an artifact has `location` and a `keep` or `remove`
 disposition. An item carried in a handoff keeps its producer's identity and date until a
-slot binding consumes it.
+slot binding consumes it. Checkpoint retains every session item other than an artifact
+in the session ledger; it is restored into `resume.open_loops`
+by each later checkpoint, pre-compaction write, stop skeleton and wrap, once per
+`session_id`, `produced_at`, `type` and `context`, until the wrap files or drops it.
+Pickup copies the resumed session's unsettled items into the successor's ledger. The
+stale-handoff guard and the context-usage warning ask for new lessons, decisions and
+knowledge in `session_items`.
 
 Checkpoint also retains `resume.close_outcomes[]` and `resume.touched_tickets[]`
 from the session ledger, beside `resume.session_history[]` and
