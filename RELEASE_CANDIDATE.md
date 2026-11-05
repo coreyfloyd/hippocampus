@@ -1,106 +1,62 @@
-# Release candidate: 0.14.0
+# Release candidate: 0.14.1
 
 ## Scope
 
-This candidate covers the changes since v0.13.2. Every change is to the session
-features.
+This candidate covers the changes since v0.14.0.
 
-- Lessons, decisions and knowledge saved at a checkpoint are kept until the wrap
-  files or drops them. Each checkpoint, the stop-time skeleton, the
-  pre-compaction write and the wrap restore them from the session ledger, and
-  pickup carries them to the successor session. Both automatic checkpoint
-  prompts now ask for new lessons in `session_items`
-  ([hippocampus#141](https://github.com/coreyfloyd/hippocampus/issues/141)).
-- An agent can run `pickup`, `checkpoint`, `handoff-prompt` and `wip` when the
-  user asks in a sentence; they are no longer user-only
-  ([hippocampus#142](https://github.com/coreyfloyd/hippocampus/issues/142)).
-- Timed checkpoints: after each checkpoint, a checkpoint is scheduled
-  `timed_checkpoint_minutes` later (default 55) and runs only below
-  `timed_checkpoint_token_limit` tokens (default 200,000). Before compaction,
-  the continuation is captured without an agent turn
-  ([hippocampus#125](https://github.com/coreyfloyd/hippocampus/issues/125)).
-- The checklist report leads with the session summary, and a wrap needs a
-  nonempty one before project persistence
-  ([hippocampus#110](https://github.com/coreyfloyd/hippocampus/issues/110)).
-- The report ends with the saved line: whether each checkout the session
-  touched is committed and pushed
-  ([hippocampus#108](https://github.com/coreyfloyd/hippocampus/issues/108)).
-- Pickup copies the resumed session's history chain into the successor's
-  ledger ([hippocampus#109](https://github.com/coreyfloyd/hippocampus/issues/109)).
-- Ticket close outcomes are recorded in the session ledger
-  ([hippocampus#107](https://github.com/coreyfloyd/hippocampus/issues/107)).
-- Setup and sweep use the per-kind record writes
-  ([hippocampus#106](https://github.com/coreyfloyd/hippocampus/issues/106)).
-- Record the v0.13.2 publication in `docs/releases/0.13.2.md`.
+- A failed `install-claude.py` no longer removes the Claude plugin directory.
+  The backup is kept on disk until the run succeeds, rollback restores only
+  what the failed command changed, and removed skill links are restored. A
+  `hippocampus` marketplace registered from another source is reported before
+  anything changes. `install-codex.py` gets the same guarantees
+  ([hippocampus#151](https://github.com/coreyfloyd/hippocampus/issues/151)).
+- Upgrades between releases complete unattended in Claude Code. The plugin's
+  marketplace is registered at the stable
+  `~/.local/share/hippocampus/current` path, and an upgrade runs
+  `claude plugin marketplace update` and `claude plugin update`, keeping the
+  plugin's options and data. An installation registered at a versioned release
+  folder by an earlier release moves to `current` once, on the first upgrade.
+- Record the v0.14.0 publication in `docs/releases/0.14.0.md`.
 
 ## Compatibility
 
-Knowledge profile version remains 4. Two optional settings are added to the
-shared configuration, `timed_checkpoint_minutes` and
-`timed_checkpoint_token_limit`; both have defaults. Skill names, the Claude
-`hippocampus:` namespace and installation paths are unchanged. The public
-signing key and fingerprint are unchanged.
-
-Session features are unreleased until the public launch and keep no
-compatibility paths. Pickup refuses handoffs written by earlier versions,
-because they lack a history entry for their write; such a handoff reports
-`chain_copy_failed`. Recovering lessons carried in those older handoffs is
-tracked in [hippocampus#144](https://github.com/coreyfloyd/hippocampus/issues/144).
+Knowledge profile version remains 4. Skill names, the Claude `hippocampus:`
+namespace and installation paths are unchanged. The public signing key and
+fingerprint are unchanged. Run the helpers from
+`~/.local/share/hippocampus/current`; a helper run from another release folder
+is refused with that instruction. During the one-time move to `current`, the
+plugin is briefly unregistered, so a Claude Code session started at that moment
+loads without it. An upgrade or rerun currently re-enables a disabled
+hippocampus plugin; tracked in
+[hippocampus#155](https://github.com/coreyfloyd/hippocampus/issues/155).
 
 ## Verification and publication state
 
-Published 2026-11-05: tag `v0.14.0` (annotated, tag object
-`aecbeaeae2319dbe08b4916bda713a605be2a6cf`) at commit
-`6f900310f70786715a3e4f75a2e647f5aa0402d5`,
-https://github.com/coreyfloyd/hippocampus/releases/tag/v0.14.0 (public, not a
-draft or prerelease). Assets: hippocampus-0.14.0.tar.gz, hippocampus-0.14.0.tar.gz.asc, hippocampus-0.14.0.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
-Archive sha256: `be306997daf80dd08b8cca72e248a401e71be25d3e1add9a96ef8b3fc5d1d20e`.
+Not yet published.
 
-Evidence:
-
-- All RELEASING.md candidate checks passed locally on the candidate (pytest 1758
-  passed, 3 skipped; swift test passed). CI was not used: a runner was
-  restarting, and the maintainer directed local verification with
-  administrator merges. The public commit-range scan was clean before every push.
-- The documentation sweep found one stale sentence calling the checkpoint skill
-  user-only; it was fixed before tagging.
-- The maintainer signed. `verify-release.sh` passed on the local build and on
-  the downloaded assets. The downloaded archive is byte-identical to the local
-  build, and the downloaded key and scripts are byte-identical to the
-  repository's. The archive has a single `hippocampus/` root (357 entries).
-- Installed from the downloaded assets with `install-release.sh`, then
-  `install-claude.py` and `install-codex.py`; `install.sh --verify` passed with
-  the plugin `hippocampus@hippocampus` at 0.14.0 read from `releases/0.14.0`.
-  The first `install-claude.py` attempt failed on a marketplace registered from
-  another source, and its rollback removed the Claude plugin directory; tracked
-  in [hippocampus#151](https://github.com/coreyfloyd/hippocampus/issues/151).
-
-Previous records: [0.13.2](docs/releases/0.13.2.md),
-[0.13.1 (not published)](docs/releases/0.13.1.md),
-[0.13.0](docs/releases/0.13.0.md).
+Previous records: [0.14.0](docs/releases/0.14.0.md),
+[0.13.2](docs/releases/0.13.2.md),
+[0.13.1 (not published)](docs/releases/0.13.1.md).
 
 ## Release-note draft
 
-Hippocampus v0.14.0 keeps what a session learns.
+Hippocampus v0.14.1 makes installing and upgrading safe.
 
-Lessons, decisions and knowledge saved at any checkpoint now survive every later
-checkpoint, compaction and pickup until the wrap files or drops them. Before
-this release, a lesson saved at one checkpoint was lost at the next one that
-did not repeat it, and the automatic checkpoint prompts never asked for
-lessons.
+A failed Claude Code install in 0.14.0 could delete the whole Claude plugin
+directory, removing every plugin. The installer now keeps its backup on disk,
+restores only what it changed, and reports a conflicting marketplace before
+touching anything.
 
-Also in this release:
+Upgrades between releases now complete without manual steps: the plugin is
+registered at the stable `~/.local/share/hippocampus/current` path and updated
+in place, keeping its options and data. To upgrade, run the release installer,
+then the helpers from the installed release:
 
-- Agents can run `pickup`, `checkpoint`, `handoff-prompt` and `wip` when you
-  ask for them in a sentence.
-- Timed checkpoints, every 55 minutes by default, and a continuation captured
-  before compaction.
-- The checklist report leads with the session summary and ends with the saved
-  line for each checkout the session touched.
-- Pickup carries the resumed session's history to the new session.
+```bash
+python3 ~/.local/share/hippocampus/current/scripts/install-claude.py
+python3 ~/.local/share/hippocampus/current/scripts/install-codex.py
+```
 
-Handoffs written by earlier versions cannot be picked up with this release;
-start from the transcript (`pickup --session <id>`) for those sessions.
-
-Existing skill names, knowledge profiles and the knowledge root are compatible
-with 0.13.2.
+The first upgrade from 0.14.0 moves the plugin's registration to `current`
+once. Existing skill names, knowledge profiles and the knowledge root are
+compatible with 0.14.0.
