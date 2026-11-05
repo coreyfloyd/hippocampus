@@ -454,6 +454,19 @@ def test_nudge_once_and_no_failed_tests(sandbox,command,output):
         assert cli(ADAPTER,'checklist-nudge',data=p).stdout==''
 
 
+def test_ledger_commit_makes_handoff_stale(sandbox):
+    _,work=sandbox;checkpoint(work)
+    p=payload('PostToolUse',sandbox)
+    assert cli(ADAPTER,'ledger-record',data=p).returncode==0
+    commit=subprocess.run(['git','-C',str(work),'-c','user.name=Example','-c','user.email=example@example.org',
+                    'commit','--allow-empty','-m','Work'],check=True,text=True,capture_output=True)
+    p['tool_input']['command']='git commit --allow-empty -m Work';p['tool_response']=commit.stdout
+    assert cli(ADAPTER,'ledger-record',data=p).returncode==0
+    stop=payload('Stop',sandbox)
+    result=cli(ADAPTER,'guard-decide',data=stop)
+    assert json.loads(result.stdout)['decision']=='block'
+    stop['stop_hook_active']=True
+    assert cli(ADAPTER,'guard-decide',data=stop).stdout==''
 
 
 def test_unattended_completion_marks_wrap_until_success(sandbox):
@@ -520,6 +533,23 @@ def test_uninstall_preserves_trust_for_a_user_hook_added_after_install(sandbox):
     trust.verify_with_hooks_list(shutil.which('codex'),codex,codex,{newkey:digest})
 
 
+def test_quiet_commit_uses_the_captured_transcript_completion_exit_code(sandbox):
+    _,work=sandbox;checkpoint(work)
+    p=payload('PostToolUse',sandbox)
+    assert cli(ADAPTER,'ledger-record',data=p).returncode==0
+    subprocess.run(['git','-C',str(work),'-c','user.name=Example','-c','user.email=example@example.org',
+                    'commit','--allow-empty','-qm','Quiet work'],check=True)
+    p['tool_input']['command']='git commit --allow-empty -qm "Quiet work"'
+    p['tool_response']=''
+    row=json.loads((FIX/'completion.jsonl').read_text())
+    item=row['payload']['item'];item['id']=p['tool_use_id']
+    item['command'][-1]=p['tool_input']['command'];item['aggregated_output']=''
+    with Path(p['transcript_path']).open('a') as handle:handle.write(json.dumps(row)+'\n')
+    assert cli(ADAPTER,'ledger-record',data=p).returncode==0
+    stop=payload('Stop',sandbox)
+    result=cli(ADAPTER,'guard-decide',data=stop)
+    assert result.stdout, 'a quiet owned commit still makes the handoff stale'
+    assert json.loads(result.stdout)['decision']=='block'
 
 
 def test_owned_commit_without_any_handoff_writes_skeleton_and_allows_stop(sandbox):
@@ -572,7 +602,7 @@ def test_codex_session_file_edit_blocks_and_active_stop_does_not_loop(sandbox):
     _, work = sandbox
     path = checkpoint(work)
     edited = work / 'own.txt'; edited.write_text('x')
-    event = payload('PostToolUse', sandbox, tool_name='Edit', tool_input={'file_path': str(edited)}, tool_response={'exit_code': 0})
+    event = payload('PostToolUse', sandbox, tool_input={'file_path': str(edited)}, tool_response={'exit_code': 0})
     assert cli(ADAPTER, 'ledger-record', data=event).returncode == 0
     stamp = path.stat().st_mtime + 10; os.utime(edited, (stamp, stamp))
     stop = payload('Stop', sandbox)
@@ -592,7 +622,7 @@ def test_codex_stop_retains_renamed_file_ownership(sandbox, owned, newer, expect
     path = checkpoint(work)
     source.write_text(source.read_text() + 'session edit\n')
     if owned:
-        event = payload('PostToolUse', sandbox, tool_name='Edit', tool_input={'file_path': str(source)}, tool_response={'exit_code': 0})
+        event = payload('PostToolUse', sandbox, tool_input={'file_path': str(source)}, tool_response={'exit_code': 0})
         assert cli(ADAPTER, 'ledger-record', data=event).returncode == 0
     subprocess.run(['git', '-C', str(work), 'mv', source.name, destination.name], check=True)
     status = subprocess.run(['git', '-C', str(work), 'status', '--porcelain=v1', '-z'], capture_output=True, check=True).stdout

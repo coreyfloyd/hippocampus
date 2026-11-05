@@ -32,7 +32,7 @@ cannot remove recorded checkouts. The list includes each tool call's working-dir
 checkout and each edit-tool file's checkout. Read each listed checkout's additive
 `.claude/checklist-profile.md` completely, including notes qualifying its steps.
 
-The package does not parse shell command text, inspect other worktrees or local
+The saved-state check does not parse shell command text, inspect other worktrees or local
 branches, or carry a predecessor's checked scope. A shell-only target not named
 by the agent is an accepted limit. Each listed checkout is checked for all
 uncommitted changes (including deletions) and current-HEAD commits absent from
@@ -339,7 +339,7 @@ validation fails; the wrap check then fails with the validation errors. When
 `record` is bound, `--record-at` is the time of its latest write, or of a later
 passing freshness check by the binding;
 the wrap check fails when that time is older than the session's last recorded
-change (an edited file or published artifact) made before the
+change (an edited file, published artifact, or owned commit) made before the
 latest `plan` start marker. Changes after the marker are the checklist's own
 writes, such as persist's commits and lessons edits, and do not count. With no
 marker in the ledger, every recorded change counts. When no record writes are

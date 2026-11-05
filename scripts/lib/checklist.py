@@ -1007,7 +1007,7 @@ def mark_start(session_id: str) -> None:
 
 
 def last_change(session_id: str) -> str | None:
-    """Latest change the session's ledger holds: an edited file or artifact.
+    """Latest change the session's ledger holds: an edited file, artifact, or owned commit.
 
     Rows appended after the latest start marker are the checklist's own wrap-up
     writes, not the session's work, so they do not count.
@@ -1018,7 +1018,7 @@ def last_change(session_id: str) -> str | None:
     if starts:
         rows = rows[:starts[-1]]
     stamps = [row["ts"] for row in rows
-              if row.get("ts") and row.get("kind") in ("file", "artifact")]
+              if row.get("ts") and (row.get("kind") in ("file", "artifact") or row.get("commit"))]
     return max(stamps, key=lambda ts: _timestamp(ts, "ledger ts"), default=None)
 
 

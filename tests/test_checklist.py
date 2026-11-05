@@ -557,13 +557,13 @@ class ChecklistTests(unittest.TestCase):
         with open(Path(directory) / "session-touched-paths.wrap-session.jsonl", "a") as handle:
             handle.write(json.dumps(row) + "\n")
 
-    def test_wrap_up_repository_observation_after_the_record_passes(self):
+    def test_wrap_up_commit_after_the_record_passes(self):
         user = ["--user-profile", str(PROFILES / "user.md")]
         with tempfile.TemporaryDirectory() as directory:
             self.edit(directory, "2026-10-06T11:00:00Z")
             self.start(directory, user)
-            observation = {"kind": "repository", "checkout": "/", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
-            _, result, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", [observation])
+            commit = {"repo_root": "/", "head": "b", "commit": "b", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
+            _, result, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", [commit])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["record_check"], "passed")
 

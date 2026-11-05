@@ -1180,10 +1180,19 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
         return {"decision": "allow"}
     except (OSError, ValueError, TypeError):
         return {"decision": "allow"}
+    git = handoff.get("git", {}) if isinstance(handoff, dict) else {}
+    root, baseline = git.get("repository_root", ""), git.get("head", "")
+    subject = handoff.get("subject", {}).get("working_directory", "") if isinstance(handoff, dict) else ""
+    checkout = subject if subject and repository_root(subject) == root else root
     reason = f"HANDOFF STALE — work has happened since your last handoff write. Update {handoff_path} now: source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops, spawned_processes) to handoff_checkpoint — it composes subject/git and lints. The handoff is the last thing that survives a crashed session."
     session_id = session_id or handoff.get("subject", {}).get("session_id", "")
     records = [record for record in _ledger_records(ledger_path)
                if not record.get("session_id") or record.get("session_id") == session_id]
+    owned = {record.get("commit") for record in records if record.get("repo_root") == root and record.get("commit")}
+    if root and baseline and checkout and _run_git(checkout, "cat-file", "-e", baseline + "^{commit}") is not None:
+        current = _run_git(checkout, "rev-list", baseline + "..HEAD") or ""
+        if any(commit in owned for commit in current.splitlines()):
+            return {"decision": "block", "reason": reason}
     try:
         handoff_mtime = os.path.getmtime(handoff_path)
         touched: dict[str, set[str]] = {}
@@ -1205,21 +1214,31 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
 
 
 def ledger_record(payload: Mapping[str, Any]) -> None:
-    """Record this tool call's checkout and edit-tool file paths."""
+    """Append this hook event's touched repositories and owned HEAD transition."""
     session_id = str(payload.get("session_id") or "")
     if not session_id:
         return
-    cwd = str(payload.get("cwd") or os.getcwd())
-    tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
-    checkout = _run_git(cwd, "rev-parse", "--show-toplevel")
+    candidates: list[str] = []
+    cwd = payload.get("cwd")
+    if isinstance(cwd, str):
+        candidates.append(cwd)
+    # Saved-state scope records cwd separately from legacy commit observations.
+    checkout = _run_git(cwd, "rev-parse", "--show-toplevel") if isinstance(cwd, str) else None
     if checkout:
         append_ledger(session_id, {"kind": "repository", "checkout": str(Path(checkout).resolve()),
                                   "session_id": session_id, "ts": utc_now()})
-    if payload.get("tool_name") in ("Write", "Edit", "MultiEdit", "apply_patch"):
-        for key in ("file_path", "path"):
-            value = tool_input.get(key)
-            if isinstance(value, str) and value:
-                record_file(cwd, session_id, value)
+    tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+    for key in ("file_path", "path"):
+        value = tool_input.get(key)
+        if isinstance(value, str):
+            candidates.append(os.path.dirname(os.path.expanduser(value)))
+    command = tool_input.get("command")
+    if isinstance(command, str):
+        candidates.extend(re.findall(r"(?:^|\s)git\s+-C\s+([^\s;|&]+)", command))
+    for key in ("file_path", "path"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value:
+            record_file(str(cwd or os.getcwd()), session_id, value)
     # Provider-neutral record tools can supply ticket references directly.
     # Other ticket tools must register each reference through ledger-ticket.
     for source in (tool_input, payload.get("tool_response")):
@@ -1231,6 +1250,51 @@ def ledger_record(payload: Mapping[str, Any]) -> None:
                 record_ticket(session_id, ticket)
         if isinstance(source.get("ticket"), str):
             record_ticket(session_id, source["ticket"])
+    records_path = ledger_path(session_id)
+    os.makedirs(os.path.dirname(records_path), exist_ok=True)
+    existing = _ledger_records(records_path)
+    response = payload.get("tool_response") if isinstance(payload.get("tool_response"), dict) else {}
+    if "exit_code" in response or "exitCode" in response:
+        success = response.get("exit_code", response.get("exitCode")) == 0
+    else:
+        # Claude Code's shell result carries no exit code: a failed call fires
+        # PostToolUseFailure instead, so a PostToolUse result not interrupted succeeded.
+        success = payload.get("hook_event_name") == "PostToolUse" and response.get("interrupted") is False
+    seen: set[str] = set()
+    with open(records_path, "a", encoding="utf-8") as handle:
+        for candidate in candidates:
+            root = repository_root(candidate)
+            if not root or root in seen:
+                continue
+            seen.add(root)
+            head = _run_git(candidate, "rev-parse", "HEAD")
+            remote_output = _run_git(candidate, "for-each-ref", "refs/remotes", "--format=%(objectname)")
+            if head is None or remote_output is None:
+                print(f"handoff: could not record git state for {root}", file=sys.stderr)
+                continue
+            remote_heads = sorted(set(remote_output.splitlines()))
+            previous = next((row for row in reversed(existing) if row.get("repo_root") == root), {})
+            prior = previous.get("head", "")
+            previous_remote_heads = [item for item in previous.get("remote_heads", []) if isinstance(item, str)]
+            record: dict[str, Any] = {"repo_root": root, "head": head, "remote_heads": remote_heads, "ts": utc_now()}
+            if isinstance(command, str) and success and prior and head != prior:
+                ownership = _run_git(candidate, "rev-list", f"{prior}..{head}", "--not", *previous_remote_heads)
+                if ownership is None:
+                    print(f"handoff: could not determine ownership for {root}", file=sys.stderr)
+                else:
+                    owned = set(ownership.splitlines())
+                    is_pull = bool(re.search(r"(?:^|[;&|]\s*|\s)git\s+(?:-[^\s]+\s+)*(?:pull|fetch)\b", command))
+                    new_remote_heads = sorted(set(remote_heads) - set(previous_remote_heads))
+                    if is_pull and new_remote_heads:
+                        pulled = _run_git(candidate, "rev-list", *new_remote_heads)
+                        if pulled is None:
+                            print(f"handoff: could not determine pulled commits for {root}", file=sys.stderr)
+                            owned = set()
+                        else:
+                            owned.difference_update(pulled.splitlines())
+                    if head in owned:
+                        record["commit"] = head
+            handle.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
 def _emit_hook_context(text: str) -> None:

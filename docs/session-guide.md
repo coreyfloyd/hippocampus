@@ -137,7 +137,7 @@ headless sessions and subagents do not receive the hippocampus prompts.
 | `scripts/post-compact-restore.sh` | Session start, including after compaction | At startup, a count of repository handoffs; after compaction, this session's handoff and a reminder to revalidate it. |
 | `scripts/pre-compact.sh` | Before compaction | A checkpoint written directly from retained ledger facts and git state, preserving continuation; the raw hook input is also backed up. |
 | `scripts/context-guard.sh` | Prompt submission | A context warning at 50% or above when usable usage data is available, with instructions to reconcile the record and checkpoint. |
-| `hooks/handoff-ledger.sh` | After every tool call | Usually nothing: the ledger records the working-directory checkout and edit-tool file checkouts. Shell-driven file edits need explicit ledger registration. |
+| `hooks/handoff-ledger.sh` | After every tool call | Usually nothing: the ledger records the working-directory checkout, file paths, and existing commit ownership for checkpoint and the stop check. Shell-driven file edits need explicit ledger registration. |
 | `hooks/handoff-staleness-guard.sh` | Session stop | If no handoff exists, a skeleton is written without blocking. An existing handoff made stale by this session's own work prompts an update and blocks that stop. |
 | `hooks/checklist-nudge.sh` | After a shell tool call signaling commit, push, or passing tests | A once-per-session checklist reminder when that wraps a unit of work; configured unattended work uses checkpoint until the whole slate finishes. |
 
@@ -312,9 +312,13 @@ ledger JSONL                          # one JSON object per line
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start
-└── repository observation (tool hook or checklist addition)
-    └── kind, checkout, session_id, ts
-        # kind=repository; checkout path; current session; UTC observation
+├── checked checkout (tool cwd or checklist addition)
+│   └── kind, checkout, session_id, ts
+│       # kind=repository; checkout path; current session; UTC observation
+└── repository observation (tool hook; no kind field)
+    └── repo_root, head, remote_heads[], ts, commit (when attributed)
+        # common repository root; observed HEAD; remote tip hashes; UTC observation;
+        # optional session-owned commit hash
 ```
 
 Repeated events append lines. Pending artifact updates preserve production time;
@@ -623,6 +627,8 @@ persist is unbound, and unsaved items with reasons under `Not saved:`.
 
 The claim covers only the listed checkouts. Shell-only targets the agent did not
 name, other local branches, other worktrees, and predecessor-only checkouts are
-accepted limits. There is no shell-text parsing, reflog inspection, or session-start
-time used to discover checkouts. Commit attribution is no longer recorded; the
-stop guard still checks recorded file edits newer than the handoff.
+accepted limits. The saved-state check adds no shell-text parsing, reflog inspection, or session-start
+time discovery. Existing hook commit observations and ownership remain unchanged:
+`git -C` candidates populate repository-root observations, not checkout fields,
+so they do not widen this list. The stop guard still checks owned commits since
+the handoff and recorded file edits newer than it.
