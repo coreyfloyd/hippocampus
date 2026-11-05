@@ -246,6 +246,8 @@ def test_a_session_at_half_its_context_window_is_told_to_checkpoint(tmp_path, ho
     assert warned and warned[0].startswith("CONTEXT USAGE: 54% of context window")
     assert "handoff_checkpoint" in warned[0]
     assert warned[0].index("save durable progress to your record") < warned[0].index("handoff_checkpoint")
+    assert "session_items" in warned[0] and "new lesson, decision and knowledge" in warned[0]
+    assert "target file and section, the proposed text, and the evidence" in warned[0]
 
 
 def test_a_session_that_stops_with_work_newer_than_its_handoff_is_told_it_is_stale(tmp_path, home):
@@ -263,7 +265,10 @@ def test_a_session_that_stops_with_work_newer_than_its_handoff_is_told_it_is_sta
                                    "[main 1a2b3c4] notes\n 1 file changed"), env)
     blocked = fire("Stop", stop, env)
     assert blocked and json.loads(blocked[0])["decision"] == "block"
-    assert "HANDOFF STALE" in json.loads(blocked[0])["reason"]
+    reason = json.loads(blocked[0])["reason"]
+    assert "HANDOFF STALE" in reason
+    assert "session_items" in reason and "new lesson, decision and knowledge" in reason
+    assert "target file and section, the proposed text, and the evidence" in reason
 
 
 def test_a_dirty_file_newer_than_the_handoff_is_stale(tmp_path, home):

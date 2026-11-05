@@ -416,7 +416,10 @@ def test_restore_precompact_and_context_half_window(sandbox):
     row=json.loads((FIX/'usage.jsonl').read_text());info=row['payload']['info']
     info['last_token_usage']['input_tokens']=info['model_context_window']//2
     transcript.write_text(transcript.read_text()+json.dumps(row)+'\n')
-    assert '50%' in cli(ADAPTER,'context-guard',data=p).stdout
+    warned=cli(ADAPTER,'context-guard',data=p).stdout
+    assert '50%' in warned
+    assert 'session_items' in warned and 'new lesson, decision and knowledge' in warned
+    assert 'target file and section, the proposed text, and the evidence' in warned
     info['last_token_usage']['input_tokens']-=1
     transcript.write_text((FIX/'interactive.jsonl').read_text()+json.dumps(row)+'\n')
     assert cli(ADAPTER,'context-guard',data=p).stdout==''
@@ -465,6 +468,9 @@ def test_ledger_commit_makes_handoff_stale(sandbox):
     stop=payload('Stop',sandbox)
     result=cli(ADAPTER,'guard-decide',data=stop)
     assert json.loads(result.stdout)['decision']=='block'
+    reason=json.loads(result.stdout)['reason']
+    assert 'session_items' in reason and 'new lesson, decision and knowledge' in reason
+    assert 'target file and section, the proposed text, and the evidence' in reason
     stop['stop_hook_active']=True
     assert cli(ADAPTER,'guard-decide',data=stop).stdout==''
 

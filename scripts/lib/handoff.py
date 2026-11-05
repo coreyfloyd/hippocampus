@@ -684,8 +684,15 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
         if previous["handoff"] != selected:
             raise ValueError(f"pickup: session already recorded resumed handoff {previous['handoff']}; got {selected}")
         return
-    if data["subject"]["session_id"] == session_id:
+    predecessor = data["subject"]["session_id"]
+    # The resumed session's unsettled items: its handoff's typed loops and its ledger.
+    loops = data["resume"].get("open_loops", [])
+    written = {session_item_identity(loop) for loop in loops}
+    carried = [*loops, *(item for item in retained_session_items(predecessor)
+                         if session_item_identity(item) not in written)]
+    if predecessor == session_id:
         retain_session_facts(data["resume"], session_id)
+        retain_session_items(carried, session_id, foreign=True)
         return  # Native continuation keeps its facts without creating a chain link.
     resume = data["resume"]
     chain = list(resume.get("resumed_chain", []))
@@ -700,6 +707,14 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
              for ticket in resume.get("touched_tickets", [])]
     rows += [{"kind": "touched_project", "project": project}
              for project in resume.get("touched_projects", [])]
+    _, settled = _session_item_rows(predecessor)
+    items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for item in carried:
+        identity = session_item_identity(item)
+        if identity and identity not in settled and item.get("recorded") is not True:
+            items.setdefault(identity, []).append(dict(item))
+    rows += [{"kind": "session_item", "identity": list(identity), "items": _distinct(copies)}
+             for identity, copies in items.items()]
     rows += [{"kind": "resumed_chain", "record": record} for record in chain]
     rows.append({"kind": "resumed_handoff", "handoff": selected, "data": data})
     existing = _ledger_records(ledger_path(session_id))
@@ -739,6 +754,127 @@ def retain_session_facts(resume: Mapping[str, Any], session_id: str, *,
                 values.append(value)
         facts[field] = values
     return facts
+
+
+# A retained session item is identified by its producer, time, type and text.
+# Artifacts have their own ledger rows and status, so they are not retained here.
+SESSION_ITEM_IDENTITY = ("session_id", "produced_at", "type", "context")
+
+
+def session_item_identity(item: Any) -> tuple[str, ...] | None:
+    """The identity of a well-formed retainable session item, else None."""
+    if (not isinstance(item, Mapping) or not isinstance(item.get("type"), str)
+            or item["type"] not in ITEM_TYPES or item["type"] == "artifact"):
+        return None
+    if any(not isinstance(item.get(field), str) or not item[field].strip() for field in SESSION_ITEM_IDENTITY):
+        return None
+    probe = {"schema_version": 1, "written_at": utc_now(),
+             "resume": {"headline": "probe", "open_loops": [dict(item)]}}
+    if lint_data(probe)[0]:
+        return None
+    return tuple(item[field] for field in SESSION_ITEM_IDENTITY)
+
+
+def _session_item_rows(session_id: str) -> tuple[dict[tuple[str, ...], list[dict[str, Any]]], set[tuple[str, ...]]]:
+    """Latest retained copies per identity, in first-retained order, and settled identities.
+
+    One identity can name several distinct items, such as two asks for the same lesson
+    with different choices; the latest write that supplied the identity holds them all.
+    """
+    items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    settled: set[tuple[str, ...]] = set()
+    for row in _ledger_records(ledger_path(session_id)) if session_id else []:
+        if row.get("kind") == "session_item" and isinstance(row.get("items"), list):
+            copies = [dict(item) for item in row["items"] if session_item_identity(item)]
+            identities = {session_item_identity(item) for item in copies}
+            if len(identities) == 1:
+                items[identities.pop()] = copies
+        elif row.get("kind") == "session_item_settled" and isinstance(row.get("identity"), list):
+            settled.add(tuple(row["identity"]))
+    return items, settled
+
+
+def retained_session_items(session_id: str) -> list[dict[str, Any]]:
+    """This session's retained, unsettled session items from its own ledger."""
+    items, settled = _session_item_rows(session_id)
+    return [item for identity, copies in items.items() if identity not in settled for item in copies]
+
+
+def _distinct(items: Sequence[Any]) -> list[Any]:
+    result: list[Any] = []
+    for item in items:
+        if item not in result:
+            result.append(item)
+    return result
+
+
+def retain_session_items(items: Sequence[Any], session_id: str, *, foreign: bool = False) -> None:
+    """Retain unrecorded items; a recorded item settles its retained copies.
+
+    Another session's item enters only through pickup (``foreign``) or when this
+    session's ledger already retains it.
+    """
+    if not session_id.strip():
+        return
+    retained, settled = _session_item_rows(session_id)
+    supplied: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for item in items:
+        identity = session_item_identity(item)
+        if not identity:
+            continue
+        if item.get("recorded") is True:
+            if identity in retained and identity not in settled:
+                append_ledger(session_id, {"kind": "session_item_settled", "identity": list(identity)})
+                settled.add(identity)
+            continue
+        if identity[0] != session_id and identity not in retained and not foreign:
+            continue
+        supplied.setdefault(identity, []).append(dict(item))
+    for identity, copies in supplied.items():
+        copies = _distinct(copies)
+        if identity in settled or retained.get(identity) == copies:
+            continue
+        append_ledger(session_id, {"kind": "session_item", "identity": list(identity), "items": copies})
+
+
+def settle_session_items(items: Sequence[Any], session_id: str) -> None:
+    """Mark filed or dropped items settled so no later write restores them."""
+    if not session_id.strip():
+        return
+    _, settled = _session_item_rows(session_id)
+    for item in items:
+        identity = session_item_identity(item)
+        if identity and identity not in settled:
+            append_ledger(session_id, {"kind": "session_item_settled", "identity": list(identity)})
+            settled.add(identity)
+
+
+def merge_session_items(loops: list[Any], session_id: str,
+                        recorded: Sequence[Any] = ()) -> list[Any]:
+    """Drop exact duplicates, then restore retained, unsettled items not supplied or recorded."""
+    excluded = {session_item_identity(item) for item in recorded} - {None}
+    result: list[Any] = []
+    supplied: set[tuple[str, ...]] = set()
+    for loop in loops:
+        identity = session_item_identity(loop)
+        if identity and loop in result:
+            continue
+        if identity:
+            supplied.add(identity)
+        result.append(loop)
+    for item in retained_session_items(session_id):
+        identity = session_item_identity(item)
+        if identity not in supplied and identity not in excluded and item not in result:
+            result.append(item)
+    return result
+
+
+def supplied_session_items(supplied: Mapping[str, Any]) -> list[Any]:
+    """Typed items a writer received: the continuation's open loops and session items."""
+    resume = supplied.get("resume") if isinstance(supplied, Mapping) else None
+    loops = resume.get("open_loops", []) if isinstance(resume, Mapping) else []
+    items = supplied.get("session_items", []) if isinstance(supplied, Mapping) else []
+    return [*(loops if isinstance(loops, list) else []), *(items if isinstance(items, list) else [])]
 
 
 def missing_chain_facts(data: Mapping[str, Any]) -> list[str]:
@@ -901,10 +1037,13 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
         items = supplied.get("session_items", [])
         if isinstance(loops, list) and isinstance(items, list):
             loops = list(loops)
+            recorded = [item for item in items if isinstance(item, dict) and item.get("recorded") is True]
             for item in items:
                 if isinstance(item, dict) and item.get("recorded") is True:
                     continue
                 loops.append(dict(item, type=item.get("type", "")) if isinstance(item, dict) else item)
+            # Retained items survive checkpoints that do not re-supply them.
+            loops = merge_session_items(loops, session_id, recorded)
             resume["open_loops"] = carry_artifacts(loops, session_id)
         elif not isinstance(items, list):
             # Preserve a malformed input for post-write lint instead of losing it.
@@ -928,6 +1067,8 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
         raise ValueError("checkpoint: a session id is required (--session-id or CLAUDE_SESSION_ID)")
     handoff = overlay_checkpoint(supplied, cwd, session_id, trigger)
     atomic_write(path, handoff)
+    # Each well-formed item is retained even when another field fails lint.
+    retain_session_items(supplied_session_items(supplied), session_id)
     code, lint = lint_output(path)
     if code:
         return CheckpointResult(path, 1 if code == 1 else 2, f"Handoff file: {path}\n", [lint.rstrip()])
@@ -1165,6 +1306,13 @@ def _dirty_paths(checkout: str) -> list[tuple[str, set[str]]] | None:
     return paths
 
 
+# Both automatic checkpoint prompts ask for what only the agent knows.
+SESSION_ITEMS_ASK = ("In session_items, add every new lesson, decision and knowledge item since your last "
+                     "checkpoint, each with type, context, disposition, session_id and produced_at; a lesson's "
+                     "context holds its target file and section, the proposed text, and the evidence. "
+                     "Items an earlier checkpoint saved are kept until the wrap files them; do not re-supply them.")
+
+
 def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id: str = "") -> dict[str, str]:
     """Create a missing Stop handoff; block existing handoffs only for owned work."""
     try:
@@ -1174,8 +1322,9 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
             skeleton = overlay_checkpoint(
                 {"resume": {"headline": "", "open_loops": []}, "spawned_processes": []},
                 cwd, session_id, "stop")
-            # A skeleton has no agent-authored continuation, including open loops.
-            skeleton["resume"]["open_loops"] = []
+            # A skeleton has no new agent-authored continuation; it keeps only
+            # the session items earlier checkpoints retained.
+            skeleton["resume"]["open_loops"] = retained_session_items(session_id)
             atomic_write(handoff_path, skeleton, replace=False)
         return {"decision": "allow"}
     except (OSError, ValueError, TypeError):
@@ -1184,7 +1333,7 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
     root, baseline = git.get("repository_root", ""), git.get("head", "")
     subject = handoff.get("subject", {}).get("working_directory", "") if isinstance(handoff, dict) else ""
     checkout = subject if subject and repository_root(subject) == root else root
-    reason = f"HANDOFF STALE — work has happened since your last handoff write. Update {handoff_path} now: source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops, spawned_processes) to handoff_checkpoint — it composes subject/git and lints. The handoff is the last thing that survives a crashed session."
+    reason = f"HANDOFF STALE — work has happened since your last handoff write. Update {handoff_path} now: source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops, spawned_processes, session_items) to handoff_checkpoint — it composes subject/git and lints. {SESSION_ITEMS_ASK} The handoff is the last thing that survives a crashed session."
     session_id = session_id or handoff.get("subject", {}).get("session_id", "")
     records = [record for record in _ledger_records(ledger_path)
                if not record.get("session_id") or record.get("session_id") == session_id]
@@ -1401,7 +1550,7 @@ def context_guard(payload: Mapping[str, Any]) -> None:
     window_note = "checkpoint threshold 50%" if codex else "warn 50%, auto-compaction 75%"
     restart = "Then start a fresh session when at a clean boundary." if codex else "Then /clear when at a clean boundary."
     if path:
-        print(f"CONTEXT USAGE: {percentage}% of context window ({window_note}). First save durable progress to your record (the checklist's record step). Then checkpoint: source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops[], spawned_processes) to handoff_checkpoint — it resolves the subject, composes subject/git, and lints (do NOT use handoff_atomic_write directly — it refuses a subject-less payload). {restart}")
+        print(f"CONTEXT USAGE: {percentage}% of context window ({window_note}). First save durable progress to your record (the checklist's record step). Then checkpoint: source {HANDOFF_SH} and pipe your continuation JSON (resume.headline/next_action/open_loops[], spawned_processes, session_items[]) to handoff_checkpoint — it resolves the subject, composes subject/git, and lints (do NOT use handoff_atomic_write directly — it refuses a subject-less payload). {SESSION_ITEMS_ASK} {restart}")
     else:
         print(f"CONTEXT USAGE: {percentage}% of context window ({window_note}). Save durable progress to your record NOW, because the record is what outlives this context. {restart}")
 
@@ -1543,8 +1692,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 2
             session_id = parsed.get("subject", {}).get("session_id", "")
             parsed["resume"].update(retain_session_facts(parsed["resume"], session_id, record=False))
+            loops = parsed["resume"].get("open_loops", [])
+            if isinstance(loops, list):
+                merged = merge_session_items(list(loops), session_id)
+                if merged or "open_loops" in parsed["resume"]:
+                    parsed["resume"]["open_loops"] = merged
             atomic_write(args.path, parsed)
             retain_session_facts(parsed["resume"], session_id)
+            retain_session_items(parsed["resume"].get("open_loops", []), session_id)
         elif args.command == "lint":
             path = args.path or resolve_path(os.getcwd(), args.session_id)
             if not path:

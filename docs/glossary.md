@@ -39,7 +39,7 @@ A ticket the session read, changed, or closed. Its reference is retained in the 
 A project the session worked on, identified by a stable reference in `resume.touched_projects` or an item's `anchor.project`. The ledger and handoff retain its reference through compaction and pickup. A projects record write receives all touched projects alongside the session summary and close outcomes.
 
 **Resumed chain**:
-The sessions continued through pickup, native same-session resume, or compaction. A session started from a brief or pasted prompt without pickup starts its own chain. At pickup, the successor's ledger immediately receives the selected handoff's history entries, close outcomes, touched tickets, and resumed-chain records. Later commands use only that ledger, never the resumed handoff file.
+The sessions continued through pickup, native same-session resume, or compaction. A session started from a brief or pasted prompt without pickup starts its own chain. At pickup, the successor's ledger immediately receives the selected handoff's history entries, close outcomes, touched tickets, retained session items, and resumed-chain records. Later commands use only that ledger, never the resumed handoff file.
 
 **Resumed-chain record**:
 One session's pickup of a handoff: its path, producing session identity, and resume time. It also retains the handoff's write time and skeleton marker so a successor can identify a session that ended without an account of its work. Records are carried whole through every successor's ledger and handoff.
@@ -57,7 +57,7 @@ A handoff whose subject is a different worktree of the same repository as the cu
 _Avoid_: duplicate, related session
 
 **Checkpoint**:
-Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
+Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
 **Timed checkpoint**:
@@ -93,12 +93,15 @@ _Avoid_: hook, plugin
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
-The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, touched tickets, and resumed-chain records. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
+The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, touched tickets, retained session items, and resumed-chain records. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
 _Avoid_: log, history
 
 **Open loop**:
 One item carried in a handoff, with a disposition saying what should happen to it. A carried item names its session-item type (progress, commitment, decision, knowledge, lesson, artifact, or open loop) and keeps the identity of the session that produced it and when; a decision also keeps who made it and where. A slot that consumes an open loop removes it from the handoff.
 _Avoid_: todo, task
+
+**Retained session item**:
+A session item, other than an artifact, that a checkpoint received and stored in the session ledger with its original identity: producing session, time, type, and context. Every later checkpoint, pre-compaction write, stop skeleton, and wrap restores it as an open loop, once, until it is settled. The wrap settles an item when it files or drops it, or when a native step returns its receipt; a later item marked recorded settles it too. Another session's items enter the ledger only through pickup, which copies the resumed session's unsettled items to the successor.
 
 **Sweep**:
 An unattended-safe pass over the handoffs in one scope: a directory together with every worktree of its repository, or every handoff on the machine. For each abandoned session in scope it applies the filing rules to the handoff's items, removes the session's clean, merged worktrees, archives the handoff once nothing in it is left unhandled, and writes a sweep report. A sweep never acts on a session that is still open.
