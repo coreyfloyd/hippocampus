@@ -1,7 +1,6 @@
 ---
 name: checkpoint
 description: Write and lint the current interactive session's handoff, then print a short paste block for resuming it. Use when the user runs /hippocampus:checkpoint or asks to checkpoint a session now.
-disable-model-invocation: true
 ---
 
 # Checkpoint
