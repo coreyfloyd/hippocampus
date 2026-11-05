@@ -557,13 +557,13 @@ class ChecklistTests(unittest.TestCase):
         with open(Path(directory) / "session-touched-paths.wrap-session.jsonl", "a") as handle:
             handle.write(json.dumps(row) + "\n")
 
-    def test_wrap_up_commit_after_the_record_passes(self):
+    def test_wrap_up_repository_observation_after_the_record_passes(self):
         user = ["--user-profile", str(PROFILES / "user.md")]
         with tempfile.TemporaryDirectory() as directory:
             self.edit(directory, "2026-10-06T11:00:00Z")
             self.start(directory, user)
-            commit = {"repo_root": "/", "checkout": "/", "head": "b", "commit": "b", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
-            _, result, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", [commit])
+            observation = {"kind": "repository", "checkout": "/", "session_id": "wrap-session", "ts": "2026-10-06T14:00:00Z"}
+            _, result, _ = self.wrap(directory, [], user, "2026-10-06T13:00:00Z", [observation])
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["record_check"], "passed")
 
@@ -786,7 +786,7 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {"outcome_line": "No milestone or epic closed or moved this session.", "summary": "earlier work",
                                                          "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
-                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "saved_line": "All saved and pushed", "asks": []})
+                                                         "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "saved_line": "All saved and pushed: no checkouts listed", "asks": []})
             path.write_text(json.dumps(wrote))
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 1)

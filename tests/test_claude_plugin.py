@@ -248,22 +248,6 @@ def test_a_session_at_half_its_context_window_is_told_to_checkpoint(tmp_path, ho
     assert warned[0].index("save durable progress to your record") < warned[0].index("handoff_checkpoint")
 
 
-def test_a_session_that_stops_with_work_newer_than_its_handoff_is_told_it_is_stale(tmp_path, home):
-    env = clean_env(home)
-    repo = new_repo(tmp_path / "work")
-    stop = dict(base("Stop", "session-one", repo, home), permission_mode="default", stop_hook_active=False)
-    checkpoint(repo, "session-one", env, "Before the commit")
-    fire("PostToolUse", write_event("session-one", repo, home, repo / "notes.txt"), env)
-    assert fire("Stop", stop, env) == []
-
-    (repo / "notes.txt").write_text("done\n")
-    git(repo, "add", "notes.txt")
-    git(repo, "commit", "-q", "-m", "notes")
-    fire("PostToolUse", bash_event("session-one", repo, home, "git commit -m notes",
-                                   "[main 1a2b3c4] notes\n 1 file changed"), env)
-    blocked = fire("Stop", stop, env)
-    assert blocked and json.loads(blocked[0])["decision"] == "block"
-    assert "HANDOFF STALE" in json.loads(blocked[0])["reason"]
 
 
 def test_a_dirty_file_newer_than_the_handoff_is_stale(tmp_path, home):
@@ -281,17 +265,6 @@ def test_a_dirty_file_newer_than_the_handoff_is_stale(tmp_path, home):
 
 
 
-def test_an_interrupted_commit_call_is_not_owned(tmp_path, home):
-    env = clean_env(home)
-    repo = new_repo(tmp_path / "work")
-    checkpoint(repo, "session-one", env, "Before the commit")
-    fire("PostToolUse", write_event("session-one", repo, home, repo / "notes.txt"), env)
-    git(repo, "commit", "-q", "--allow-empty", "-m", "moved by another process")
-    interrupted = bash_event("session-one", repo, home, "git commit -m notes")
-    interrupted["tool_response"]["interrupted"] = True
-    fire("PostToolUse", interrupted, env)
-    stop = dict(base("Stop", "session-one", repo, home), permission_mode="default", stop_hook_active=False)
-    assert fire("Stop", stop, env) == []
 
 @pytest.mark.parametrize("command, stdout, signal", [
     ("git commit -m notes", "[main 1a2b3c4] notes\n 1 file changed", "git commit"),

@@ -2,7 +2,6 @@
 import json
 import os
 from pathlib import Path
-import shlex
 import shutil
 import subprocess
 import sys
@@ -40,13 +39,12 @@ def check(tmp_path, profile, data, cwd=None):
     results = tmp_path / 'results.json'
     results.write_text(json.dumps([dict(id=s, status='run', writes=[]) for s in
                                   ('record', 'knowledge', 'lessons', 'persist', 'handoff')]))
-    summary = tmp_path / 'summary.txt'
-    summary.write_text('Recorded changes and checked saved state.')
     common = ['--user-profile', str(profile_path)]
     report = subprocess.run([sys.executable, str(CLI), 'report', *common, '--handoff', str(target),
-        '--results', str(results), '--summary', str(summary)], text=True, capture_output=True, env=env)
+        '--results', str(results)], text=True, capture_output=True, env=env)
     wrap = subprocess.run([sys.executable, str(CLI), 'wrap-check', *common, '--written-handoff',
         str(target), '--record-at', '2099-01-01T00:00:00Z'], text=True, capture_output=True, env=env)
+    assert report.stdout, report.stderr
     return report, wrap
 
 
@@ -89,7 +87,7 @@ def test_saved_state_table(tmp_path, state):
         assert ('documents' if state == 'unbound' else 'ask') in line
         assert output['warnings']
     else:
-        assert line == 'All saved and pushed'
+        assert line == 'All saved and pushed: no checkouts listed'
     if state in ('ask', 'noask', 'pending'):
         assert output['asks'][0]['text'] == 'Keep the complete change'
         assert output['asks'][0]['choices'] == ['approve', 'defer']
@@ -138,14 +136,15 @@ def check_repository_problem(tmp_path, bound, checkout, reason, cwd=None):
     if bound:
         profile['bindings'] = {'persist': {'command': '/persist', 'consumes': []}}
     report, wrap = check(tmp_path, profile, payload([]), cwd=cwd)
-    assert report.returncode == int(bound), report.stdout + report.stderr
-    assert wrap.returncode == int(bound), wrap.stdout + wrap.stderr
+    failed = bound or "cannot check" in reason
+    assert report.returncode == int(failed), report.stdout + report.stderr
+    assert wrap.returncode == int(failed), wrap.stdout + wrap.stderr
     output = json.loads(report.stdout)
     line = output['saved_line']
     assert str(checkout) in line
     assert reason in line
-    assert ('Not saved:' if bound else 'Not pushed:') in line
-    if not bound:
+    assert ('Not saved:' if failed else 'Not pushed:') in line
+    if not failed:
         assert 'changes were not pushed' in line
         assert output['warnings']
     assert list(output)[-2:] == ['saved_line', 'asks']
@@ -153,17 +152,16 @@ def check_repository_problem(tmp_path, bound, checkout, reason, cwd=None):
 
 
 @pytest.mark.parametrize('bound', [False, True])
-@pytest.mark.parametrize('observation', ['cwd', 'git-command', 'quoted-git-command'])
 @pytest.mark.parametrize('subject', ['outside', 'main', 'sibling'])
-def test_git_observations_check_each_touched_worktree(tmp_path, tool_flow, bound, observation, subject):
+def test_git_observations_check_each_touched_worktree(tmp_path, tool_flow, bound, subject):
     repo = pushed_repository(tmp_path)
-    linked = tmp_path / ('linked checkout' if observation == 'quoted-git-command' else 'linked')
+    linked = tmp_path / 'linked checkout'
     git(repo, 'worktree', 'add', '-qb', 'linked', str(linked))
     sibling = tmp_path / 'sibling'
     git(repo, 'worktree', 'add', '-qb', 'sibling', str(sibling))
     cwd = {'outside': tmp_path, 'main': repo, 'sibling': sibling}[subject]
-    observed_cwd = linked if observation == 'cwd' else cwd
-    prefix = 'git' if observation == 'cwd' else f'git -C {shlex.quote(str(linked))}'
+    observed_cwd = linked
+    prefix = 'git'
     ledger_command(tmp_path, tool_flow, observed_cwd, prefix + ' status')
     (linked / 'folder/change.txt').write_text('unpublished work')
     git(linked, 'commit', '-qam', 'Changed in linked checkout')
@@ -177,7 +175,7 @@ def test_git_command_keeps_hash_inside_checkout_name(tmp_path, tool_flow):
     git(repo, 'worktree', 'add', '-qb', 'linked', str(linked))
     (linked / 'folder/change.txt').write_text('unpublished work')
     git(linked, 'commit', '-qam', 'Changed in linked checkout')
-    ledger_command(tmp_path, tool_flow, repo, f'git -C {linked} commit -qam change')
+    ledger_command(tmp_path, tool_flow, linked, 'git commit -qam change')
     check_repository_problem(tmp_path, True, linked, 'changes were not pushed', cwd=repo)
 
 
@@ -221,16 +219,6 @@ def test_unavailable_checkout_does_not_fall_back_to_parent(tmp_path, tool_flow, 
 
 
 @pytest.mark.parametrize('bound', [False, True])
-def test_repository_without_checkout_evidence_is_not_assumed_saved(tmp_path, bound):
-    repo = pushed_repository(tmp_path)
-    ledger = tmp_path / 'ledger'
-    ledger.mkdir()
-    (ledger / 'session-touched-paths.successor.jsonl').write_text(json.dumps(
-        dict(repo_root=str(repo), head=git(repo, 'rev-parse', 'HEAD').stdout.strip())) + '\n')
-    check_repository_problem(tmp_path, bound, repo, 'missing checkout', cwd=repo)
-
-
-@pytest.mark.parametrize('bound', [False, True])
 @pytest.mark.parametrize('state', ['dirty', 'unpushed', 'pushed', 'no-upstream'])
 def test_repository_saved_state(tmp_path, bound, state):
     repo = tmp_path / 'repository'
@@ -264,7 +252,7 @@ def test_repository_saved_state(tmp_path, bound, state):
     assert wrap.returncode == int(failed), wrap.stderr
     output = json.loads(report.stdout)
     if state == 'pushed':
-        assert output['saved_line'] == 'All saved and pushed'
+        assert output['saved_line'] == f'All saved and pushed: {repo} ({git(repo, "branch", "--show-current").stdout.strip()})'
     else:
         assert str(repo) in output['saved_line']
         assert ('Not saved:' if bound else 'Not pushed:') in output['saved_line']
@@ -281,3 +269,60 @@ def test_native_item_without_a_receipt_is_not_saved(tmp_path, status):
     assert wrap.returncode == 1
     line = json.loads(report.stdout)['saved_line']
     assert 'Not saved:' in line and 'Capture the finding' in line and 'capture unavailable' in line
+
+
+def touched(tmp_path, *names):
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'),
+        'touched-checkouts', '--session-id', 'successor',
+        *[arg for name in names for arg in ('--add', str(name))]],
+        text=True, capture_output=True,
+        env=dict(os.environ, HANDOFF_LEDGER_DIR=str(tmp_path / 'ledger')))
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+@pytest.mark.parametrize('state', ['pushed', 'dirty', 'unpushed'])
+@pytest.mark.parametrize('bound', [False, True])
+def test_agent_names_are_additive_and_share_the_checked_list(tmp_path, tool_flow, state, bound):
+    repo = pushed_repository(tmp_path)
+    linked = tmp_path / 'named checkout'
+    git(repo, 'worktree', 'add', '-qb', 'named', str(linked))
+    ledger_command(tmp_path, tool_flow, repo, 'pwd')
+    if state != 'pushed':
+        (linked / 'folder/change.txt').write_text('Named work')
+        if state == 'unpushed':
+            git(linked, 'commit', '-qam', 'Named commit')
+    expected = sorted([str(repo), str(linked)])
+    assert touched(tmp_path, linked) == expected
+    assert touched(tmp_path) == expected
+    profile = {'name': 'user'}
+    if bound:
+        profile['bindings'] = {'persist': {'command': '/persist', 'consumes': []}}
+    report, wrap = check(tmp_path, profile, payload([]))
+    assert report.returncode == wrap.returncode == int(bound and state != 'pushed')
+    line = json.loads(report.stdout)['saved_line']
+    if state == 'pushed':
+        scope = ', '.join(f'{path} ({git(path, "branch", "--show-current").stdout.strip()})' for path in expected)
+        assert line == 'All saved and pushed: ' + scope
+    else:
+        assert str(linked) in line
+        assert ('Not saved:' if bound else 'Not pushed:') in line
+
+
+def test_edit_tool_records_file_checkout_and_every_tool_records_cwd(tmp_path, tool_flow):
+    repo = pushed_repository(tmp_path)
+    linked = tmp_path / 'edited checkout'
+    git(repo, 'worktree', 'add', '-qb', 'edited', str(linked))
+    script = 'scripts/codex-hook.py' if tool_flow == 'codex' else 'scripts/lib/handoff.py'
+    for tool, inputs in [('Read', {'file_path': str(repo / 'folder/change.txt')}),
+                         ('Edit', {'file_path': str(linked / 'folder/change.txt')})]:
+        event = dict(session_id='successor', cwd=str(repo), hook_event_name='PostToolUse',
+            tool_name=tool, tool_input=inputs, tool_response={},
+            transcript_path=str(tmp_path / 'codex/sessions/successor.jsonl'))
+        result = subprocess.run([sys.executable, str(ROOT / script), 'ledger-record'],
+            input=json.dumps(event), text=True, capture_output=True,
+            env=dict(os.environ, HANDOFF_LEDGER_DIR=str(tmp_path / 'ledger')))
+        assert result.returncode == 0, result.stderr
+    assert touched(tmp_path) == sorted([str(repo), str(linked)])
+    (linked / 'folder/change.txt').write_text('Edited work')
+    check_repository_problem(tmp_path, True, linked, 'uncommitted changes')

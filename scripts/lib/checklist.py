@@ -659,24 +659,9 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
 
     module = _load_handoff_module()
     session = data.get("subject", {}).get("session_id", "")
-    ledger = module._ledger_records(module.ledger_path(session)) if session else []
-    repositories: set[str] = set()
-    owned_paths: set[str] = set()
+    repositories = module.touched_checkouts(session)
+    scope = []
     repository_problems: dict[str, list[str]] = {}
-    for row in ledger:
-        checkout = row.get("checkout")
-        if checkout:
-            repositories.add(str(Path(checkout).resolve()))
-            if row.get("kind") == "file" and row.get("path"):
-                path = Path(row["path"])
-                owned_paths.add(str(path.parent.resolve() / path.name))
-        elif row.get("repo_root"):
-            # A shared repository root cannot identify which worktree was used.
-            repository_problems[row["repo_root"]] = ["missing checkout in session ledger"]
-    for path in data.get("uncommitted_files", []):
-        candidate = Path(path)
-        if str(candidate.parent.resolve() / candidate.name) not in owned_paths:
-            repository_problems[path] = ["missing checkout in session ledger"]
     for checkout in sorted(repositories):
         # Git otherwise walks up to a different checkout if this one lost .git.
         actual = (module._run_git(checkout, "rev-parse", "--show-toplevel")
@@ -684,6 +669,8 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         if not actual or str(Path(actual).resolve()) != checkout:
             repository_problems[checkout] = ["cannot check commit and push state: checkout unavailable"]
             continue
+        branch = module._run_git(checkout, "symbolic-ref", "--short", "HEAD") or "detached HEAD"
+        scope.append(f"{checkout} ({branch})")
         dirty = module._run_git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
         unpublished = module._run_git(checkout, "rev-list", "HEAD", "--not", "--remotes")
         reasons = []
@@ -702,7 +689,7 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         if not persist and "changes were not pushed" not in reasons:
             reasons.append("changes were not pushed")
         detail = f"{checkout}: " + "; ".join(reasons)
-        (not_saved if persist else unpushed).append(detail)
+        (not_saved if persist or any("cannot check" in reason for reason in reasons) else unpushed).append(detail)
     not_saved = list(dict.fromkeys(not_saved))
     warnings = list(dict.fromkeys([*warnings, *kept, *unpushed]))
     parts = []
@@ -712,7 +699,7 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         parts.append("Not pushed: " + "; ".join(unpushed))
     if not_saved:
         parts.append("Not saved: " + "; ".join(not_saved))
-    return " | ".join(parts) or "All saved and pushed", not_saved, warnings
+    return " | ".join(parts) or ("All saved and pushed: " + (", ".join(scope) or "no checkouts listed")), not_saved, warnings
 
 
 def _load_handoff_module() -> Any:
@@ -993,7 +980,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     if problems:
         output["errors"] = list(dict.fromkeys(problems))
     if problems and "Not saved:" not in saved_line:
-        saved_line = (saved_line + " | " if saved_line != "All saved and pushed" else "") + "Not saved: " + "; ".join(dict.fromkeys(problems))
+        saved_line = (saved_line + " | " if not saved_line.startswith("All saved and pushed:") else "") + "Not saved: " + "; ".join(dict.fromkeys(problems))
     output["saved_line"] = saved_line
     output["asks"] = asks
     return output
@@ -1020,7 +1007,7 @@ def mark_start(session_id: str) -> None:
 
 
 def last_change(session_id: str) -> str | None:
-    """Latest change the session's ledger holds: an edited file, artifact, or owned commit.
+    """Latest change the session's ledger holds: an edited file or artifact.
 
     Rows appended after the latest start marker are the checklist's own wrap-up
     writes, not the session's work, so they do not count.
@@ -1031,7 +1018,7 @@ def last_change(session_id: str) -> str | None:
     if starts:
         rows = rows[:starts[-1]]
     stamps = [row["ts"] for row in rows
-              if row.get("ts") and (row.get("kind") in ("file", "artifact") or row.get("commit"))]
+              if row.get("ts") and row.get("kind") in ("file", "artifact")]
     return max(stamps, key=lambda ts: _timestamp(ts, "ledger ts"), default=None)
 
 

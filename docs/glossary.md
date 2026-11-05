@@ -119,3 +119,7 @@ _Avoid_: dead session, stale session
 **Sweep report**:
 The file one sweep run writes, grouped by directory: the asks it raised, the items it filed and where, the items it dropped and why, the sessions still open, and the worktrees it removed. It gives status and asks for nothing; the asks themselves go through the ask binding.
 _Avoid_: digest, summary
+
+## Touched repository
+
+A checkout in the current session's ledger, recorded from a tool call's working directory or an edit tool's changed file, plus checkouts the agent names during checklist. The shared checked-checkout list is additive: the agent can add, never remove. Each checkout is checked for uncommitted changes and current-HEAD commits absent from every remote-tracking branch. The saved line names each checkout and branch; its claim covers only that list. Shell-only targets not named by the agent, other local branches, other worktrees, and predecessor-only checkouts are accepted limits.

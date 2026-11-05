@@ -374,24 +374,6 @@ def test_interactive_gate(entrypoint, agent_id, expected):
     assert handoff.is_interactive({"agent_id": agent_id}, entrypoint) is expected
 
 
-def test_guard_uses_recorded_commit_ownership_in_linked_worktree(tmp_path):
-    handoff = load_module()
-    repo = tmp_path / "repo"
-    linked = tmp_path / "linked"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-qm", "init", "--allow-empty"], check=True)
-    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-qb", "linked", str(linked)], check=True)
-    baseline = subprocess.check_output(["git", "-C", str(linked), "rev-parse", "HEAD"], text=True).strip()
-    data = handoff.overlay_checkpoint(valid_payload(), str(linked), "s", "checkpoint", repository_root=str(repo), branch="linked", head=baseline)
-    path = tmp_path / "handoff.json"
-    handoff.atomic_write(str(path), data)
-    (linked / "work").write_text("x")
-    subprocess.run(["git", "-C", str(linked), "add", "work"], check=True)
-    subprocess.run(["git", "-C", str(linked), "-c", "user.name=t", "-c", "user.email=t@x", "commit", "-qm", "work"], check=True)
-    head = subprocess.check_output(["git", "-C", str(linked), "rev-parse", "HEAD"], text=True).strip()
-    ledger = tmp_path / "ledger.jsonl"
-    ledger.write_text(json.dumps({"repo_root": str(repo), "commit": head}) + "\n")
-    assert handoff.guard_decide(str(path), str(ledger))["decision"] == "block"
 
 
 def test_cli_is_stdlib_only_when_common_third_party_names_are_poisoned(tmp_path):
@@ -456,7 +438,12 @@ def test_guard_cli_resolves_only_the_calling_sessions_handoff(tmp_path, monkeypa
                                           repository_root=str(repo), branch="master", head=baseline)
         handoff.atomic_write(handoff.resolve_path(str(repo), session_id, use_override=False), data)
     ledger = tmp_path / "ledger.jsonl"
-    ledger.write_text(json.dumps({"repo_root": str(repo), "commit": new_head}) + "\n")
+    edited = repo / "owned"
+    edited.write_text("new edit")
+    stamp = Path(handoff.resolve_path(str(repo), "session-b", use_override=False)).stat().st_mtime + 10
+    os.utime(edited, (stamp, stamp))
+    ledger.write_text(json.dumps({"kind": "file", "checkout": str(repo), "path": str(edited),
+                                  "session_id": "session-b"}) + "\n")
     env = os.environ | {
         "CLAUDE_CODE_ENTRYPOINT": "cli",
         "HANDOFF_STATE_DIR": str(state),
@@ -508,40 +495,6 @@ def _configure_repo(repo):
     subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
 
 
-def test_pull_event_through_ledger_hook_is_not_owned_or_blocked(tmp_path):
-    """A real pull moves HEAD but the remote already owns its commit."""
-    remote = tmp_path / "remote.git"
-    seed = tmp_path / "seed"
-    work = tmp_path / "work"
-    other = tmp_path / "other"
-    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
-    subprocess.run(["git", "clone", "-q", str(remote), str(seed)], check=True)
-    _configure_repo(seed)
-    (seed / "initial").write_text("initial")
-    subprocess.run(["git", "-C", str(seed), "add", "initial"], check=True)
-    subprocess.run(["git", "-C", str(seed), "commit", "-qm", "initial"], check=True)
-    subprocess.run(["git", "-C", str(seed), "push", "-q", "origin", "HEAD"], check=True)
-    subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
-    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)
-    _configure_repo(other)
-    baseline = subprocess.check_output(["git", "-C", str(work), "rev-parse", "HEAD"], text=True).strip()
-    handoff = load_module().overlay_checkpoint(valid_payload(), str(work), "session", "checkpoint", repository_root=str(work), branch="main", head=baseline)
-    handoff_path = tmp_path / "handoff.json"
-    load_module().atomic_write(str(handoff_path), handoff)
-    env = os.environ | {"HOME": str(tmp_path / "home"), "HANDOFF_LEDGER_DIR": str(tmp_path / "ledger"), "CLAUDE_CODE_ENTRYPOINT": "cli"}
-    payload = {"session_id": "session", "cwd": str(work), "tool_input": {"command": "git pull --ff-only"}, "tool_response": {"exit_code": 0}}
-    assert _run_hook(LEDGER_HOOK, payload, env).returncode == 0
-    (other / "remote-change").write_text("remote")
-    subprocess.run(["git", "-C", str(other), "add", "remote-change"], check=True)
-    subprocess.run(["git", "-C", str(other), "commit", "-qm", "remote"], check=True)
-    subprocess.run(["git", "-C", str(other), "push", "-q"], check=True)
-    subprocess.run(["git", "-C", str(work), "pull", "--ff-only"], check=True)
-    assert _run_hook(LEDGER_HOOK, payload, env).returncode == 0
-    ledger = tmp_path / "ledger" / "session-touched-paths.session.jsonl"
-    guard_env = env | {"HANDOFF_GUARD_OVERRIDE_PATH": str(handoff_path), "HANDOFF_GUARD_OVERRIDE_LEDGER": str(ledger)}
-    result = _run_hook(GUARD_HOOK, {"session_id": "session", "cwd": str(work)}, guard_env)
-    assert result.returncode == 0
-    assert result.stdout == ""
 
 
 def test_dirty_linked_worktree_subject_blocks_once(tmp_path):
@@ -585,31 +538,6 @@ def test_all_handoff_hook_adapters_fail_open_on_malformed_json(tmp_path):
         assert result.stdout == "", adapter
 
 
-def test_commit_and_push_event_retains_ownership_from_prior_remote_snapshot(tmp_path):
-    remote = tmp_path / "remote.git"
-    seed = tmp_path / "seed"
-    work = tmp_path / "work"
-    subprocess.run(["git", "init", "--bare", "-q", str(remote)], check=True)
-    subprocess.run(["git", "clone", "-q", str(remote), str(seed)], check=True)
-    _configure_repo(seed)
-    (seed / "initial").write_text("initial")
-    subprocess.run(["git", "-C", str(seed), "add", "initial"], check=True)
-    subprocess.run(["git", "-C", str(seed), "commit", "-qm", "initial"], check=True)
-    subprocess.run(["git", "-C", str(seed), "push", "-q", "origin", "HEAD"], check=True)
-    subprocess.run(["git", "clone", "-q", str(remote), str(work)], check=True)
-    _configure_repo(work)
-    env = os.environ | {"HOME": str(tmp_path / "home"), "HANDOFF_LEDGER_DIR": str(tmp_path / "ledger"), "CLAUDE_CODE_ENTRYPOINT": "cli"}
-    first = {"session_id": "session", "cwd": str(work), "tool_input": {"command": "git status"}, "tool_response": {"exit_code": 0}}
-    assert _run_hook(LEDGER_HOOK, first, env).returncode == 0
-    (work / "local").write_text("local")
-    subprocess.run(["git", "-C", str(work), "add", "local"], check=True)
-    subprocess.run(["git", "-C", str(work), "commit", "-qm", "local"], check=True)
-    owned = subprocess.check_output(["git", "-C", str(work), "rev-parse", "HEAD"], text=True).strip()
-    subprocess.run(["git", "-C", str(work), "push", "-q"], check=True)
-    event = first | {"tool_input": {"command": "git commit -m local && git push"}}
-    assert _run_hook(LEDGER_HOOK, event, env).returncode == 0
-    rows = [json.loads(line) for line in (tmp_path / "ledger" / "session-touched-paths.session.jsonl").read_text().splitlines()]
-    assert rows[-1]["commit"] == owned
 
 
 def test_dirty_secondary_ledger_repository_blocks(tmp_path):
@@ -636,25 +564,6 @@ def test_dirty_secondary_ledger_repository_blocks(tmp_path):
     assert json.loads(result.stdout)["decision"] == "block"
 
 
-def test_git_failure_during_ownership_record_keeps_owned_list_unchanged(tmp_path, monkeypatch, capsys):
-    module = load_module()
-    repo = tmp_path / "repo"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    _configure_repo(repo)
-    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "initial", "--allow-empty"], check=True)
-    ledger_dir = tmp_path / "ledger"
-    monkeypatch.setenv("HANDOFF_LEDGER_DIR", str(ledger_dir))
-    payload = {"session_id": "session", "cwd": str(repo), "tool_input": {"command": "git commit -m local"}, "tool_response": {"exit_code": 0}}
-    module.ledger_record(payload)
-    (repo / "local").write_text("local")
-    subprocess.run(["git", "-C", str(repo), "add", "local"], check=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "local"], check=True)
-    real_run_git = module._run_git
-    monkeypatch.setattr(module, "_run_git", lambda cwd, *args: None if args and args[0] == "rev-list" else real_run_git(cwd, *args))
-    module.ledger_record(payload)
-    rows = [json.loads(line) for line in (ledger_dir / "session-touched-paths.session.jsonl").read_text().splitlines()]
-    assert all("commit" not in row for row in rows)
-    assert "could not determine ownership" in capsys.readouterr().err
 
 
 def test_checkpoint_carries_only_owned_dirty_paths_without_git_mutation(tmp_path, monkeypatch):
