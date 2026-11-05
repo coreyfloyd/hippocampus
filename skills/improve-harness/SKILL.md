@@ -168,6 +168,10 @@ If you can't cite the moment, don't propose the edit. "This could be clearer" wi
 | **HITL** | interactive session the user is present in | Proposal table → **wait** → apply approved edits |
 | **AFK** | the user left the session to run unattended, or it is a scheduled or pipeline run | Record proposals through the AFK delivery path below; do not apply them (mechanical memory-index hygiene is exempt) |
 
+**The auto-apply setting overrides this table.** With `plan` returning
+`auto_apply.lessons: apply`, follow Auto-apply below in either mode. With it off, or
+with `auto_apply.lessons: propose`, this table applies.
+
 Unattended runs carry proposals because approval needs a present user; waiting stalls the run, and self-approval defeats the gate. A subagent inherits its parent's mode.
 
 **AFK output — one proposal per placement decision.** By default, emit each as
@@ -191,6 +195,54 @@ full proposals; do not claim they were saved or will reach interactive review.
 For carried items, the checklist's native `lessons` step presents them at the next interactive
 `/hippocampus:improve-harness` run; retain pending items until approved and applied. This
 reaches only sessions that resume the handoff, not unrelated future sessions.
+
+## Auto-apply
+
+The `auto_apply_lessons` setting in the hippocampus configuration is off by default. With
+it on, a wrap does not show the lesson table and wait; `apply-lessons` writes the lessons.
+The setting decides, not whether the user is present. Over-limit and duplicate
+rows are not lessons to apply: report or carry them as above.
+
+A routing file can forbid this with the line `lesson-policy: propose`; it wins, and the
+report says lessons were carried because the routing file requires it. The module reads
+only that key, so a routing file says it with the key. `lesson-pull-requests:` followed by
+`  - owner/name` lines names repositories whose lessons always go through a pull request.
+`lesson-pull-request-command: <command>` names the user's command that opens one
+(see `INTERFACE.md`); the package opens none itself and never merges.
+
+Run steps 1 to 4 and assess each lesson as in step 5: grounding, impact and the
+recommendation are unchanged. Add any new lesson to `session_items` in `<remaining-items>`,
+then write one row per lesson. `index` counts `resume.open_loops`, then unrecorded `session_items`:
+
+```json
+[{"index": 0, "recommend": "apply", "target": "/absolute/path/to/source", "change": "One-line change",
+  "evidence": "The moment in this conversation", "edits": [{"old": "exact text", "new": "replacement"}]},
+ {"index": 1, "recommend": "skip", "reason": "Future impact is noise"}]
+```
+
+An edit with `old` replaces text that must appear exactly once; an edit without it appends
+`new`. Set `dictated: true` on a rule the user dictated: it is applied whatever its
+recommendation, so give it the apply fields. Set `always_loaded: true` when the target is
+always loaded and the module cannot know it, such as a source of a rules composition.
+The module detects user-level rules files, their imports and routing-file sources composed into
+`CLAUDE.md` or `AGENTS.md`.
+
+```bash
+python3 <checklist-module> apply-lessons --user-profile <user-profile> \
+  --repository-profile <repository-profile> --handoff <remaining-items> --lessons <rows>
+```
+
+Keep its output as `<remaining-items>`; `lesson_outcomes` says what happened to each row.
+Each applied lesson is one commit, `lesson: <change>`, on the branch checked out where the
+target's source lives, holding only its own lines even in a file with other changes. A
+target outside git is written without a commit. A `skip` is dropped: not carried and never
+an ask. A produced path is traced to its source, and a generated copy is never edited;
+regenerate each outcome's `surfaces` as in the routing contract. A lesson that cannot be
+written or committed is `failed` with its error and stays carried. Applying the same lesson
+twice does nothing. The persist step delivers the commits, so step 7 does not apply.
+
+A rerun or resumed lesson marked `applied: true` already holds its commit: give it no
+row, and let the checklist deliver its ask.
 
 ## Procedure
 
@@ -278,7 +330,7 @@ After approval (HITL) — surgical edits only. Don't reflow unrelated content; m
 
 ### 7. Leave commits to the persist step
 
-**Do not commit or push from this skill.** Edits land as working-tree changes; report which repositories are now dirty so the checklist's `persist` step (or the user) commits them.
+**Do not commit or push from this skill**, unless the auto-apply setting is on. Edits land as working-tree changes; report which repositories are now dirty so the checklist's `persist` step (or the user) commits them.
 
 ## Output format
 

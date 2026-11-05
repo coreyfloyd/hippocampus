@@ -50,6 +50,7 @@ an empty configuration.
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
+| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends. Default false. Any other type is an error. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value, a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -284,12 +285,19 @@ composes and checks it and executes record-write commands. It writes no handoff 
 |---|---|
 | `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine and route carried items from the session ledger snapshot. Returns its `handoff` payload. An optional handoff path must match pickup’s recorded selection; its source file is never reopened. Writes a start marker to the session’s ledger. |
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
+| `apply-lessons ... --handoff H --lessons L` | With the auto-apply setting on: write and commit each lesson row, one commit each; drop `skip` rows; keep each outcome in the session ledger; return the payload without settled items, plus `lesson_outcomes`. A failed lesson stays carried and exits 0. With the setting off it refuses, exit 1. |
+| `deliver-lessons ... --handoff H` | After the persist binding: push undelivered lesson commits, retrying once when the remote moved, or, when the repository refuses a direct push or the routing file requires it, push the lesson's own branch and run the routing file's `lesson-pull-request-command`. That command reads one JSON object on stdin (`checkout`, `remote`, `base`, `branch`, `title`, `body`), opens the pull request, owns how it merges, and prints the pull request's reference as its last line. The package never merges. Adds `lesson_outcomes` and `lesson_asks`. Pushes nothing with persist unbound. |
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
 | `wrap-check ... --written-handoff H [--record-at T] [--unattended]` | Fail, with the reason, when the handoff is invalid, a bound item is still carried, a read/write failed, or `record` is bound and its latest write is older than the session's last change. |
 | `report ... --results R --handoff H [--unattended]` | Require a valid written handoff containing the agent-authored `resume.session_summary` and check its filing outcomes and the run's step results; the report starts with the stored outcome line followed by that summary. |
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
+
+With the auto-apply setting on, `plan` adds `auto_apply` (`{"lessons": "apply"}`, or
+`{"lessons": "propose", "reason": ...}` when the routing file's `lesson-policy: propose`
+forbids applying), `file` adds `filing.lessons`, and `report` adds `lessons`. With it off,
+none of these appear.
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
 `handoff`. Only `persist` is a slot. Record is the package step calling per-kind record writes. Knowledge and lessons are native

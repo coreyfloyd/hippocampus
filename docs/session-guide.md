@@ -102,6 +102,31 @@ If this directory and its siblings have no candidate, pickup falls back to
 local session transcripts from either tool. A handoff is keyed by subject and
 session together, so separate sessions do not overwrite each other's files.
 
+### Let a wrap apply its lessons
+
+Set `"auto_apply_lessons": true` in the hippocampus configuration (off by default).
+A wrap then no longer shows the lesson table and waits, attended or unattended:
+
+- Each lesson it recommends is written to its source as one commit of its own, holding only
+  that lesson's lines, so reverting the commit removes it. A target outside git is written
+  without a commit. A rule you dictated is applied whatever its recommendation.
+- A lesson recommended "skip" is dropped and listed; it is not carried or asked about again.
+- A lesson for an always-loaded rules file is in effect before anyone reviews it. It also
+  raises an ask naming the target, text, evidence and commit, and saying how to undo it.
+  The ask has no choices.
+- The persist step pushes the commits with the wrap's others, and when the remote moved
+  brings in its commits and pushes once more. A repository that refuses a direct push gets
+  each lesson on its own branch with a pull request, opened by the routing file's
+  `lesson-pull-request-command`, which you set up to merge through the repository's checks.
+  With no such command the lesson is `committed, not pushed`. With persist unbound nothing is pushed.
+- The report lists each applied lesson with its target, change and commit, each dropped
+  lesson with its reason, and each failure with its error. A failed lesson stays carried.
+  A lesson `committed, not pushed` counts as not saved.
+
+A routing file line `lesson-policy: propose` turns this off and the report says so.
+`lesson-pull-requests:` with `  - owner/name` lines sends a repository's lessons through a
+pull request every time. Knowledge capture, the sweep and the slim review are unchanged.
+
 ### Route a lesson, then slim its source
 
 During a wrap you identify a rule that caused a concrete mistake.

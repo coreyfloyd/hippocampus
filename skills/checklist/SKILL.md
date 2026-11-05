@@ -177,11 +177,16 @@ then current lessons. Read its routing file to decide destinations; profiles
 cannot replace this step. With no lessons, report `nothing`. Failed or declined
 work reports its error or reason and keeps every unsaved lesson.
 
+With the auto-apply setting on (`plan` returns `auto_apply`), the lessons step
+applies instead of waiting, in attended and unattended runs alike: follow
+improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, the
+routing file forbids applying: run this step as if the setting were off.
+
 Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition,
 or a lesson applied or written to the routing file's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
-Unattended and sweep runs use these same native steps in unattended mode: carry
+With the auto-apply setting off, unattended runs, and sweep runs either way, use these same native steps in unattended mode: carry
 items and apply nothing. Report pending proposals and preserve their provenance.
 
 ### 4. Persist — slot `persist`
@@ -189,6 +194,22 @@ items and apply nothing. Report pending proposals and preserve their provenance.
 Run the bound command after steps 1–3 and their additions so it includes their
 edits. Send unsaved items through the filing pass, including when unbound. Ticket-state decisions
 and merge authorization belong to profiles and their bindings.
+
+With `auto_apply` in the plan, finish this step by delivering lesson commits, after
+the bound command and also when persist is unbound:
+
+```bash
+python3 <checklist-module> deliver-lessons --user-profile <user-profile> \
+  --repository-profile <repository-profile> --handoff <remaining-items>
+```
+
+Keep its output as `<remaining-items>`. A commit the bound command pushed needs
+nothing more. Otherwise the module pushes the branch; when the remote moved it merges
+the remote's commits and pushes again, once. A repository that refuses a direct push,
+or that the routing file's `lesson-pull-requests` names, gets each lesson on its own
+branch cut from the remote, and the routing file's `lesson-pull-request-command` opens a
+pull request that merges through the repository's checks. A lesson still not pushed is `committed, not pushed` with its error. With
+persist unbound nothing is pushed, and the existing `Not pushed:` rule applies.
 
 ### 5. Write and validate the handoff — fixed
 
@@ -214,6 +235,12 @@ and its response contract when bound. A failed, unsupported, or malformed read
 is **unknown**, never absence: keep the item with outcome `read failed`, naming
 the item and the error. Never drop it under R1 or create a ticket under R5 on
 that evidence. An information-only R1 can explicitly set `information_only: true`.
+
+An applied lesson still in `resume.open_loops` (`applied: true`) needs an ask: run the
+ask command with its payload from `lesson_asks` and give it an R3 row with the receipt.
+It has no choices, so it files without any, and its ask receipt settles it. Never apply it again.
+A lesson that failed to apply gets an R4 row with status `failed` and its error; it stays
+carried, the report is `incomplete`, and the wrap passes.
 
 The module runs record writes and collects matching receipts; do not execute them separately. Run the ask command and native steps as before.
 For each ask, pass the ask command a JSON object containing `text` (the item),
@@ -429,6 +456,14 @@ The final report returns `report: "incomplete"` and an `incomplete` list naming
 every failed, declined, or pending native step with its reason, even with no
 carried items. `nothing` and `not configured` leave `report: "ok"`. Record and
 persist retain their existing bound-write failure rule.
+
+With the auto-apply setting on, print the output's `lessons`: every applied lesson with
+its target, change, commit, branch and delivery (naming any pull request, and the
+default branch when the lesson is on another), every dropped lesson with its reason, and
+every failed lesson with its error. When the routing file forbids applying, print its
+`reason` and `carried` lessons instead. Asks raised appear in the final `asks` list. A
+lesson `committed, not pushed` counts under the saved line's rules: not saved with
+persist bound, `Not pushed:` with it unbound.
 
 Immediately before the pending-asks block, print the output's `saved_line`.
 It reads `All saved and pushed: <checkout> (<branch>), ...` only when every item has a matching record-write
