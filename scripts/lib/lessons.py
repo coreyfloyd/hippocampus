@@ -361,10 +361,12 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
 
 
 def _remote(checkout: Path, branch: str) -> str | None:
-    configured = _text(_git(checkout, "config", f"branch.{branch}.remote"))
+    """The remote a push of this branch goes to, in git's own order of precedence."""
     remotes = _text(_git(checkout, "remote")).split()
-    if configured in remotes:
-        return configured
+    for key in (f"branch.{branch}.pushRemote", "remote.pushDefault", f"branch.{branch}.remote"):
+        configured = _text(_git(checkout, "config", key))
+        if configured in remotes:
+            return configured
     return "origin" if "origin" in remotes else remotes[0] if len(remotes) == 1 else None
 
 
@@ -376,6 +378,12 @@ def _remote_url(checkout: Path, remote: str) -> str:
 def _requires_pull_request(checkout: Path, remote: str, rules: Mapping[str, Any]) -> bool:
     url = _remote_url(checkout, remote)
     return any(url.endswith((f"/{name}", f":{name}")) for name in rules["pull_requests"])
+
+
+def _on_remote(checkout: Path, remote: str | None, branch: str, commit: str) -> bool:
+    """Whether the selected remote's branch holds the commit; another remote's copy does not count."""
+    return bool(remote) and _git(checkout, "merge-base", "--is-ancestor", commit,
+                                 f"refs/remotes/{remote}/{branch}").returncode == 0
 
 
 def _default_branch(checkout: Path, remote: str) -> str | None:
@@ -456,7 +464,7 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
                 if default and default != branch:
                     update.update(default_branch=default,
                                   note=f"Reaches {default} when {branch} does.")
-            if _text(_git(checkout, "branch", "-r", "--contains", row["commit"])):
+            if _on_remote(checkout, remote, branch, row["commit"]):
                 update.update(delivery="pushed", error=None)
             elif not persist_bound:
                 update.update(delivery=NOT_PUSHED, error="persist is unbound, so nothing pushes it")

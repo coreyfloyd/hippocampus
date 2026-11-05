@@ -300,6 +300,45 @@ def test_rejected_push_brings_in_the_remote_and_retries(tmp_path, tool):
     assert (checkout / 'moved.md').exists()
 
 
+def backup_remote(tmp_path, checkout):
+    """A second remote, starting level with the checkout's branch."""
+    backup = tmp_path / 'backup.git'
+    git(tmp_path, 'init', '-q', '--bare', '-b', 'main', str(backup))
+    git(checkout, 'remote', 'add', 'backup', str(backup))
+    git(checkout, 'push', '-q', 'backup', 'main')
+    return backup
+
+
+def test_commit_on_another_remote_is_still_pushed_to_the_selected_one(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    backup = backup_remote(tmp_path, checkout)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    commit = data['lesson_outcomes'][0]['commit']
+    git(checkout, 'push', '-q', 'backup', 'main')
+    assert git(remote, 'rev-parse', 'main') != commit
+    report, check, _ = wrap.finish(wrap.file(wrap.deliver(data)))
+    assert check.returncode == 0, check.stderr
+    [applied] = report['lessons']['applied']
+    assert (applied['delivery'], applied['attempts']) == ('pushed', 1)
+    assert git(remote, 'rev-parse', 'main') == commit == git(backup, 'rev-parse', 'main')
+
+
+def test_commit_on_the_fetch_remote_is_still_pushed_to_the_push_remote(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    backup = backup_remote(tmp_path, checkout)
+    git(checkout, 'config', 'branch.main.pushRemote', 'backup')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    commit = data['lesson_outcomes'][0]['commit']
+    git(checkout, 'push', '-q', 'origin', 'main')
+    data = wrap.deliver(data)
+    assert data['lesson_outcomes'][0]['delivery'] == 'pushed'
+    assert git(backup, 'rev-parse', 'main') == commit
+
+
 def test_push_rejected_twice_is_committed_not_pushed_and_not_saved(tmp_path, tool):
     checkout, _, other = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
