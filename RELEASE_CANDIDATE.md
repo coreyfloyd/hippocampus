@@ -53,12 +53,34 @@ as a directory, which `--verify` rejects; the recovery is in
 [INSTALLATION.md](INSTALLATION.md#earlier-helper-only-checkout-installs). The
 public signing key and fingerprint are unchanged.
 
-## Verification
+## Verification and publication state
 
-Run the exact candidate checks in `RELEASING.md`, the documentation sweep and
-the public commit-range scan. Final commit identifiers and results are recorded
-in the release-session evidence; publication evidence is appended after release
-to avoid a self-referential commit.
+Published 2026-11-04: tag `v0.13.2` (annotated, tag object
+`bb28c936fe920e8c6af281c74e27d5ee7210038f`) at commit
+`d1110c365018cbc0bcbd72d04d8a4c93d59def57`,
+https://github.com/coreyfloyd/hippocampus/releases/tag/v0.13.2 (public, not a
+draft or prerelease). Assets: hippocampus-0.13.2.tar.gz, hippocampus-0.13.2.tar.gz.asc, hippocampus-0.13.2.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
+Archive sha256: `dff6b2ff78ed67527da59020f81d787f5a3c1043118a78bb740701b816732b54`.
+
+Evidence:
+
+- All RELEASING.md candidate checks passed in a clean worktree on the candidate
+  (pytest 1466 passed, 3 skipped; swift test passed), and CI passed on macOS
+  and Ubuntu. The public commit-range scan was clean before every push.
+- The documentation sweep found stale sweep wording left by the record-write
+  change; it is unreleased session behavior and is tracked in
+  [hippocampus#119](https://github.com/coreyfloyd/hippocampus/issues/119).
+- The maintainer signed. `verify-release.sh` passed on the local build and on
+  the downloaded assets. The downloaded archive is byte-identical to the local
+  build, and the downloaded key and scripts are byte-identical to the
+  repository's. The archive has a single `hippocampus/` root (349 entries).
+- Installed from the downloaded assets into a clean temporary home with the
+  real Claude CLI (2.1.318): `install-release.sh`, then `install-claude.py` and
+  `install-codex.py` from `~/.local/share/hippocampus/current`, then a profile.
+  `install.sh --verify` passed with both tools: plugin `hippocampus@hippocampus`
+  enabled at 0.13.2, read from `releases/0.13.2`, and 26 Codex skill links.
+  Retargeting one Codex skill link made `--verify` fail with "codex skill
+  target differs".
 
 Previous records: [0.13.1 (not published)](docs/releases/0.13.1.md),
 [0.13.0](docs/releases/0.13.0.md), [0.12.0](docs/releases/0.12.0.md).
@@ -107,11 +129,3 @@ v0.13.1 was tagged but not published; use v0.13.2.
 
 Existing skill names, knowledge profiles and the knowledge root are compatible
 with 0.13.0.
-
-## Publication checklist
-
-- [ ] Verify and commit the candidate; resolve the public commit-history scan.
-- [ ] Merge the reviewed candidate and tag its exact commit as `v0.13.2`.
-- [ ] Maintainer signs using `HIPPOCAMPUS_GPG_KEY` and `scripts/build-release.sh`.
-- [ ] Verify signed assets, publish, and independently verify downloaded assets.
-- [ ] Install from the signed release in a clean home with the real Claude CLI and confirm `install.sh --verify` passes for both tools.

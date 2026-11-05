@@ -12,6 +12,7 @@ directory it installs it into, never by importing it: every entry point is a com
 |---|---|---|
 | Handoffs | `~/.local/state/hippocampus/handoffs/` | `HANDOFF_STATE_DIR`, else `handoff_dir` in the configuration |
 | Ledger (one file per session) | the parent of the handoff directory | `HANDOFF_LEDGER_DIR` |
+| Timed checkpoint state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
 | Checklist state (the unattended-wrap marker) | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, else `checklist_state_dir` in the configuration |
 
@@ -44,6 +45,8 @@ an empty configuration.
 | `checklist_surfaces` | list of strings | Standing surfaces the surface detector reports in addition to the session's own repository. |
 | `checklist_suite_baselines_dir` | string | Directory of per-repository suite baseline files the surface detector reports. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
+| `timed_checkpoint_minutes` | positive integer | Whole-minute interval after each checkpoint; at least 1, default 55. Fractional values and other JSON types are refused in both tools. |
+| `timed_checkpoint_token_limit` | positive integer | Timed prompts checkpoint only below this token count; default 200,000. |
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
@@ -63,7 +66,7 @@ returned, so a broken hook never blocks a session.
 |---|---|
 | `resolve [cwd] [--subject] [--session-id ID]` | Print the handoff path for a directory and session. |
 | `repository-root [cwd]`, `count [cwd]` | The shared repository root, and how many handoffs exist for it. |
-| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from the required authored `resume.session_summary`, retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`. |
+| `checkpoint [--cwd D] [--session-id ID] [--trigger T]` | Read continuation JSON on stdin, append a dated history entry from `resume.history_entry` (the authored one-line `resume.session_summary` at checkpoints), retain earlier ledger entries, compose subject and git, write atomically, lint, and print the resume paste block. A wrap stores the complete chain's `resume.session_summary` separately. Writes even when the lint fails and reports the failure. `T` is `checkpoint`, `wrap`, or `manual`; the pre-compaction hook uses `pre-compact`. |
 | `write PATH` | Low-level atomic write. Refuses a payload that fails the lint. |
 | `lint [PATH] [--session-id ID]` | Validate a handoff. `scripts/lint-handoff.sh` is a thin adapter over this command. |
 | `ledger-ticket --ticket T --session-id ID` | Record a ticket the session read, changed, or closed. |
@@ -72,6 +75,10 @@ returned, so a broken hook never blocks a session.
 | `is-interactive [JSON]` | Exit 0 for an interactive session, 1 for a headless entry point or a subagent (`agent_id` in the payload). |
 | `state-dir`, `config-get KEY` | Where handoffs are stored, and one configured value. |
 | `migrate` | Rename handoffs keyed by directory alone to their per-session path. Idempotent. |
+| `timed-checkpoint-check [--session-id ID] [--transcript-path P]` | Print JSON with `tokens`, `limit`, `below_limit`. Read the same latest transcript usage as the context guard; unknown usage exits 2 and never means below the limit. |
+| `timed-checkpoint-prompt [--session-id ID]` | Print the exact shared timed prompt, rendered from `scripts/lib/timed-checkpoint-prompt.txt`. |
+| `claude-timer-set --session-id ID --job-id ID` | Retain the CronCreate job ID for the next checkpoint's CronDelete instruction. |
+| `timed-checkpoint-wait PATH` | Internal detached Codex worker; locks ensure one pending timer per session. |
 | `post-compact`, `pre-compact`, `context-guard`, `ledger-record`, `guard-decide` | Hook decisions, section 5. |
 | `cycle-request-*`, `automated-cycle-handoff` | Support for a consumer that cycles sessions, section 8. |
 
@@ -88,13 +95,35 @@ disposition. An item carried in a handoff keeps its producer's identity and date
 slot binding consumes it.
 
 Checkpoint also retains `resume.close_outcomes[]` and `resume.touched_tickets[]`
-from the session ledger, beside `resume.session_history[]`. A close outcome holds
+from the session ledger, beside `resume.session_history[]` and
+`resume.touched_projects[]`. At wrap the agent supplies `resume.history_entry`
+for the current write and the complete `resume.session_summary` for the report.
+Projects lookups and writes receive `session_summary`, `close_outcomes`, and
+`touched_projects` as additional request fields outside the item identity.
+Project items remain pending without a lookup or write when the session summary
+is missing, null, or blank; the agent must write a nonempty summary and retry.
+At wrap, when a tickets record write is bound and touched tickets exist, their
+reread must succeed before project lookup or write. A failed or malformed reread
+keeps project items pending. With no tickets record write bound, no reread runs:
+stored close outcomes are the complete known set, and a projects-only profile
+proceeds with those outcomes and the supplied summary. The filing result records
+`ticket_read.status` as `unbound` for that case, `not_needed` when there are no
+touched tickets, or `read` after a successful reread.
+A close outcome holds
 `kind` (milestone or epic), `title`, `state` (open or closed), integer `done` and
 `total`, `triggering_ticket`, and timezone-qualified `produced_at`. A touched
 ticket is a stable reference string. The shared ticket record-write contract,
 including the wrap-only read of exactly these tickets, is defined in
 [record](skills/record/SKILL.md#ticket-reads-and-close-outcomes).
 Checklist report emits `outcome_line` first, built only from these stored facts.
+
+`resume.resumed_chain[]` retains each selected `handoff` path, its producing
+`session_id`, and timezone-qualified `resumed_at`, plus `written_at` and `skeleton`.
+Pickup copies history entries, close outcomes, touched tickets, and these records
+into the successor ledger immediately. Checkpoint restores them from that ledger
+through compaction; `wrap-check` names every missing history entry or close outcome
+in the final handoff. Only pickup, native same-session resume, and compaction
+continue the chain. A brief or pasted prompt alone starts a new chain.
 
 ## 4. Pickup: `scripts/pickup.sh`
 
@@ -189,10 +218,35 @@ entry point in `sdk-cli`, `sdk-py`, `sdk-ts`, `sdk`, `mcp`, or `headless`
 tool call, it denies a subagent or headless session the checklist and the checkpoint
 writers, using `checklist.py actor-guard`.
 
+Every successful interactive checkpoint replaces its timed checkpoint. Claude Code
+receives a pinned local cron minute rounded up so it is strictly in the future
+and never earlier than checkpoint time plus the interval, `recurring: false`, session-only CronCreate,
+CronDelete of the previous job, and the exact shared prompt. The agent records
+the new job ID with `claude-timer-set`. Codex starts a detached worker that reads
+the session's replaceable deadline and queues the same prompt through
+`codex queue --thread ID --message TEXT`. One worker lock serializes delivery;
+a scheduling lock makes replacement and delivery mutually exclusive. No PID is
+killed. A delivery receipt records command failures as well as success. Timers,
+receipts, Claude job IDs, and transcript locations live in `timed-checkpoints/`
+beside the handoff directory; `HANDOFF_TIMER_DIR` overrides it.
+
+At or above the configured token limit the timed prompt does nothing. Below it,
+the agent writes a checkpoint. The pre-compaction hook writes one itself from
+ledger history, touched tickets and projects, and git state; it preserves any
+agent-written continuation and appends a factual history entry. It keeps the
+five raw-input backups as well. The command has an eight-second budget inside
+the hook's ten-second timeout. Post-compaction restore and pickup read the
+updated handoff; Claude restore repeats the scheduling instruction because
+PreCompact cannot call CronCreate.
+
 An automatic stop handoff is marked `skeleton: true`, carries earlier history
-entries from the ledger, and adds no entry. A skeleton passes handoff lint but
-cannot complete a wrap. Checkpoint and wrap never fill a missing account from a
-headline or placeholder; a missing real history entry fails validation.
+entries from the ledger, and adds no entry. Every handoff, including a skeleton,
+requires a timezone-qualified ISO `written_at`; a schema-v2 subject requires a non-empty `session_id`. The stop
+writer supplies the timestamp through the shared checkpoint composer. Pickup
+refuses invalid copy metadata with `chain_copy_failed` and names the invalid
+field, preserving that diagnostic across its helper boundary. A valid skeleton
+passes handoff lint but cannot complete a wrap. Checkpoint and wrap never fill a
+missing account from a headline or placeholder; a missing real history entry fails validation.
 
 The ledger attributes a commit to the session only after a shell call that succeeded: the
 payload's `exit_code` (or `exitCode`) is 0, or, with no exit code, the event is
@@ -222,12 +276,12 @@ composes and checks it and executes record-write commands. It writes no handoff 
 
 | Operation | Purpose |
 |---|---|
-| `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine with the profiles and route a resumed handoff's carried items to their slots. Writes a start marker to the session's ledger. |
+| `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine and route carried items from the session ledger snapshot. Returns its `handoff` payload. An optional handoff path must match pickup’s recorded selection; its source file is never reopened. Writes a start marker to the session’s ledger. |
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
 | `wrap-check ... --written-handoff H [--record-at T] [--unattended]` | Fail, with the reason, when the handoff is invalid, a bound item is still carried, a read/write failed, or `record` is bound and its latest write is older than the session's last change. |
-| `report ... --results R --handoff H [--summary F \| --no-summary WHY] [--unattended]` | Require a valid written handoff and check its filing outcomes and the run's step results; the report starts with the session summary. |
+| `report ... --results R --handoff H [--unattended]` | Require a valid written handoff containing the agent-authored `resume.session_summary` and check its filing outcomes and the run's step results; the report starts with the stored outcome line followed by that summary. |
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 

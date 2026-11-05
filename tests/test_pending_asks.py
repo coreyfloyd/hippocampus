@@ -224,7 +224,7 @@ def failed_wrap(tmp_path):
         return invoke('scripts/lib/checklist.py', 'report', '--user-profile', profile,
                       *(handoff_args if handoff_args is not None else ['--handoff', written]),
                       *(results_args if results_args is not None else ['--results', results]),
-                      *(summary_args if summary_args is not None else ['--no-summary', 'Summary unavailable']),
+                      *(summary_args or []),
                       *(['--unattended'] if unattended else []))
 
     def assert_asks(result, *, expected=1, status='failed'):
@@ -294,8 +294,7 @@ def test_incomplete_native_step_still_reports_every_ask(failed_wrap, unattended,
 @pytest.mark.parametrize('failure', [
     'missing results argument', 'unreadable results', 'malformed results', 'results not array',
     'results not objects', 'missing step', 'missing status', 'pending writes', 'pending reason',
-    'native failure reason', 'missing summary', 'empty summary reason', 'conflicting summary',
-    'empty summary', 'unreadable summary', 'invalid handoff', 'malformed filing',
+    'native failure reason', 'missing summary', 'empty summary', 'malformed summary', 'invalid handoff', 'malformed filing',
     'malformed filing row', 'malformed filing items', 'malformed ask payload', 'malformed resume',
     'malformed carried item', 'invalid ask choices',
     'unreadable profile', 'malformed profile', 'invalid profile',
@@ -332,24 +331,14 @@ def test_report_validation_errors_do_not_suppress_asks(failed_wrap, tmp_path, un
             results[1]['status'] = 'failed'
             error = 'failed requires a reason or error'
         failed_wrap.results.write_text(json.dumps(results))
-    elif failure == 'missing summary':
-        summary_args = []
-        error = 'session summary: missing'
-    elif failure == 'empty summary reason':
-        summary_args = ['--no-summary', ' ']
-        error = '--no-summary names why it is unavailable'
-    elif failure in ('conflicting summary', 'empty summary', 'unreadable summary'):
-        summary = tmp_path / 'summary.md'
-        summary_args = ['--summary', summary]
-        if failure == 'conflicting summary':
-            summary.write_text('Session work')
-            summary_args += ['--no-summary', 'Unavailable']
-            error = 'pass --summary or --no-summary, not both'
-        elif failure == 'empty summary':
-            summary.write_text(' \n')
-            error = 'summary file is empty'
+    elif failure in ('missing summary', 'empty summary', 'malformed summary'):
+        handoff = json.loads(failed_wrap.handoff.read_text())
+        if failure == 'missing summary':
+            handoff['resume'].pop('session_summary')
         else:
-            error = 'summary.md'
+            handoff['resume']['session_summary'] = ' ' if failure == 'empty summary' else []
+        failed_wrap.handoff.write_text(json.dumps(handoff))
+        error = 'session summary: missing'
     elif failure in ('invalid handoff', 'malformed filing', 'malformed filing row', 'malformed filing items',
                      'malformed ask payload', 'malformed resume',
                      'malformed carried item', 'invalid ask choices'):
@@ -404,7 +393,10 @@ def test_combined_wrap_failures_keep_all_errors_and_asks(failed_wrap, unattended
     failed_wrap.results.write_text(json.dumps(results))
     failed_wrap.rows[0].update(status='failed', error='Ask store unavailable')
     failed_wrap.checkpoint()
-    result = failed_wrap.report(unattended, summary_args=[])
+    handoff = json.loads(failed_wrap.handoff.read_text())
+    handoff['resume'].pop('session_summary')
+    failed_wrap.handoff.write_text(json.dumps(handoff))
+    result = failed_wrap.report(unattended)
     output = failed_wrap.assert_asks(result)
     for error in ('Record unavailable', 'Push refused', 'Ask store unavailable', 'session summary: missing'):
         assert error in result.stderr

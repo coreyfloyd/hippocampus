@@ -135,7 +135,7 @@ headless sessions and subagents do not receive the hippocampus prompts.
 | Adapter | When it fires | What you see |
 |---|---|---|
 | `scripts/post-compact-restore.sh` | Session start, including after compaction | At startup, a count of repository handoffs; after compaction, this session's handoff and a reminder to revalidate it. |
-| `scripts/pre-compact.sh` | Before compaction | A reminder to reconcile the record and checkpoint continuation; the raw hook input is backed up. |
+| `scripts/pre-compact.sh` | Before compaction | A checkpoint written directly from retained ledger facts and git state, preserving continuation; the raw hook input is also backed up. |
 | `scripts/context-guard.sh` | Prompt submission | A context warning at 50% or above when usable usage data is available, with instructions to reconcile the record and checkpoint. |
 | `hooks/handoff-ledger.sh` | After a file edit or shell tool call | Usually nothing: the ledger tracks touched files and session-owned commits for checkpoint and the stop check. Shell-driven edits need explicit ledger registration. |
 | `hooks/handoff-staleness-guard.sh` | Session stop | If no handoff exists, a skeleton is written without blocking. An existing handoff made stale by this session's own work prompts an update and blocks that stop. |
@@ -174,6 +174,7 @@ of the resolved handoff directory unless its own override is set.
 ├── .local/state/hippocampus/
 │   ├── handoffs/                       # handoff JSON; HANDOFF_STATE_DIR, else handoff_dir
 │   ├── session-touched-paths.<id>.jsonl # per-session ledger; HANDOFF_LEDGER_DIR
+│   ├── timed-checkpoints/              # deadlines, job IDs, transcript locations, queue receipts
 │   ├── compact-state/                  # raw pre-compaction inputs; HANDOFF_COMPACT_STATE_DIR
 │   └── checklist/                      # unattended-wrap markers; CHECKLIST_STATE_DIR, else checklist_state_dir
 ├── .config/hippocampus/config.json      # shared configuration; HIPPOCAMPUS_CONFIG, else XDG_CONFIG_HOME/hippocampus/config.json
@@ -224,6 +225,10 @@ handoff JSON
 │   ├── session_summary                # authored work since the previous entry
 │   ├── session_history[]              # append-only dated history entries
 │   │   └── session_id, produced_at, summary # producer, UTC time, one-line context
+│   ├── close_outcomes[]               # milestone/epic observations from ticket closes
+│   ├── touched_tickets[]              # references read, changed, or closed in the chain
+│   ├── resumed_chain[]                # selected handoff, producing session, resume time
+│   │   └── handoff, session_id, resumed_at, written_at, skeleton
 │   └── open_loops[]                   # unconsumed items, with original provenance
 ├── uncommitted_files[]                # absolute changed paths owned by this session in the ledger
 ├── spawned_processes[]                # processes to reconcile before adoption or teardown
@@ -256,9 +261,9 @@ items move into `resume.open_loops`. Pending artifacts are supplied from the
 ledger, preserving their producer and time. Extra session-supplied fields are
 preserved rather than constituting a closed schema.
 
-A handoff never holds anything the record holds: no live ticket list, project
-status, runtime posture, or monitor doctrine. Its short continuation summaries
-are not the bound record's session summary described below.
+A handoff holds continuation context rather than live ticket lists, project
+status, runtime posture, or monitor doctrine. At wrap it also stores the
+agent-authored session summary described below, alongside its history entries.
 
 ### Ledger (one file per session)
 
@@ -269,7 +274,11 @@ ledger directory. The tool hook writes observations and file entries;
 start marker. `ledger-ticket` registers ticket reads, changes, and closes; the
 ticket record write adds close outcomes as it reports them. Every checkpoint and wrap appends its dated history entry;
 automatic stop handoffs read earlier entries without adding one. Checkpoint and
-the stop and wrap checks read the ledger next.
+the stop and wrap checks read the ledger next. Pickup immediately copies a
+selected handoff's history entries, close outcomes, touched tickets, and
+resumed-chain records into the successor ledger, together with its snapshot.
+Later commands never reopen the resumed handoff file. Wrap fails and names each
+history entry or close outcome missing from the final handoff.
 [Captured ledger](examples/ledger.jsonl).
 
 ```text
@@ -293,6 +302,13 @@ ledger JSONL                          # one JSON object per line
 │   └── kind, outcome
 │       # kind=close_outcome; milestone/epic title, state, done, total,
 │       # triggering_ticket, produced_at; retained through compaction
+├── resumed-chain record
+│   └── kind, record
+│       # kind=resumed_chain; selected handoff, producing session, resume time,
+│       # original write time and skeleton marker
+├── resumed handoff snapshot
+│   └── kind, handoff, data
+│       # kind=resumed_handoff; canonical source path and complete selected data
 ├── start marker
 │   └── kind, session_id, ts
 │       # kind=checklist-start; current session; UTC plan start
@@ -312,8 +328,12 @@ repository observations are written by the hook, not those capture commands.
 
 Location: JSON on stdout, saved wherever the caller chooses. The command
 `python3 scripts/lib/checklist.py plan` composes it from the user and repository
-profiles, optionally routing a resumed handoff. The checklist skill reads and
-executes it; the engine does not run bindings.
+profiles and the current session's ledger. After pickup it routes the saved
+handoff snapshot's items; optional `--handoff` must match the recorded source
+path but does not read that file. The returned `handoff` payload names the
+current session and carries its ledger facts; use it for later filing and
+settling. A brief or pasted prompt without pickup starts its own chain. The
+checklist skill reads and executes the plan; the engine does not run bindings.
 [Captured plan](examples/plan.json).
 
 ```text
@@ -324,6 +344,7 @@ plan JSON
 ├── ask                                # user command for asks, or null; never a slot
 ├── rerun_all_steps                    # true; no pending results reused from an earlier run
 ├── record_read                        # user command for reading the record, or null
+├── handoff                            # current session payload from its snapshot and ledger
 └── steps[]                            # execution order, including additions at their anchors
     ├── id, title                      # step identity; spine title or optional added title
     ├── slot                           # only persist
@@ -370,20 +391,25 @@ their directory when no ask binding can save them; keep their handoff.
 
 ### Session summary
 
-Location: a file named by the bound record, passed to checklist `report --summary`.
-The package does **not** compose it. After its ticket step, a bound record
-composes it from final ticket outcomes and writes each project's durable history
-to its record. The checklist report starts with a stored close-outcome line, followed by that summary unedited. There is
-no example because the bound record writes it, not the package.
+Location: `resume.session_summary` in the final handoff. At wrap, the checklist
+agent writes it from every history entry and close outcome in the chain,
+including current work since the last entry. Every ticket it names includes a
+description of the work. A session with only a skeleton is named with its end
+time as having ended without an account of its work; that gap does not fail wrap.
+The report starts with the stored close-outcome line, followed by this summary
+unedited, even when no record writes are bound. A projects record write receives
+the summary, close outcomes, and touched projects for its durable history.
 
 ```text
-bound record's summary text           # binding-defined format, not a package JSON schema
-└── each project's goal, shipped work, follow-up tickets, and decisions
+final handoff resume
+├── session_summary                   # agent-authored account of the entire chain
+├── session_history[]                 # dated entries under their producing sessions
+├── close_outcomes[]                  # stored milestone and epic states
+└── touched_projects[]                # project references carried through pickup
 
 report command output                 # JSON on stdout, checked by the reporting session
 ├── outcome_line                      # stored milestone/epic outcomes, or explicit none
-├── summary                           # unedited file text, or null
-├── summary_unavailable               # reason when no summary was composed
+├── summary                           # unedited summary from the final handoff
 ├── report                            # ok, incomplete, or failed
 ├── pending[]                         # identities of pending steps
 ├── filing                            # item outcomes, asks by directory, warnings and failures
@@ -409,10 +435,8 @@ A native lesson proposal awaiting approval keeps its choices on the carried item
 or filing outcome. Native backlog with no user decision stays in the filing
 report and incomplete-step details, without appearing as an ask.
 
-If none was composed, pass `--no-summary` with the record's reason; an older
-binding can be reported as `<command> composed no session summary`. With record
-unbound, omit both arguments and the engine supplies that reason. A bound record
-with neither summary nor reason fails validation.
+An absent or empty summary fails report validation and wrap. Record writes
+cannot supply the report's summary or an unavailable-summary fallback.
 
 ### Configuration file
 
@@ -428,6 +452,8 @@ configuration JSON object             # shared settings, not a profile
 ├── checklist_surfaces: string[]      # standing surface-detector candidates
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
+├── timed_checkpoint_minutes: positive integer # whole minutes, at least 1; default 55
+├── timed_checkpoint_token_limit: positive integer # below-limit checkpoint, default 200000
 ├── prune_days: positive integer      # stale-transcript prune age, default 7; PICKUP_PRUNE_DAYS overrides
 ├── cycle_sessions: object            # consumer session-name to home-relative directory mapping
 └── unattended: object                # optional unattended-mode integration
@@ -476,6 +502,47 @@ session-item types. Added steps use the anchors listed in the plan outline;
 are read by the skill through their `Slot:` declarations; the engine loader
 requires JSON or a single fence. The example is a loader fixture showing format
 and composition, not a recommended cleanup or persistence policy.
+
+### Timed checkpoint state
+
+Every interactive checkpoint replaces the pending timer for that session. The
+shared configuration sets `timed_checkpoint_minutes` (a whole number of minutes,
+at least 1; 55 by default) and
+`timed_checkpoint_token_limit` (200,000 by default). At the scheduled time the
+agent reads transcript usage with `handoff.py timed-checkpoint-check`; below the
+limit it checkpoints, at or above it the prompt does nothing, and unknown usage
+is reported without guessing.
+
+Claude Code's checkpoint output instructs the agent to delete the previous job,
+create a session-only one-shot CronCreate job pinned to the printed minute with
+`recurring: false`, and record its job ID. The pinned minute rounds up: it is
+always strictly in the future and never earlier than checkpoint time plus the
+interval, including when restore runs after the original deadline. Fractions
+and non-integer JSON values are refused in both tools. Codex automatically starts a detached
+worker that replaces the per-session deadline and calls `codex queue`. The exact
+prompt has one source, `scripts/lib/timed-checkpoint-prompt.txt`, rendered by
+`handoff.py timed-checkpoint-prompt`. Timer state and delivery receipts live in
+`timed-checkpoints/` beside the handoff directory (`HANDOFF_TIMER_DIR` overrides).
+Only one worker per session can deliver a pending prompt.
+
+```text
+timed-checkpoints/<encoded-session-id>.*
+├── context.json                      # transcript_path, harness
+├── claude.json                       # job_id returned by CronCreate
+├── pending.json                      # session_id, cwd, codex, due_at, prompt
+├── receipt.json                      # queued, exit_code/stdout/stderr or error, fired_at
+├── schedule.lock                     # serializes replacement and delivery
+└── worker.lock                       # one active delivery worker per session
+```
+
+The files use the encoded session ID as a prefix (for example,
+`<encoded-session-id>.pending.json`); locks contain no session data.
+
+Before compaction, the hook itself writes a checkpoint from ledger history,
+touched tickets and projects, and current git state, preserving the agent's last
+continuation. It needs no agent turn and has an eight-second budget inside the
+ten-second hook timeout. Pickup and post-compaction restore read that handoff;
+Claude restore repeats the scheduling instruction for its next timed checkpoint.
 
 ### Pre-compaction backups
 

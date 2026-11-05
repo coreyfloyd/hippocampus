@@ -279,7 +279,7 @@ def test_lint_rules_reject_written_shapes(tmp_path, mutate, message):
 
 def test_lint_accepts_v1_and_v2_and_ignores_unknown_keys(tmp_path):
     handoff = load_module()
-    v1 = {"schema_version": 1, "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []}
+    v1 = {"schema_version": 1, "written_at": "2026-11-01T12:00:00Z", "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []}
     v2 = handoff.overlay_checkpoint(valid_payload(), str(tmp_path), "s", "checkpoint")
     v2["unknown"] = {"accepted": True}
     for name, data in (("v1", v1), ("v2", v2)):
@@ -427,7 +427,7 @@ def test_each_cli_subcommand_executes(tmp_path):
     assert resolved.returncode == 0
     path = resolved.stdout.strip()
     assert invoke("repository-root", str(repo)).stdout.strip() == str(repo.resolve())
-    assert invoke("write", path, stdin=json.dumps({"schema_version": 1, "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []})).returncode == 0
+    assert invoke("write", path, stdin=json.dumps({"schema_version": 1, "written_at": "2026-11-01T12:00:00Z", "resume": {"headline": "v1", "open_loops": []}, "spawned_processes": []})).returncode == 0
     assert invoke("lint", path).returncode == 0
     assert invoke("count", str(repo), env={"HANDOFF_STATE_DIR": str(state)}).returncode == 0
     assert invoke("checkpoint", "--cwd", str(repo), "--session-id", "session",
@@ -770,6 +770,7 @@ def test_carried_summary_keeps_original_session_identity(tmp_path, monkeypatch):
     assert summary["session_id"] == "producer"
     assert summary["summary"] == payload["resume"]["session_summary"]
     assert summary["produced_at"]
+    module.record_pickup(str(tmp_path / "producer.json"), first, "successor")
     second = module.overlay_checkpoint(first, str(tmp_path), "successor", "checkpoint")
     assert summary in second["resume"]["session_history"]
 
@@ -825,8 +826,9 @@ def test_artifact_remove_disposition_and_removed_state(tmp_path, monkeypatch):
 def test_summary_updates_current_session_without_rewriting_carried_history(tmp_path, monkeypatch):
     module = load_module()
     monkeypatch.setenv("HANDOFF_LEDGER_DIR", str(tmp_path / "ledger"))
+    earlier = module.overlay_checkpoint(valid_payload(), str(tmp_path), "old", "checkpoint")
+    module.record_pickup(str(tmp_path / "old.json"), earlier, "s")
     first = module.overlay_checkpoint(valid_payload(), str(tmp_path), "s", "checkpoint")
-    first["resume"]["session_history"].insert(0, {"session_id": "old", "produced_at": "2026-10-01T12:00:00Z", "summary": "Earlier work"})
     first["resume"]["session_summary"] = "Finished the implementation"
     second = module.overlay_checkpoint(first, str(tmp_path), "s", "checkpoint")
     assert second["resume"]["session_history"][0] == first["resume"]["session_history"][0]
@@ -847,12 +849,14 @@ def test_each_successor_summary_survives_under_its_own_identity(tmp_path):
     prior = module.overlay_checkpoint(valid_payload(), str(tmp_path), "prior", "checkpoint")
     original = dict(prior["resume"]["session_history"][0])
     prior["resume"]["session_summary"] = "Successor implemented the repair"
+    module.record_pickup(str(tmp_path / "prior.json"), prior, "successor")
     successor = module.overlay_checkpoint(prior, str(tmp_path), "successor", "checkpoint")
     history = successor["resume"]["session_history"]
     assert original in history
     assert [row["summary"] for row in history if row["session_id"] == "successor"] == ["Successor implemented the repair"]
     successor_row = dict(next(row for row in history if row["session_id"] == "successor"))
     successor["resume"]["session_summary"] = "Third session verified it"
+    module.record_pickup(str(tmp_path / "successor.json"), successor, "third")
     third = module.overlay_checkpoint(successor, str(tmp_path), "third", "checkpoint")
     assert original in third["resume"]["session_history"]
     assert successor_row in third["resume"]["session_history"]

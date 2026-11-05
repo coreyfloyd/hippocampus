@@ -781,10 +781,10 @@ class ChecklistTests(unittest.TestCase):
             path.write_text(json.dumps(results))
             user = ["--user-profile", str(PROFILES / "user.md")]
             _, _, written = self.wrap(directory, [])
-            unavailable = ["--no-summary", "session summary unavailable: HTTP 502", "--handoff", str(written)]
+            unavailable = ["--handoff", str(written)]
             result = subprocess.run([sys.executable, str(ENGINE), "report", *user, "--unattended", "--results", str(path), *unavailable], text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout), {"outcome_line": "No milestone or epic closed or moved this session.", "summary": None, "summary_unavailable": "session summary unavailable: HTTP 502",
+            self.assertEqual(json.loads(result.stdout), {"outcome_line": "No milestone or epic closed or moved this session.", "summary": "earlier work",
                                                          "report": "incomplete", "pending": ["knowledge"], "filing": {}, "warnings": [],
                                                          "incomplete": [{"id": "knowledge", "status": "pending", "reason": "approve which findings to capture"}], "saved_line": "All saved and pushed", "asks": []})
             path.write_text(json.dumps(wrote))
@@ -792,52 +792,102 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("checklist: report invalid: knowledge: a pending step writes nothing", result.stderr)
 
-    def test_report_starts_with_outcome_then_session_summary(self):
-        """Stored close outcomes lead the report, before the existing summary."""
-        user = ["--user-profile", str(PROFILES / "user.md")]
-        plan = self.engine.compose([self.engine.load_profile(PROFILES / "user.md")])
-        results = [{"id": step["id"], "status": "run", "writes": []} for step in plan]
-        text = "## Session summary\n\n- No record outcome closed or moved this session.\n"
+    def test_report_starts_with_summary_from_final_handoff_even_without_record_writes(self):
         with tempfile.TemporaryDirectory() as directory:
-            path, summary = Path(directory) / "results.json", Path(directory) / "summary.md"
-            path.write_text(json.dumps(results))
-            summary.write_text(text)
-
             _, _, written = self.wrap(directory, [])
-
-            def report(*extra, profile=user):
-                return subprocess.run([sys.executable, str(ENGINE), "report", *profile, "--results", str(path), "--handoff", str(written), *extra],
-                                      text=True, capture_output=True)
-
-            result = report("--summary", str(summary))
-            self.assertEqual(result.returncode, 0, result.stderr)
-            output = json.loads(result.stdout)
+            results = Path(directory) / "results.json"
+            results.write_text(json.dumps([dict(id=s["id"], status="run", writes=[])
+                                           for s in self.engine.compose([])]))
+            data = json.loads(written.read_text())
+            text = "Implemented example/project#7 (retain session history).\nVerified the resumed chain."
+            data["resume"]["session_summary"] = text
+            written.write_text(json.dumps(data))
+            command = [sys.executable, str(ENGINE), "report", "--results", str(results), "--handoff", str(written)]
+            report = subprocess.run(command, text=True, capture_output=True)
+            self.assertEqual(report.returncode, 0, report.stderr)
+            output = json.loads(report.stdout)
             self.assertEqual(list(output)[:2], ["outcome_line", "summary"])
+            self.assertEqual(output["outcome_line"], "No milestone or epic closed or moved this session.")
             self.assertEqual(output["summary"], text)
-
-            missing = report()
+            data["resume"].pop("session_summary")
+            written.write_text(json.dumps(data))
+            missing = subprocess.run(command, text=True, capture_output=True)
             self.assertEqual(missing.returncode, 1)
-            self.assertIn("checklist: report invalid: session summary: missing; pass --summary <file> from /hippocampus:record", missing.stderr)
-            # An older record binding composes nothing; the error names the path that still wraps.
-            self.assertIn('--no-summary "/hippocampus:record composed no session summary"', missing.stderr)
-            older = report("--no-summary", "/hippocampus:record composed no session summary")
-            self.assertEqual(older.returncode, 0, older.stderr)
-            self.assertEqual(list(json.loads(older.stdout))[:3], ["outcome_line", "summary", "summary_unavailable"])
+            self.assertIn("session summary: missing", missing.stderr)
+            # A record binding cannot provide or replace the handoff's summary.
+            rejected = subprocess.run(command + ["--no-summary", "binding unavailable"], text=True, capture_output=True)
+            self.assertNotEqual(rejected.returncode, 0)
 
-            both = report("--summary", str(summary), "--no-summary", "why")
-            self.assertEqual(both.returncode, 1)
-            self.assertIn("pass --summary or --no-summary, not both", both.stderr)
+    def test_wrap_stores_chain_summary_and_skeleton_gap_without_failing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "final.json"
+            environment = dict(os.environ, HANDOFF_PATH=str(target), HANDOFF_LEDGER_DIR=directory)
+            entries = [dict(session_id="first", produced_at="2026-10-01T12:00:00Z",
+                            summary="Implemented example/project#7 (retain session history).")]
+            gap = dict(handoff="missing.json", session_id="middle", resumed_at="2026-10-02T13:00:00Z",
+                       written_at="2026-10-02T12:00:00Z", skeleton=True)
+            ledger = Path(directory) / "session-touched-paths.wrap-session.jsonl"
+            ledger.write_text("\n".join(json.dumps(row) for row in [
+                dict(kind="history_entry", entry=entries[0]), dict(kind="resumed_chain", record=gap)]) + "\n")
+            source = self.handoff()
+            summary = ("Implemented example/project#7 (retain session history).\n"
+                       "Session middle ended at 2026-10-02T12:00:00Z without an account of its work.\n"
+                       "Verified example/project#8 (carry history across pickup).")
+            source["resume"].update(session_summary=summary, history_entry="Verified example/project#8 (carry history across pickup).", open_loops=[])
+            saved = subprocess.run([sys.executable, str(ROOT / "scripts/lib/handoff.py"), "checkpoint",
+                "--cwd", directory, "--session-id", "wrap-session", "--trigger", "wrap"],
+                input=json.dumps(source), text=True, capture_output=True, env=environment)
+            self.assertEqual(saved.returncode, 0, saved.stderr)
+            final = json.loads(target.read_text())
+            self.assertEqual(final["resume"]["session_summary"], summary)
+            self.assertNotIn("history_entry", final["resume"])
+            self.assertEqual(final["resume"]["session_history"][0], entries[0])
+            self.assertEqual(final["resume"]["session_history"][-1]["summary"], source["resume"]["history_entry"])
+            checked = subprocess.run([sys.executable, str(ENGINE), "wrap-check", "--written-handoff", str(target)],
+                                     text=True, capture_output=True, env=environment)
+            self.assertEqual(checked.returncode, 0, checked.stderr)
 
-            summary.write_text("  \n")
-            empty = report("--summary", str(summary))
-            self.assertEqual(empty.returncode, 1)
-            self.assertIn("session summary: the summary file is empty", empty.stderr)
-
-            path.write_text(json.dumps([{"id": step["id"], "status": "carried" if "slot" in step else "run", "writes": []}
-                                        for step in self.engine.compose([])]))
-            unbound = report(profile=[])
-            self.assertEqual(unbound.returncode, 0, unbound.stderr)
-            self.assertEqual(json.loads(unbound.stdout)["summary_unavailable"], "record unbound: no binding composes a session summary")
+    def test_project_record_write_receives_summary_outcomes_and_touched_projects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            log = root / "requests.jsonl"
+            store = root / "store.py"
+            store.write_text("import json, sys\nfrom pathlib import Path\nr=json.load(sys.stdin)\n"
+                + "with Path(" + repr(str(log)) + ").open('a') as f: f.write(json.dumps(r)+'\\n')\n"
+                + "if r['operation']=='read':\n print(json.dumps({'status':'read','tickets':[{'ticket':t,'state':'closed','closed_at':'2026-10-02T12:00:00Z','close_outcomes':[{'kind':'epic','title':'Session history','state':'closed','done':2,'total':2}]} for t in r['tickets']]})); sys.exit(0)\n"
+                + "print(json.dumps({'status':'not_found'} if r['operation']=='lookup' else "
+                  "{'status':'saved','receipt':{'identity':r['identity'],'destination':'project history'}}))\n")
+            profile = root / "profile.json"
+            profile.write_text(json.dumps(dict(name="projects", record_writes={kind: {"command": [sys.executable, str(store)]} for kind in ("projects", "tickets")})))
+            source = self.handoff()
+            source["resume"].update(open_loops=[], session_summary="Updated example/project#7 (retain session history).",
+                touched_projects=["example/project"], touched_tickets=["example/project#7"], close_outcomes=[dict(kind="epic", title="Session history", state="closed",
+                    done=2, total=2, triggering_ticket="example/project#7", produced_at="2026-10-02T12:00:00Z")])
+            expected_outcomes = source["resume"].pop("close_outcomes")
+            source["session_items"] = [dict(self.item("progress"), record_kind="projects", anchor={"project": "example/second"})]
+            source["session_items"].append(dict(source["session_items"][0], context="Second project update",
+                anchor={"project": "example/second", "ticket": "example/project#8"}))
+            expected_outcomes.append(dict(expected_outcomes[0], triggering_ticket="example/project#8"))
+            source["resume"]["close_outcomes"] = copy.deepcopy(expected_outcomes)
+            handoff, filing = root / "source.json", root / "filing.json"
+            handoff.write_text(json.dumps(source))
+            filing.write_text(json.dumps([dict(index=i, rule="R2", status="filed", read_status="ok") for i in (0, 1)]))
+            result = subprocess.run([sys.executable, str(ENGINE), "file", "--user-profile", str(profile),
+                "--handoff", str(handoff), "--filing", str(filing)], text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            requests = [json.loads(line) for line in log.read_text().splitlines()]
+            self.assertEqual([r["operation"] for r in requests], ["read", "lookup", "write", "lookup", "write"])
+            self.assertEqual(requests[0]["tickets"], ["example/project#7", "example/project#8"])
+            for request in requests[1:]:
+                self.assertEqual(request["session_summary"], source["resume"]["session_summary"])
+                self.assertEqual(request["close_outcomes"], expected_outcomes)
+                self.assertEqual(request["touched_projects"], ["example/project", "example/second"])
+            self.assertEqual(json.loads(result.stdout)["resume"]["touched_projects"], ["example/project", "example/second"])
+            planned = subprocess.run([sys.executable, str(ENGINE), "plan", "--session-id", "resumed-session"],
+                                     text=True, capture_output=True)
+            self.assertEqual(planned.returncode, 0, planned.stderr)
+            self.assertEqual(json.loads(planned.stdout)["handoff"]["resume"]["touched_projects"],
+                             ["example/project", "example/second"])
 
     def complete(self, directory, session_id, updated_by="slate-completed"):
         """Rewrite the record as the completion command leaves it: attended, marked by the command."""

@@ -27,7 +27,10 @@ not a pointer. Preserve all of this through compaction, pickup, and wrap. Only i
 the record may have `recorded: true`; those are omitted. Already-carried items stay in
 `resume.open_loops` with their original identity and date until a binding consumes them.
 Supply new account text on every checkpoint and wrap; never use a placeholder or
-fall back to the headline. The module appends one dated history entry under the
+fall back to the headline. At wrap, checklist supplies the complete chain's
+`resume.session_summary` and a separate one-line `resume.history_entry` for the
+work since this session's previous entry. At a checkpoint, the session summary
+itself is the one-line account. The module appends one dated history entry under the
 calling session ID and keeps earlier entries in its ledger, so compaction does
 not require the agent to re-supply them. Carried `resume.session_history` entries
 keep their original identities and dates. A missing or blank account fails
@@ -78,3 +81,21 @@ Report that failure; do not imply the handoff is clean.
 Close outcomes and touched tickets are also recovered from the session ledger
 into `resume.close_outcomes` and `resume.touched_tickets`. Preserve those facts
 unchanged; never reconstruct milestone or epic state during checkpoint.
+
+After every successful checkpoint, replace this session's timed checkpoint. Follow
+its command output: Claude Code must CronDelete the previous job before CronCreate,
+using the printed pinned minute, `recurring: false`, and session-only persistence.
+The interval must be a whole number of minutes, at least 1, in both tools. Claude
+rounds its due minute up so it stays strictly in the future and never precedes
+checkpoint time plus the interval.
+Record the new job ID with the printed `claude-timer-set` command. The exact prompt
+comes from `handoff.py timed-checkpoint-prompt --session-id <session>`; never paraphrase
+it. Codex schedules its detached timer automatically and replaces the pending deadline.
+
+The prompt calls `handoff.py timed-checkpoint-check --session-id <session>`: its JSON
+reports `tokens`, `limit`, and `below_limit`. Only `below_limit: true` authorizes the
+timed checkpoint. At or above the limit do nothing. Unknown usage exits nonzero;
+report it rather than assuming the session is below the limit. Hooks retain the
+session's transcript location for this command. The pre-compaction hook writes a
+checkpoint itself from the ledger and git state while keeping the agent's continuation;
+post-compaction restore returns that checkpoint and any Claude scheduling instruction.

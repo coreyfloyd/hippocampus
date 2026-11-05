@@ -20,8 +20,8 @@ A read of the existing record through a user-bound skill. It is read-only: it re
 _Avoid_: tracker
 
 **Handoff**:
-The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds dated history entries, close outcomes, and touched tickets. Checkpoint and wrap both end by writing it.
-_Avoid_: summary, record
+The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds the session's dated history entries and session summary, close outcomes, touched tickets, and touched projects. Checkpoint and wrap both end by writing it.
+_Avoid_: record
 
 **History entry**:
 One handoff write's account of the work since that session's previous entry, with its producing session identity, time, and text. Every checkpoint and wrap adds one real entry. Entries stay in the session ledger through compaction. An automatic stop handoff is marked as a skeleton and adds no entry, while retaining earlier entries.
@@ -29,8 +29,20 @@ One handoff write's account of the work since that session's previous entry, wit
 **Close outcome**:
 One milestone or epic state reported when a ticket closes: kind, title, open or closed state, done of total, triggering ticket, and time. The ticket record write reports it; the package stores it in the session ledger beside history entries. The wrap builds its outcome line only from these stored facts, without rediscovering milestone or epic state.
 
+**Session summary**:
+One account the agent writes at wrap from every history entry and close outcome in the resumed chain, including the current session's work. It covers every entry, describes every ticket it names, and names any session that ended with only a skeleton and the time it ended without an account of its work. The final handoff stores it; the report prints it immediately after the outcome line. Record writes never compose it. A projects record write receives it with close outcomes and touched projects.
+
 **Touched ticket**:
 A ticket the session read, changed, or closed. Its reference is retained in the session ledger and handoff. At wrap the ticket record write re-reads only touched tickets, including those carried from a resumed chain, and records any closed ticket's missing close outcomes.
+
+**Touched project**:
+A project the session worked on, identified by a stable reference in `resume.touched_projects` or an item's `anchor.project`. The ledger and handoff retain its reference through compaction and pickup. A projects record write receives all touched projects alongside the session summary and close outcomes.
+
+**Resumed chain**:
+The sessions continued through pickup, native same-session resume, or compaction. A session started from a brief or pasted prompt without pickup starts its own chain. At pickup, the successor's ledger immediately receives the selected handoff's history entries, close outcomes, touched tickets, and resumed-chain records. Later commands use only that ledger, never the resumed handoff file.
+
+**Resumed-chain record**:
+One session's pickup of a handoff: its path, producing session identity, and resume time. It also retains the handoff's write time and skeleton marker so a successor can identify a session that ended without an account of its work. Records are carried whole through every successor's ledger and handoff.
 
 **Successor**:
 The interactive session that resumed another session's handoff through `pickup`. The session whose handoff it resumed is the **resumed session**, which is never used again. Every contract bound to the resumed session's id — claims, pending approvals, pending replies, granted scopes, and any other record keyed by session id — is carried to the successor's id. See [The successor rule](../skills/pickup/SKILL.md#the-successor-rule) for transfer ownership and the fallback when no transfer tool is available.
@@ -48,6 +60,13 @@ _Avoid_: duplicate, related session
 Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
+**Timed checkpoint**:
+A per-session prompt scheduled after each checkpoint. Below the configured token limit,
+the agent writes another checkpoint; at or above it, the prompt does nothing. Claude Code
+uses a session-only one-shot job; Codex uses a detached timer that queues the same prompt.
+Each checkpoint replaces the pending timer. Before compaction the hook writes a checkpoint
+from retained facts, preserving the agent's continuation without requiring an agent turn.
+
 **Wrap**:
 Finishing a session: running the checklist, which is the spine plus any checklist profile steps, and ending by writing and validating the handoff. Unlike a checkpoint, a wrap fails, and says why, when the handoff fails its validity check.
 _Avoid_: checkpoint
@@ -58,7 +77,7 @@ _Avoid_: checklist (the checklist is the spine plus checklist profile steps)
 
 **Checklist profile**:
 One file that extends the checklist: it binds slots, adds steps before the spine, and adds steps after any of the spine's first four steps, and may add the one step `own-worktree` after the handoff. A user checklist profile applies to every session; a repository checklist profile adds steps for sessions in that repository.
-_Avoid_: configuration (the configuration is the one value naming where handoffs are stored)
+_Avoid_: configuration (shared settings are separate from checklist profiles)
 
 **Knowledge profile**:
 The existing `~/.config/hippocampus/profile.md` file that configures the knowledge root and knowledge workflows. Its format and free-form policy body are preserved.
@@ -74,7 +93,7 @@ _Avoid_: hook, plugin
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
-The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, and touched tickets. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
+The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, touched tickets, and resumed-chain records. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
 _Avoid_: log, history
 
 **Open loop**:

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Prepare agent-owned record reads and append only validated skill responses.
 
-Reads a selected pickup report on stdin; never executes a binding or writes files.
+Reads a selected pickup report on stdin; copies its chain into the successor ledger.
+Never executes a binding or writes to a user record store.
 """
 import argparse
 import json
@@ -11,6 +12,7 @@ import sys
 
 from checklist import compose, load_profile, record_read_binding
 from record_read import verdict
+from handoff import ambient_session_id, record_pickup
 
 
 UNBOUND = 'No record read is bound.'
@@ -122,7 +124,16 @@ def main():
     parser.add_argument('--commitments', type=Path, help='raw skill response file')
     parser.add_argument('--complete', action='store_true', help='finish even if neither skill returned output')
     args = parser.parse_args()
-    report = prepare(json.load(sys.stdin), args.no_commitments)
+    report = json.load(sys.stdin)
+    if not (args.complete or args.ticket_status is not None or args.commitments is not None):
+        if report.get('source') == 'handoff' and 'error' not in report:
+            try:
+                record_pickup(report['handoff_path'], report['handoff'], ambient_session_id())
+            except (OSError, ValueError) as error:
+                report.update(error='chain_copy_failed', message=str(error))
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+                return 1
+    report = prepare(report, args.no_commitments)
     if args.complete or args.ticket_status is not None or args.commitments is not None:
         complete(report, {'ticket_status': args.ticket_status, 'commitments': args.commitments})
     print(json.dumps(report, ensure_ascii=False, indent=2))

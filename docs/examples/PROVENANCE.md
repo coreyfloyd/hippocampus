@@ -13,10 +13,11 @@ the other captured values remain from the original capture.
 `profile.md` and `config.json` are **validated inputs**, not captured outputs:
 the package reads these files and has no command that generates them. The profile
 is an unchanged copy of `tests/fixtures/profiles/user.md`. The configuration is
-the existing `{"handoff_dir": "~/state/session-handoffs"}` literal from
-`test_configured_handoff_dir_places_handoffs_and_ledger` in `tests/test_handoff.py`,
-serialized with two-space indentation and a trailing newline. Its shape and key
-are defined by `INTERFACE.md` section 2. No private configuration was copied.
+a documented handoff-directory override and enforcement-reference path, plus the
+55-minute timed checkpoint interval and 200,000-token limit defaults. It is
+serialized with two-space indentation and a trailing newline. Its shape and keys
+are defined by `INTERFACE.md` section 2 and round-trip through `config-get` in
+`test_configuration_example_is_read_by_config_get`. No private configuration was copied.
 
 ## Sandbox and exact capture commands
 
@@ -154,3 +155,15 @@ directory, with the inherited session variables listed above removed. Saved
 stdout unchanged as `plan.json` (SHA-256 `8eecf3c4a43b6104651a5da25f9b9d6549fe11ff122bdf9aa2deca0e12a6f66b`).
 The refreshed plan adds `record_read: null`, reflecting the profile's unbound
 read skill. The original handoff and ledger captures above remain unchanged.
+
+## Resumed-chain refresh, 2026-11-04
+
+The handoff gained the empty `resume.resumed_chain` array now emitted by
+checkpoint; the complete shape still round-trips through the checkpoint command.
+Re-ran the plan command against the committed profile and handoff with an empty
+temporary ledger and inherited session variables removed. Saved its stdout as
+`plan.json`, redacting the returned current working directory to
+`/workspace/example-repo`. Plan now returns its `handoff` payload with the
+current session identity and ledger facts. No pickup occurred in this example,
+so its returned history and resumed chain are empty. The round-trip test checks
+the working directory before applying this redaction.
