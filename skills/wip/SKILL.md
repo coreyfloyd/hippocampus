@@ -1,7 +1,6 @@
 ---
 name: wip
 description: "Report in-flight work, blockers, and pending approvals, or catch the user up on changes since their last message. Use for /wip, 'where are we?', 'what's pending?', or 'catch me up.'"
-disable-model-invocation: true
 ---
 
 # What's in flight

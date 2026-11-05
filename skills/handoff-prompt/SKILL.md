@@ -2,7 +2,6 @@
 name: handoff-prompt
 description: Create a portable, copy-pasteable handoff prompt for another session, agent, tool, repository, or project. Use when the user says "/hippocampus:handoff-prompt" or asks to hand work to a new session rather than resume this one.
 argument-hint: "What will the receiving session be used for?"
-disable-model-invocation: true
 ---
 
 # Handoff prompt
