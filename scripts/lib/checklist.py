@@ -24,6 +24,9 @@ _record_spec.loader.exec_module(record_write)
 _lessons_spec = importlib.util.spec_from_file_location("lessons", Path(__file__).with_name("lessons.py"))
 lessons = importlib.util.module_from_spec(_lessons_spec)
 _lessons_spec.loader.exec_module(lessons)
+_knowledge_spec = importlib.util.spec_from_file_location("knowledge", Path(__file__).with_name("knowledge.py"))
+knowledge = importlib.util.module_from_spec(_knowledge_spec)
+_knowledge_spec.loader.exec_module(knowledge)
 
 SLOTS = ("persist",)
 NATIVE = {"knowledge": {"command": "/hippocampus:knowledge-capture", "consumes": ["knowledge"]},
@@ -311,7 +314,8 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
 def validate_ask_payload(ask: Mapping[str, Any]) -> None:
     """Require complete text and usable choices for both new and stored asks.
 
-    An ask about an applied lesson reports what happened, so it has no choices.
+    An ask about an applied lesson reports what happened, so it has no choices. A fact
+    about the user is an ordinary ask: it keeps its choices and never has a default.
     """
     if not isinstance(ask.get("text"), str) or not ask["text"].strip():
         raise ValueError("an ask requires non-empty text")
@@ -320,11 +324,13 @@ def validate_ask_payload(ask: Mapping[str, Any]) -> None:
     choices = ask.get("choices")
     if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
         raise ValueError(f"{ask['text']}: an ask requires the user's choices")
+    if ask.get("user_fact") and "default" in ask:
+        raise ValueError(f"{ask['text']}: a fact about the user has no default")
 
 
 def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
-    text = item["ask_text"] if item.get("applied") else item.get("context", str(item))
+    text = item["ask_text"] if item.get("applied") or item.get("user_fact") else item.get("context", str(item))
     ask = {**copy.deepcopy(dict(item)), "text": text,
            "session_id": item.get("session_id") or subject.get("session_id"),
            "directory": subject.get("working_directory"),
@@ -406,10 +412,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result = copy.deepcopy(dict(handoff))
     result.pop("lesson_outcomes", None)
     result.pop("lesson_asks", None)
+    result.pop("knowledge_outcomes", None)
+    result.pop("knowledge_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     ticket_module = _load_handoff_module()
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
     lesson_outcomes = lessons.outcomes(ticket_module, session_id) if execute_writes else []
+    knowledge_outcomes = knowledge.outcomes(ticket_module, session_id) if execute_writes else []
     outcome_for = {tuple(outcome["identity"]): outcome for outcome in lesson_outcomes}
     summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
@@ -580,6 +589,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result.pop("session_items", None)
     if lesson_outcomes:
         report["lessons"] = lessons.report_section(lesson_outcomes)
+    if knowledge_outcomes:
+        report["knowledge"] = knowledge.report_section(knowledge_outcomes)
     result["filing"] = report
     if execute_writes and session_id:
         # Filed and dropped items are settled; kept items stay retained.
@@ -829,7 +840,7 @@ def completed_by() -> set[str]:
 
 
 # Commands that run the checklist or write a handoff; only an interactive session may.
-WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|apply-lessons|deliver-lessons|file|record|wrap-check|report)\b"
+WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|apply-lessons|deliver-lessons|apply-knowledge|file|record|wrap-check|report)\b"
                           r"|checkpoint\.sh\b|handoff\.py['\"]?\s+checkpoint\b")
 
 
@@ -939,7 +950,9 @@ def auto_apply_state() -> dict[str, Any] | None:
         return None
     rules = lessons.routing_rules()
     reason = lessons.forbidden_reason(rules)
-    return {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
+    # The routing file governs lessons only; knowledge capture follows the setting.
+    state = {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
+    return {**state, "knowledge": "apply"}
 
 
 def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]],
@@ -1052,6 +1065,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
               "filing": handoff.get("filing", {}), "warnings": warnings}
     if lesson_report:
         output["lessons"] = lesson_report
+    if isinstance(filing.get("knowledge"), Mapping):
+        output["knowledge"] = copy.deepcopy(filing["knowledge"])
     if incomplete:
         output["incomplete"] = incomplete
     if problems:
@@ -1152,7 +1167,8 @@ def _handoff_session(path: Path) -> str | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "file", "record",
+    parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "apply-knowledge",
+                                                      "file", "record",
                                                       "wrap-check", "report", "wrap-cadence", "actor-guard",
                                                       "is-completion-command"))
     parser.add_argument("--user-profile", type=Path)
@@ -1161,6 +1177,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--receipts", type=Path)
     parser.add_argument("--filing", type=Path, help="file: explicit outcome for each remaining item")
     parser.add_argument("--lessons", type=Path, help="apply-lessons: the assessment of each lesson")
+    parser.add_argument("--knowledge", type=Path, help="apply-knowledge: what was captured for each knowledge item")
+    parser.add_argument("--knowledge-profile", type=Path,
+                        help="apply-knowledge: the knowledge profile (default ~/.config/hippocampus/profile.md)")
     parser.add_argument("--written-handoff", type=Path, help="wrap-check: the handoff step 5 wrote")
     parser.add_argument("--record-at", help="wrap-check: time of the record's latest write or passing check")
     parser.add_argument("--unattended", action="store_true",
@@ -1272,6 +1291,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                       handoff.get("subject", {}))
                                           for item in items for row in rows if item.get("applied")
                                           and tuple(row["identity"]) == module.session_item_identity(item)]}
+        elif args.operation == "apply-knowledge":
+            if not auto_apply_state():
+                raise ValueError("apply-knowledge: the auto-apply setting is off")
+            if not args.handoff or not args.knowledge:
+                raise ValueError("apply-knowledge requires --handoff and --knowledge")
+            session_id = (handoff.get("subject") or {}).get("session_id") or session_id
+            output = knowledge.apply(handoff, json.loads(args.knowledge.read_text()), module, session_id,
+                                     knowledge.profile_path(args.knowledge_profile))
+            # A fact about the user, carried or found this wrap, goes to the ask binding.
+            items = [*output.get("resume", {}).get("open_loops", []),
+                     *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
+            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}))
+                                        for item in items if item.get("user_fact")]
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")

@@ -112,15 +112,23 @@ The fixed, ordered table that decides what each carried item becomes: dropped wi
 _Avoid_: disposition (an open loop's own instruction), triage
 
 **Ask**:
-An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors. An ask about an applied lesson is text only: it says what was already done and how to undo it, and has no choices.
+An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors. An ask about an applied lesson is text only: it says what was already done and how to undo it, and has no choices. An ask about a fact about the user is an ordinary ask: it keeps its choices, has no default, and never resolves on its own.
 _Avoid_: question, needs-you item
 
 **Auto-apply setting**:
-The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends instead of waiting for approval, in every interactive session, attended or unattended. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it.
+The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends and captures the knowledge it recommends for the wiki or for retention under the knowledge root, instead of waiting for approval, in every interactive session, attended or unattended. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it for lessons only.
 _Avoid_: auto mode, autopilot
 
 **Applied lesson**:
 A lesson a wrap wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git is written with no commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
+
+**Applied capture**:
+A knowledge item a wrap captured under the auto-apply setting without an approval: compiled into the wiki, or retained as a source under `raw/` or an output under `output/`, all inside the knowledge root. The session ledger keeps each item's outcome (captured, asked or failed) with the files created and updated, relative to the knowledge root. A captured item is settled. A capture that names a file outside the knowledge root, outside its kind's folder, or not written fails, and the item keeps its approval.
+_Avoid_: auto-capture, applied knowledge
+
+**Fact about the user**:
+A knowledge item that states something about the user: a preference, habit, or circumstance. Under the auto-apply setting it is never captured without the user; it becomes an ordinary ask naming the proposed text, its destination and its source.
+_Avoid_: personal fact, user memory
 
 **Delivered mark**:
 A ref under `refs/hippocampus/delivered/` in a checkout, named by a local lesson commit and pointing at the commit that carried that lesson to the remote on a lesson branch. The saved line leaves a marked commit, and only that commit, out of the commits it counts as not pushed, in this wrap and every later one, so a pull request's local commit does not fail a later wrap in that checkout, before or after the request merges. The package writes it at delivery and never removes it.

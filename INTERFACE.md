@@ -50,7 +50,7 @@ an empty configuration.
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
-| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends. Default false. Any other type is an error. |
+| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value, a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -287,6 +287,7 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
 | `apply-lessons ... --handoff H --lessons L` | With the auto-apply setting on: write and commit each lesson row, one commit each; drop `skip` rows; keep each outcome in the session ledger; return the payload without settled items, plus `lesson_outcomes`. A failed lesson stays carried and exits 0. With the setting off it refuses, exit 1. |
 | `deliver-lessons ... --handoff H` | After the persist binding: push undelivered lesson commits, retrying once when the remote moved, or, when the repository refuses a direct push or the routing file requires it, undo the retry's merge when that second push is refused for a pull request, re-apply the checkout's lessons on one lesson branch (`lesson/<session>`, one commit each, cut from the remote's base branch or continuing the session's branch), push it, and run the routing file's `lesson-pull-request-command` once. That command reads one JSON object on stdin (`checkout`, `remote`, `base`, `branch`, `title`, `body`, and `lessons`: one `title`, `path` and `commit` per lesson), opens the pull request, owns how it merges, and prints the pull request's reference as its last line. The package never merges. Each delivered row names the delivered `commit`, its `local_commit`, `lesson_branch` and `pull_request`; the local commit gets a delivered mark (`refs/hippocampus/delivered/<local_commit>`) that the saved line honors in every later wrap. Adds `lesson_outcomes` and `lesson_asks`, one ask per applied lesson in `resume.open_loops` or unrecorded `session_items`, each with `choices: []`. Pushes nothing with persist unbound. |
+| `apply-knowledge ... --handoff H --knowledge K [--knowledge-profile P]` | With the auto-apply setting on: check each captured row (`wiki`, `source`, `output`) against the knowledge profile (default `~/.config/hippocampus/profile.md`): every named file written, inside the knowledge root, at least one under its kind's folder (`wiki/`, `raw/`, `output/`), and a `wiki` capture only with the wiki enabled. A captured item is settled; a failed one stays carried with its approval and exits 0. A `user_fact` row (`text`, `destination`, `source`, `choices`, never `default`) marks its item `user_fact` and keeps it carried. Keeps each outcome in the session ledger; returns the payload plus `knowledge_outcomes` and `knowledge_asks`, one ordinary ask per carried fact about the user. Items with no row are unchanged. With the setting off it refuses, exit 1. |
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items; execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
 | `wrap-check ... --written-handoff H [--record-at T] [--unattended]` | Fail, with the reason, when the handoff is invalid, a bound item is still carried, a read/write failed, or `record` is bound and its latest write is older than the session's last change. |
@@ -294,10 +295,12 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
-With the auto-apply setting on, `plan` adds `auto_apply` (`{"lessons": "apply"}`, or
-`{"lessons": "propose", "reason": ...}` when the routing file's `lesson-policy: propose`
-forbids applying), `file` adds `filing.lessons`, and `report` adds `lessons`. With it off,
-none of these appear.
+With the auto-apply setting on, `plan` adds `auto_apply` (`{"lessons": "apply", "knowledge": "apply"}`,
+or `{"lessons": "propose", "reason": ..., "knowledge": "apply"}` when the routing file's
+`lesson-policy: propose` forbids applying lessons), `file` adds `filing.lessons` and
+`filing.knowledge` (`captured`, `asked` and `failed` rows; a captured row lists `created` and
+`updated` paths relative to the knowledge root), and `report` adds `lessons` and `knowledge`.
+With it off, none of these appear.
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
 `handoff`. Only `persist` is a slot. Record is the package step calling per-kind record writes. Knowledge and lessons are native

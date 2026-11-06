@@ -661,7 +661,7 @@ def test_an_applied_lesson_is_settled_and_never_applied_twice(tmp_path, tool):
 def test_plan_runs_auto_apply_unattended_too(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
     result = wrap.run('plan', '--session-id', SESSION, '--unattended')
-    assert json.loads(result.stdout)['auto_apply'] == {'lessons': 'apply'}
+    assert json.loads(result.stdout)['auto_apply'] == {'lessons': 'apply', 'knowledge': 'apply'}
 
 
 def test_routing_file_that_requires_proposals_wins_and_the_report_says_so(tmp_path, tool):

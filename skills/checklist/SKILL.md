@@ -165,7 +165,10 @@ wrap summary.
 
 Run this package's knowledge-capture. Present carried knowledge items first,
 intact with their provenance, then new session knowledge. Follow its knowledge
-profile and approval requirements. With nothing to capture, report `nothing`.
+profile and approval requirements. With `auto_apply` in the plan, follow knowledge-capture's
+Auto-apply section in attended and unattended runs alike: wiki captures and retained sources and
+outputs under the knowledge root apply without approval, and a fact about the user becomes an
+ordinary ask. With nothing to capture, report `nothing`.
 With no configured knowledge root, report `not configured`, name
 `hippocampus-set-up`, and keep carried knowledge. An invalid configuration or
 capture error is `failed`, with its error. A refusal is `declined`, with its reason.
@@ -183,11 +186,11 @@ improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, th
 routing file forbids applying: run this step as if the setting were off.
 
 Both native steps continue to the next checklist step on failure or refusal.
-Remove an item only after an explicit receipt: the knowledge capture disposition,
+Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,
 or a lesson applied or written to the routing file's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
 With the auto-apply setting off, unattended runs, and sweep runs either way, use these same native steps in unattended mode: carry
-items and apply nothing. Report pending proposals and preserve their provenance.
+items and apply nothing. With the setting on, an unattended run still applies what the setting covers. Report pending proposals and preserve their provenance.
 
 ### 4. Persist — slot `persist`
 
@@ -467,6 +470,10 @@ every failed lesson with its error. When the routing file forbids applying, prin
 `reason` and `carried` lessons instead. Asks raised appear in the final `asks` list. A
 lesson `committed, not pushed` counts under the saved line's rules: not saved with
 persist bound, `Not pushed:` with it unbound.
+
+With the auto-apply setting on, also print the output's `knowledge`: every captured item with
+its kind and the files created and updated (the wiki articles for a wiki capture), every fact
+about the user asked, and every failed capture with its error.
 
 Immediately before the pending-asks block, print the output's `saved_line`.
 It reads `All saved and pushed: <checkout> (<branch>), ...` only when every item has a matching record-write

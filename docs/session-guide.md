@@ -102,7 +102,7 @@ If this directory and its siblings have no candidate, pickup falls back to
 local session transcripts from either tool. A handoff is keyed by subject and
 session together, so separate sessions do not overwrite each other's files.
 
-### Let a wrap apply its lessons
+### Let a wrap apply its lessons and knowledge
 
 Set `"auto_apply_lessons": true` in the hippocampus configuration (off by default).
 A wrap then no longer shows the lesson table and waits, attended or unattended:
@@ -128,7 +128,18 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
 
 A routing file line `lesson-policy: propose` turns this off and the report says so.
 `lesson-pull-requests:` with `  - owner/name` lines sends a repository's lessons through a
-pull request every time. Knowledge capture, the sweep and the slim review are unchanged.
+pull request every time. The sweep and the slim review are unchanged.
+
+The same setting lets a wrap capture knowledge without asking, attended or unattended:
+
+- A capture recommended for the wiki is compiled, and one retained as a source under `raw/` or
+  an output under `output/` is written, both inside the knowledge root. The report lists the
+  articles and files created or updated.
+- A fact about you is never saved without you. It becomes an ordinary ask with the proposed
+  text, where it would go and where it came from, with no default; it stays carried until you
+  answer.
+- A capture outside the knowledge root, an action for someone else, a discard and a document
+  update keep their approval. Meeting capture and the research workflows are unchanged.
 
 ### Route a lesson, then slim its source
 
