@@ -176,6 +176,7 @@ These are every key in [INTERFACE.md section 2](../INTERFACE.md#2-configuration)
 | `prune_days` | positive integer | Transcript age in days for `stale_transcript` prune candidates; default 7, overridden by `PICKUP_PRUNE_DAYS`. |
 | `cycle_sessions` | object | Session names mapped to home-relative directories for an external session-cycling consumer. The package does not run that consumer. |
 | `unattended` | object | Optional unattended-mode adapter: `state_module`, `completion_command`, and `completed_by`, described in interface section 6. Absent by default. |
+| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends; default false. |
 
 Default shared storage sits outside both tools' data areas:
 

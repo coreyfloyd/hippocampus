@@ -120,6 +120,9 @@ each row as a `lesson` item through the AFK delivery path below. Preserve the fi
 measurement, limit and suggested command; no conversation incident or proposed
 diff is required for this measurement-only row. Do not invoke slim-harness.
 
+With `plan` returning `auto_apply.lessons: apply`, record instead, attended or
+unattended; see Over-limit records below. With `propose`, the blocks stay as above.
+
 ## Duplicate rules — independent detection pass
 
 In both Claude Code and Codex, run
@@ -143,6 +146,29 @@ or the AFK `lesson` delivery path below, retaining row type, both spans, match,
 score, and action. No proposed diff is needed; do not invoke slim-harness. With no
 matches, report no duplicate rules found in the supplied loaded set. Repeat
 findings on future runs until resolved; retain no suppression history.
+With the auto-apply setting on, record duplicate rows with the size rows below.
+
+## Over-limit records — auto-apply setting on
+
+With `plan` returning `auto_apply.lessons: apply`, do not present the two blocks,
+ask the user to run the slim review, carry the rows as `lesson` items, or slim.
+Pass both outputs to the checklist module:
+
+```bash
+python3 <checklist-module> record-over-limit --user-profile <user-profile> \
+  --measure <measure-output.json> --duplicates <duplicates-output.json>
+```
+
+Print each `recorded[].line`: one line per file or duplicate rule, kept as an
+over-limit record for a later unattended slim. A measurement replaces only what it
+measured: this tool's limits (a skill only listed, its description limits alone),
+and a duplicate rule only when this wrap loaded every file it names.
+Rows in `reported` (outside git, not tracked by git, no hosted remote, git
+unreadable, or a Codex chain) get today's blocks with their `action` and `reason`;
+they are never recorded or slimmed unattended. Report `unresolved` paths. With the
+setting off or `lesson-policy: propose`, the module refuses; use the blocks above.
+If it fails for any other reason, such as a damaged store, print its error and
+present the blocks above, so no finding is lost.
 
 ## The one rule that makes this safe: every edit must be grounded
 
@@ -168,6 +194,10 @@ If you can't cite the moment, don't propose the edit. "This could be clearer" wi
 | **HITL** | interactive session the user is present in | Proposal table → **wait** → apply approved edits |
 | **AFK** | the user left the session to run unattended, or it is a scheduled or pipeline run | Record proposals through the AFK delivery path below; do not apply them (mechanical memory-index hygiene is exempt) |
 
+**The auto-apply setting overrides this table.** With `plan` returning
+`auto_apply.lessons: apply`, follow Auto-apply below in either mode. With it off, or
+with `auto_apply.lessons: propose`, this table applies.
+
 Unattended runs carry proposals because approval needs a present user; waiting stalls the run, and self-approval defeats the gate. A subagent inherits its parent's mode.
 
 **AFK output — one proposal per placement decision.** By default, emit each as
@@ -191,6 +221,54 @@ full proposals; do not claim they were saved or will reach interactive review.
 For carried items, the checklist's native `lessons` step presents them at the next interactive
 `/hippocampus:improve-harness` run; retain pending items until approved and applied. This
 reaches only sessions that resume the handoff, not unrelated future sessions.
+
+## Auto-apply
+
+The `auto_apply_lessons` setting in the hippocampus configuration is off by default. With
+it on, a wrap does not show the lesson table and wait; `apply-lessons` writes the lessons.
+The setting decides, not whether the user is present. Over-limit and duplicate
+rows are not lessons to apply: record them as in Over-limit records.
+
+A routing file can forbid this with the line `lesson-policy: propose`; it wins, and the
+report says lessons were carried because the routing file requires it. The module reads
+only that key, so a routing file says it with the key. `lesson-pull-requests:` followed by
+`  - owner/name` lines names repositories whose lessons always go through a pull request.
+`lesson-pull-request-command: <command>` names the user's command that opens one
+(see `INTERFACE.md`); the package opens none itself and never merges.
+
+Run steps 1 to 4 and assess each lesson as in step 5: grounding, impact and the
+recommendation are unchanged. Add any new lesson to `session_items` in `<remaining-items>`,
+then write one row per lesson. `index` counts `resume.open_loops`, then unrecorded `session_items`:
+
+```json
+[{"index": 0, "recommend": "apply", "target": "/absolute/path/to/source", "change": "One-line change",
+  "evidence": "The moment in this conversation", "edits": [{"old": "exact text", "new": "replacement"}]},
+ {"index": 1, "recommend": "skip", "reason": "Future impact is noise"}]
+```
+
+An edit with `old` replaces text that must appear exactly once; an edit without it appends
+`new`. Set `dictated: true` on a rule the user dictated: it is applied whatever its
+recommendation, so give it the apply fields. Set `always_loaded: true` when the target is
+always loaded and the module cannot know it, such as a source of a rules composition.
+The module detects user-level rules files, their imports and routing-file sources composed into
+`CLAUDE.md` or `AGENTS.md`.
+
+```bash
+python3 <checklist-module> apply-lessons --user-profile <user-profile> \
+  --repository-profile <repository-profile> --handoff <remaining-items> --lessons <rows>
+```
+
+Keep its output as `<remaining-items>`; `lesson_outcomes` says what happened to each row.
+Each applied lesson is one commit, `lesson: <change>`, on the branch checked out where the
+target's source lives, holding only its own lines even in a file with other changes. A
+target outside git is written without a commit. A `skip` is dropped: not carried and never
+an ask. A produced path is traced to its source, and a generated copy is never edited;
+regenerate each outcome's `surfaces` as in the routing contract. A lesson that cannot be
+written or committed is `failed` with its error and stays carried. Applying the same lesson
+twice does nothing. The persist step delivers the commits, so step 7 does not apply.
+
+A rerun or resumed lesson marked `applied: true` already holds its commit: give it no
+row, and let the checklist deliver its ask.
 
 ## Procedure
 
@@ -278,7 +356,7 @@ After approval (HITL) — surgical edits only. Don't reflow unrelated content; m
 
 ### 7. Leave commits to the persist step
 
-**Do not commit or push from this skill.** Edits land as working-tree changes; report which repositories are now dirty so the checklist's `persist` step (or the user) commits them.
+**Do not commit or push from this skill**, unless the auto-apply setting is on. Edits land as working-tree changes; report which repositories are now dirty so the checklist's `persist` step (or the user) commits them.
 
 ## Output format
 
@@ -287,8 +365,8 @@ Routing: <routing file path | default>
 Surfaces scanned: rules · skills+agents (<list>) · memory (<n> recalled or written)
 Memory: <policy; reviewed count | skipped — reason>
 Mode: HITL | AFK
-Over-limit files: <measurement rows | none>
-Duplicate rules: <duplicate-rule rows with both spans, match, score and action | none>
+Over-limit files: <measurement rows | recorded lines and reported rows (auto-apply) | none>
+Duplicate rules: <duplicate-rule rows with both spans, match, score and action | recorded lines and reported rows (auto-apply) | none>
 
 <the table from step 5 with impact, strip/compress, and recommend columns, or "nothing grounded — <one line on what was checked>">
 Net: <per file touched, lines added and removed>

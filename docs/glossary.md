@@ -112,8 +112,26 @@ The fixed, ordered table that decides what each carried item becomes: dropped wi
 _Avoid_: disposition (an open loop's own instruction), triage
 
 **Ask**:
-An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors.
+An item only the user can resolve: a decision, an approval, a destructive action, or a session left open. The driving agent hands each ask to the user's ask binding, one configured command that is not a spine step. With nothing bound, an ask stays in the sweep report and its handoff is kept. Its complete text and choices have no length limit through checkpoint, compaction, pickup, and wrap. Every checklist report ends with all filed or carried asks in full, with lesson asks first, including their target file and section, proposed text, and evidence. Failed or incomplete wraps still show the asks alongside their errors. An ask about an applied lesson is text only: it says what was already done and how to undo it, and has no choices.
 _Avoid_: question, needs-you item
+
+**Auto-apply setting**:
+The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends instead of waiting for approval, in every interactive session, attended or unattended. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it.
+_Avoid_: auto mode, autopilot
+
+**Applied lesson**:
+A lesson a wrap wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git is written with no commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
+
+**Delivered mark**:
+A ref under `refs/hippocampus/delivered/` in a checkout, named by a local lesson commit and pointing at the commit that carried that lesson to the remote on a lesson branch. The saved line leaves a marked commit, and only that commit, out of the commits it counts as not pushed, in this wrap and every later one, so a pull request's local commit does not fail a later wrap in that checkout, before or after the request merges. The package writes it at delivery and never removes it.
+_Avoid_: delivery note, pushed tag
+
+**Over-limit record**:
+One file a wrap found over its size limit, or named in a duplicate rule, kept under the auto-apply setting for a later unattended slim instead of being put in front of the user. It names the file by repository (the repository's path on its host, such as `owner/name`, from the checkout's `origin` remote, else its only remote) and path inside that repository, never by a local path, and holds each exceeded limit by tool and unit with its measured size, every duplicate rule naming the file, and the sessions that recorded it. A file recorded by several sessions is one record. A measurement replaces only what it measured: this tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when the wrap loaded every file it names. A file left with no finding under any key has no record. With the routing file's `lesson-policy: propose` nothing is recorded. Records live in the machine's store beside the session ledgers, so they outlive the session whether it wraps or is abandoned. A file outside git, one git does not track, or one in a repository without a hosted remote (none, two without `origin`, or a local, `file://`, absolute or `~user` path), gets no record: the wrap reports it with the attended slim command.
+_Avoid_: slim queue, backlog
+
+**Always-loaded rules file**:
+A user-level rules file, a file it imports, or a source composed into one or into repositories' instruction files. An applied lesson for one also raises an ask.
 
 **Abandoned session**:
 An interactive session idle for longer than the configured threshold that no open-session check reports as open. Only an abandoned session's handoff is swept.

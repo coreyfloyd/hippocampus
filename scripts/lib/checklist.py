@@ -21,6 +21,12 @@ from typing import Any, Mapping, Sequence
 _record_spec = importlib.util.spec_from_file_location("record_write", Path(__file__).with_name("record_write.py"))
 record_write = importlib.util.module_from_spec(_record_spec)
 _record_spec.loader.exec_module(record_write)
+_lessons_spec = importlib.util.spec_from_file_location("lessons", Path(__file__).with_name("lessons.py"))
+lessons = importlib.util.module_from_spec(_lessons_spec)
+_lessons_spec.loader.exec_module(lessons)
+_over_limit_spec = importlib.util.spec_from_file_location("over_limit", Path(__file__).with_name("over_limit.py"))
+over_limit = importlib.util.module_from_spec(_over_limit_spec)
+_over_limit_spec.loader.exec_module(over_limit)
 
 SLOTS = ("persist",)
 NATIVE = {"knowledge": {"command": "/hippocampus:knowledge-capture", "consumes": ["knowledge"]},
@@ -306,9 +312,14 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
 
 
 def validate_ask_payload(ask: Mapping[str, Any]) -> None:
-    """Require complete text and usable choices for both new and stored asks."""
+    """Require complete text and usable choices for both new and stored asks.
+
+    An ask about an applied lesson reports what happened, so it has no choices.
+    """
     if not isinstance(ask.get("text"), str) or not ask["text"].strip():
         raise ValueError("an ask requires non-empty text")
+    if ask.get("applied"):
+        return
     choices = ask.get("choices")
     if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
         raise ValueError(f"{ask['text']}: an ask requires the user's choices")
@@ -316,11 +327,12 @@ def validate_ask_payload(ask: Mapping[str, Any]) -> None:
 
 def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
-    ask = {**copy.deepcopy(dict(item)), "text": item.get("context", str(item)),
+    text = item["ask_text"] if item.get("applied") else item.get("context", str(item))
+    ask = {**copy.deepcopy(dict(item)), "text": text,
            "session_id": item.get("session_id") or subject.get("session_id"),
            "directory": subject.get("working_directory"),
            "ticket": (item.get("anchor") or {}).get("ticket"),
-           "choices": copy.deepcopy(item.get("choices", []))}
+           "choices": [] if item.get("applied") else copy.deepcopy(item.get("choices", []))}
     validate_ask_payload(ask)
     return ask
 
@@ -335,7 +347,8 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
         if "ask" in row:
             candidates.append((f"filing.items[{index}].ask", row["ask"], True))
         elif (row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES)
-              and isinstance(row.get("item"), Mapping) and row["item"].get("choices")):
+              and isinstance(row.get("item"), Mapping)
+              and (row["item"].get("choices") or row["item"].get("applied"))):
             candidates.append((f"filing.items[{index}].item", row["item"], False))
     groups = handoff.get("filing", {}).get("asks", {})
     if not isinstance(groups, Mapping):
@@ -349,7 +362,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
                               for index, payload in enumerate(payloads))
     candidates.extend((f"open_loops[{index}]", item, False)
                       for index, item in enumerate(handoff.get("resume", {}).get("open_loops", []))
-                      if item.get("choices"))
+                      if item.get("choices") or item.get("applied"))
     for label, item, is_payload in candidates:
         try:
             if not isinstance(item, Mapping):
@@ -394,9 +407,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     writes = next(step for step in plan if step["id"] == "record")["record_writes"]
     bindings.update(writes)
     result = copy.deepcopy(dict(handoff))
+    result.pop("lesson_outcomes", None)
+    result.pop("lesson_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     ticket_module = _load_handoff_module()
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
+    lesson_outcomes = lessons.outcomes(ticket_module, session_id) if execute_writes else []
+    outcome_for = {tuple(outcome["identity"]): outcome for outcome in lesson_outcomes}
     summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
         result.setdefault("resume", {}).update(ticket_module.retain_session_facts(result.get("resume", {}), session_id))
@@ -459,6 +476,12 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     for row in sorted(outcomes, key=lambda row: (project_row(row), row["index"])):
         item = loops[row["index"]]
         rule, status = row.get("rule"), row.get("status")
+        lesson_outcome = outcome_for.get(ticket_module.session_item_identity(item))
+        if item.get("applied"):
+            if rule != "R3":
+                raise ValueError(f"{item.get('context')}: an applied lesson's ask files under R3")
+            if lesson_outcome:
+                item = {**item, "ask_text": lessons.ask_text(lesson_outcome), "commit": lesson_outcome.get("commit")}
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):
             raise ValueError(f"filing: unknown rule {rule!r}")
         if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
@@ -467,11 +490,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if binding == "record":
             binding = record_write.kind_for(rule, item, row, writes)
             bindings.setdefault(binding, None)
-        if binding == "ask" or (binding in NATIVE and "choices" in row):
+        if not item.get("applied") and (binding == "ask" or (binding in NATIVE and "choices" in row)):
             item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
         entry = {**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding}
+        if lesson_outcome and lesson_outcome["status"] == "failed":
+            entry["apply_failed"] = True
         label = item.get("context", str(item))
         error = row.get("error") or "missing, unsupported, or malformed record read"
         # Information-only R1 does not depend on a record read. Other R1,
@@ -544,7 +569,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: a new ticket requires priority and priority_reason")
             if binding == "ask" and item.get("type") in ("knowledge", "lesson"):
                 entry["native_step"] = "knowledge" if item["type"] == "knowledge" else "lessons"
-                if status == "filed" and ask is not None:
+                if status == "filed" and ask is not None and not item.get("applied"):
                     # Keep the ask payload and acknowledgement, but not as a capture receipt.
                     entry.update(status="pending", ask_status="filed",
                                  reason="Ask delivered; awaiting native capture receipt")
@@ -556,6 +581,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result["resume"]["next_action"] = ("Session finished." if not kept else
         "Unfiled items: " + "; ".join(item.get("context", str(item)) for item in kept))
     result.pop("session_items", None)
+    if lesson_outcomes:
+        report["lessons"] = lessons.report_section(lesson_outcomes)
     result["filing"] = report
     if execute_writes and session_id:
         # Filed and dropped items are settled; kept items stay retained.
@@ -631,7 +658,10 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         label = item.get("context", str(item))
         status, binding = row.get("status"), row.get("binding")
         reason = row.get("error") or row.get("reason") or "no successful write receipt"
-        if binding == "ask" and (status == "filed" or row.get("ask_status") == "filed"):
+        if row.get("apply_failed"):
+            # The lesson is safe in the handoff, so the wrap continues without it.
+            kept.append(f"{label}: lesson failed and stays carried: {reason}")
+        elif binding == "ask" and (status == "filed" or row.get("ask_status") == "filed"):
             if not isinstance(row.get("destination"), str) or not row["destination"].strip():
                 not_saved.append(f"{label}: pending with no ask receipt")
         elif status in ("failed", "uncertain", "read failed", "pending"):
@@ -673,6 +703,7 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     repositories = module.touched_checkouts(session)
     scope = []
     repository_problems: dict[str, list[str]] = {}
+    applied = data.get("filing", {}).get("lessons", {}).get("applied", [])
     for checkout in sorted(repositories):
         # Git otherwise walks up to a different checkout if this one lost .git.
         actual = (module._run_git(checkout, "rev-parse", "--show-toplevel")
@@ -683,7 +714,14 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         branch = module._run_git(checkout, "symbolic-ref", "--short", "HEAD") or "detached HEAD"
         scope.append(f"{checkout} ({branch})")
         dirty = module._run_git(checkout, "status", "--porcelain=v1", "--untracked-files=all")
+        # A lesson commit delivered by pull request, in this wrap or an earlier one, stays on
+        # the local branch; its delivered mark says it is not waiting for a push.
+        marks = module._run_git(checkout, "for-each-ref", "--format=%(refname)", lessons.DELIVERED_REFS)
+        delivered = {ref.rsplit("/", 1)[-1] for ref in (marks or "").splitlines()}
+        # Merge commits stay in the query: only the marked commits themselves are left out.
         unpublished = module._run_git(checkout, "rev-list", "HEAD", "--not", "--remotes")
+        if unpublished and delivered:
+            unpublished = "\n".join(line for line in unpublished.splitlines() if line not in delivered)
         reasons = []
         if dirty is None or unpublished is None:
             reasons.append("cannot check commit and push state")
@@ -701,6 +739,10 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
             reasons.append("changes were not pushed")
         detail = f"{checkout}: " + "; ".join(reasons)
         (not_saved if persist or any("cannot check" in reason for reason in reasons) else unpushed).append(detail)
+    for row in applied:
+        if row.get("delivery") == lessons.NOT_PUSHED:
+            detail = f"{row['change']}: {lessons.NOT_PUSHED}: {row.get('error')}"
+            (not_saved if persist else unpushed).append(detail)
     not_saved = list(dict.fromkeys(not_saved))
     warnings = list(dict.fromkeys([*warnings, *kept, *unpushed]))
     parts = []
@@ -790,7 +832,7 @@ def completed_by() -> set[str]:
 
 
 # Commands that run the checklist or write a handoff; only an interactive session may.
-WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|file|record|wrap-check|report)\b"
+WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|apply-lessons|deliver-lessons|file|record|wrap-check|report)\b"
                           r"|checkpoint\.sh\b|handoff\.py['\"]?\s+checkpoint\b")
 
 
@@ -894,6 +936,30 @@ def session_summary(handoff: Mapping[str, Any]) -> tuple[dict[str, Any], list[st
     return {"summary": text}, []
 
 
+def auto_apply_state() -> dict[str, Any] | None:
+    """What the auto-apply setting does for this wrap; None with the setting off."""
+    if not lessons.enabled(_load_handoff_module().read_config()):
+        return None
+    rules = lessons.routing_rules()
+    reason = lessons.forbidden_reason(rules)
+    return {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
+
+
+def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]],
+                   problems: list[str]) -> dict[str, Any] | None:
+    """The report's lessons: what auto-apply did, or why the routing file stopped it."""
+    section = copy.deepcopy(filing.get("lessons")) if isinstance(filing.get("lessons"), Mapping) else None
+    try:
+        state = auto_apply_state()
+    except (OSError, ValueError) as error:
+        problems.append(f"auto-apply: {error}")
+        return section
+    if state and state["lessons"] == "propose":
+        section = {**(section or {}), "reason": state["reason"],
+                   "carried": [item.get("context") for item in loops if item.get("type") == "lesson"]}
+    return section
+
+
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
     """Collect failures independently, then always end the report with its asks.
 
@@ -983,9 +1049,12 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     except (ValueError, TypeError) as error:
         problems.append(f"close outcomes: {error}")
         line = "Close outcomes unavailable."
+    lesson_report = lesson_section(filing, loops, problems)
     output = {"outcome_line": line, **summary, "report": "failed" if problems else "incomplete" if incomplete else "ok",
               "pending": [r.get("id") for r in results if r.get("status") == "pending"],
               "filing": handoff.get("filing", {}), "warnings": warnings}
+    if lesson_report:
+        output["lessons"] = lesson_report
     if incomplete:
         output["incomplete"] = incomplete
     if problems:
@@ -1086,13 +1155,18 @@ def _handoff_session(path: Path) -> str | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("plan", "settle", "file", "record", "wrap-check", "report", "wrap-cadence", "actor-guard",
+    parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "file", "record",
+                                                      "record-over-limit", "over-limit-records",
+                                                      "wrap-check", "report", "wrap-cadence", "actor-guard",
                                                       "is-completion-command"))
     parser.add_argument("--user-profile", type=Path)
     parser.add_argument("--repository-profile", type=Path, action="append", default=[])
     parser.add_argument("--handoff", type=Path)
     parser.add_argument("--receipts", type=Path)
     parser.add_argument("--filing", type=Path, help="file: explicit outcome for each remaining item")
+    parser.add_argument("--lessons", type=Path, help="apply-lessons: the assessment of each lesson")
+    parser.add_argument("--measure", type=Path, help="record-over-limit: the slim helper's measure output")
+    parser.add_argument("--duplicates", type=Path, help="record-over-limit: the slim helper's duplicates output")
     parser.add_argument("--written-handoff", type=Path, help="wrap-check: the handoff step 5 wrote")
     parser.add_argument("--record-at", help="wrap-check: time of the record's latest write or passing check")
     parser.add_argument("--unattended", action="store_true",
@@ -1115,6 +1189,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if reason:
                 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                   "permissionDecision": "deny", "permissionDecisionReason": reason}}))
+            return 0
+        if args.operation == "over-limit-records":
+            # Read-only, so a later slim step in any session can read what wraps recorded.
+            print(json.dumps({"records": over_limit.read(_load_handoff_module())}, indent=2))
             return 0
         kind = session_kind({})
         if kind != "interactive":
@@ -1177,6 +1255,47 @@ def main(argv: Sequence[str] | None = None) -> int:
                       "ask": ask, "rerun_all_steps": True, "handoff": handoff}
             if args.unattended:
                 output["when_answer_needed"] = UNATTENDED_RULE
+            auto_apply = auto_apply_state()
+            if auto_apply:
+                output["auto_apply"] = auto_apply
+        elif args.operation in ("apply-lessons", "deliver-lessons"):
+            state = auto_apply_state()
+            if not state:
+                raise ValueError(f"{args.operation}: the auto-apply setting is off")
+            if not args.handoff:
+                raise ValueError(f"{args.operation} requires --handoff")
+            session_id = (handoff.get("subject") or {}).get("session_id") or session_id
+            if state["lessons"] == "propose":
+                output = {**handoff, "lesson_outcomes": []}
+            elif args.operation == "apply-lessons":
+                if not args.lessons:
+                    raise ValueError("apply-lessons requires --lessons")
+                output = lessons.apply(handoff, json.loads(args.lessons.read_text()), module, session_id)
+            else:
+                persist = next(step for step in plan if step["id"] == "persist").get("binding")
+                rows = lessons.deliver(module, session_id, bool(persist), lessons.routing_rules())
+                # An applied lesson may be a carried open loop or one found during this wrap.
+                items = [*handoff.get("resume", {}).get("open_loops", []),
+                         *(item for item in handoff.get("session_items", []) if item.get("recorded") is not True)]
+                output = {**handoff, "lesson_outcomes": rows,
+                          "lesson_asks": [ask_payload({**item, "ask_text": lessons.ask_text(row)},
+                                                      handoff.get("subject", {}))
+                                          for item in items for row in rows if item.get("applied")
+                                          and tuple(row["identity"]) == module.session_item_identity(item)]}
+        elif args.operation == "record-over-limit":
+            state = auto_apply_state()
+            if not state:
+                raise ValueError("record-over-limit: the auto-apply setting is off")
+            # The routing file's `lesson-policy: propose` overrides the setting (glossary,
+            # Auto-apply setting), so the blocks stay as they are with the setting off.
+            if state["lessons"] == "propose":
+                raise ValueError(f"record-over-limit: {state['reason']}")
+            if not args.measure or not args.duplicates:
+                raise ValueError("record-over-limit requires --measure and --duplicates")
+            tool = "codex" if (os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
+                               or os.environ.get("CODEX_THREAD_ID")) else "claude"
+            output = over_limit.record(module, json.loads(args.measure.read_text()),
+                                       json.loads(args.duplicates.read_text()), session_id or None, tool)
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")

@@ -102,6 +102,42 @@ If this directory and its siblings have no candidate, pickup falls back to
 local session transcripts from either tool. A handoff is keyed by subject and
 session together, so separate sessions do not overwrite each other's files.
 
+### Let a wrap apply its lessons
+
+Set `"auto_apply_lessons": true` in the hippocampus configuration (off by default).
+A wrap then no longer shows the lesson table and waits, attended or unattended:
+
+- Each lesson it recommends is written to its source as one commit of its own, holding only
+  that lesson's lines, so reverting the commit removes it. A target outside git is written
+  without a commit. A rule you dictated is applied whatever its recommendation.
+- A lesson recommended "skip" is dropped and listed; it is not carried or asked about again.
+- A lesson for an always-loaded rules file is in effect before anyone reviews it. It also
+  raises an ask naming the target, text, evidence and commit, and saying how to undo it.
+  The ask has no choices.
+- The persist step pushes the commits with the wrap's others, and when the remote moved
+  brings in its commits and pushes once more. A repository that refuses a direct push gets
+  the wrap's lessons for that checkout on one lesson branch, one commit each, with a pull
+  request opened by the routing file's `lesson-pull-request-command`, which you set up to
+  merge through the repository's checks. The local commit stays on your branch with a
+  delivered mark, so a later wrap in that checkout does not count it as unpushed, before or
+  after the request merges. With no such command the lesson is `committed, not pushed`.
+  With persist unbound nothing is pushed.
+- The report lists each applied lesson with its target, change and commit, each dropped
+  lesson with its reason, and each failure with its error. A failed lesson stays carried.
+  A lesson `committed, not pushed` counts as not saved.
+- A file over its size limit, or named in a duplicate rule, is not put in front of you.
+  The wrap keeps it as an over-limit record, by repository and path inside it, for a later
+  unattended slim, and reports it in one line. Several sessions' findings for one file are
+  one record, a measurement replaces only what it measured (this tool's limits, and a
+  duplicate rule only when the wrap loaded both files), and a file with nothing left
+  loses its record. Records outlive the session whether it wraps or is abandoned. A file
+  outside git, one git does not track, or one in a repository without a hosted remote, is
+  reported with the slim command, as before, and never recorded.
+
+A routing file line `lesson-policy: propose` turns this off, over-limit records included, and the report says so.
+`lesson-pull-requests:` with `  - owner/name` lines sends a repository's lessons through a
+pull request every time. Knowledge capture, the sweep and the slim review itself are unchanged.
+
 ### Route a lesson, then slim its source
 
 During a wrap you identify a rule that caused a concrete mistake.
