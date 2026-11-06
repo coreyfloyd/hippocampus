@@ -6,8 +6,8 @@ output here instead of asking the user to run the slim review. Each file in a gi
 with a hosted remote becomes one record, named by repository and path inside it, in a
 machine-level store beside the session ledgers, so it outlives the session whether it wraps
 or is abandoned. A file outside git, in a repository without a hosted remote, or that git
-cannot read is reported with the attended command and never recorded. Nothing here slims.
-Standard library only.
+cannot read or does not track is reported with the attended command and never recorded.
+Nothing here slims. Standard library only.
 """
 from __future__ import annotations
 
@@ -24,6 +24,9 @@ from typing import Any, Iterator, Mapping, Sequence
 
 STORE = "over-limit-records.json"
 SCHEMA_VERSION = 1
+# The limits a listed-only skill measurement covers; a full measurement covers every unit.
+DESCRIPTION_UNITS = ("description characters", "description + when_to_use characters")
+HOME_ROOTS = ("Users", "home")
 
 
 def store_path(module: Any) -> Path:
@@ -54,7 +57,9 @@ def repository_slug(url: str) -> str | None:
     The whole path is kept, not only its last two segments: a host with nested groups
     names different repositories `g1/sub/proj` and `g2/sub/proj`. A path of one segment
     names no owner and gets no slug. Local-path and `file://` remotes name a directory only
-    this machine has, so they get none either.
+    this machine has, so they get none either, and so does a home path in any form: an
+    scp-like absolute path, a `~user` segment, or a path under a home root such as `Users`
+    or `home`, whichever scheme carries it.
     """
     url = url.strip()
     match = HOSTED.match(url) or (None if "://" in url else SCP_LIKE.match(url))
@@ -64,15 +69,18 @@ def repository_slug(url: str) -> str | None:
     segments = path.split("/")
     if len(segments) < 2 or any(not part or part in (".", "..") for part in segments):
         return None
+    if segments[0] in HOME_ROOTS or any(part.startswith("~") for part in segments):
+        return None
     return path
 
 
 class Locator:
-    """Resolve files to repository and path, asking git once per directory and once per repository."""
+    """Resolve files to repository and path: git answers once per directory, repository and file."""
 
     def __init__(self) -> None:
         self.tops: dict[Path, str | None] = {}
         self.slugs: dict[str, tuple[str | None, str | None]] = {}
+        self.located: dict[Path, tuple[dict[str, str] | None, str | None]] = {}
 
     def _slug(self, top: str) -> tuple[str | None, str | None]:
         if top not in self.slugs:
@@ -91,21 +99,30 @@ class Locator:
         """The file's repository and path inside it, or why it has none.
 
         The remote is the current branch's, else `origin`, else the only one. A file that only
-        a local path could name gets no record: another machine could not find it.
+        a local path could name gets no record: another machine could not find it. Neither does
+        a file git does not track, ignored or untracked, which only this checkout has.
         """
         path = Path(source).resolve()
+        if path not in self.located:
+            self.located[path] = self._locate(path)
+        return self.located[path]
+
+    def _locate(self, path: Path) -> tuple[dict[str, str] | None, str | None]:
         try:
             if path.parent not in self.tops:
                 self.tops[path.parent] = _git(path.parent, "rev-parse", "--show-toplevel")
             top = self.tops[path.parent]
             if not top:
                 return None, "not in a git repository"
+            inside = path.relative_to(Path(top).resolve()).as_posix()
+            if _git(Path(top), "ls-files", "--error-unmatch", "--", inside) is None:
+                return None, "git does not track it, so another machine could not find it"
             slug, reason = self._slug(top)
         except GitUnreadable as error:
             return None, str(error)
         if not slug:
             return None, reason
-        return {"repository": slug, "path": path.relative_to(Path(top).resolve()).as_posix()}, None
+        return {"repository": slug, "path": inside}, None
 
 
 @contextlib.contextmanager
@@ -119,13 +136,27 @@ def _locked(path: Path) -> Iterator[None]:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def _is_record(row: Any) -> bool:
+    return (isinstance(row, Mapping)
+            and all(isinstance(row.get(key), str) and row[key] for key in ("repository", "path"))
+            and all(isinstance(row.get(key), list) for key in ("limits", "duplicates", "sessions"))
+            and isinstance(row.get("size", {}), Mapping))
+
+
 def read(module: Any) -> list[dict[str, Any]]:
+    """Every record in the store; a damaged store is a clear error, never a crash later."""
     path = store_path(module)
     if not path.exists():
         return []
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise ValueError(f"over-limit records: {path} is not valid JSON: {error}") from error
     if not isinstance(data, Mapping) or not isinstance(data.get("records"), list):
         raise ValueError(f"over-limit records: {path} is not a records file")
+    for number, row in enumerate(data["records"], 1):
+        if not _is_record(row):
+            raise ValueError(f"over-limit records: {path} row {number} is not a record")
     return list(data["records"])
 
 
@@ -156,10 +187,12 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
            session_id: str | None) -> dict[str, Any]:
     """Merge one wrap's findings into the store; return one line per recorded finding.
 
-    A file several sessions record stays one record, listing each session once. A file this
-    wrap measured gets its limits and duplicate rules from this measurement alone, replacing
-    what earlier wraps recorded; measured within its limits and named in no duplicate rule,
-    its record is removed. A file this wrap did not measure keeps its record unchanged.
+    A file several sessions record stays one record, listing each session once. A measurement
+    replaces the findings it covers: a file loaded in full gets its limits and duplicate rules
+    from this wrap alone, while a skill only listed, whose measurement covers its description
+    alone, keeps its body limits and duplicate rules and replaces only its description limits.
+    A file left with no limit and no duplicate rule loses its record. A file this wrap did not
+    measure keeps its record unchanged.
     """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     recorded: list[dict[str, Any]] = []
@@ -168,12 +201,16 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
     current: dict[tuple[str, str], dict[str, Any]] = {}
 
     def fresh(where: Mapping[str, str]) -> dict[str, Any]:
-        return current.setdefault((where["repository"], where["path"]), {"limits": [], "duplicates": []})
+        return current.setdefault((where["repository"], where["path"]),
+                                  {"size": {}, "limits": [], "duplicates": [], "full": False})
 
     for row in measured.get("measured", []):
         where, _ = locate(row["source"])
-        if where is not None and "lines" in row["size"]:
-            fresh(where)["size"] = row["size"]
+        if where is not None:
+            entry = fresh(where)
+            entry["size"] = {**entry["size"], **row["size"]}
+            # The slim helper gives a listed skill a description-only size; a body measurement has lines.
+            entry["full"] = entry["full"] or "lines" in row["size"]
     for row in measured.get("over_limit", []):
         if row.get("members") is not None:
             reported.append({**row, "reason": "a chain of several files; the user chooses one member"})
@@ -183,7 +220,7 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
             reported.append({**row, "reason": reason})
             continue
         entry = fresh(where)
-        entry["size"] = {**entry.get("size", {}), **row["size"]}
+        entry["size"] = {**entry["size"], **row["size"]}
         entry["limits"] = list(row["limits"])
         recorded.append({**where, "kind": "over-limit", "limits": row["limits"],
                          "line": f"Over limit, recorded for a later slim: {where['repository']} "
@@ -212,12 +249,18 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
         with _locked(path):
             records = {(r["repository"], r["path"]): r for r in read(module)}
             for key, found in current.items():
+                kept = records.get(key, {})
+                if kept and not found["full"]:
+                    found["size"] = {**kept.get("size", {}), **found["size"]}
+                    found["limits"] = [row for row in kept["limits"] if row.get("unit") not in DESCRIPTION_UNITS
+                                       ] + found["limits"]
+                    found["duplicates"] = kept["duplicates"]
                 if not found["limits"] and not found["duplicates"]:
                     records.pop(key, None)
                     continue
                 entry = records.setdefault(key, {"repository": key[0], "path": key[1], "sessions": [],
                                                  "first_recorded": now})
-                entry.update(size=found.get("size", {}), limits=found["limits"], duplicates=found["duplicates"])
+                entry.update(size=found["size"], limits=found["limits"], duplicates=found["duplicates"])
                 if session_id and session_id not in entry["sessions"]:
                     entry["sessions"].append(session_id)
                 entry["last_recorded"] = now

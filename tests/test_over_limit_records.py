@@ -28,9 +28,21 @@ def repository(tmp_path, name='rules', remote='https://example.invalid/acme/rule
     return checkout
 
 
-def rules_file(path, lines=230, extra=''):
+def rules_file(path, lines=230, extra='', tracked=True):
+    """A rules file; inside a repository it is tracked, as a file another machine can find."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('# Rules\n\n' + extra + ''.join(f'- Rule {n} of {path.name} keeps its own words.\n' for n in range(lines)))
+    if tracked and subprocess.run(['git', 'rev-parse'], cwd=path.parent, capture_output=True).returncode == 0:
+        git(path.parent, 'add', '--', str(path))
+    return path
+
+
+def skill_file(path, description_characters=1100, body_lines=3):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    description = ('Use for anything at all. ' * 60)[:description_characters].strip().ljust(description_characters, 'x')
+    path.write_text('---\nname: x\ndescription: ' + description + '\n---\n# Skill\n\n'
+                    + ''.join(f'- Step {n} of the skill body.\n' for n in range(body_lines)))
+    git(path.parent, 'add', '--', str(path))
     return path
 
 
@@ -64,9 +76,11 @@ class Session:
                                               'payload': {'id': session, 'source': 'cli'}}) + '\n')
 
     def slim_helper(self, operation, *files):
+        """Files are rules loaded automatically, or (path, kind, loaded) rows of the slim helper's manifest."""
         manifest = self.tmp / f'{self.session}-manifest.json'
         manifest.write_text(json.dumps({'tool': self.tool, 'files': [
-            {'path': str(path), 'kind': 'rules', 'loaded': 'auto'} for path in files]}))
+            {'path': str(row[0]), 'kind': row[1], 'loaded': row[2]} if isinstance(row, tuple)
+            else {'path': str(row), 'kind': 'rules', 'loaded': 'auto'} for row in files]}))
         result = subprocess.run([sys.executable, str(HARNESS), operation, str(manifest)],
                                 text=True, capture_output=True)
         assert result.returncode == 0, result.stderr
@@ -143,7 +157,7 @@ def test_a_record_survives_a_wrapped_and_an_abandoned_session(tmp_path, tool):
 
 
 def test_a_file_outside_a_repository_is_reported_with_the_attended_command(tmp_path, tool):
-    outside = rules_file(tmp_path / 'loose/AGENTS.md')
+    outside = rules_file(tmp_path / 'loose/AGENTS.md', tracked=False)
     no_remote = rules_file(repository(tmp_path, 'local', remote=None) / 'AGENTS.md')
     local = rules_file(repository(tmp_path, 'path-remote', remote=str(tmp_path / 'srv/git/rules.git')) / 'AGENTS.md')
     file_url = rules_file(repository(tmp_path, 'file-remote', remote='file:///srv/git/rules.git') / 'AGENTS.md')
@@ -163,7 +177,7 @@ def test_duplicate_rules_are_recorded_for_each_file_they_name(tmp_path, tool):
     checkout = repository(tmp_path)
     left = rules_file(checkout / 'AGENTS.md', lines=3, extra=RULE + '\n\n')
     right = rules_file(checkout / 'skills/CLAUDE.md', lines=3, extra=RULE + '\n\n')
-    outside = rules_file(tmp_path / 'loose.md', lines=3, extra=RULE + '\n\n')
+    outside = rules_file(tmp_path / 'loose.md', lines=3, extra=RULE + '\n\n', tracked=False)
     output = Session(tmp_path, tool, 'first').record(left, right)
     assert [row['line'] for row in output['recorded']] == [
         'Duplicate rule, recorded for the slim of the files it names: '
@@ -224,6 +238,92 @@ def test_a_hosted_remote_names_the_whole_repository_path(tmp_path, tool, remote,
     Session(tmp_path, tool, 'first').record(target)
     [entry] = Session(tmp_path, tool, 'reader').records()
     assert entry['repository'] == repository_name
+
+
+@pytest.mark.parametrize('remote', [
+    'ssh://me@example.invalid/Users/someone/repos/rules.git',
+    'ssh://git@example.invalid:22/~me/repos/rules.git',
+    'me@example.invalid:/Users/someone/rules.git',
+    'me@example.invalid:~someone/rules.git',
+    'https://example.invalid/home/someone/rules.git'])
+def test_a_remote_whose_path_is_a_home_path_names_no_repository(tmp_path, tool, remote):
+    target = rules_file(repository(tmp_path, remote=remote) / 'AGENTS.md')
+    output = Session(tmp_path, tool, 'first').record(target)
+    [row] = output['reported']
+    assert output['recorded'] == [] and row['reason'] == 'its repository has no hosted remote that names it'
+    assert Session(tmp_path, tool, 'reader').records() == []
+
+
+def test_a_file_git_does_not_track_is_reported_not_recorded(tmp_path, tool):
+    checkout = repository(tmp_path)
+    (checkout / '.gitignore').write_text('CLAUDE.local.md\n')
+    git(checkout, 'add', '.gitignore')
+    ignored = rules_file(checkout / 'CLAUDE.local.md', tracked=False)
+    untracked = rules_file(checkout / 'notes/AGENTS.md', tracked=False)
+    tracked = rules_file(checkout / 'AGENTS.md')
+    output = Session(tmp_path, tool, 'first').record(ignored, untracked, tracked)
+    assert [row['line'] for row in output['recorded']] == [
+        'Over limit, recorded for a later slim: acme/rules AGENTS.md (232 lines, limit 200)']
+    rows = [row for row in output['reported'] if 'type' not in row]
+    assert {row['path']: row['reason'] for row in rows} == {
+        str(ignored): 'git does not track it, so another machine could not find it',
+        str(untracked): 'git does not track it, so another machine could not find it'}
+    assert all(row['action'] == f"run /hippocampus:slim-harness on `{row['path']}`" for row in rows)
+    assert [entry['path'] for entry in Session(tmp_path, tool, 'reader').records()] == ['AGENTS.md']
+
+
+def test_a_listed_skill_measurement_replaces_only_its_description_limits(tmp_path, tool):
+    skill = skill_file(repository(tmp_path) / 'skills/x/SKILL.md', body_lines=520)
+    full, listed = (skill, 'skill', 'full'), (skill, 'skill', 'listed')
+    output = Session(tmp_path, tool, 'first').record(full)
+    [line] = [row['line'] for row in output['recorded']]
+    assert line == ('Over limit, recorded for a later slim: acme/rules skills/x/SKILL.md '
+                    '(522 body lines, limit 500; 1100 description characters, limit 1024)')
+    # A wrap that only lists the skill measures its description alone: the body limit stays.
+    skill_file(skill, description_characters=1090, body_lines=520)
+    output = Session(tmp_path, tool, 'second').record(listed)
+    assert [row['line'] for row in output['recorded']] == [
+        'Over limit, recorded for a later slim: acme/rules skills/x/SKILL.md (1090 description characters, limit 1024)']
+    [entry] = Session(tmp_path, tool, 'reader').records()
+    assert [(row['unit'], row['measured']) for row in entry['limits']] == [
+        ('body lines', 522), ('description characters', 1090)]
+    assert entry['size']['lines'] and entry['size']['description_characters'] == 1090
+    assert entry['sessions'] == ['first', 'second']
+    # Trimmed, the description limit goes; the body limit, which this wrap did not measure, stays.
+    skill_file(skill, description_characters=100, body_lines=520)
+    assert Session(tmp_path, tool, 'third').record(listed)['recorded'] == []
+    [entry] = Session(tmp_path, tool, 'reader').records()
+    assert [(row['unit'], row['measured']) for row in entry['limits']] == [('body lines', 522)]
+    # A full load within every limit removes the record.
+    skill_file(skill, description_characters=100, body_lines=3)
+    assert Session(tmp_path, tool, 'fourth').record(full)['recorded'] == []
+    assert Session(tmp_path, tool, 'reader').records() == []
+
+
+def test_a_listed_skill_trimmed_within_its_limit_loses_its_record(tmp_path, tool):
+    skill = skill_file(repository(tmp_path) / 'skills/x/SKILL.md')
+    listed = (skill, 'skill', 'listed')
+    Session(tmp_path, tool, 'first').record(listed)
+    [entry] = Session(tmp_path, tool, 'reader').records()
+    assert entry['limits'] == [{'unit': 'description characters', 'measured': 1100, 'limit': 1024}]
+    skill_file(skill, description_characters=100)
+    assert Session(tmp_path, tool, 'second').record(listed)['recorded'] == []
+    assert Session(tmp_path, tool, 'reader').records() == []
+
+
+def test_a_damaged_store_is_a_clear_error_and_is_left_alone(tmp_path, tool):
+    target = rules_file(repository(tmp_path) / 'AGENTS.md')
+    store = tmp_path / 'ledger/over-limit-records.json'
+    store.parent.mkdir()
+    store.write_text(json.dumps({'schema_version': 1, 'records': [{'x': 1}]}))
+    session = Session(tmp_path, tool, 'first')
+    result = session.run('record-over-limit', '--measure', session.slim_helper('measure', target),
+                         '--duplicates', session.slim_helper('duplicates', target))
+    assert result.returncode == 1 and result.stdout == ''
+    assert result.stderr.strip() == f'checklist: over-limit records: {store} row 1 is not a record'
+    assert json.loads(store.read_text())['records'] == [{'x': 1}]
+    listing = session.run('over-limit-records')
+    assert listing.returncode == 1 and 'row 1 is not a record' in listing.stderr
 
 
 def test_a_new_measurement_replaces_findings_and_within_limits_removes_the_record(tmp_path, tool):

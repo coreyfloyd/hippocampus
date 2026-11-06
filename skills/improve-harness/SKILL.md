@@ -160,11 +160,14 @@ python3 <checklist-module> record-over-limit --user-profile <user-profile> \
 ```
 
 Print each `recorded[].line`: one line per file or duplicate rule, kept as an
-over-limit record for a later unattended slim. Rows in `reported` (outside git,
-no hosted remote, git unreadable, or a Codex chain) get today's blocks with their
-`action` and `reason`; they are never recorded or slimmed unattended. Report
-`unresolved` paths. With the setting off or `lesson-policy: propose`, the module
-refuses; use the blocks above.
+over-limit record for a later unattended slim. A skill only listed records its
+description limits alone and keeps any body limits an earlier full load recorded.
+Rows in `reported` (outside git, not tracked by git, no hosted remote, git
+unreadable, or a Codex chain) get today's blocks with their `action` and `reason`;
+they are never recorded or slimmed unattended. Report `unresolved` paths. With the
+setting off or `lesson-policy: propose`, the module refuses; use the blocks above.
+If it fails for any other reason, such as a damaged store, print its error and
+present the blocks above, so no finding is lost.
 
 ## The one rule that makes this safe: every edit must be grounded
 
