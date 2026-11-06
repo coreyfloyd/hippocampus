@@ -79,11 +79,9 @@ class Session:
                                '--session-id', self.session, *map(str, args)],
                               text=True, capture_output=True, env=self.env, cwd=self.tmp)
 
-    def record(self, *files, duplicates=True):
-        args = ['--measure', self.slim_helper('measure', *files)]
-        if duplicates:
-            args += ['--duplicates', self.slim_helper('duplicates', *files)]
-        result = self.run('record-over-limit', *args)
+    def record(self, *files):
+        result = self.run('record-over-limit', '--measure', self.slim_helper('measure', *files),
+                          '--duplicates', self.slim_helper('duplicates', *files))
         assert result.returncode == 0, result.stderr
         return json.loads(result.stdout)
 
@@ -147,12 +145,17 @@ def test_a_record_survives_a_wrapped_and_an_abandoned_session(tmp_path, tool):
 def test_a_file_outside_a_repository_is_reported_with_the_attended_command(tmp_path, tool):
     outside = rules_file(tmp_path / 'loose/AGENTS.md')
     no_remote = rules_file(repository(tmp_path, 'local', remote=None) / 'AGENTS.md')
-    output = Session(tmp_path, tool, 'first').record(outside, no_remote, duplicates=False)
+    local = rules_file(repository(tmp_path, 'path-remote', remote=str(tmp_path / 'srv/git/rules.git')) / 'AGENTS.md')
+    file_url = rules_file(repository(tmp_path, 'file-remote', remote='file:///srv/git/rules.git') / 'AGENTS.md')
+    no_owner = rules_file(repository(tmp_path, 'no-owner', remote='https://example.invalid/rules.git') / 'AGENTS.md')
+    output = Session(tmp_path, tool, 'first').record(outside, no_remote, local, file_url, no_owner)
     assert output['recorded'] == []
-    reasons = {row['path']: row['reason'] for row in output['reported']}
-    assert reasons == {str(outside): 'not in a git repository',
-                       str(no_remote): 'its repository has no remote that names it'}
-    assert all(row['action'] == f"run /hippocampus:slim-harness on `{row['path']}`" for row in output['reported'])
+    rows = [row for row in output['reported'] if 'type' not in row]
+    remoteless = 'its repository has no hosted remote that names it'
+    assert {row['path']: row['reason'] for row in rows} == {
+        str(outside): 'not in a git repository', str(no_remote): remoteless, str(local): remoteless,
+        str(file_url): remoteless, str(no_owner): remoteless}
+    assert all(row['action'] == f"run /hippocampus:slim-harness on `{row['path']}`" for row in rows)
     assert Session(tmp_path, tool, 'reader').records() == []
 
 
@@ -174,19 +177,22 @@ def test_duplicate_rules_are_recorded_for_each_file_they_name(tmp_path, tool):
         assert finding['match'] == 'exact'
         assert [(s['repository'], s['path'], s['text']) for s in finding['spans']] == [
             ('acme/rules', 'AGENTS.md', RULE), ('acme/rules', 'skills/CLAUDE.md', RULE)]
-    # A duplicate naming a file no record could name stays attended, as today.
+    # A duplicate naming a file no record could name stays attended, as today; the file
+    # measured again within its limits, with no recordable duplicate left, loses its record.
     mixed = Session(tmp_path, tool, 'third').record(left, outside)
     assert mixed['recorded'] == []
     [row] = mixed['reported']
     assert row['type'] == 'duplicate-rule' and row['reason'] == f'{outside}: not in a git repository'
     assert row['action'].startswith('run /hippocampus:slim-harness')
+    assert [entry['path'] for entry in Session(tmp_path, tool, 'reader').records()] == ['skills/CLAUDE.md']
 
 
 def test_with_the_setting_off_nothing_is_recorded_and_the_blocks_are_unchanged(tmp_path, tool):
     target = rules_file(repository(tmp_path) / 'AGENTS.md')
     session = Session(tmp_path, tool, 'first', setting=False)
     measure = session.slim_helper('measure', target)
-    result = session.run('record-over-limit', '--measure', measure)
+    result = session.run('record-over-limit', '--measure', measure,
+                         '--duplicates', session.slim_helper('duplicates', target))
     assert result.returncode == 1 and 'the auto-apply setting is off' in result.stderr
     assert not (tmp_path / 'ledger/over-limit-records.json').exists()
     [row] = json.loads(measure.read_text())['over_limit']
@@ -198,9 +204,51 @@ def test_with_the_setting_off_nothing_is_recorded_and_the_blocks_are_unchanged(t
 
 
 
-def test_a_routing_file_that_requires_proposals_still_records(tmp_path, tool):
+def test_a_routing_file_that_requires_proposals_records_nothing(tmp_path, tool):
     target = rules_file(repository(tmp_path) / 'AGENTS.md')
     session = Session(tmp_path, tool, 'first')
     (tmp_path / 'routing.md').write_text('lesson-policy: propose\n')
-    output = session.record(target, duplicates=False)
-    assert [row['path'] for row in output['recorded']] == ['AGENTS.md']
+    result = session.run('record-over-limit', '--measure', session.slim_helper('measure', target),
+                         '--duplicates', session.slim_helper('duplicates', target))
+    assert result.returncode == 1 and 'requires it' in result.stderr
+    assert not (tmp_path / 'ledger/over-limit-records.json').exists()
+
+
+@pytest.mark.parametrize('remote,repository_name', [
+    ('https://example.invalid/acme/rules.git', 'acme/rules'),
+    ('ssh://git@example.invalid:2222/acme/rules', 'acme/rules'),
+    ('git@example.invalid:acme/rules.git', 'acme/rules'),
+    ('https://example.invalid/group/sub/rules.git', 'group/sub/rules')])
+def test_a_hosted_remote_names_the_whole_repository_path(tmp_path, tool, remote, repository_name):
+    target = rules_file(repository(tmp_path, remote=remote) / 'AGENTS.md')
+    Session(tmp_path, tool, 'first').record(target)
+    [entry] = Session(tmp_path, tool, 'reader').records()
+    assert entry['repository'] == repository_name
+
+
+def test_a_new_measurement_replaces_findings_and_within_limits_removes_the_record(tmp_path, tool):
+    checkout = repository(tmp_path)
+    target = rules_file(checkout / 'AGENTS.md', extra=RULE + '\n\n')
+    other = rules_file(checkout / 'other.md', lines=3, extra=RULE + '\n\n')
+    Session(tmp_path, tool, 'first').record(target, other)
+    [entry, _] = Session(tmp_path, tool, 'reader').records()
+    assert entry['limits'][0]['unit'] == 'lines' and len(entry['duplicates']) == 1
+    # Slimmed under the line limit, with the duplicate's text reworded in both files.
+    rules_file(target, lines=40, extra='A reworded rule that no other file states anywhere.\n\n')
+    rules_file(other, lines=3, extra='Another rule entirely, for the second file only.\n\n')
+    output = Session(tmp_path, tool, 'second').record(target, other)
+    assert output['recorded'] == []
+    assert Session(tmp_path, tool, 'reader').records() == []
+
+
+def test_a_file_git_cannot_read_is_reported_not_recorded(tmp_path, tool):
+    target = rules_file(repository(tmp_path) / 'AGENTS.md')
+    session = Session(tmp_path, tool, 'first')
+    measure, duplicates = session.slim_helper('measure', target), session.slim_helper('duplicates', target)
+    session.env['PATH'] = str(tmp_path / 'no-git')
+    result = session.run('record-over-limit', '--measure', measure, '--duplicates', duplicates)
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    [row] = output['reported']
+    assert output['recorded'] == [] and row['reason'].startswith('git could not be read')
+    assert row['action'] == f'run /hippocampus:slim-harness on `{target}`'

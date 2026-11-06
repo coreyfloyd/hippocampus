@@ -120,8 +120,8 @@ each row as a `lesson` item through the AFK delivery path below. Preserve the fi
 measurement, limit and suggested command; no conversation incident or proposed
 diff is required for this measurement-only row. Do not invoke slim-harness.
 
-With the auto-apply setting on (`plan` returns `auto_apply`, either value), record
-instead, attended or unattended; see Over-limit records below.
+With `plan` returning `auto_apply.lessons: apply`, record instead, attended or
+unattended; see Over-limit records below. With `propose`, the blocks stay as above.
 
 ## Duplicate rules — independent detection pass
 
@@ -150,8 +150,9 @@ With the auto-apply setting on, record duplicate rows with the size rows below.
 
 ## Over-limit records — auto-apply setting on
 
-Do not present the two blocks, ask the user to run the slim review, carry the rows
-as `lesson` items, or slim. Pass both outputs to the checklist module:
+With `plan` returning `auto_apply.lessons: apply`, do not present the two blocks,
+ask the user to run the slim review, carry the rows as `lesson` items, or slim.
+Pass both outputs to the checklist module:
 
 ```bash
 python3 <checklist-module> record-over-limit --user-profile <user-profile> \
@@ -159,10 +160,11 @@ python3 <checklist-module> record-over-limit --user-profile <user-profile> \
 ```
 
 Print each `recorded[].line`: one line per file or duplicate rule, kept as an
-over-limit record for a later unattended slim. Rows in `reported` (outside git, no
-remote, or a Codex chain) get today's blocks with their `action` and `reason`;
-they are never recorded or slimmed unattended. Report `unresolved` paths. With the
-setting off the module refuses; use the blocks above.
+over-limit record for a later unattended slim. Rows in `reported` (outside git,
+no hosted remote, git unreadable, or a Codex chain) get today's blocks with their
+`action` and `reason`; they are never recorded or slimmed unattended. Report
+`unresolved` paths. With the setting off or `lesson-policy: propose`, the module
+refuses; use the blocks above.
 
 ## The one rule that makes this safe: every edit must be grounded
 

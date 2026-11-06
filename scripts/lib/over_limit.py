@@ -3,10 +3,11 @@
 
 With the auto-apply setting on, a wrap hands the slim helper's `measure` and `duplicates`
 output here instead of asking the user to run the slim review. Each file in a git repository
-with a remote becomes one record, named by repository and path inside it, in a machine-level
-store beside the session ledgers, so it outlives the session whether it wraps or is abandoned.
-A file outside git, or a repository with no remote, is reported with the attended command and
-never recorded. Nothing here slims. Standard library only.
+with a hosted remote becomes one record, named by repository and path inside it, in a
+machine-level store beside the session ledgers, so it outlives the session whether it wraps
+or is abandoned. A file outside git, in a repository without a hosted remote, or that git
+cannot read is reported with the attended command and never recorded. Nothing here slims.
+Standard library only.
 """
 from __future__ import annotations
 
@@ -30,37 +31,81 @@ def store_path(module: Any) -> Path:
     return Path(module.ledger_path("store")).parent / STORE
 
 
+class GitUnreadable(Exception):
+    """Git could not answer for a file; the file is reported, never recorded."""
+
+
 def _git(cwd: Path, *args: str) -> str | None:
-    result = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, timeout=60)
+    """Git's answer, None when git says no, or GitUnreadable when git cannot run or hangs."""
+    try:
+        result = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise GitUnreadable(f"git could not be read: {error}") from error
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+HOSTED = re.compile(r"^(?:https?|ssh|git)://(?:[^@/]+@)?[^/]+/(?P<path>.+)$")
+SCP_LIKE = re.compile(r"^(?:[^@/:]+@)?[^/:]+:(?!/)(?P<path>.+)$")
+
+
 def repository_slug(url: str) -> str | None:
-    """`owner/name` from a remote URL, without its host, scheme or `.git`."""
-    match = re.search(r"[:/]([^/:]+/[^/:]+?)(?:\.git)?/*$", url.strip())
-    return match[1] if match else None
+    """The repository's path on its host, from a hosted remote URL; None for any other remote.
 
-
-def locate(source: str) -> tuple[dict[str, str] | None, str | None]:
-    """The file's repository and path inside it, or why it has none.
-
-    The remote is the current branch's, else `origin`, else the only one. A file that only a
-    local checkout path could name gets no record: another machine could not find it.
+    The whole path is kept, not only its last two segments: a host with nested groups
+    names different repositories `g1/sub/proj` and `g2/sub/proj`. A path of one segment
+    names no owner and gets no slug. Local-path and `file://` remotes name a directory only
+    this machine has, so they get none either.
     """
-    path = Path(source).resolve()
-    top = _git(path.parent, "rev-parse", "--show-toplevel")
-    if not top:
-        return None, "not in a git repository"
-    remotes = (_git(path.parent, "remote") or "").split()
-    branch = _git(path.parent, "symbolic-ref", "--quiet", "--short", "HEAD") or ""
-    remote = (_git(path.parent, "config", f"branch.{branch}.remote") if branch else None)
-    if remote not in remotes:
-        remote = "origin" if "origin" in remotes else remotes[0] if len(remotes) == 1 else None
-    url = _git(path.parent, "remote", "get-url", remote) if remote else None
-    slug = repository_slug(url) if url else None
-    if not slug:
-        return None, "its repository has no remote that names it"
-    return {"repository": slug, "path": path.relative_to(Path(top).resolve()).as_posix()}, None
+    url = url.strip()
+    match = HOSTED.match(url) or (None if "://" in url else SCP_LIKE.match(url))
+    if not match:
+        return None
+    path = re.sub(r"\.git$", "", match["path"].strip("/"))
+    segments = path.split("/")
+    if len(segments) < 2 or any(not part or part in (".", "..") for part in segments):
+        return None
+    return path
+
+
+class Locator:
+    """Resolve files to repository and path, asking git once per directory and once per repository."""
+
+    def __init__(self) -> None:
+        self.tops: dict[Path, str | None] = {}
+        self.slugs: dict[str, tuple[str | None, str | None]] = {}
+
+    def _slug(self, top: str) -> tuple[str | None, str | None]:
+        if top not in self.slugs:
+            cwd = Path(top)
+            remotes = (_git(cwd, "remote") or "").split()
+            branch = _git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD") or ""
+            remote = _git(cwd, "config", f"branch.{branch}.remote") if branch else None
+            if remote not in remotes:
+                remote = "origin" if "origin" in remotes else remotes[0] if len(remotes) == 1 else None
+            url = _git(cwd, "remote", "get-url", remote) if remote else None
+            slug = repository_slug(url) if url else None
+            self.slugs[top] = (slug, None) if slug else (None, "its repository has no hosted remote that names it")
+        return self.slugs[top]
+
+    def __call__(self, source: str) -> tuple[dict[str, str] | None, str | None]:
+        """The file's repository and path inside it, or why it has none.
+
+        The remote is the current branch's, else `origin`, else the only one. A file that only
+        a local path could name gets no record: another machine could not find it.
+        """
+        path = Path(source).resolve()
+        try:
+            if path.parent not in self.tops:
+                self.tops[path.parent] = _git(path.parent, "rev-parse", "--show-toplevel")
+            top = self.tops[path.parent]
+            if not top:
+                return None, "not in a git repository"
+            slug, reason = self._slug(top)
+        except GitUnreadable as error:
+            return None, str(error)
+        if not slug:
+            return None, reason
+        return {"repository": slug, "path": path.relative_to(Path(top).resolve()).as_posix()}, None
 
 
 @contextlib.contextmanager
@@ -107,46 +152,46 @@ def _span_text(span: Mapping[str, Any]) -> str:
     return f"{span['repository']} {span['path']}:{lines}"
 
 
-def _duplicate_identity(finding: Mapping[str, Any]) -> tuple:
-    return (finding["match"], tuple(sorted((s["repository"], s["path"], s["text"]) for s in finding["spans"])))
-
-
-def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, Any] | None,
+def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, Any],
            session_id: str | None) -> dict[str, Any]:
     """Merge one wrap's findings into the store; return one line per recorded finding.
 
-    A file several sessions record stays one record: its latest measurement replaces each
-    limit it repeats, and every session that recorded it is listed once.
+    A file several sessions record stays one record, listing each session once. A file this
+    wrap measured gets its limits and duplicate rules from this measurement alone, replacing
+    what earlier wraps recorded; measured within its limits and named in no duplicate rule,
+    its record is removed. A file this wrap did not measure keeps its record unchanged.
     """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     recorded: list[dict[str, Any]] = []
     reported: list[dict[str, Any]] = []
-    sizes: dict[tuple[str, str], dict[str, Any]] = {}
-    found: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    places: dict[str, tuple[dict[str, str] | None, str | None]] = {}
+    locate = Locator()
+    current: dict[tuple[str, str], dict[str, Any]] = {}
 
-    def place(source: str) -> tuple[dict[str, str] | None, str | None]:
-        if source not in places:
-            places[source] = locate(source)
-        return places[source]
+    def fresh(where: Mapping[str, str]) -> dict[str, Any]:
+        return current.setdefault((where["repository"], where["path"]), {"limits": [], "duplicates": []})
 
+    for row in measured.get("measured", []):
+        where, _ = locate(row["source"])
+        if where is not None and "lines" in row["size"]:
+            fresh(where)["size"] = row["size"]
     for row in measured.get("over_limit", []):
         if row.get("members") is not None:
             reported.append({**row, "reason": "a chain of several files; the user chooses one member"})
             continue
-        where, reason = place(row["source"])
+        where, reason = locate(row["source"])
         if where is None:
             reported.append({**row, "reason": reason})
             continue
-        key = (where["repository"], where["path"])
-        sizes[key] = {"size": row["size"], "limits": row["limits"]}
+        entry = fresh(where)
+        entry["size"] = {**entry.get("size", {}), **row["size"]}
+        entry["limits"] = list(row["limits"])
         recorded.append({**where, "kind": "over-limit", "limits": row["limits"],
                          "line": f"Over limit, recorded for a later slim: {where['repository']} "
                                  f"{where['path']} ({_limits_text(row['limits'])})"})
-    for row in (duplicates or {}).get("duplicates", []):
+    for row in duplicates.get("duplicates", []):
         spans = []
         for span in row["spans"]:
-            where, reason = place(span["source"])
+            where, reason = locate(span["source"])
             if where is None:
                 break
             spans.append({**where, "start_line": span["start_line"], "end_line": span["end_line"],
@@ -156,30 +201,26 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
             reported.append({**row, "reason": f"{span['path']}: {reason}"})
             continue
         finding = {"match": row["match"], "similarity": row["similarity"], "spans": spans}
-        for key in dict.fromkeys((span["repository"], span["path"]) for span in spans):
-            found.setdefault(key, []).append(finding)
+        for where in {(s["repository"], s["path"]): s for s in spans}.values():
+            fresh(where)["duplicates"].append(finding)
         recorded.append({"kind": "duplicate-rule", "spans": spans,
                          "line": "Duplicate rule, recorded for the slim of the files it names: "
                                  + " and ".join(_span_text(span) for span in spans)})
 
-    if sizes or found:
+    if current:
         path = store_path(module)
         with _locked(path):
             records = {(r["repository"], r["path"]): r for r in read(module)}
-            for key in dict.fromkeys([*sizes, *found]):
-                entry = records.setdefault(key, {"repository": key[0], "path": key[1], "limits": [],
-                                                 "duplicates": [], "sessions": [], "first_recorded": now})
-                if key in sizes:
-                    entry["size"] = {**entry.get("size", {}), **sizes[key]["size"]}
-                    units = {limit["unit"]: limit for limit in entry["limits"]}
-                    units.update({limit["unit"]: limit for limit in sizes[key]["limits"]})
-                    entry["limits"] = list(units.values())
-                for finding in found.get(key, []):
-                    entry["duplicates"] = [d for d in entry["duplicates"]
-                                           if _duplicate_identity(d) != _duplicate_identity(finding)] + [finding]
+            for key, found in current.items():
+                if not found["limits"] and not found["duplicates"]:
+                    records.pop(key, None)
+                    continue
+                entry = records.setdefault(key, {"repository": key[0], "path": key[1], "sessions": [],
+                                                 "first_recorded": now})
+                entry.update(size=found.get("size", {}), limits=found["limits"], duplicates=found["duplicates"])
                 if session_id and session_id not in entry["sessions"]:
                     entry["sessions"].append(session_id)
                 entry["last_recorded"] = now
             _write(path, sorted(records.values(), key=lambda r: (r["repository"], r["path"])))
-    unresolved = list(dict.fromkeys([*measured.get("unresolved", []), *(duplicates or {}).get("unresolved", [])]))
+    unresolved = list(dict.fromkeys([*measured.get("unresolved", []), *duplicates.get("unresolved", [])]))
     return {"recorded": recorded, "reported": reported, "unresolved": unresolved}

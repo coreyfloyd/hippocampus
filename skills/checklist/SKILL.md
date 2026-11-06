@@ -180,9 +180,8 @@ work reports its error or reason and keeps every unsaved lesson.
 With the auto-apply setting on (`plan` returns `auto_apply`), the lessons step
 applies instead of waiting, in attended and unattended runs alike: follow
 improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, the
-routing file forbids applying: run this step as if the setting were off, except that
-over-limit and duplicate rows are still recorded as improve-harness's Over-limit
-records section says.
+routing file forbids applying: run this step as if the setting were off, including
+the over-limit and duplicate-rule blocks, which are not recorded.
 
 Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition,
