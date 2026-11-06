@@ -123,7 +123,7 @@ _Avoid_: auto mode, autopilot
 A lesson a wrap wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git is written with no commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
 
 **Applied capture**:
-A knowledge item a wrap captured under the auto-apply setting without an approval: compiled into the wiki, or retained as a source under `raw/` or an output under `output/`, all inside the knowledge root. The session ledger keeps each item's outcome (captured, asked or failed) with the files created and updated, relative to the knowledge root. A captured item is settled. A capture that names a file outside the knowledge root, outside its kind's folder, or not written fails, and the item keeps its approval.
+A knowledge item a wrap captured under the auto-apply setting without an approval: compiled into the wiki, or retained as a source under `raw/` or an output under `output/`, all inside the knowledge root. The session ledger keeps each item's outcome (captured, asked or failed) with the files created and updated, relative to the knowledge root. A captured item is settled. Every file a capture names is under its kind's folders (a wiki capture's under `wiki/` or `raw/`, with at least one article in `wiki/`) and was written after the wrap's checklist started; otherwise the capture fails and the item keeps its approval.
 _Avoid_: auto-capture, applied knowledge
 
 **Fact about the user**:
@@ -135,7 +135,7 @@ A ref under `refs/hippocampus/delivered/` in a checkout, named by a local lesson
 _Avoid_: delivery note, pushed tag
 
 **Always-loaded rules file**:
-A user-level rules file, a file it imports, or a source composed into one or into repositories' instruction files. An applied lesson for one also raises an ask.
+A user-level rules file, a file it imports, a repository's instruction file (`CLAUDE.md` or `AGENTS.md`), or a source composed into one of them. An applied lesson for one also raises an ask.
 
 **Abandoned session**:
 An interactive session idle for longer than the configured threshold that no open-session check reports as open. Only an abandoned session's handoff is swept.

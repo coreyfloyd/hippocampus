@@ -41,35 +41,33 @@ def enabled(config: Mapping[str, Any]) -> bool:
     return value
 
 
+_COMPOSE: Any = None
+
+
 def _compose_rules() -> Any:
-    spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The routing contract's parser, loaded once so its ComposeError is one class."""
+    global _COMPOSE
+    if _COMPOSE is None:
+        spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _COMPOSE = module
+    return _COMPOSE
 
 
 def routing_rules() -> dict[str, Any]:
-    """The routing file's delivery keys: `lesson-policy`, `lesson-pull-requests` and the command."""
-    path = _compose_rules().routing_path()
-    rules: dict[str, Any] = {"path": str(path), "propose": False, "pull_requests": [], "command": None}
-    if not path.exists():
-        return rules
-    listing = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        policy = re.match(r"lesson-policy:\s*(.*?)\s*$", line)
-        if policy:
-            if policy[1] not in ("apply", "propose"):
-                raise ValueError(f"routing {path}: lesson-policy must be apply or propose")
-            rules["propose"] = policy[1] == "propose"
-        command = re.match(r"lesson-pull-request-command:\s*(.*?)\s*$", line)
-        if command:
-            rules["command"] = _compose_rules().routing_scalar(command[1])
-        entry = re.match(r"\s+-\s+(\S+)\s*$", line)
-        if listing and entry:
-            rules["pull_requests"].append(entry[1].lower())
-        else:
-            listing = line.rstrip() == "lesson-pull-requests:"
-    return rules
+    """The routing file's delivery keys: `lesson-policy`, `lesson-pull-requests` and the command.
+
+    A malformed routing file is a ValueError, which every caller reports as an error.
+    """
+    compose = _compose_rules()
+    try:
+        path = compose.routing_path()
+        parsed = compose.load_lesson_delivery(path)
+    except compose.ComposeError as error:
+        raise ValueError(str(error)) from None
+    return {"path": str(path), "propose": parsed["policy"] == "propose",
+            "pull_requests": parsed["pull_requests"], "command": parsed["command"]}
 
 
 def forbidden_reason(rules: Mapping[str, Any]) -> str | None:
@@ -254,7 +252,8 @@ def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
     before = source.read_bytes() if source.exists() else None
     checkout = _checkout(source)
     outcome: dict[str, Any] = {"target": str(source), "commit": None, "surfaces": surfaces,
-                               "always_loaded": bool(row.get("always_loaded")) or source in _rule_files() or any(
+                               "always_loaded": bool(row.get("always_loaded")) or source in _rule_files()
+                               or source.name in INSTRUCTION_FILES or any(
                                    Path(surface["path"]).name in INSTRUCTION_FILES for surface in surfaces)}
     if checkout is not None:
         tracked = _git(checkout, "ls-files", "--error-unmatch", "--", str(source)).returncode == 0
@@ -313,6 +312,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                     for field in ("target", "change", "evidence"))
                     or not isinstance(edits, list) or not edits
                     or not all(isinstance(edit, Mapping) and isinstance(edit.get("new"), str) and edit["new"]
+                               and ("old" not in edit or (isinstance(edit["old"], str) and edit["old"]))
                                for edit in edits)):
                 raise ValueError(f"lessons: row {index}: an applied lesson requires target, change, evidence and edits")
     routing = _compose_rules().routing_path()
@@ -346,9 +346,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 outcome.update(_apply_one(row, routing), status="applied")
             except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
                 outcome.update(status="failed", target=row["target"], error=str(error))
-            except Exception as error:  # A malformed routing file fails one lesson, not the wrap.
-                if type(error).__name__ != "ComposeError":
-                    raise
+            except _compose_rules().ComposeError as error:  # A malformed routing file fails one lesson.
                 outcome.update(status="failed", target=row["target"], error=str(error))
             if outcome["status"] == "applied":
                 outcome["ask"] = outcome.pop("always_loaded")
@@ -415,6 +413,12 @@ def _push(checkout: Path, remote: str, branch: str) -> tuple[bool, str, int]:
     error = _error(first)
     if REFUSED_DIRECT.search(error) or not REMOTE_MOVED.search(error):
         return False, error, 1
+    current = _git(checkout, "symbolic-ref", "--short", "HEAD")
+    if current.returncode or _text(current) != branch:
+        # A merge acts on the checked-out branch; bringing the remote's commits into another
+        # branch would change work the lesson never touched.
+        return False, (f"{error}; the checkout is on {_text(current) or 'a detached HEAD'}, not {branch}, "
+                       "so the remote's commits were not brought in"), 1
     fetched = _git(checkout, "fetch", remote, f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}")
     if fetched.returncode:
         return False, _error(fetched), 1
@@ -425,15 +429,19 @@ def _push(checkout: Path, remote: str, branch: str) -> tuple[bool, str, int]:
         return False, f"could not bring in the remote's commits: {_error(merged)}", 1
     second = _git(checkout, "push", remote, f"refs/heads/{branch}:refs/heads/{branch}")
     error = _error(second) if second.returncode else ""
-    if REFUSED_DIRECT.search(error) and before:
-        # The branch takes pull requests only, so the merge made for the retry could never
-        # be pushed; undo it and leave the branch as it was, with the user's other changes.
+    if second.returncode and before:
+        # The merge was made only for the retry; whatever refused the push, undo it and leave
+        # the branch as it was, with the user's other changes.
         _git(checkout, "reset", "--merge", before)
     return second.returncode == 0, error, 2
 
 
 def _lesson_branch(session_id: str) -> str:
-    return "lesson/" + re.sub(r"[^A-Za-z0-9._-]", "-", session_id)[:12]
+    # Dots are replaced too, so `..`, `.lock` and a leading dot cannot make an invalid ref.
+    name = re.sub(r"-+", "-", re.sub(r"[^A-Za-z0-9_-]", "-", session_id)).strip("-")
+    if not name:
+        raise LessonError(f"session id {session_id!r} names no lesson branch")
+    return "lesson/" + name
 
 
 def _mark_delivered(checkout: Path, local_commit: str, delivered: str) -> None:
@@ -476,7 +484,7 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
                 else:
                     try:
                         update["lesson_commit"] = _reapply(checkout, worktree, row)
-                    except LessonError as error:
+                    except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
                         update.update(delivery=NOT_PUSHED, error=f"{lesson_branch}: {error}")
                 updates.append(update)
             if any("lesson_commit" in update for update in updates):
@@ -489,7 +497,7 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
         _mark_delivered(checkout, row["commit"], update["lesson_commit"])
     if not delivered:
         return updates
-    paths = [Path(row["target"]).relative_to(checkout).as_posix() for row, _ in delivered]
+    paths = [_inside(checkout, row["target"]).as_posix() for row, _ in delivered]
     request = {"checkout": str(checkout), "remote": remote, "base": base, "branch": lesson_branch,
                "title": _message(delivered[0][0]["change"]) if len(delivered) == 1
                else f"lessons: {len(delivered)} applied at wrap",
@@ -513,14 +521,31 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
     return updates
 
 
+def _inside(checkout: Path, target: str) -> Path:
+    """A lesson target as a path inside its checkout, symlinks resolved on both sides."""
+    try:
+        return Path(target).resolve().relative_to(Path(checkout).resolve())
+    except ValueError:
+        raise LessonError(f"{target} is not inside {checkout}") from None
+
+
 def _reapply(checkout: Path, worktree: str, row: Mapping[str, Any]) -> str:
-    """Commit one lesson's edits on the lesson branch, from the branch's own copy of the file."""
-    relative = Path(row["target"]).relative_to(checkout)
+    """Commit one lesson's edits on the lesson branch, from the branch's own copy of the file.
+
+    A lesson that fails leaves nothing staged or changed, so the next lesson's commit holds
+    only its own lines.
+    """
+    relative = _inside(checkout, row["target"])
     path = Path(worktree) / relative
     before = path.read_bytes() if path.exists() else b""
-    _write(path, before, _edited(before, row["edits"], "remote's file"))
-    _must(worktree, "add", "--", relative.as_posix())
-    _must(worktree, "commit", "-q", "-m", _message(row["change"]))
+    try:
+        _write(path, before, _edited(before, row["edits"], "remote's file"))
+        _must(worktree, "add", "--", relative.as_posix())
+        _must(worktree, "commit", "-q", "-m", _message(row["change"]))
+    except (LessonError, OSError, subprocess.SubprocessError):
+        _git(worktree, "reset", "-q", "--hard", "HEAD")
+        _git(worktree, "clean", "-q", "-fd", "--", relative.as_posix())
+        raise
     return _must(worktree, "rev-parse", "HEAD")
 
 
@@ -561,13 +586,13 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
                     continue
                 else:
                     update.update(delivery=NOT_PUSHED, attempts=attempts, error=error)
-        except (LessonError, OSError, subprocess.SubprocessError) as error:
+        except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
             update.update(delivery=NOT_PUSHED, error=str(error))
         _record(module, session_id, {**row, **update})
     for (checkout, _, remote), group in requests.items():
         try:
             updates = _pull_requests(Path(checkout), remote, session_id, group, rules["command"])
-        except (LessonError, OSError, subprocess.SubprocessError) as error:
+        except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
             updates = [{"delivery": NOT_PUSHED, "error": str(error)} for _ in group]
         for row, update in zip(group, updates):
             _record(module, session_id, {**row, **update})

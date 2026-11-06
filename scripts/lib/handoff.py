@@ -1784,6 +1784,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             value = read_config().get(args.key)
             if args.key in TIMED_CHECKPOINT_DEFAULTS:
                 print(timed_setting(args.key))
+            elif args.key == "auto_apply_lessons":
+                # A boolean setting, off by default; any other type is an error, as the wrap reads it.
+                if value is not None and type(value) is not bool:
+                    raise ValueError(f"hippocampus config {config_path()}: auto_apply_lessons must be true or false")
+                print("true" if value else "false")
             elif args.key == "prune_days" and value is not None:
                 if type(value) is not int or value <= 0:
                     raise ValueError(f"hippocampus config {config_path()}: prune_days must be a positive integer")

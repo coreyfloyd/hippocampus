@@ -45,7 +45,9 @@ row per captured item or fact. `index` counts `resume.open_loops`, then unrecord
 ```
 
 `capture` is `wiki`, `source`, `output` or `user_fact`. Paths are relative to the knowledge root or
-absolute inside it. A fact about the user has no default.
+absolute inside it. List every file the capture wrote: a wiki capture writes only under `wiki/` and
+`raw/`, a source only under `raw/`, an output only under `output/`, all during this wrap. A fact
+about the user has no default.
 
 ```bash
 python3 <checklist-module> apply-knowledge --user-profile <user-profile> \
@@ -54,8 +56,8 @@ python3 <checklist-module> apply-knowledge --user-profile <user-profile> \
 ```
 
 Keep its output as `<remaining-items>`; `knowledge_outcomes` says what happened to each row. A
-captured item is settled. A file outside the knowledge root or its kind's folder, or not written,
-fails: the item stays carried and keeps its approval. Each `knowledge_asks` payload goes to the ask
+captured item is settled. A file outside the knowledge root or its kind's folders, missing, or
+not written since the checklist's `plan`, fails: the item stays carried and keeps its approval. Each `knowledge_asks` payload goes to the ask
 binding through an R4 row with `destination: "ask"` and its choices; the fact stays carried until
 the user answers and it is captured. Report the articles created or updated from
 `knowledge_outcomes`.

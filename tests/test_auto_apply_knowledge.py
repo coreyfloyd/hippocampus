@@ -1,5 +1,6 @@
 """Knowledge capture at a wrap with the auto-apply setting on, driven through the checklist's command line."""
 import json
+import os
 
 import pytest
 
@@ -24,8 +25,11 @@ class KnowledgeWrap(Wrap):
         self.root = tmp_path / 'knowledge'
         for folder in ('raw/research', 'raw/derived', 'output', 'docs', 'wiki'):
             (self.root / folder).mkdir(parents=True, exist_ok=True)
-        for name in ('docs/log.md', 'docs/DECISIONS.md', 'wiki/hot.md', 'wiki/index.md'):
+        for name in ('docs/log.md', 'docs/DECISIONS.md', 'wiki/hot.md', 'wiki/index.md', 'context/rules.md'):
+            (self.root / name).parent.mkdir(parents=True, exist_ok=True)
             (self.root / name).write_text('# Start\n')
+            # Written before this wrap started.
+            os.utime(self.root / name, (1_000_000_000, 1_000_000_000))
         fields = ['profile_version: 4', f'knowledge_root: {self.root}', 'operation_log_file: docs/log.md',
                   'decision_log_file: docs/DECISIONS.md', 'artifact_followup_destination: "Task list"']
         fields += (['hot_file: wiki/hot.md', 'wiki_followup_destination: "Wiki backlog"'] if wiki
@@ -52,6 +56,7 @@ def test_wiki_capture_is_compiled_without_an_approval_and_listed(tmp_path, tool)
     assert wrap.plan()['auto_apply']['knowledge'] == 'apply'
     wrap.write('wiki/pickup.md')
     wrap.write('raw/research/pickup-source.md')
+    wrap.write('wiki/index.md', '# Index\n- pickup\n')
     item = knowledge(choices=['approve', 'decline'])
     data = wrap.capture([item], [{'index': 0, 'capture': 'wiki',
                                   'created': ['wiki/pickup.md', 'raw/research/pickup-source.md'],
@@ -139,9 +144,33 @@ def test_a_capture_in_the_wrong_place_or_a_disabled_wiki_is_not_applied(tmp_path
     assert data['resume']['open_loops'] == [item]
     assert 'wiki is disabled' in data['knowledge_outcomes'][0]['error']
     data = wrap.capture([item], [{'index': 0, 'capture': 'source', 'created': ['wiki/pickup.md']}])
-    assert 'writes under raw/' in data['knowledge_outcomes'][0]['error']
+    assert 'outside raw/' in data['knowledge_outcomes'][0]['error']
     data = wrap.capture([item], [{'index': 0, 'capture': 'source', 'created': ['raw/missing.md']}])
     assert 'was not written' in data['knowledge_outcomes'][0]['error']
+
+
+def test_every_file_of_a_capture_is_in_its_folders_and_written_this_wrap(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    wrap.write('wiki/a.md')
+    wrap.write('context/rules.md', '# Changed\n')
+    item = knowledge()
+    data = wrap.capture([item], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/a.md'],
+                                  'updated': ['context/rules.md']}])
+    assert data['resume']['open_loops'] == [item]
+    error = data['knowledge_outcomes'][0]['error']
+    assert 'context/rules.md is outside wiki/, raw/' in error and 'keeps its approval' in error
+    data = wrap.capture([item], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/a.md'],
+                                  'updated': ['wiki/index.md']}])
+    assert data['resume']['open_loops'] == [item]
+    assert 'wiki/index.md was not written during this wrap' in data['knowledge_outcomes'][0]['error']
+
+
+def test_apply_knowledge_needs_the_wrap_to_have_started(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.write('wiki/a.md')
+    refused = wrap.capture([knowledge()], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/a.md']}], expect=1)
+    assert "run the checklist's plan first" in refused.stderr
 
 
 def test_the_routing_file_governs_lessons_only(tmp_path, tool):

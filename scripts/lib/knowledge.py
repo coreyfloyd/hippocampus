@@ -10,14 +10,17 @@ about the user becomes an ordinary ask. Nothing here runs unless the setting is 
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 import importlib.util
 import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 OUTCOME = "knowledge_outcome"
-# Each capture that applies without an approval, and the knowledge root folder it lands in.
-CAPTURES = {"wiki": "wiki", "source": "raw", "output": "output"}
+# Each capture that applies without an approval, and the knowledge root folders it may write.
+# A wiki capture also keeps its provenance under raw/; at least one file is in the first folder.
+CAPTURES = {"wiki": ("wiki", "raw"), "source": ("raw",), "output": ("output",)}
+START_MARKER = "checklist-start"
 USER_FACT = "user_fact"
 
 
@@ -98,28 +101,43 @@ def _validate(rows: Any, items: Sequence[Mapping[str, Any]]) -> None:
                              f"{', '.join([*CAPTURES, USER_FACT])}")
 
 
-def _relative(root: Path, value: str) -> Path:
-    """A written file as a path inside the knowledge root, or the reason it is not one."""
+def started_at(module: Any, session_id: str) -> datetime:
+    """When this session's checklist started: a capture's files are written after it."""
+    stamps = [row["ts"] for row in module._ledger_records(module.ledger_path(session_id))
+              if row.get("kind") == START_MARKER and row.get("ts")]
+    if not stamps:
+        raise ValueError("apply-knowledge: run the checklist's plan first; it marks when the wrap started")
+    return datetime.fromisoformat(stamps[-1].replace("Z", "+00:00"))
+
+
+def _relative(root: Path, value: str, folders: Sequence[str], since: datetime) -> Path:
+    """A file this wrap wrote under one of the capture's folders, or the reason it is not one."""
     candidate = Path(value).expanduser()
     resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
     try:
         relative = resolved.relative_to(root)
     except ValueError:
         raise ValueError(f"{value} is outside the knowledge root; a capture there keeps its approval") from None
+    if relative.parts[0] not in folders:
+        raise ValueError(f"{relative} is outside {', '.join(f + '/' for f in folders)} in the knowledge root; "
+                         "a capture there keeps its approval")
     if not resolved.is_file():
         raise ValueError(f"{value} was not written")
+    # Whole seconds: the start marker and a file system's times may round differently.
+    if int(resolved.stat().st_mtime) < int(since.timestamp()):
+        raise ValueError(f"{value} was not written during this wrap")
     return relative
 
 
-def _captured(row: Mapping[str, Any], root: Path, wiki: bool) -> dict[str, Any]:
+def _captured(row: Mapping[str, Any], root: Path, wiki: bool, since: datetime) -> dict[str, Any]:
     capture = row["capture"]
     if capture == "wiki" and not wiki:
         raise ValueError("the wiki is disabled in the knowledge profile")
-    folder = CAPTURES[capture]
-    files = {change: [str(_relative(root, value)) for value in row.get(change, [])]
+    folders = CAPTURES[capture]
+    files = {change: [str(_relative(root, value, folders, since)) for value in row.get(change, [])]
              for change in ("created", "updated")}
-    if not any(path.split(os.sep)[0] == folder for path in [*files["created"], *files["updated"]]):
-        raise ValueError(f"a {capture} capture writes under {folder}/ in the knowledge root")
+    if not any(Path(path).parts[0] == folders[0] for path in [*files["created"], *files["updated"]]):
+        raise ValueError(f"a {capture} capture writes under {folders[0]}/ in the knowledge root")
     return files
 
 
@@ -138,6 +156,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     items = [*loops, *current]
     _validate(rows, items)
     root, wiki = read_profile(profile)
+    since = started_at(module, session_id)
     known = {tuple(outcome["identity"]): outcome for outcome in outcomes(module, session_id)}
     removed: list[Mapping[str, Any]] = []
     annotated: dict[int, dict[str, Any]] = {}
@@ -157,7 +176,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                                        "ask_text": ask_text(row), "choices": list(row["choices"])}
         else:
             try:
-                outcome.update(_captured(row, root, wiki), status="captured")
+                outcome.update(_captured(row, root, wiki, since), status="captured")
                 removed.append(item)
             except (OSError, ValueError) as error:
                 outcome.update(status="failed", error=str(error))

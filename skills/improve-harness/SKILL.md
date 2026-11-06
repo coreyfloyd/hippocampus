@@ -205,8 +205,10 @@ rows are not lessons to apply: report or carry them as above.
 
 A routing file can forbid this with the line `lesson-policy: propose`; it wins, and the
 report says lessons were carried because the routing file requires it. The module reads
-only that key, so a routing file says it with the key. `lesson-pull-requests:` followed by
-`  - owner/name` lines names repositories whose lessons always go through a pull request.
+only these keys, each on an unindented line outside fenced code blocks, so prose and fenced
+examples never set them; a trailing ` # comment` is allowed, and a malformed value is an
+error. `lesson-pull-requests:` followed by `  - owner/name` lines (blank and comment lines may
+sit between them) names repositories whose lessons always go through a pull request.
 `lesson-pull-request-command: <command>` names the user's command that opens one
 (see `INTERFACE.md`); the package opens none itself and never merges.
 
@@ -224,8 +226,8 @@ An edit with `old` replaces text that must appear exactly once; an edit without 
 `new`. Set `dictated: true` on a rule the user dictated: it is applied whatever its
 recommendation, so give it the apply fields. Set `always_loaded: true` when the target is
 always loaded and the module cannot know it, such as a source of a rules composition.
-The module detects user-level rules files, their imports and routing-file sources composed into
-`CLAUDE.md` or `AGENTS.md`.
+The module detects user-level rules files, their imports, repository `CLAUDE.md` and `AGENTS.md`
+files and routing-file sources composed into either.
 
 ```bash
 python3 <checklist-module> apply-lessons --user-profile <user-profile> \

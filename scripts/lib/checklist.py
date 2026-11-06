@@ -485,7 +485,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         lesson_outcome = outcome_for.get(ticket_module.session_item_identity(item))
         if item.get("applied"):
             if rule != "R3":
-                raise ValueError(f"{item.get('context')}: an applied lesson's ask files under R3")
+                # One mis-ruled row fails alone; the other items still file.
+                error = "an applied lesson's ask files under R3"
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": "ask",
+                                        "status": "failed", "error": error})
+                report["failures"].append(f"{item.get('context', str(item))}: {error}, not {rule}")
+                kept.append(copy.deepcopy(item))
+                continue
             if lesson_outcome:
                 item = {**item, "ask_text": lessons.ask_text(lesson_outcome), "commit": lesson_outcome.get("commit")}
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):

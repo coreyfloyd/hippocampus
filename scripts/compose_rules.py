@@ -214,6 +214,72 @@ def load_surfaces(path: pathlib.Path) -> dict[pathlib.Path, list[dict[str, str]]
     return mapping
 
 
+LESSON_KEYS = ("lesson-policy", "lesson-pull-request-command", "lesson-pull-requests")
+
+
+def _without_comment(value: str) -> str:
+    """Drop a trailing ` # comment` from an unquoted scalar; a quoted one keeps its text."""
+    value = value.strip()
+    if value.startswith(('"', "'")):
+        return value
+    return re.split(r"\s+#", value, maxsplit=1)[0].strip()
+
+
+def load_lesson_delivery(path: pathlib.Path) -> dict:
+    """Read the lesson delivery keys in the routing contract's YAML subset.
+
+    Each key is an unindented `key: value` line outside fenced code blocks;
+    `lesson-pull-requests:` takes `  - owner/name` entries, with blank lines and
+    comments allowed between them, until the next unindented line. Prose and fenced
+    examples are ignored. Malformed values fail closed, like Produced surfaces.
+    """
+    rules: dict = {"policy": None, "command": None, "pull_requests": []}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        if path.is_symlink():
+            fail(f"routing: broken symlink {path}")
+        return rules
+    except (OSError, UnicodeError) as exc:
+        fail(f"routing {path}: {exc}")
+    fenced = False
+    listing = False
+    seen: set = set()
+    for line in lines:
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            listing = False
+            continue
+        if fenced or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line.startswith(" "):
+            if listing:
+                entry = re.fullmatch(r"\s+-\s+(.+)", line)
+                if not entry:
+                    fail(f"routing {path}: invalid lesson-pull-requests entry: {line.strip()}")
+                rules["pull_requests"].append(routing_scalar(_without_comment(entry[1])).lower())
+            continue
+        listing = False
+        key, separator, value = line.partition(":")
+        if not separator or key not in LESSON_KEYS:
+            continue
+        if key in seen:
+            fail(f"routing {path}: duplicate {key}")
+        seen.add(key)
+        value = _without_comment(value)
+        if key == "lesson-pull-requests":
+            if value:
+                fail(f"routing {path}: lesson-pull-requests takes `  - owner/name` lines, not a value")
+            listing = True
+        elif key == "lesson-policy":
+            if value not in ("apply", "propose"):
+                fail(f"routing {path}: lesson-policy must be apply or propose")
+            rules["policy"] = value
+        else:
+            rules["command"] = routing_scalar(value)
+    return rules
+
+
 def surfaces_for(path: pathlib.Path, routing: pathlib.Path) -> dict:
     mapping = load_surfaces(routing)
     requested = resolved_routing_path(str(path), pathlib.Path.cwd())

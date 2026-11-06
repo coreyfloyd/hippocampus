@@ -126,7 +126,7 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
   lesson with its reason, and each failure with its error. A failed lesson stays carried.
   A lesson `committed, not pushed` counts as not saved.
 
-A routing file line `lesson-policy: propose` turns this off and the report says so.
+A routing file line `lesson-policy: propose` turns lesson applying off and the report says so.
 `lesson-pull-requests:` with `  - owner/name` lines sends a repository's lessons through a
 pull request every time. The sweep and the slim review are unchanged.
 
