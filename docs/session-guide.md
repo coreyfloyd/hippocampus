@@ -125,10 +125,18 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
 - The report lists each applied lesson with its target, change and commit, each dropped
   lesson with its reason, and each failure with its error. A failed lesson stays carried.
   A lesson `committed, not pushed` counts as not saved.
+- A file over its size limit, or named in a duplicate rule, is not put in front of you.
+  The wrap keeps it as an over-limit record, by repository and path inside it, for a later
+  unattended slim, and reports it in one line. Several sessions' findings for one file are
+  one record, a measurement replaces only what it measured (this tool's limits, and a
+  duplicate rule only when the wrap loaded both files), and a file with nothing left
+  loses its record. Records outlive the session whether it wraps or is abandoned. A file
+  outside git, one git does not track, or one in a repository without a hosted remote, is
+  reported with the slim command, as before, and never recorded.
 
-A routing file line `lesson-policy: propose` turns this off and the report says so.
+A routing file line `lesson-policy: propose` turns this off, over-limit records included, and the report says so.
 `lesson-pull-requests:` with `  - owner/name` lines sends a repository's lessons through a
-pull request every time. Knowledge capture, the sweep and the slim review are unchanged.
+pull request every time. Knowledge capture, the sweep and the slim review itself are unchanged.
 
 ### Route a lesson, then slim its source
 

@@ -126,6 +126,10 @@ A lesson a wrap wrote to its source under the auto-apply setting, as one commit 
 A ref under `refs/hippocampus/delivered/` in a checkout, named by a local lesson commit and pointing at the commit that carried that lesson to the remote on a lesson branch. The saved line leaves a marked commit, and only that commit, out of the commits it counts as not pushed, in this wrap and every later one, so a pull request's local commit does not fail a later wrap in that checkout, before or after the request merges. The package writes it at delivery and never removes it.
 _Avoid_: delivery note, pushed tag
 
+**Over-limit record**:
+One file a wrap found over its size limit, or named in a duplicate rule, kept under the auto-apply setting for a later unattended slim instead of being put in front of the user. It names the file by repository (the repository's path on its host, such as `owner/name`, from the checkout's `origin` remote, else its only remote) and path inside that repository, never by a local path, and holds each exceeded limit by tool and unit with its measured size, every duplicate rule naming the file, and the sessions that recorded it. A file recorded by several sessions is one record. A measurement replaces only what it measured: this tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when the wrap loaded every file it names. A file left with no finding under any key has no record. With the routing file's `lesson-policy: propose` nothing is recorded. Records live in the machine's store beside the session ledgers, so they outlive the session whether it wraps or is abandoned. A file outside git, one git does not track, or one in a repository without a hosted remote (none, two without `origin`, or a local, `file://`, absolute or `~user` path), gets no record: the wrap reports it with the attended slim command.
+_Avoid_: slim queue, backlog
+
 **Always-loaded rules file**:
 A user-level rules file, a file it imports, or a source composed into one or into repositories' instruction files. An applied lesson for one also raises an ask.
 
