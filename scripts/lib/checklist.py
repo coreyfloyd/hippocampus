@@ -1292,8 +1292,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError(f"record-over-limit: {state['reason']}")
             if not args.measure or not args.duplicates:
                 raise ValueError("record-over-limit requires --measure and --duplicates")
+            tool = "codex" if (os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
+                               or os.environ.get("CODEX_THREAD_ID")) else "claude"
             output = over_limit.record(module, json.loads(args.measure.read_text()),
-                                       json.loads(args.duplicates.read_text()), session_id or None)
+                                       json.loads(args.duplicates.read_text()), session_id or None, tool)
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")

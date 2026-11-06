@@ -160,8 +160,9 @@ python3 <checklist-module> record-over-limit --user-profile <user-profile> \
 ```
 
 Print each `recorded[].line`: one line per file or duplicate rule, kept as an
-over-limit record for a later unattended slim. A skill only listed records its
-description limits alone and keeps any body limits an earlier full load recorded.
+over-limit record for a later unattended slim. A measurement replaces only what it
+measured: this tool's limits (a skill only listed, its description limits alone),
+and a duplicate rule only when this wrap loaded every file it names.
 Rows in `reported` (outside git, not tracked by git, no hosted remote, git
 unreadable, or a Codex chain) get today's blocks with their `action` and `reason`;
 they are never recorded or slimmed unattended. Report `unresolved` paths. With the

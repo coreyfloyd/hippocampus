@@ -118,7 +118,7 @@ def test_a_record_names_repository_and_path_never_a_home_path(tmp_path, tool):
     assert output['reported'] == []
     [entry] = Session(tmp_path, tool, 'reader').records()
     assert (entry['repository'], entry['path']) == ('acme/rules', 'rules/AGENTS.md')
-    assert entry['limits'] == [{'unit': 'lines', 'measured': 232, 'limit': 200}]
+    assert entry['limits'] == [{'tool': tool, 'unit': 'lines', 'measured': 232, 'limit': 200}]
     assert entry['size']['lines'] == 232 and entry['sessions'] == ['first']
     stored = (tmp_path / 'ledger/over-limit-records.json').read_text()
     assert str(tmp_path) not in stored and 'example.invalid' not in stored
@@ -134,7 +134,7 @@ def test_several_sessions_record_one_file_as_one_entry(tmp_path, tool):
     [entry] = Session(tmp_path, tool, 'reader').records()
     assert entry['path'] == 'AGENTS.md' and entry['repository'] == 'acme/rules'
     assert entry['sessions'] == ['first', 'second']
-    assert entry['limits'] == [{'unit': 'lines', 'measured': 262, 'limit': 200}]
+    assert entry['limits'] == [{'tool': tool, 'unit': 'lines', 'measured': 262, 'limit': 200}]
 
 
 def test_a_record_survives_a_wrapped_and_an_abandoned_session(tmp_path, tool):
@@ -191,14 +191,15 @@ def test_duplicate_rules_are_recorded_for_each_file_they_name(tmp_path, tool):
         assert finding['match'] == 'exact'
         assert [(s['repository'], s['path'], s['text']) for s in finding['spans']] == [
             ('acme/rules', 'AGENTS.md', RULE), ('acme/rules', 'skills/CLAUDE.md', RULE)]
-    # A duplicate naming a file no record could name stays attended, as today; the file
-    # measured again within its limits, with no recordable duplicate left, loses its record.
+    # A duplicate naming a file no record could name stays attended, as today. This wrap did
+    # not load the other side of the recorded pair, so both records keep that finding.
     mixed = Session(tmp_path, tool, 'third').record(left, outside)
     assert mixed['recorded'] == []
     [row] = mixed['reported']
     assert row['type'] == 'duplicate-rule' and row['reason'] == f'{outside}: not in a git repository'
     assert row['action'].startswith('run /hippocampus:slim-harness')
-    assert [entry['path'] for entry in Session(tmp_path, tool, 'reader').records()] == ['skills/CLAUDE.md']
+    assert [(entry['path'], len(entry['duplicates'])) for entry in Session(tmp_path, tool, 'reader').records()] == [
+        ('AGENTS.md', 1), ('skills/CLAUDE.md', 1)]
 
 
 def test_with_the_setting_off_nothing_is_recorded_and_the_blocks_are_unchanged(tmp_path, tool):
@@ -232,7 +233,8 @@ def test_a_routing_file_that_requires_proposals_records_nothing(tmp_path, tool):
     ('https://example.invalid/acme/rules.git', 'acme/rules'),
     ('ssh://git@example.invalid:2222/acme/rules', 'acme/rules'),
     ('git@example.invalid:acme/rules.git', 'acme/rules'),
-    ('https://example.invalid/group/sub/rules.git', 'group/sub/rules')])
+    ('https://example.invalid/group/sub/rules.git', 'group/sub/rules'),
+    ('https://example.invalid/home/rules.git', 'home/rules')])
 def test_a_hosted_remote_names_the_whole_repository_path(tmp_path, tool, remote, repository_name):
     target = rules_file(repository(tmp_path, remote=remote) / 'AGENTS.md')
     Session(tmp_path, tool, 'first').record(target)
@@ -241,11 +243,9 @@ def test_a_hosted_remote_names_the_whole_repository_path(tmp_path, tool, remote,
 
 
 @pytest.mark.parametrize('remote', [
-    'ssh://me@example.invalid/Users/someone/repos/rules.git',
     'ssh://git@example.invalid:22/~me/repos/rules.git',
-    'me@example.invalid:/Users/someone/rules.git',
-    'me@example.invalid:~someone/rules.git',
-    'https://example.invalid/home/someone/rules.git'])
+    'me@example.invalid:/srv/someone/rules.git',
+    'me@example.invalid:~someone/rules.git'])
 def test_a_remote_whose_path_is_a_home_path_names_no_repository(tmp_path, tool, remote):
     target = rules_file(repository(tmp_path, remote=remote) / 'AGENTS.md')
     output = Session(tmp_path, tool, 'first').record(target)
@@ -305,7 +305,7 @@ def test_a_listed_skill_trimmed_within_its_limit_loses_its_record(tmp_path, tool
     listed = (skill, 'skill', 'listed')
     Session(tmp_path, tool, 'first').record(listed)
     [entry] = Session(tmp_path, tool, 'reader').records()
-    assert entry['limits'] == [{'unit': 'description characters', 'measured': 1100, 'limit': 1024}]
+    assert entry['limits'] == [{'tool': tool, 'unit': 'description characters', 'measured': 1100, 'limit': 1024}]
     skill_file(skill, description_characters=100)
     assert Session(tmp_path, tool, 'second').record(listed)['recorded'] == []
     assert Session(tmp_path, tool, 'reader').records() == []
@@ -352,3 +352,99 @@ def test_a_file_git_cannot_read_is_reported_not_recorded(tmp_path, tool):
     [row] = output['reported']
     assert output['recorded'] == [] and row['reason'].startswith('git could not be read')
     assert row['action'] == f'run /hippocampus:slim-harness on `{target}`'
+
+
+def test_the_repository_is_named_from_origin_whatever_the_branch_tracks(tmp_path, tool):
+    checkout = repository(tmp_path)
+    git(checkout, 'remote', 'add', 'fork', 'https://example.invalid/me/rules.git')
+    target = rules_file(checkout / 'AGENTS.md')
+    git(checkout, 'commit', '-q', '-m', 'rules')
+    git(checkout, 'checkout', '-q', '-b', 'feature')
+    git(checkout, 'config', 'branch.feature.remote', 'fork')
+    git(checkout, 'config', 'branch.feature.merge', 'refs/heads/feature')
+    Session(tmp_path, tool, 'first').record(target)
+    [entry] = Session(tmp_path, tool, 'reader').records()
+    assert entry['repository'] == 'acme/rules'
+    # Two remotes and no origin name nothing: the choice would depend on the checkout.
+    git(checkout, 'remote', 'rename', 'origin', 'upstream')
+    output = Session(tmp_path, tool, 'second').record(target)
+    assert output['recorded'] == []
+    assert output['reported'][0]['reason'] == 'its repository has no hosted remote that names it'
+
+
+def test_each_tool_replaces_only_its_own_limits(tmp_path):
+    skill = skill_file(repository(tmp_path) / 'skills/x/SKILL.md')
+    listed = (skill, 'skill', 'listed')
+    Session(tmp_path, 'claude', 'claude-1').record(listed)
+    Session(tmp_path, 'codex', 'codex-1').record(listed)
+    [entry] = Session(tmp_path, 'claude', 'reader').records()
+    assert [(row['tool'], row['unit']) for row in entry['limits']] == [
+        ('claude', 'description characters'), ('codex', 'description characters')]
+    # Trimmed and measured by Codex alone: Claude's limit stays until a Claude wrap measures it.
+    skill_file(skill, description_characters=100)
+    assert Session(tmp_path, 'codex', 'codex-2').record(listed)['recorded'] == []
+    [entry] = Session(tmp_path, 'claude', 'reader').records()
+    assert [(row['tool'], row['unit']) for row in entry['limits']] == [('claude', 'description characters')]
+    assert Session(tmp_path, 'claude', 'claude-2').record(listed)['recorded'] == []
+    assert Session(tmp_path, 'claude', 'reader').records() == []
+
+
+def test_a_duplicate_rule_is_kept_until_a_wrap_loads_every_file_it_names(tmp_path, tool):
+    checkout = repository(tmp_path)
+    left = rules_file(checkout / 'AGENTS.md', lines=3, extra=RULE + '\n\n')
+    right = rules_file(checkout / 'skills/CLAUDE.md', lines=3, extra=RULE + '\n\n')
+    Session(tmp_path, tool, 'first').record(left, right)
+    # A wrap that loaded one side alone could not have compared the pair: both records keep it.
+    Session(tmp_path, tool, 'second').record(right)
+    entries = Session(tmp_path, tool, 'reader').records()
+    assert [(entry['path'], len(entry['duplicates'])) for entry in entries] == [('AGENTS.md', 1), ('skills/CLAUDE.md', 1)]
+    assert [entry['sessions'] for entry in entries] == [['first'], ['first', 'second']]
+    # Found again by a wrap that loaded both, the pair is one finding, not two.
+    Session(tmp_path, tool, 'third').record(left, right)
+    assert [len(entry['duplicates']) for entry in Session(tmp_path, tool, 'reader').records()] == [1, 1]
+    rules_file(right, lines=3, extra='Another rule entirely, for the second file only.\n\n')
+    assert Session(tmp_path, tool, 'fourth').record(left, right)['recorded'] == []
+    assert Session(tmp_path, tool, 'reader').records() == []
+
+
+def test_a_new_duplicate_merges_into_a_record_whose_file_was_not_measured(tmp_path, tool):
+    checkout = repository(tmp_path)
+    left = rules_file(checkout / 'AGENTS.md', lines=3, extra=RULE + '\n\n')
+    right = rules_file(checkout / 'skills/CLAUDE.md', extra=RULE + '\n\n')
+    Session(tmp_path, tool, 'first').record(right)
+    session = Session(tmp_path, tool, 'second')
+    result = session.run('record-over-limit', '--measure', session.slim_helper('measure', left),
+                         '--duplicates', session.slim_helper('duplicates', left, right))
+    assert result.returncode == 0, result.stderr
+    [line] = [row['line'] for row in json.loads(result.stdout)['recorded']]
+    assert line.startswith('Duplicate rule, recorded')
+    [left_entry, right_entry] = Session(tmp_path, tool, 'reader').records()
+    assert left_entry['limits'] == [] and len(left_entry['duplicates']) == 1
+    assert right_entry['limits'][0]['unit'] == 'lines' and len(right_entry['duplicates']) == 1
+
+
+def test_a_glob_in_an_untracked_name_matches_no_tracked_file(tmp_path, tool):
+    checkout = repository(tmp_path)
+    rules_file(checkout / 'notes/a.md')
+    untracked = rules_file(checkout / 'notes/[ab].md', tracked=False)
+    output = Session(tmp_path, tool, 'first').record(untracked)
+    assert output['recorded'] == []
+    assert output['reported'][0]['reason'].startswith('git does not track it')
+
+
+@pytest.mark.parametrize('measure,duplicates,error', [
+    ('{"measured": [{"x": 1}]}', '{"duplicates": []}', "the measure payload's measured row 1 is not a measurement"),
+    ('{"over_limit": [{"source": "a", "size": {}, "limits": [{"unit": "lines"}]}]}', '{"duplicates": []}',
+     "the measure payload's over_limit row 1 is not a measurement"),
+    ('{"measured": []}', '{"duplicates": [{"match": "exact", "spans": []}]}',
+     "the duplicates payload's duplicates row 1 is not a finding"),
+    ('[]', '{}', 'the measure and duplicates payloads must be objects')])
+def test_a_malformed_payload_is_a_checklist_error(tmp_path, tool, measure, duplicates, error):
+    session = Session(tmp_path, tool, 'first')
+    (tmp_path / 'measure.json').write_text(measure)
+    (tmp_path / 'duplicates.json').write_text(duplicates)
+    result = session.run('record-over-limit', '--measure', tmp_path / 'measure.json',
+                         '--duplicates', tmp_path / 'duplicates.json')
+    assert result.returncode == 1 and result.stdout == ''
+    assert result.stderr.strip() == f'checklist: record-over-limit: {error}'
+    assert not (tmp_path / 'ledger/over-limit-records.json').exists()

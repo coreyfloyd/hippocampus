@@ -26,7 +26,7 @@ STORE = "over-limit-records.json"
 SCHEMA_VERSION = 1
 # The limits a listed-only skill measurement covers; a full measurement covers every unit.
 DESCRIPTION_UNITS = ("description characters", "description + when_to_use characters")
-HOME_ROOTS = ("Users", "home")
+TOOLS = ("claude", "codex")
 
 
 def store_path(module: Any) -> Path:
@@ -41,7 +41,8 @@ class GitUnreadable(Exception):
 def _git(cwd: Path, *args: str) -> str | None:
     """Git's answer, None when git says no, or GitUnreadable when git cannot run or hangs."""
     try:
-        result = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, timeout=30)
+        result = subprocess.run(["git", "--literal-pathspecs", "-C", str(cwd), *args],
+                                capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as error:
         raise GitUnreadable(f"git could not be read: {error}") from error
     return result.stdout.strip() if result.returncode == 0 else None
@@ -57,9 +58,10 @@ def repository_slug(url: str) -> str | None:
     The whole path is kept, not only its last two segments: a host with nested groups
     names different repositories `g1/sub/proj` and `g2/sub/proj`. A path of one segment
     names no owner and gets no slug. Local-path and `file://` remotes name a directory only
-    this machine has, so they get none either, and so does a home path in any form: an
-    scp-like absolute path, a `~user` segment, or a path under a home root such as `Users`
-    or `home`, whichever scheme carries it.
+    this machine has, so they get none either. So do the forms that name a home directory
+    on the host: an scp-like absolute path (`box:/srv/repo`) and a `~user` path in either
+    form (`box:~me/repo`, `ssh://box/~me/repo`). The rest of an ssh:// or http(s) path is
+    the host's own naming, so an owner called `home` or `Users` is a name like any other.
     """
     url = url.strip()
     match = HOSTED.match(url) or (None if "://" in url else SCP_LIKE.match(url))
@@ -69,38 +71,58 @@ def repository_slug(url: str) -> str | None:
     segments = path.split("/")
     if len(segments) < 2 or any(not part or part in (".", "..") for part in segments):
         return None
-    if segments[0] in HOME_ROOTS or any(part.startswith("~") for part in segments):
+    if segments[0].startswith("~"):
         return None
     return path
 
 
 class Locator:
-    """Resolve files to repository and path: git answers once per directory, repository and file."""
+    """Resolve files to repository and path: git answers once per directory, repository and file.
+
+    A failure is cached like an answer, so a repository whose git hangs costs one timeout,
+    not one per file.
+    """
 
     def __init__(self) -> None:
-        self.tops: dict[Path, str | None] = {}
-        self.slugs: dict[str, tuple[str | None, str | None]] = {}
+        self.tops: dict[Path, str | None | GitUnreadable] = {}
+        self.slugs: dict[str, tuple[str | None, str | None] | GitUnreadable] = {}
         self.located: dict[Path, tuple[dict[str, str] | None, str | None]] = {}
 
+    def _top(self, directory: Path) -> str | None:
+        if directory not in self.tops:
+            try:
+                self.tops[directory] = _git(directory, "rev-parse", "--show-toplevel")
+            except GitUnreadable as error:
+                self.tops[directory] = error
+        answer = self.tops[directory]
+        if isinstance(answer, GitUnreadable):
+            raise answer
+        return answer
+
     def _slug(self, top: str) -> tuple[str | None, str | None]:
+        """The repository's name from `origin`, else its only remote; never from branch tracking,
+        which would key one file differently per branch or checkout."""
         if top not in self.slugs:
-            cwd = Path(top)
-            remotes = (_git(cwd, "remote") or "").split()
-            branch = _git(cwd, "symbolic-ref", "--quiet", "--short", "HEAD") or ""
-            remote = _git(cwd, "config", f"branch.{branch}.remote") if branch else None
-            if remote not in remotes:
+            try:
+                cwd = Path(top)
+                remotes = (_git(cwd, "remote") or "").split()
                 remote = "origin" if "origin" in remotes else remotes[0] if len(remotes) == 1 else None
-            url = _git(cwd, "remote", "get-url", remote) if remote else None
-            slug = repository_slug(url) if url else None
-            self.slugs[top] = (slug, None) if slug else (None, "its repository has no hosted remote that names it")
-        return self.slugs[top]
+                url = _git(cwd, "remote", "get-url", remote) if remote else None
+                slug = repository_slug(url) if url else None
+                self.slugs[top] = (slug, None) if slug else (None, "its repository has no hosted remote that names it")
+            except GitUnreadable as error:
+                self.slugs[top] = error
+        answer = self.slugs[top]
+        if isinstance(answer, GitUnreadable):
+            raise answer
+        return answer
 
     def __call__(self, source: str) -> tuple[dict[str, str] | None, str | None]:
         """The file's repository and path inside it, or why it has none.
 
-        The remote is the current branch's, else `origin`, else the only one. A file that only
-        a local path could name gets no record: another machine could not find it. Neither does
-        a file git does not track, ignored or untracked, which only this checkout has.
+        A file that only a local path could name gets no record: another machine could not
+        find it. Neither does a file git does not track, ignored or untracked, which only this
+        checkout has.
         """
         path = Path(source).resolve()
         if path not in self.located:
@@ -109,9 +131,7 @@ class Locator:
 
     def _locate(self, path: Path) -> tuple[dict[str, str] | None, str | None]:
         try:
-            if path.parent not in self.tops:
-                self.tops[path.parent] = _git(path.parent, "rev-parse", "--show-toplevel")
-            top = self.tops[path.parent]
+            top = self._top(path.parent)
             if not top:
                 return None, "not in a git repository"
             inside = path.relative_to(Path(top).resolve()).as_posix()
@@ -136,11 +156,60 @@ def _locked(path: Path) -> Iterator[None]:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def _is_limit(row: Any) -> bool:
+    return (isinstance(row, Mapping) and isinstance(row.get("unit"), str)
+            and all(isinstance(row.get(key), int) for key in ("measured", "limit")))
+
+
+def _is_span(row: Any, located: bool) -> bool:
+    where = ("repository", "path") if located else ("source",)
+    return (isinstance(row, Mapping) and all(isinstance(row.get(key), str) and row[key] for key in where)
+            and all(isinstance(row.get(key), int) for key in ("start_line", "end_line"))
+            and isinstance(row.get("text"), str))
+
+
+def _is_finding(row: Any, located: bool) -> bool:
+    return (isinstance(row, Mapping) and isinstance(row.get("match"), str)
+            and isinstance(row.get("similarity"), (int, float)) and isinstance(row.get("spans"), list)
+            and len(row["spans"]) >= 2 and all(_is_span(span, located) for span in row["spans"]))
+
+
 def _is_record(row: Any) -> bool:
     return (isinstance(row, Mapping)
             and all(isinstance(row.get(key), str) and row[key] for key in ("repository", "path"))
             and all(isinstance(row.get(key), list) for key in ("limits", "duplicates", "sessions"))
+            and all(_is_limit(limit) and limit.get("tool") in TOOLS for limit in row["limits"])
+            and all(_is_finding(finding, located=True) for finding in row["duplicates"])
             and isinstance(row.get("size", {}), Mapping))
+
+
+def _is_measurement(row: Any) -> bool:
+    return (isinstance(row, Mapping) and isinstance(row.get("source"), str) and row["source"]
+            and isinstance(row.get("size"), Mapping) and isinstance(row.get("limits"), list)
+            and all(_is_limit(limit) for limit in row["limits"]))
+
+
+def check_payloads(measured: Any, duplicates: Any) -> None:
+    """Refuse a slim-helper payload that is not its documented shape, with a clear error."""
+    if not isinstance(measured, Mapping) or not isinstance(duplicates, Mapping):
+        raise ValueError("record-over-limit: the measure and duplicates payloads must be objects")
+    for name, key in (("measure", "measured"), ("measure", "over_limit")):
+        rows = measured.get(key, [])
+        if not isinstance(rows, list):
+            raise ValueError(f"record-over-limit: the {name} payload's {key} is not a list")
+        for number, row in enumerate(rows, 1):
+            if not _is_measurement(row):
+                raise ValueError(f"record-over-limit: the {name} payload's {key} row {number} is not a measurement")
+    rows = duplicates.get("duplicates", [])
+    if not isinstance(rows, list):
+        raise ValueError("record-over-limit: the duplicates payload's duplicates is not a list")
+    for number, row in enumerate(rows, 1):
+        if not _is_finding(row, located=False):
+            raise ValueError(f"record-over-limit: the duplicates payload's duplicates row {number} is not a finding")
+    for name, payload in (("measure", measured), ("duplicates", duplicates)):
+        unresolved = payload.get("unresolved", [])
+        if not isinstance(unresolved, list) or not all(isinstance(item, str) for item in unresolved):
+            raise ValueError(f"record-over-limit: the {name} payload's unresolved is not a list of paths")
 
 
 def read(module: Any) -> list[dict[str, Any]]:
@@ -183,17 +252,28 @@ def _span_text(span: Mapping[str, Any]) -> str:
     return f"{span['repository']} {span['path']}:{lines}"
 
 
+def _finding_key(finding: Mapping[str, Any]) -> tuple:
+    """Two findings are one when they name the same text in the same files; lines may move."""
+    return (finding["match"], tuple(sorted((span["repository"], span["path"], span["text"])
+                                           for span in finding["spans"])))
+
+
 def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, Any],
-           session_id: str | None) -> dict[str, Any]:
+           session_id: str | None, tool: str) -> dict[str, Any]:
     """Merge one wrap's findings into the store; return one line per recorded finding.
 
     A file several sessions record stays one record, listing each session once. A measurement
-    replaces the findings it covers: a file loaded in full gets its limits and duplicate rules
-    from this wrap alone, while a skill only listed, whose measurement covers its description
-    alone, keeps its body limits and duplicate rules and replaces only its description limits.
-    A file left with no limit and no duplicate rule loses its record. A file this wrap did not
+    replaces only what it measured. A limit is keyed by tool and unit: this tool's measurement
+    replaces this tool's limits, every unit for a file loaded in full and the description
+    units for a skill only listed, and leaves the other tool's limits alone. A duplicate rule
+    is replaced only when every file it names was loaded in full in this wrap, because the
+    slim helper compares only the files a wrap loaded; new findings merge with the kept ones.
+    A record is removed only when nothing remains under any key. A file this wrap did not
     measure keeps its record unchanged.
     """
+    if tool not in TOOLS:
+        raise ValueError(f"record-over-limit: unknown tool {tool!r}")
+    check_payloads(measured, duplicates)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     recorded: list[dict[str, Any]] = []
     reported: list[dict[str, Any]] = []
@@ -202,7 +282,7 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
 
     def fresh(where: Mapping[str, str]) -> dict[str, Any]:
         return current.setdefault((where["repository"], where["path"]),
-                                  {"size": {}, "limits": [], "duplicates": [], "full": False})
+                                  {"size": {}, "limits": [], "duplicates": [], "full": False, "listed": False})
 
     for row in measured.get("measured", []):
         where, _ = locate(row["source"])
@@ -210,7 +290,10 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
             entry = fresh(where)
             entry["size"] = {**entry["size"], **row["size"]}
             # The slim helper gives a listed skill a description-only size; a body measurement has lines.
-            entry["full"] = entry["full"] or "lines" in row["size"]
+            if "lines" in row["size"]:
+                entry["full"] = True
+            else:
+                entry["listed"] = True
     for row in measured.get("over_limit", []):
         if row.get("members") is not None:
             reported.append({**row, "reason": "a chain of several files; the user chooses one member"})
@@ -221,8 +304,12 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
             continue
         entry = fresh(where)
         entry["size"] = {**entry["size"], **row["size"]}
-        entry["limits"] = list(row["limits"])
-        recorded.append({**where, "kind": "over-limit", "limits": row["limits"],
+        entry["limits"] = [{"tool": tool, **limit} for limit in row["limits"]]
+        if "lines" in row["size"]:
+            entry["full"] = True
+        else:
+            entry["listed"] = True
+        recorded.append({**where, "kind": "over-limit", "limits": entry["limits"],
                          "line": f"Over limit, recorded for a later slim: {where['repository']} "
                                  f"{where['path']} ({_limits_text(row['limits'])})"})
     for row in duplicates.get("duplicates", []):
@@ -245,22 +332,25 @@ def record(module: Any, measured: Mapping[str, Any], duplicates: Mapping[str, An
                                  + " and ".join(_span_text(span) for span in spans)})
 
     if current:
+        loaded = {key for key, found in current.items() if found["full"]}
         path = store_path(module)
         with _locked(path):
             records = {(r["repository"], r["path"]): r for r in read(module)}
             for key, found in current.items():
-                kept = records.get(key, {})
-                if kept and not found["full"]:
-                    found["size"] = {**kept.get("size", {}), **found["size"]}
-                    found["limits"] = [row for row in kept["limits"] if row.get("unit") not in DESCRIPTION_UNITS
-                                       ] + found["limits"]
-                    found["duplicates"] = kept["duplicates"]
-                if not found["limits"] and not found["duplicates"]:
+                kept = records.get(key, {"size": {}, "limits": [], "duplicates": []})
+                replaced = (lambda limit: limit["tool"] == tool and (
+                    found["full"] or (found["listed"] and limit["unit"] in DESCRIPTION_UNITS)))
+                limits = [limit for limit in kept["limits"] if not replaced(limit)] + found["limits"]
+                findings = {_finding_key(f): f for f in kept["duplicates"]
+                            if not all((s["repository"], s["path"]) in loaded for s in f["spans"])}
+                findings.update((_finding_key(f), f) for f in found["duplicates"])
+                if not limits and not findings:
                     records.pop(key, None)
                     continue
                 entry = records.setdefault(key, {"repository": key[0], "path": key[1], "sessions": [],
                                                  "first_recorded": now})
-                entry.update(size=found["size"], limits=found["limits"], duplicates=found["duplicates"])
+                entry.update(size={**kept["size"], **found["size"]}, limits=limits,
+                             duplicates=list(findings.values()))
                 if session_id and session_id not in entry["sessions"]:
                     entry["sessions"].append(session_id)
                 entry["last_recorded"] = now
