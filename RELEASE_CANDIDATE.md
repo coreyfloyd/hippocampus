@@ -32,7 +32,29 @@ hippocampus plugin; tracked in
 
 ## Verification and publication state
 
-Not yet published.
+Published 2026-11-05: tag `v0.14.1` (annotated, tag object
+`e9e2504ffc8f27c506813ce10e846f390f122f2b`) at commit
+`b1766adc8c50f22e06293b08839021259ed5966b`,
+https://github.com/coreyfloyd/hippocampus/releases/tag/v0.14.1 (public, not a
+draft or prerelease). Assets: hippocampus-0.14.1.tar.gz, hippocampus-0.14.1.tar.gz.asc, hippocampus-0.14.1.tar.gz.sha256, hippocampus-release.asc, install-release.sh, verify-release.sh.
+Archive sha256: `325bb9a2f7c55a3a77da66a85c04931b7bcf54eac49baafc93f5500ff4f9e155`.
+
+Evidence:
+
+- All RELEASING.md candidate checks passed locally on the candidate (pytest 1796
+  passed, 3 skipped; swift test passed). CI was not used: a runner was
+  restarting, and the maintainer directed local verification with
+  administrator merges. The public commit-range scan was clean before every push.
+- The maintainer signed. `verify-release.sh` passed on the local build and on
+  the downloaded assets. The downloaded archive is byte-identical to the local
+  build, and the downloaded key and scripts are byte-identical to the
+  repository's. The archive has a single `hippocampus/` root (360 entries).
+- Upgraded a real 0.14.0 installation from the downloaded assets with
+  `install-release.sh`, then `install-claude.py` and `install-codex.py` from
+  `current`, while Claude Code sessions were running. The registration moved to
+  `current` once; the plugin reports 0.14.1 read from `current`;
+  `install.sh --verify` passed; every other plugin's enabled state and cache
+  entries were unchanged.
 
 Previous records: [0.14.0](docs/releases/0.14.0.md),
 [0.13.2](docs/releases/0.13.2.md),
