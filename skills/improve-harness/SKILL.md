@@ -237,7 +237,7 @@ python3 <checklist-module> apply-lessons --user-profile <user-profile> \
 Keep its output as `<remaining-items>`; `lesson_outcomes` says what happened to each row.
 Each applied lesson is one commit, `lesson: <change>`, on the branch checked out where the
 target's source lives, holding only its own lines even in a file with other changes. A
-target outside git is written without a commit. A `skip` is dropped: not carried and never
+target outside git, or untracked or ignored in its repository, is written without a commit. A `skip` is dropped: not carried and never
 an ask. A produced path is traced to its source, and a generated copy is never edited;
 regenerate each outcome's `surfaces` as in the routing contract. A lesson that cannot be
 written or committed is `failed` with its error and stays carried. Applying the same lesson

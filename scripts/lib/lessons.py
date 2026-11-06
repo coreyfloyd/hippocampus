@@ -102,8 +102,8 @@ def ask_text(outcome: Mapping[str, Any]) -> str:
     undo = (f"Commit: {outcome['commit']}. The change is already applied; undo it by reverting that "
             "commit through the repository's normal delivery."
             if outcome.get("commit") else
-            "The target is not in a git repository, so there is no commit; the change is already "
-            "applied, and removing the added text undoes it.")
+            f"The target is {outcome.get('delivery') or 'not in a git repository'}, so there is no commit; "
+            "the change is already applied, and removing the added text undoes it.")
     return (f"Lesson applied to always-loaded rules file {outcome['target']}. Added: {outcome['added']} "
             f"Evidence: {outcome['evidence']} {undo}")
 
@@ -255,13 +255,19 @@ def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
                                "always_loaded": bool(row.get("always_loaded")) or source in _rule_files()
                                or source.name in INSTRUCTION_FILES or any(
                                    Path(surface["path"]).name in INSTRUCTION_FILES for surface in surfaces)}
+    delivery = "not in a git repository"
     if checkout is not None:
-        tracked = _git(checkout, "ls-files", "--error-unmatch", "--", str(source)).returncode == 0
-        if not tracked and _git(checkout, "check-ignore", "-q", "--", str(source)).returncode == 0:
+        # Only a tracked file has a committed copy to build the lesson's commit from; an
+        # untracked or ignored one is written in place, like a file outside git.
+        tracked = _git(checkout, "--literal-pathspecs", "ls-files", "--error-unmatch", "--",
+                       str(source)).returncode == 0
+        if not tracked:
+            ignored = _git(checkout, "check-ignore", "-q", "--", str(source)).returncode == 0
+            delivery = "ignored by its repository" if ignored else "not tracked by its repository"
             checkout = None
     if checkout is None:
         _write(source, before, _edited(before or b"", row["edits"], "file"))
-        return {**outcome, "delivery": "not in a git repository"}
+        return {**outcome, "delivery": delivery}
     branch = _git(checkout, "symbolic-ref", "--short", "HEAD")
     if branch.returncode:
         raise LessonError("the checkout has no branch checked out (detached HEAD)")

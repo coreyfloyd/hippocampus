@@ -108,8 +108,8 @@ Set `"auto_apply_lessons": true` in the hippocampus configuration (off by defaul
 A wrap then no longer shows the lesson table and waits, attended or unattended:
 
 - Each lesson it recommends is written to its source as one commit of its own, holding only
-  that lesson's lines, so reverting the commit removes it. A target outside git is written
-  without a commit. A rule you dictated is applied whatever its recommendation.
+  that lesson's lines, so reverting the commit removes it. A target outside git, or one its
+  repository does not track, is written without a commit. A rule you dictated is applied whatever its recommendation.
 - A lesson recommended "skip" is dropped and listed; it is not carried or asked about again.
 - A lesson for an always-loaded rules file is in effect before anyone reviews it. It also
   raises an ask naming the target, text, evidence and commit, and saying how to undo it.

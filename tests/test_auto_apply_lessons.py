@@ -769,6 +769,18 @@ def test_a_malformed_routing_file_is_an_error_not_a_traceback(tmp_path, tool):
     delivered = wrap.run('deliver-lessons', '--handoff', wrap.save('h.json', wrap.payload([])))
     assert delivered.returncode == 1 and 'Traceback' not in delivered.stderr
     assert 'invalid quoted string' in delivered.stderr
+    handoff = wrap.save('h.json', wrap.payload([lesson()]))
+    rows = wrap.save('rows.json', [])
+    commands = [('apply-lessons', '--handoff', handoff, '--lessons', rows),
+                ('apply-knowledge', '--handoff', handoff, '--knowledge', rows)]
+    # The over-limit record ships with its own ticket; once this module offers it, it is held
+    # to the same rule.
+    if 'record-over-limit' in wrap.run('--help').stdout:
+        commands.append(('record-over-limit', '--handoff', handoff, '--measure', rows, '--duplicates', rows))
+    for command in commands:
+        result = wrap.run(*command)
+        assert result.returncode == 1 and 'Traceback' not in result.stderr, (command[0], result.stderr)
+        assert 'invalid quoted string' in result.stderr, (command[0], result.stderr)
     report, _, _ = wrap.finish(wrap.payload([]))
     assert report['report'] == 'failed'
     assert any('invalid quoted string' in error for error in report['errors'])
@@ -871,3 +883,23 @@ def test_config_get_prints_the_auto_apply_setting(tmp_path, tool):
     (tmp_path / 'config.json').write_text('{"auto_apply_lessons": "yes"}')
     mistyped = get()
     assert mistyped.returncode == 2 and 'must be true or false' in mistyped.stderr
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_an_untracked_target_in_a_repository_is_written_without_a_commit(tmp_path, tool, ignored):
+    checkout, _, _ = clone_pair(tmp_path)
+    target = checkout / 'local-rules.md'
+    body = ''.join(f'Rule {number}.\n' for number in range(100))
+    target.write_text(body)
+    if ignored:
+        (checkout / '.git/info/exclude').write_text('local-rules.md\n')
+    head = git(checkout, 'rev-parse', 'HEAD')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, target)])
+    [outcome] = data['lesson_outcomes']
+    assert outcome['status'] == 'applied' and outcome['commit'] is None
+    assert outcome['delivery'] == ('ignored by its repository' if ignored else 'not tracked by its repository')
+    assert target.read_text() == body + 'Run the suite first.\n'
+    assert git(checkout, 'rev-parse', 'HEAD') == head
+    assert git(checkout, 'diff', '--cached', '--name-only') == ''
