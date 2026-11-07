@@ -112,19 +112,6 @@ Each removal row identifies one original assertion site; a looped assertion incl
 | tests/test_claude_plugin.py | test_one_install_adds_the_six_skills_and_six_hooks | 438 | assert len(registrations(os.path.join(installed, "hooks", "hooks.json"))) == 6 | R1/R2 |
 | tests/test_codex_adapter.py | test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls | 97 | assert sum(len(g['hooks']) for groups in hooks.values() for g in groups)==8 | R1; R6 |
 | tests/test_combined_install.py | test_codex_install_from_extracted_tree_verifies_native_trust | 191 | assert len(manifest['trust_keys']) == 7 (for operation in ([], [], ['--uninstall'])) | R1; R6 |
-| tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | 60 | assert len(rows) == 1 | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | 61 | assert len({s['source'] for s in rows[0]['spans']}) == 2 | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_output_style_scope_and_no_self_duplicates | 69 | assert len(rows) == (2 if tool == 'claude' else 0) | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_markdown_boundaries_metadata_and_line_ranges | 81 | assert len(rows) == 1 | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_markdown_boundaries_metadata_and_line_ranges | 83 | assert (span['start_line'], span['end_line']) == (10, 11) | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_short_exact_instruction_is_not_lost_to_near_match_noise_filter | 104 | assert len(rows) == 1 | R1/R4 |
-| tests/test_duplicate_rules.py | test_short_exact_instruction_is_not_lost_to_near_match_noise_filter | 105 | assert rows[0]['match'] == 'exact' | R1/R4 |
-| tests/test_duplicate_rules.py | test_short_exact_instruction_is_not_lost_to_near_match_noise_filter | 106 | assert all(span['text'] == 'Do not commit.' for span in rows[0]['spans']) | R1/R4 |
-| tests/test_duplicate_rules.py | test_table_blocks_excluded_with_optional_outer_pipes | 130 | assert len(rows) == 1, rows | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_table_blocks_excluded_with_optional_outer_pipes | 132 | assert span['text'] == RULE | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_table_blocks_excluded_with_optional_outer_pipes | 133 | assert (span['start_line'], span['end_line']) == (6, 6) | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_table_stops_at_new_markdown_blocks | 145 | assert len(rows) == (2 if boundary.startswith(('- ', '> ')) else 1), rows | R1/R4 |
-| tests/test_duplicate_rules.py | test_pipe_prose_without_a_valid_table_separator_remains_visible | 152 | assert len(rows) == 1 | R1/R4 |
 | tests/test_fold_flows.py | test_flow_1_new_session_without_knowledge_profile | 109 | assert 'not configured' in instructions and 'hippocampus-set-up' in instructions | R4 |
 | tests/test_fold_flows.py | test_flow_7_session_only_setup_probes_record_and_validates_profile | 243 | assert 'decline knowledge configuration; write no knowledge profile' in guide | R4 |
 | tests/test_fold_flows.py | test_flow_7_session_only_setup_probes_record_and_validates_profile | 244 | assert 'Do not bind a failed new skill' in guide | R4 |
@@ -432,12 +419,16 @@ One row per retained test in the reviewed configuration-reader files (including 
 | tests/test_combined_install.py | test_codex_install_from_extracted_tree_verifies_native_trust | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_combined_install.py | test_codex_runtime_transaction_with_cross_device_home | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_combined_install.py | test_installed_version_integrity_and_narrow_repair | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | R7 | Exact and near reports are required for two fully test-authored temporary instruction files. Nonempty output, match kinds, pair spans, source identity, read-only operation and deterministic output are behavior checks. |
-| tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_output_style_scope_and_no_self_duplicates | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_markdown_boundaries_metadata_and_line_ranges | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_invalid_tool_is_rejected | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_table_blocks_excluded_with_optional_outer_pipes | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
+| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
+| tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
+| tests/test_duplicate_rules.py | test_output_style_scope_and_no_self_duplicates | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
+| tests/test_duplicate_rules.py | test_markdown_boundaries_metadata_and_line_ranges | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
+| tests/test_duplicate_rules.py | test_short_exact_instruction_is_not_lost_to_near_match_noise_filter | R7 | A test-authored short instruction must yield one exact report with the expected spans. |
+| tests/test_duplicate_rules.py | test_table_stops_at_new_markdown_blocks | R7 | Test-authored headings, lists, quotes, fences and comments terminate tables as specified by the parser. |
+| tests/test_duplicate_rules.py | test_pipe_prose_without_a_valid_table_separator_remains_visible | R7 | Test-authored pipe prose remains an instruction when no valid table separator is present. |
+| tests/test_duplicate_rules.py | test_unrelated_and_opposite_rules_are_not_near_duplicates | R7 | Test-authored unrelated and opposite-polarity instructions do not create near matches. |
+| tests/test_duplicate_rules.py | test_invalid_tool_is_rejected | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
+| tests/test_duplicate_rules.py | test_table_blocks_excluded_with_optional_outer_pipes | R7 | Duplicate-detector behavior over test-authored temporary source, agent and comparison files; no shipped instruction text supplies expected reports. |
 | tests/test_fixture_redaction.py | test_fixture_has_no_thinking_block_or_raw_tool_output | R8 | Leak prevention or behavior of the leak checker; private source material stays redacted. |
 | tests/test_fixture_redaction.py | test_fixture_has_no_session_url | R8 | Leak prevention or behavior of the leak checker; private source material stays redacted. |
 | tests/test_fixture_redaction.py | test_fixture_tool_results_are_placeholders | R8 | Leak prevention or behavior of the leak checker; private source material stays redacted. |
@@ -670,7 +661,6 @@ These tests stay unchanged. They require classification before any further remov
 | tests/test_slim_harness.py | test_codex_chain_under_line_limit_but_over_bytes | The recorded instruction chain trips its byte limit while below its line limit. | Captured dimensions and the cross-file aggregation behavior are inseparable in the current assertions. |
 | tests/test_slim_harness.py | test_multiline_plain_discovery_scalar_is_not_silently_undercounted | Multiline description fields are explicitly rejected rather than undercounted. | The refusal checks behavior, while its input-length precondition comes from captured prose. |
 | tests/test_slim_harness.py | test_listed_and_full_skill_merge_retains_all_sizes_and_limits | Combining listed and full loads retains sizes and limits. | Dynamic measurement checks mix with a fixed expected set of exceeded limits based on recorded dimensions. |
-| tests/test_duplicate_rules.py | test_unrelated_and_opposite_rules_are_not_near_duplicates | Opposite-polarity instruction text does not become a near duplicate. | The expected absence depends on live prose, but the negative match also exercises polarity handling. |
 
 ### Group 2
 
@@ -682,7 +672,7 @@ These tests stay unchanged. They require classification before any further remov
 
 ## Commit and integration boundary
 
-Review correction: exact/near output assertions were restored as behavior checks over fully controlled temporary inputs. The public custom-class example is parsed again as an R5 validity check; only its configured-name assertion stays removed. These restorations belong after the deletion-only boundary.
+Review corrections: every duplicate-detector regression case and its report assertions are restored over fully controlled temporary inputs, including parent-attested roles, output styles, Markdown spans, short exact instructions, and table boundaries. The public custom-class example is parsed again as an R5 validity check; only its configured-name assertion stays removed. These restorations belong after the deletion-only boundary.
 
 The rule, this inventory and deletion-only test changes precede modifying trims. Later trims remove only fixed-count conjuncts while retaining uniqueness checks; those rows are listed below so the inventory can be reviewed before either change is integrated. The two kinds require separate pull requests. This repository has no suite declaration to edit. The declared commands and every leak guard remain. Linking the committed inventory to the issue, independent evaluation, pull requests and merge are the orchestrator’s work.
 
