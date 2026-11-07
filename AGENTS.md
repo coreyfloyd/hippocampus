@@ -28,6 +28,13 @@ working: its install path, knowledge profile format and composer entry point.
 `docs/glossary.md` names every concept. Use its terms and never a word on an entry's
 avoid list; add or revise an entry before naming a new concept in code or docs.
 
+## Tests and configuration
+
+Stated exception to keeping a rule in one place: the shared development rules
+reach only private repositories, so this public repository carries its own copy.
+
+No test fails because configuration changed. Configuration is settings, per-node values, job and label lists, and the text of rules, skills and agent definitions, whether live or recorded. A test may check that configuration is valid: it parses, generated views match their source, references resolve, a tool's size limit holds. It never asserts a count, name, value, hash or wording taken from configuration. Remove any test that does when you come across it in your work (how: `test-driven-development`). Test code against an input the test controls: written in the test or a recorded fixture. Agents check wording when reviewing rules and skills (`/improve-harness`, `/slim-harness`). Why: such tests check no behaviour, and they turned checks red on legitimate changes and blocked unrelated pull requests (maintainer, 2026-11-05).
+
 ## Verify before handing off
 
 Run the checks in `RELEASING.md` § Verify the candidate. At minimum:

@@ -24,19 +24,9 @@ test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
 test -f "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Use `hippocampus-set-up`' "$ROOT/MIGRATION.md"
 test ! -d "$ROOT/skills/research-tools-set-up"
-grep -Fq 'old release directory in place for recovery' "$ROOT/MIGRATION.md"
-grep -Fq 'never a backlog sweep' "$CONTRACT"
-grep -Fq 'Reports are not raw compiler input' "$CONTRACT"
-grep -Fq 'drafts before reading existing wiki' "$CONTRACT"
-grep -Fq 'read-only' "$CONTRACT"
 grep -Fxq 'profile_version: 4' "$PROFILE"
 scan 'retired profile fields' -nE '^(raw_dir|wiki_dir|output_dir|docs_dir|capabilities):' "$PROFILE"
-grep -Fxq 'hot_file: wiki/hot.md' "$PROFILE"
-grep -Fxq 'operation_log_file: docs/log.md' "$PROFILE"
-grep -Fxq 'decision_log_file: docs/DECISIONS.md' "$PROFILE"
-grep -Fq 'wiki_followup_destination:' "$PROFILE"
 grep -Fq 'artifact_followup_destination:' "$PROFILE"
 if grep -Fq 'task_destination:' "$PROFILE"; then exit 1; fi
 PROFILE_ROOT="$(mktemp -d)"
@@ -138,113 +128,6 @@ sed -e "s|/absolute/path/to/knowledge|$PROFILE_ROOT/disabled-root|" \
 grep -Fxq 'wiki_enabled: false' "$PROFILE_ROOT/documented-disable-recipe.md"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-recipe.md" >/dev/null
 
-for skill in research-to-wiki wiki-audit; do
-  grep -Fq 'Karpathy-wiki contract' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  grep -Fq '~/.config/hippocampus/profile.md' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-grep -Fq 'free-form local policy body' "$PROFILE"
-grep -Fq 'free-form local policy body' "$ROOT/contracts/karpathy-wiki.md"
-grep -Fq 'Obsidian-style wikilinks' "$CONTRACT"
-grep -Fq 'session cache' "$CONTRACT"
-grep -Fq 'wiki follow-up destination' "$CONTRACT"
-grep -Fq 'artifact follow-up destination' "$CONTRACT"
-grep -Fq 'must not infer' "$CONTRACT"
-grep -Fq 'Andrej Karpathy' "$CONTRACT"
-grep -Fq 'canonical directories' "$CONTRACT"
-grep -Fq 'runtime-detected optional integrations' "$CONTRACT"
-for skill in research-sources research-topic feature-research feedback-research research-absorb; do
-  grep -Fq 'artifact_followup_destination' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-grep -Fq 'artifact_followup_destination' "$ROOT/skills/knowledge-capture/SKILL.md"
-# feature-research and feedback-research produce deliverables, not absorb handoffs.
-for skill in feature-research feedback-research; do
-  grep -Fq 'research-absorb` does not apply' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  if grep -Fq 'artifact-contract.md' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
-  if grep -Fq 'Findings format' "$ROOT/skills/$skill/SKILL.md"; then exit 1; fi
-done
-for skill in feature-research feedback-research dev-research; do
-  grep -Fq 'references/wiki-candidates.md' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-grep -Fq 'references/wiki-candidates.md' "$ROOT/skills/absorb/SKILL.md"
-grep -Fq 'never compile input' "$ROOT/skills/absorb/references/wiki-candidates.md"
-grep -Fq '## Sources' "$ROOT/skills/feature-research/SKILL.md"
-grep -Fq '## Communities to watch' "$ROOT/skills/feedback-research/SKILL.md"
-grep -Fq 'For research artifacts also read' "$ROOT/skills/absorb/SKILL.md"
-grep -Fq 'feature-research' "$ROOT/skills/absorb/references/artifact-contract.md"
-grep -Fq 'feedback-research' "$ROOT/skills/absorb/references/artifact-contract.md"
-for skill in research-to-wiki wiki-audit; do
-  grep -Fq 'wiki_followup_destination' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-for skill in research-sources research-topic feature-research feedback-research dev-research quick-research; do
-  grep -Fq 'runtime-detected' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-grep -Fq 'runtime-detected' "$ROOT/skills/transcribe/SKILL.md"
-for skill in research-sources research-topic feature-research feedback-research research-absorb knowledge-capture research-to-wiki wiki-audit; do
-  grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  grep -Fq 'hippocampus-set-up' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-grep -Fq 'profiles/karpathy-wiki.example.md' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'scripts/validate_profile.py' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Do not write or change configuration until the user approves' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-
-# Optional wiki: setup asks with no lean, gates wiki-only questions, and can
-# flip the wiki state later without redoing the rest of setup.
-#
-# The phrase greps below (and the similar ones later in this file, matching
-# the file's pre-existing convention for skill and contract prose) confirm
-# required doctrine is present in the shipped text. They are not behavioral
-# tests: they cannot prove an agent follows the instruction, only that the
-# instruction exists, and a reword that preserves meaning will need a
-# matching reword here. The validator cases above them are the behavioral
-# tests for this feature; there is no bash-only way to exercise agent-read
-# Markdown instructions behaviorally.
-grep -Fq 'Neither option is the default or the recommendation' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'no `wiki/hot.md`, no `hot_file`, and no `wiki_followup_destination`' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq '## Enable or disable the wiki later' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-grep -Fq 'Never delete or modify `wiki/`' "$ROOT/skills/hippocampus-set-up/SKILL.md"
-
-# The wiki skills gate on the validator's require-wiki option, not their own
-# judgment, and relay its refusal back to setup.
-for skill in research-to-wiki wiki-audit; do
-  grep -Fq -- '--require-wiki' "$ROOT/skills/$skill/SKILL.md" || exit 1
-  grep -Fq 'hippocampus-set-up enables' "$ROOT/skills/$skill/SKILL.md" || exit 1
-done
-
-# A wiki-disabled artifact has no Wiki Additions class, and research-absorb
-# neither stages provenance nor invokes the compiler.
-grep -Fq 'exists only for wiki-enabled profiles' "$ROOT/skills/absorb/references/artifact-contract.md"
-grep -Fq 'never invokes `wiki-compile`' "$ROOT/skills/absorb/references/artifact-contract.md"
-grep -Fq '../../absorb/references/artifact-contract.md' "$ROOT/skills/research-absorb/references/artifact-contract.md"
-
-# knowledge-capture offers no wiki classification when the wiki is disabled.
-grep -Fq 'offers no wiki classification' "$ROOT/skills/knowledge-capture/SKILL.md"
-# F3 regression: a disabled-wiki named referent must route to a classification
-# knowledge-capture actually defines, not the research-absorb-only "Document
-# Update" class this skill never explains.
-if grep -Fq 'Document Update' "$ROOT/skills/knowledge-capture/SKILL.md"; then exit 1; fi
-grep -Fq 'raw/derived/' "$ROOT/skills/knowledge-capture/SKILL.md"
-
-# The contract, README, INSTALLATION, and MIGRATION describe the wiki as optional.
-grep -Fq 'wiki is optional' "$CONTRACT"
-grep -Fq -- '--require-wiki' "$CONTRACT"
-grep -Fq 'never deletes or modifies an existing `wiki/`' "$CONTRACT"
-grep -Fq 'wiki is optional' "$ROOT/README.md"
-grep -Fq 'wiki is enabled by default' "$ROOT/INSTALLATION.md"
-grep -Fq 'wiki_enabled: false' "$ROOT/INSTALLATION.md"
-grep -Fq 'Existing version-4 profiles need no change' "$ROOT/MIGRATION.md"
 
 scan 'private vault vocabulary' -rnE 'unified Obsidian vault|AI-vault|writing-corpus|R-004|wiki/people/' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
 scan 'private paths and names' -rnE --exclude='*.swift' 'claude-dotfiles|research-skills|~/Obsidian|Corey|~/[.]claude/skills|~/Development|wiki/CLAUDE[.]md|wiki/AGENTS[.]md' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
-
-# Meeting input/schema and retention doctrine must remain in shipped text.
-for field in meeting_transcript_source meeting_event_source meeting_note_path meeting_record_folder meeting_record_template; do
-  grep -Fq "$field" "$PROFILE"
-  grep -Fq "$field" "$CONTRACT"
-  grep -Fq "$field" "$ROOT/INSTALLATION.md"
-done
-grep -Fq 'Ask only when a missing or ambiguous purpose' "$ROOT/skills/knowledge-capture/references/meetings.md"
-grep -Fq 'compile_mode: exclude' "$CONTRACT"
-grep -Fq 'compile_mode: exclude' "$ROOT/skills/absorb/SKILL.md"
-grep -Fq 'compile_mode: exclude' "$ROOT/skills/absorb/references/artifact-contract.md"
-grep -Fq 'meeting folder' "$ROOT/skills/knowledge-capture/references/meetings.md"
-grep -Fq 'raw/derived' "$ROOT/INSTALLATION.md"

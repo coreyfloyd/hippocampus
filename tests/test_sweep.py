@@ -704,20 +704,6 @@ def test_report_settings_and_strict_idle_boundary(sandbox):
         os.environ.update(original)
 
 
-def test_shared_skill_is_shipped_by_both_installers():
-    spec = importlib.util.spec_from_file_location('installer', ROOT / 'scripts/install-codex.py')
-    sys.path.insert(0, str(ROOT / 'scripts'))
-    try:
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    finally:
-        sys.path.pop(0)
-    assert 'sweep' in module.SKILLS
-    skill = (ROOT / 'skills/sweep/SKILL.md').read_text()
-    assert 'name: sweep' in skill
-    assert 'scripts/lib/sweep.py' in skill
-
-
 def test_failed_read_is_retained_instead_of_reported_as_drop_or_new_ticket(sandbox):
     source(sandbox)
     for row in ({'rule': 'R1', 'reason': 'Possibly recorded'},

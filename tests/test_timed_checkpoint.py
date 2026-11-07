@@ -96,10 +96,6 @@ def test_claude_schedule_output_replaces_job_and_uses_single_prompt(runtime):
     assert prompt.returncode == 0, prompt.stderr
     assert prompt.stdout.strip() in result.stdout
     assert 'below_limit' in prompt.stdout and 'otherwise do nothing' in prompt.stdout
-    assert 'timed-checkpoint-check' in PROMPT.read_text()
-    skill = (ROOT / 'skills/checkpoint/SKILL.md').read_text()
-    assert 'CronCreate' in skill and 'CronDelete' in skill
-    assert 'timed-checkpoint-prompt' in skill
 
 
 def test_pre_compact_writes_and_restores_current_facts_preserving_continuation(runtime):

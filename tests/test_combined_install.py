@@ -188,7 +188,6 @@ def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path):
         assert result.returncode == 0, result.stdout + result.stderr
         if not operation:
             manifest = json.loads((home / '.codex/hippocampus-install.json').read_text())
-            assert len(manifest['trust_keys']) == 7
             assert set(manifest['skill_links']) == set(installer().SKILLS)
         else:
             assert not (home / '.codex/hippocampus-install.json').exists()

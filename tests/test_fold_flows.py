@@ -105,8 +105,6 @@ def test_flow_1_new_session_without_knowledge_profile(user):
     plan = json.loads(engine(user, root, 'plan', '--session-id', 'captured-session').stdout)
     assert [s['id'] for s in plan['steps']] == ['record', 'knowledge', 'lessons', 'persist', 'handoff']
     assert not (user[1] / '.config/hippocampus/profile.md').exists()
-    instructions = (root / 'skills/checklist/SKILL.md').read_text()
-    assert 'not configured' in instructions and 'hippocampus-set-up' in instructions
     handoff = checkpoint(user, root, source(user[1]))
     assert report(user, root, handoff, {'knowledge': 'not configured', 'lessons': 'nothing'})['report'] == 'ok'
     assert len(json.loads(handoff.read_text())['resume']['open_loops']) == 2
@@ -239,9 +237,6 @@ def setup(user, root, bindings, *extra, check=True):
 def test_flow_7_session_only_setup_probes_record_and_validates_profile(user):
     install(user)
     root = runtime(user)
-    guide = (root / 'skills/hippocampus-set-up/SKILL.md').read_text()
-    assert 'decline knowledge configuration; write no knowledge profile' in guide
-    assert 'Do not bind a failed new skill' in guide
     response = {'kind': 'ticket_status', 'rows': [{'reference': 'example/work#1',
                 'title': 'Fixture work', 'state': 'open', 'link': 'https://example.invalid/work/1',
                 'latest_progress': 'Fixture record read'}]}
@@ -280,8 +275,6 @@ def test_flow_8_extend_existing_knowledge_profile_preserves_other_choices(user):
                 'steps': [{'id': 'tidy', 'after': 'persist', 'instructions': 'Keep addition'}]}
     profile.write_text('# Keep prose\n```checklist-profile\n' + json.dumps(original) + '\n```\n')
     before = knowledge.read_bytes()
-    guide = (root / 'skills/hippocampus-set-up/SKILL.md').read_text()
-    assert 'exact mutation list' in guide and 'Do not write or change configuration until the user approves' in guide
     setup(user, root, {'persist': {'command': '/save-work', 'consumes': []}}, '--user-present')
     plan = json.loads(engine(user, root, 'plan', '--user-profile', profile, '--session-id', 'captured-session').stdout)
     assert knowledge.read_bytes() == before
@@ -329,8 +322,6 @@ def test_flow_9_declined_or_invalid_setup_writes_nothing_unapproved(user):
     assert failed.returncode != 0 and 'injected write failure' in failed.stderr
     assert profile.read_bytes() == before and set(profile.parent.iterdir()) == paths
     assert not (profile.parent / 'profile.md').exists()
-    guide = (root / 'skills/hippocampus-set-up/SKILL.md').read_text()
-    assert 'report setup incomplete' in guide.lower()
 
 
 def test_session_installation_guides_resolve_local_links_and_layout():

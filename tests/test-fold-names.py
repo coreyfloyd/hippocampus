@@ -25,10 +25,6 @@ class FoldNames(unittest.TestCase):
             self.assertEqual(name, path.parent.name)
             names.append(name)
         self.assertEqual(len(names), len(set(names)), 'duplicate skill name')
-        self.assertIn('hippocampus-set-up', names)
-        self.assertNotIn('setup', names)
-        self.assertEqual(json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['name'], 'hippocampus')
-        self.assertTrue((ROOT / 'skills/checklist/SKILL.md').exists())
 
     def test_claude_invocations_use_plugin_namespace(self):
         names = [path.parent.name for path in ROOT.glob('skills/*/SKILL.md')]
