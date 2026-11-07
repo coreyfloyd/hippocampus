@@ -51,6 +51,7 @@ an empty configuration.
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
 | `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
+| `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -400,9 +401,24 @@ completion command succeeds it answers `unattended-checklist` until a passing
 `wrap-check --unattended`, or an explicit attended `plan` starts all steps
 afresh after an unfinished unattended wrap. Without the section every interactive session is `checklist`.
 
+### Unattended slim: `scripts/lib/slim.py`
+
+Runs in any session kind. `plan`, `begin` and `finish` refuse, exit 1, with the auto-apply setting off or the routing file's `lesson-policy: propose`. State is `slim-state.json` beside the over-limit records, so one machine runs the step; it is given every machine's records. All output is JSON.
+
+| Command | Result |
+|---|---|
+| `plan --records F [--records F ...]` | Start a run over the given `{"records": [...]}` files, records of one file merged (the newest measurement per tool and unit; duplicate rules and sessions joined). Settles each awaiting branch gone from its remote: merged if its files moved from their base, otherwise rejected. Returns `run_id`, `queued`, `skipped` (awaiting a decision, or `over limit, slim rejected`), `deferred`, `unreachable`, `warnings` and `undelivered_asks`. |
+| `begin --run R` | With `done: false`, the open slim: `slim_id`, `repository`, `path`, `file`, `workspaces`, `limits`, `duplicates`, `frozen` and `surfaces`. It repeats the open slim until `finish`. A file an earlier slim froze goes to `deferred` and does not count toward the three. With `done: true`, the closed run: `analyzed`, `asks`, `results`, `waiting`, `skipped`, `deferred`, `unreachable`, `failed`. |
+| `workspace --run R --repository owner/name` | Clone another repository's default branch for the open slim. |
+| `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): drop edits to a frozen file with their `group`, and push one branch per repository (`slim/<run>-<path>-<digest>`). Returns `status`: `slimmed`, `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that leaves the file over a limit with no `left`, or is malformed, is refused, exit 1, and changes nothing. |
+| `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. |
+| `ask-delivered --ask ID --receipt T` | Settle a delivered ask, which `plan` otherwise lists again. |
+
+A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its text lists, in order: contradictions, duplicates, rules removed or rewritten, sizes, branches, then what was deferred, what is left, surfaces to regenerate, and how to undo or stop it. The package never merges a slim branch and schedules nothing.
+
 ## 7. Skills
 
-26 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
+27 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
 looks for skills. Each resolves its scripts from its own real directory, never from a
 tool-specific home directory.
 
@@ -418,6 +434,7 @@ tool-specific home directory.
 | `wip` | In-flight work, blockers, and pending approvals for the current session. |
 | `improve-harness` | Route a lesson to the user's rules, skills, agent definitions, or memory. |
 | `slim-harness` | Review one instruction source with the user, resolve conflicts, and leave edits uncommitted. |
+| `slim-unattended` | Slim recorded over-limit files without the user, leaving each result on a branch with an ask. |
 | `absorb` | `/hippocampus:absorb` | See the absorb skill. |
 | `dev-research` | `/hippocampus:dev-research` | See the dev-research skill. |
 | `feature-research` | `/hippocampus:feature-research` | See the feature-research skill. |
@@ -453,7 +470,7 @@ repository. `tests/test_shipped_surface.py` runs the check over the whole tree w
 ## 10. Codex installation and normalization
 
 `python3 scripts/install-codex.py [--codex-home PATH] [--codex PATH]` installs a
-runtime copy, the 26 skill links, six hippocampus hooks and the optional actor
+runtime copy, the 27 skill links, six hippocampus hooks and the optional actor
 guard. The installer owns only the registrations and links recorded in
 `hippocampus-install.json`; other hooks and configuration survive. Its seven
 handlers must match `hooks/list` with `trustStatus: trusted`, or it restores the
