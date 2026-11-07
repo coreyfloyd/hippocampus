@@ -241,7 +241,9 @@ and stays carried. An item any session's ledger already settles gets no work
 entry: it is never applied or asked again, and a commit not yet pushed goes to
 delivery. The report lists these under `already_settled`, not as this run's work;
 watch-only lists them the same way, apart from `would_apply`. A malformed ledger
-row is named in the report's errors and the rest of that ledger is still searched.
+row, including an unknown status, is named in the report's errors and the rest of
+that ledger is still searched; the item it names stays `carried` until the row is
+repaired. An always-loaded lesson's ask follows only a delivered commit.
 `complete` reads the open-session evidence passed on that call before it applies
 anything: pass refreshed `--open-sessions` evidence on every completing call. An
 assessed item whose session is open again comes back `carried` with that reason,

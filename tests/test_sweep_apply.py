@@ -820,3 +820,44 @@ def test_watch_only_lists_settled_items_apart_from_what_it_would_apply(sandbox, 
     text = report.read_text().split('```json')[0]
     assert row['outcome']['commit'] in text.split('### Already settled')[1].split('###')[0]
     assert git(checkout, 'rev-parse', 'HEAD') == row['outcome']['commit']
+
+
+def test_always_loaded_lesson_whose_push_fails_raises_no_ask_until_delivered(sandbox, tool):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    hook = reject_pushes(remote)
+    path = source(sandbox, PRODUCER, loops=[lesson(choices=['approve', 'decline'])])
+    configure(sandbox)
+    run, rounds = finish(sandbox, start(sandbox), agent(assessment(checkout / 'rules.md', always_loaded=True)))
+    assert [[row['operation'] for row in group] for group in rounds] == [['apply_lesson'], ['persist']]
+    assert not section(sandbox, run)['asks_raised'] and path.exists()
+    row, = section(sandbox, run)['lessons_not_pushed']
+    assert row['outcome'] == 'not pushed' and 'refused by test' in row['error']
+    hook.unlink()
+    # Delivered on the next run, the ask follows and names the pushed commit.
+    run, rounds = finish(sandbox, start(sandbox), agent())
+    assert [[row['operation'] for row in group] for group in rounds] == [[], ['persist'], ['ask']]
+    assert row['commit'] in rounds[2][0]['ask']['text'] and 'already applied' in rounds[2][0]['ask']['text']
+    assert git(remote, 'rev-parse', 'main') == row['commit'] and archived(sandbox, PRODUCER)
+
+
+@pytest.mark.parametrize('item,destination,kind', [(lesson(), 'lessons', 'lesson_outcome'),
+                                                   (knowledge(), 'knowledge', 'knowledge_outcome')])
+def test_unknown_ledger_status_is_malformed_and_keeps_the_item_carried(sandbox, tool, item, destination, kind):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    _, extra = knowledge_root(sandbox)
+    path = source(sandbox, PRODUCER, loops=[item])
+    configure(sandbox)
+    identity = [PRODUCER, item['produced_at'], item['type'], item['context']]
+    seed_ledger(sandbox, PRODUCER, {'kind': kind, 'outcome': {'identity': identity, 'status': 'pending'}})
+    count, pushed = commits(checkout), git(remote, 'rev-parse', 'main')
+    payload = start(sandbox, destination)
+    assert payload['work'] == []
+    run, rounds = finish(sandbox, payload, agent(), *extra)
+    assert rounds == [[]]
+    row, = section(sandbox, run)['filing_outcomes']
+    assert row['outcome'] == 'carried' and 'malformed' in row['reason'] and 'receipt' not in row
+    assert not section(sandbox, run)['already_settled'] and not section(sandbox, run)['lessons_applied']
+    assert not section(sandbox, run)['knowledge_captured']
+    damaged, = run['errors']
+    assert 'row 1' in damaged['reason'] and 'pending' in damaged['reason']
+    assert path.exists() and commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed

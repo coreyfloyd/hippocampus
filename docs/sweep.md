@@ -212,7 +212,10 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
 - Each outcome stays in a session ledger, and the sweep searches every ledger, so a later
   sweep skips what landed, delivers what did not, and never repeats a delivered ask. What a
   wrap or an earlier run settled is listed under `already_settled`, not as this run's work.
-  A malformed ledger row is named in the report's errors and the rest of that ledger is still read.
+  A malformed ledger row, including an unknown status, is named in the report's errors and the
+  rest of that ledger is still read; the item it names is carried until the row is repaired.
+- An always-loaded lesson's ask is raised only after its commit is delivered; while the commit is
+  not pushed, the handoff is kept and no ask goes out.
 - Completion reads the open-session evidence passed on that call, and current activity, before it
   applies anything: an item whose session is open again is carried, nothing is committed or pushed
   for it, and its handoff is kept. A commit made in an earlier round of the run whose session is

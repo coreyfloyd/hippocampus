@@ -660,44 +660,58 @@ def module_for(kind):
     return checklist.lessons if kind == 'lesson' else checklist.knowledge
 
 
+# The terminal statuses a ledger row may carry; any other status is a malformed row.
+STATUSES = {'lesson': ('applied', 'dropped', 'failed'), 'knowledge': ('captured', 'asked', 'failed')}
+
+
 def is_settled(kind, outcome):
     """An outcome no later run repeats; a fact about the user settles when its ask is delivered."""
     if kind == 'lesson':
-        return outcome['status'] != 'failed'
+        return outcome['status'] in ('applied', 'dropped')
     return outcome['status'] == 'captured' or bool(outcome.get('ask_delivered'))
 
 
-def ledger_outcomes(kind, session, errors=None):
-    """The latest outcome per item in one session's ledger; a malformed row fails only itself."""
+def ledger_outcomes(kind, session, errors=None, damaged=None):
+    """The latest outcome per item in one session's ledger; a malformed row fails only itself.
+
+    `damaged` collects the identity of each malformed row whose identity still reads, so the
+    item it names is applied by nobody until the row is repaired.
+    """
     path = handoff.ledger_path(session)
     latest = {}
     for number, row in enumerate(handoff._ledger_records(path), 1):
         if row.get('kind') != module_for(kind).OUTCOME:
             continue
+        key = None
         try:
             outcome = row['outcome']
             key = tuple(outcome['identity'])
-            if not key or not all(isinstance(part, str) for part in key) or not isinstance(outcome.get('status'), str):
-                raise ValueError('an outcome needs a string identity and status')
+            if not key or not all(isinstance(part, str) for part in key):
+                key = None
+                raise ValueError('an outcome needs a string identity')
+            if outcome.get('status') not in STATUSES[kind]:
+                raise ValueError('unknown status ' + repr(outcome.get('status')))
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             if errors is not None:
                 errors.append({'path': path, 'reason': 'ledger row ' + str(number) + ' is malformed (' +
                                error_text(exc) + '); the other rows were searched'})
+            if damaged is not None and key is not None:
+                damaged.add(key)
             continue
         latest[key] = outcome
     return list(latest.values())
 
 
 def ledger_index(kind, errors):
-    """Every recorded outcome by identity, across every session's ledger.
+    """Every recorded outcome by identity, across every session's ledger, and the damaged identities.
 
     A wrap records under its own session, which may be neither the producer nor the handoff's.
     """
-    found = {}
+    found, damaged = {}, set()
     for session in handoff.ledger_sessions():
-        for outcome in ledger_outcomes(kind, session, errors):
+        for outcome in ledger_outcomes(kind, session, errors, damaged):
             found.setdefault(tuple(outcome['identity']), []).append((session, outcome))
-    return found
+    return {'found': found, 'damaged': damaged}
 
 
 def recorded_outcome(row, session, index):
@@ -708,7 +722,7 @@ def recorded_outcome(row, session, index):
     """
     item = ledger_item(row)
     producer = item['session_id']
-    settled = [(ledger, outcome) for ledger, outcome in index.get(handoff.session_item_identity(item), [])
+    settled = [(ledger, outcome) for ledger, outcome in index['found'].get(handoff.session_item_identity(item), [])
                if is_settled(row['item_kind'], outcome)]
     settled.sort(key=lambda found: (found[0] != producer, found[0] != session))
     return settled[0] if settled else (producer, None)
@@ -752,6 +766,10 @@ def plan_apply(section, row, session, index):
     """Mark what act mode would apply, unless a ledger already settles it."""
     row.update(item_kind=ITEM_TYPES[row['binding']], handoff_session=session)
     try:
+        if handoff.session_item_identity(ledger_item(row)) in index['damaged']:
+            row.update(outcome='carried', ledger_damaged=True,
+                       reason='A ledger row for this item is malformed; nothing is applied until it is repaired')
+            return
         row['ledger_session'], prior = recorded_outcome(row, session, index)
     except Exception as exc:
         row.update(outcome='failed', error=error_text(exc))
@@ -797,7 +815,8 @@ def plan_act(report, discovery, ask, config, path, persist=None):
             if row['outcome'] == 'would apply':
                 add_intent(report, row, directory, APPLY_OPERATIONS[row['binding']])
                 continue
-            if row['outcome'] != 'dry run' and not (row['outcome'] == 'carried' and row.get('binding') in checklist.NATIVE):
+            if row['outcome'] != 'dry run' and not (row['outcome'] == 'carried' and row.get('binding') in checklist.NATIVE
+                                                    and not row.get('ledger_damaged')):
                 continue
             if row['rule'] in ('R1', 'R6'):
                 row['outcome'] = 'dropped'
@@ -1076,7 +1095,8 @@ def advance_lessons(report, protected):
             not_pushed(rows, 'persist did not confirm (' + persist['outcome'] + '): ' + (persist.get('error') or 'no error given'))
         else:
             deliver_lessons(report, rows)
-    for row in lesson_rows(report, 'written', 'already_written', 'not pushed'):
+    # Only a delivered commit raises its ask; a commit not pushed keeps the handoff and asks later.
+    for row in lesson_rows(report, 'written', 'already_written'):
         if row.get('ask_required') and not protected(row):
             row['ask_required'] = False
             try:

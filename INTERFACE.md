@@ -663,8 +663,10 @@ abandonment is `carried` with that reason and nothing is written, committed or p
 `applied` commit whose session is open is `not pushed` until a later sweep delivers it, and its
 ask is not raised. New outcomes go to the ledger of the item's producing session, and every
 session's ledger is searched by the item's identity (`ledger_session` names the one used); a
-malformed ledger row fails only itself, named in `errors`, and the rest of that ledger is still
-searched. A
+malformed ledger row, including one whose status is not a known terminal status (`applied`,
+`dropped`, `failed`; `captured`, `asked`, `failed`), fails only itself, named in `errors`, and the
+rest of that ledger is still searched; the item such a row names stays `carried`, with the reason,
+until the row is repaired. A
 settled item (a lesson not failed, a capture, or a fact whose ask was delivered) gets no work
 entry and is reported under `already_settled` with outcome `already_written`, or `dropped`;
 those rows are this run's work in no list, and undo never names them. A row's `receipt` is its commit, its target with no commit,
@@ -674,7 +676,7 @@ or a capture's files; a lesson row also keeps `target`, `change`, `commit`, `bra
 `complete` journals one `persist` intent, returns `planned`, and on the next call delivers
 as `deliver-lessons` does, only when that result is `written` or `already_written`; any other
 result leaves the commits `not pushed` with the reason, including `uncertain` with a null `error`. With persist unbound it delivers at once. Asks for facts about the user and for always-loaded lessons follow in the
-same way, the latter after delivery with `choices: []`; a delivered ask settles its item, and its ledger records that, so no later run raises it again.
+same way, the latter only once its commit is delivered, with `choices: []`; a commit `not pushed` raises no ask yet; a delivered ask settles its item, and its ledger records that, so no later run raises it again.
 One ask per item identity per run: when two handoffs carry the same item, the second's ask row
 carries `shares_ask` (the first ask's write id) and takes that ask's outcome, receipt and error
 instead of journaling a second intent.
