@@ -18,7 +18,7 @@ own data area, and survive adapter removal.
 
 ## Skills
 
-Both installers register **26 skills**. Claude Code uses plugin-namespaced
+Both installers register **27 skills**. Claude Code uses plugin-namespaced
 commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 
 | Skill name in Codex | Claude Code command | Role |
@@ -33,6 +33,7 @@ commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 | `wip` | `/hippocampus:wip` | Report current work, blockers, and pending approvals from verified state. |
 | `improve-harness` | `/hippocampus:improve-harness` | Route grounded lessons to their owning rules, skills, agent definitions, or memory. |
 | `slim-harness` | `/hippocampus:slim-harness` | Review one instruction source with the user, resolve conflicts, and leave source edits uncommitted. |
+| `slim-unattended` | `/hippocampus:slim-unattended` | Slim recorded over-limit files without the user, leaving each result on a branch with an ask. |
 | `absorb` | `/hippocampus:absorb` | See the absorb skill. |
 | `dev-research` | `/hippocampus:dev-research` | See the dev-research skill. |
 | `feature-research` | `/hippocampus:feature-research` | See the feature-research skill. |
@@ -136,7 +137,60 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
 
 A routing file line `lesson-policy: propose` turns lesson applying off, over-limit records included, and the report says so.
 `lesson-pull-requests:` with `- owner/name` list lines sends a repository's lessons through a
-pull request every time. The sweep and the slim review itself are unchanged.
+pull request every time. The sweep and the attended slim review are unchanged.
+
+### Let over-limit files slim themselves
+
+With the auto-apply setting on, `slim-unattended` works through the over-limit records it is
+given, from one machine or several, and treats records of one file as one. Name each
+repository's checkout in the configuration, so the step can find its remote and its produced
+surfaces: `"slim_checkouts": {"owner/name": "~/code/name"}`. A repository not named waits and
+is reported, as does a file whose duplicate rule lives in a repository not named. The routing
+file's `lesson-policy: propose` stops this step too.
+
+- One run analyzes at most three files, largest overage first, one after another. The rest
+  wait for the next run.
+- Each file gets the whole attended review, in the same order, but the agent makes the edits
+  itself: it cuts inside the file, removes a rule duplicated in another file (choosing the
+  owner) and resolves contradicting rules (choosing the winner). Edits may reach other files.
+- The result is one branch per affected repository, built from its hosted default branch in
+  a temporary clone. Your checkout is not changed. No commit holds both a lesson and a slim.
+- One ask per slimmed file lists each contradiction and its winner, each duplicate and its
+  owner, every rule removed or rewritten, sizes before and after against each limit, and the
+  branches. It offers no choices and has no deadline. Your automation adds any links and merge time.
+- A file still over its limit gets the best result, and the ask says what is left and why.
+- A generated surface the step cannot verify means no branch, and an ordinary ask with the reason.
+- A file a waiting branch changed is left alone and listed as deferred to a later run, so two
+  slims never change one file on two branches, however a path is spelled. A file with a
+  waiting branch is skipped; one left alone because of an earlier run's branch gets one ask
+  saying so. A slim interrupted while pushing is settled from its remotes at the next run.
+- Closing a pull request without merging rejects the slim. Have your automation run
+  `scripts/lib/slim.py decide --repository owner/name --branch <branch> --decision rejected`
+  (or `merged`); a branch deleted from its remote is settled at the next run: rejected only
+  when the default branch still reads as it did before the slim, otherwise merged. A rejected file is reported as "over limit, slim
+  rejected" and skipped until a session measures it larger than it was at rejection or records
+  a new duplicate rule naming it.
+- A file that produces no branch in two runs in a row is stalled: its ask says why, and later
+  runs report it as "over limit, slim stalled" and skip it. It returns when measured larger,
+  on a new duplicate rule, or after `scripts/lib/slim.py retry --repository owner/name --path <file>`.
+
+The package never opens or merges the pull request, and ships no scheduler. How much review a
+change gets follows its level:
+
+| Level | What happens | Used for |
+|---|---|---|
+| Low | Committed and pushed; listed in the report. No ask. | A lesson for a narrow surface; a wiki capture |
+| Medium | Committed and pushed; an ask reports it for review afterwards. | A lesson for an always-loaded rules file |
+| High | A branch for a pull request that your automation may merge after a period; an ask says how to stop it. | A whole-file slim |
+| Critical | A pull request that is never merged automatically; an ask. | None yet. A fact about you stays an ordinary ask. |
+
+To schedule the sweep followed by the slim step, run both from your own scheduler, with your
+own agent driver. They are separate runs:
+
+```cron
+0 3 * * * /absolute/path/to/agent-driver 'Use the sweep skill with scope all unattended'
+30 3 * * * /absolute/path/to/agent-driver 'Use the slim-unattended skill'
+```
 
 The same setting lets a wrap capture knowledge without asking, attended or unattended:
 
@@ -161,7 +215,7 @@ only report findings, including in unattended runs. You choose one source for
 `slim-harness`, which reads the source
 and neighboring instructions, asks about conflicts and produced surfaces,
 then applies the agreed edits. It reports numbered changes for rejection and
-leaves them uncommitted. It does not automatically slim every flagged file;
+leaves them uncommitted. It does not slim every flagged file; with the auto-apply setting off,
 unattended lessons default to `lesson` items for sessions that resume the handoff.
 A routing file can override this with a durable proposal sink; headless runners
 without one return full proposals to their parent or report a persistence blocker.
@@ -520,6 +574,7 @@ configuration JSON object             # shared settings, not a profile
 ├── checklist_surfaces: string[]      # standing surface-detector candidates
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
+├── slim_checkouts: object            # unattended slim: repository (owner/name) to its checkout on this machine
 ├── timed_checkpoint_minutes: positive integer # whole minutes, at least 1; default 55
 ├── timed_checkpoint_token_limit: positive integer # below-limit checkpoint, default 200000
 ├── prune_days: positive integer      # stale-transcript prune age, default 7; PICKUP_PRUNE_DAYS overrides
