@@ -24,6 +24,9 @@ _record_spec.loader.exec_module(record_write)
 _lessons_spec = importlib.util.spec_from_file_location("lessons", Path(__file__).with_name("lessons.py"))
 lessons = importlib.util.module_from_spec(_lessons_spec)
 _lessons_spec.loader.exec_module(lessons)
+_knowledge_spec = importlib.util.spec_from_file_location("knowledge", Path(__file__).with_name("knowledge.py"))
+knowledge = importlib.util.module_from_spec(_knowledge_spec)
+_knowledge_spec.loader.exec_module(knowledge)
 _over_limit_spec = importlib.util.spec_from_file_location("over_limit", Path(__file__).with_name("over_limit.py"))
 over_limit = importlib.util.module_from_spec(_over_limit_spec)
 _over_limit_spec.loader.exec_module(over_limit)
@@ -314,7 +317,8 @@ def filing_binding(rule: str, item: Mapping[str, Any], row: Mapping[str, Any]) -
 def validate_ask_payload(ask: Mapping[str, Any]) -> None:
     """Require complete text and usable choices for both new and stored asks.
 
-    An ask about an applied lesson reports what happened, so it has no choices.
+    An ask about an applied lesson reports what happened, so it has no choices. A fact
+    about the user is an ordinary ask: it keeps its choices and never has a default.
     """
     if not isinstance(ask.get("text"), str) or not ask["text"].strip():
         raise ValueError("an ask requires non-empty text")
@@ -323,11 +327,13 @@ def validate_ask_payload(ask: Mapping[str, Any]) -> None:
     choices = ask.get("choices")
     if not isinstance(choices, list) or not choices or not all(isinstance(c, str) and c.strip() for c in choices):
         raise ValueError(f"{ask['text']}: an ask requires the user's choices")
+    if ask.get("user_fact") and "default" in ask:
+        raise ValueError(f"{ask['text']}: a fact about the user has no default")
 
 
 def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
-    text = item["ask_text"] if item.get("applied") else item.get("context", str(item))
+    text = item["ask_text"] if item.get("applied") or item.get("user_fact") else item.get("context", str(item))
     ask = {**copy.deepcopy(dict(item)), "text": text,
            "session_id": item.get("session_id") or subject.get("session_id"),
            "directory": subject.get("working_directory"),
@@ -409,10 +415,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result = copy.deepcopy(dict(handoff))
     result.pop("lesson_outcomes", None)
     result.pop("lesson_asks", None)
+    result.pop("knowledge_outcomes", None)
+    result.pop("knowledge_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
     ticket_module = _load_handoff_module()
     session_id = result.get("subject", {}).get("session_id") or ticket_module.ambient_session_id()
     lesson_outcomes = lessons.outcomes(ticket_module, session_id) if execute_writes else []
+    knowledge_outcomes = knowledge.outcomes(ticket_module, session_id) if execute_writes else []
     outcome_for = {tuple(outcome["identity"]): outcome for outcome in lesson_outcomes}
     summary_outcomes = copy.deepcopy(result.get("resume", {}).get("close_outcomes", []))
     if execute_writes:
@@ -479,7 +488,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         lesson_outcome = outcome_for.get(ticket_module.session_item_identity(item))
         if item.get("applied"):
             if rule != "R3":
-                raise ValueError(f"{item.get('context')}: an applied lesson's ask files under R3")
+                # One mis-ruled row fails alone; the other items still file.
+                error = "an applied lesson's ask files under R3"
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": "ask",
+                                        "status": "failed", "error": error})
+                report["failures"].append(f"{item.get('context', str(item))}: {error}, not {rule}")
+                kept.append(copy.deepcopy(item))
+                continue
             if lesson_outcome:
                 item = {**item, "ask_text": lessons.ask_text(lesson_outcome), "commit": lesson_outcome.get("commit")}
         if rule not in ("R1", "R3", "R4", "R7", "R2", "R5", "R6"):
@@ -487,6 +502,16 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
+        if item.get("user_fact") and binding != "ask" and status in ("filed", "dropped"):
+            try:
+                knowledge.user_answer(item, row, saving=status == "filed")
+            except ValueError as error:
+                # The fact stays carried with its ask; the other items still file.
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
+                                        "status": "failed", "error": str(error)})
+                report["failures"].append(f"{item.get('context', str(item))}: {error}")
+                kept.append(copy.deepcopy(item))
+                continue
         if binding == "record":
             binding = record_write.kind_for(rule, item, row, writes)
             bindings.setdefault(binding, None)
@@ -583,6 +608,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result.pop("session_items", None)
     if lesson_outcomes:
         report["lessons"] = lessons.report_section(lesson_outcomes)
+    if knowledge_outcomes:
+        report["knowledge"] = knowledge.report_section(knowledge_outcomes)
     result["filing"] = report
     if execute_writes and session_id:
         # Filed and dropped items are settled; kept items stay retained.
@@ -832,7 +859,7 @@ def completed_by() -> set[str]:
 
 
 # Commands that run the checklist or write a handoff; only an interactive session may.
-WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|apply-lessons|deliver-lessons|file|record|wrap-check|report)\b"
+WRAP_COMMAND = re.compile(r"checklist\.py['\"]?\s+(?:plan|settle|apply-lessons|deliver-lessons|apply-knowledge|file|record|wrap-check|report)\b"
                           r"|checkpoint\.sh\b|handoff\.py['\"]?\s+checkpoint\b")
 
 
@@ -942,7 +969,9 @@ def auto_apply_state() -> dict[str, Any] | None:
         return None
     rules = lessons.routing_rules()
     reason = lessons.forbidden_reason(rules)
-    return {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
+    # The routing file governs lessons only; knowledge capture follows the setting.
+    state = {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
+    return {**state, "knowledge": "apply"}
 
 
 def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]],
@@ -1055,6 +1084,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
               "filing": handoff.get("filing", {}), "warnings": warnings}
     if lesson_report:
         output["lessons"] = lesson_report
+    if isinstance(filing.get("knowledge"), Mapping):
+        output["knowledge"] = copy.deepcopy(filing["knowledge"])
     if incomplete:
         output["incomplete"] = incomplete
     if problems:
@@ -1155,8 +1186,8 @@ def _handoff_session(path: Path) -> str | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "file", "record",
-                                                      "record-over-limit", "over-limit-records",
+    parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "apply-knowledge",
+                                                      "file", "record", "record-over-limit", "over-limit-records",
                                                       "wrap-check", "report", "wrap-cadence", "actor-guard",
                                                       "is-completion-command"))
     parser.add_argument("--user-profile", type=Path)
@@ -1165,6 +1196,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--receipts", type=Path)
     parser.add_argument("--filing", type=Path, help="file: explicit outcome for each remaining item")
     parser.add_argument("--lessons", type=Path, help="apply-lessons: the assessment of each lesson")
+    parser.add_argument("--knowledge", type=Path, help="apply-knowledge: what was captured for each knowledge item")
+    parser.add_argument("--knowledge-profile", type=Path,
+                        help="apply-knowledge: the knowledge profile (default ~/.config/hippocampus/profile.md)")
     parser.add_argument("--measure", type=Path, help="record-over-limit: the slim helper's measure output")
     parser.add_argument("--duplicates", type=Path, help="record-over-limit: the slim helper's duplicates output")
     parser.add_argument("--written-handoff", type=Path, help="wrap-check: the handoff step 5 wrote")
@@ -1282,6 +1316,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                       handoff.get("subject", {}))
                                           for item in items for row in rows if item.get("applied")
                                           and tuple(row["identity"]) == module.session_item_identity(item)]}
+        elif args.operation == "apply-knowledge":
+            if not auto_apply_state():
+                raise ValueError("apply-knowledge: the auto-apply setting is off")
+            if not args.handoff or not args.knowledge:
+                raise ValueError("apply-knowledge requires --handoff and --knowledge")
+            session_id = (handoff.get("subject") or {}).get("session_id") or session_id
+            output = knowledge.apply(handoff, json.loads(args.knowledge.read_text()), module, session_id,
+                                     knowledge.profile_path(args.knowledge_profile))
+            # A fact about the user, carried or found this wrap, goes to the ask binding.
+            items = [*output.get("resume", {}).get("open_loops", []),
+                     *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
+            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}))
+                                        for item in items if item.get("user_fact")]
         elif args.operation == "record-over-limit":
             state = auto_apply_state()
             if not state:

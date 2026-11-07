@@ -29,7 +29,7 @@ def clone_pair(tmp_path, name='rules'):
     for path in (checkout,):
         git(path, 'config', 'user.name', 'Test')
         git(path, 'config', 'user.email', 'test@example.invalid')
-    (checkout / 'AGENTS.md').write_text('# Rules\n\nKeep tests green.\n')
+    (checkout / 'rules.md').write_text('# Rules\n\nKeep tests green.\n')
     (checkout / 'other.md').write_text('other\n')
     git(checkout, 'add', '.')
     git(checkout, 'commit', '-qm', 'start')
@@ -151,7 +151,7 @@ def test_each_lesson_is_one_commit_a_revert_removes_exactly(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     data = wrap.apply([lesson('First lesson.'), lesson('Second lesson.')],
                       [row(0, target, 'First rule.\n', change='Add the first rule'),
                        row(1, target, 'Second rule.\n', change='Add the second rule')])
@@ -180,7 +180,7 @@ def test_commit_holds_only_the_lessons_lines_in_a_changed_file(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     target.write_text('# Rules\n\nUncommitted user line.\n\nKeep tests green.\n')
     (checkout / 'other.md').write_text('staged user change\n')
     git(checkout, 'add', 'other.md')
@@ -192,8 +192,8 @@ def test_commit_holds_only_the_lessons_lines_in_a_changed_file(tmp_path, tool):
     assert 'Uncommitted user line' not in shown and 'other.md' not in shown
     assert 'Uncommitted user line.' in target.read_text() and 'Keep every suite green.' in target.read_text()
     status = subprocess.run(['git', 'status', '--porcelain=v1'], cwd=checkout, text=True, capture_output=True)
-    assert sorted(status.stdout.splitlines()) == [' M AGENTS.md', 'M  other.md']
-    assert 'Uncommitted user line' in git(checkout, 'diff', '--', 'AGENTS.md')
+    assert sorted(status.stdout.splitlines()) == [' M rules.md', 'M  other.md']
+    assert 'Uncommitted user line' in git(checkout, 'diff', '--', 'rules.md')
 
 
 def test_target_outside_git_is_written_without_a_commit(tmp_path, tool):
@@ -214,7 +214,7 @@ def test_skip_is_dropped_and_listed_and_dictated_rule_applies_anyway(tmp_path, t
     wrap.plan()
     data = wrap.apply([lesson('Noise lesson.'), lesson('Dictated lesson.')], [
         {'index': 0, 'recommend': 'skip', 'reason': 'Advisory noise only', 'target': 'a hook'},
-        row(1, checkout / 'AGENTS.md', recommend='skip', dictated=True, change='Add the dictated rule')])
+        row(1, checkout / 'rules.md', recommend='skip', dictated=True, change='Add the dictated rule')])
     assert data['resume']['open_loops'] == []
     report, check, handoff = wrap.finish(wrap.file(wrap.deliver(data)))
     assert check.returncode == 0, check.stderr
@@ -228,7 +228,7 @@ def test_skip_is_dropped_and_listed_and_dictated_rule_applies_anyway(tmp_path, t
 @pytest.mark.parametrize('kind', ['user-rules', 'imported', 'composed'])
 def test_always_loaded_target_is_applied_and_raises_a_text_ask(tmp_path, tool, kind):
     checkout, _, _ = clone_pair(tmp_path)
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     routing = None
     home = tmp_path / ('claude' if tool == 'claude' else 'codex')
     home.mkdir(exist_ok=True)
@@ -264,7 +264,7 @@ def test_a_new_lesson_found_during_the_wrap_raises_its_ask(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     found = lesson('Found this wrap.')
     data = wrap.apply([], [row(0, target, always_loaded=True)], session_items=[found])
     assert data['resume']['open_loops'] == [] and data['session_items'][0]['applied'] is True
@@ -284,7 +284,7 @@ def test_dictated_rule_for_an_always_loaded_target_still_raises_the_ask(tmp_path
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md', recommend='skip', dictated=True,
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md', recommend='skip', dictated=True,
                                                     always_loaded=True)]))
     assert len(data['lesson_asks']) == 1
     filed = wrap.file(data, [{'index': 0, 'rule': 'R3', 'status': 'filed', 'destination': 'ask receipt 8'}])
@@ -297,7 +297,7 @@ def test_ask_with_nothing_bound_stays_in_the_report_and_is_not_applied_again(tmp
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool, ask=False)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     data = wrap.deliver(wrap.apply([lesson()], [row(0, target, always_loaded=True)]))
     filed = wrap.file(data, [{'index': 0, 'rule': 'R3', 'status': 'filed', 'destination': 'ask'}])
     report, check, handoff = wrap.finish(filed)
@@ -314,7 +314,7 @@ def test_rejected_push_brings_in_the_remote_and_retries(tmp_path, tool):
     checkout, _, other = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    data = wrap.apply([lesson()], [row(0, checkout / 'rules.md')])
     commit = data['lesson_outcomes'][0]['commit']
     move_remote(other)
     report, check, _ = wrap.finish(wrap.file(wrap.deliver(data)))
@@ -338,7 +338,7 @@ def test_commit_on_another_remote_is_still_pushed_to_the_selected_one(tmp_path, 
     backup = backup_remote(tmp_path, checkout)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    data = wrap.apply([lesson()], [row(0, checkout / 'rules.md')])
     commit = data['lesson_outcomes'][0]['commit']
     git(checkout, 'push', '-q', 'backup', 'main')
     assert git(remote, 'rev-parse', 'main') != commit
@@ -355,7 +355,7 @@ def test_commit_on_the_fetch_remote_is_still_pushed_to_the_push_remote(tmp_path,
     git(checkout, 'config', 'branch.main.pushRemote', 'backup')
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    data = wrap.apply([lesson()], [row(0, checkout / 'rules.md')])
     commit = data['lesson_outcomes'][0]['commit']
     git(checkout, 'push', '-q', 'origin', 'main')
     data = wrap.deliver(data)
@@ -367,7 +367,7 @@ def test_push_rejected_twice_is_committed_not_pushed_and_not_saved(tmp_path, too
     checkout, _, other = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')])
+    data = wrap.apply([lesson()], [row(0, checkout / 'rules.md')])
     move_remote(other)
     # The remote moves again the moment its commits come in, so the one retry is rejected too.
     hook = checkout / '.git/hooks/post-merge'
@@ -380,6 +380,23 @@ def test_push_rejected_twice_is_committed_not_pushed_and_not_saved(tmp_path, too
     assert 'rejected' in applied['error']
     assert 'Not saved:' in report['saved_line'] and 'committed, not pushed' in report['saved_line']
     assert check.returncode == 1
+    # The merge made for the retry is undone, so the branch holds only the lesson commit.
+    assert git(checkout, 'rev-parse', 'HEAD') == data['lesson_outcomes'][0]['commit']
+    assert not (checkout / 'moved.md').exists()
+
+
+def test_retry_never_merges_into_another_checked_out_branch(tmp_path, tool):
+    checkout, _, other = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, checkout / 'rules.md')])
+    move_remote(other)
+    git(checkout, 'switch', '-q', '-c', 'feature')
+    feature = git(checkout, 'rev-parse', 'HEAD')
+    [applied] = wrap.deliver(data)['lesson_outcomes']
+    assert applied['delivery'] == 'committed, not pushed'
+    assert 'not main' in applied['error'] and 'not brought in' in applied['error']
+    assert git(checkout, 'rev-parse', 'HEAD') == feature and not (checkout / 'moved.md').exists()
 
 
 def pull_request_command(tmp_path):
@@ -397,9 +414,9 @@ def assert_pull_request_delivery(report, check, checkout, remote, log, target_li
     assert applied['delivery'] == 'pull request'
     assert applied['pull_request'] == 'https://example.invalid/pull/7'
     branch = applied['lesson_branch']
-    assert target_line in git(remote, 'show', f'{branch}:AGENTS.md')
+    assert target_line in git(remote, 'show', f'{branch}:rules.md')
     assert git(remote, 'rev-parse', branch) == applied['commit']
-    assert target_line not in git(remote, 'show', 'main:AGENTS.md')
+    assert target_line not in git(remote, 'show', 'main:rules.md')
     request = json.loads(log.read_text().splitlines()[0])
     assert (request['base'], request['branch'], request['remote']) == ('main', branch, 'origin')
     assert request['title'] == 'lesson: Add the suite rule'
@@ -419,7 +436,7 @@ def test_refused_direct_push_goes_to_its_own_branch_and_pull_request(tmp_path, t
     log, routing = pull_request_command(tmp_path)
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert_pull_request_delivery(report, check, checkout, remote, log)
 
@@ -430,7 +447,7 @@ def test_several_lessons_for_one_file_all_reach_the_pull_request(tmp_path, tool)
     log, routing = pull_request_command(tmp_path)
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
         row(0, target, 'First rule.\n', change='Add the first rule'),
         row(1, target, 'Second rule.\n', change='Add the second rule')]))
@@ -441,7 +458,7 @@ def test_several_lessons_for_one_file_all_reach_the_pull_request(tmp_path, tool)
         ('Add the first rule', 'pull request', 'https://example.invalid/pull/7'),
         ('Add the second rule', 'pull request', 'https://example.invalid/pull/7')]
     [branch] = {r['lesson_branch'] for r in applied}
-    shown = git(remote, 'show', f'{branch}:AGENTS.md')
+    shown = git(remote, 'show', f'{branch}:rules.md')
     assert 'First rule.' in shown and 'Second rule.' in shown
     assert git(remote, 'log', '--format=%s', 'main..' + branch).splitlines() == [
         'lesson: Add the second rule', 'lesson: Add the first rule']
@@ -457,7 +474,7 @@ def test_a_duplicate_index_is_rejected_before_anything_is_applied(tmp_path, tool
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     head = git(checkout, 'rev-parse', 'HEAD')
     for rows in ([row(0, target), row(0, target)],
                  [{'index': 0, 'recommend': 'skip', 'reason': 'Noise'}, row(0, target)]):
@@ -474,7 +491,7 @@ def test_a_later_local_merge_is_still_unpushed_after_a_delivered_mark(tmp_path, 
     log, routing = pull_request_command(tmp_path)
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert_pull_request_delivery(report, check, checkout, remote, log)
 
@@ -499,7 +516,7 @@ def test_a_later_wrap_passes_after_pull_request_delivery(tmp_path, tool):
     log, routing = pull_request_command(tmp_path)
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert_pull_request_delivery(report, check, checkout, remote, log)
     [first] = report['lessons']['applied']
@@ -541,7 +558,7 @@ def test_refused_push_with_no_pull_request_command_is_reported_not_saved(tmp_pat
     hook.chmod(0o755)
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     [applied] = report['lessons']['applied']
     assert applied['delivery'] == 'committed, not pushed'
@@ -556,11 +573,11 @@ def test_routing_file_requires_a_pull_request_for_a_repository(tmp_path, tool):
     wrap = Wrap(tmp_path, tool, routing=routing)
     wrap.plan()
     data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
-        row(0, checkout / 'AGENTS.md'), row(1, checkout / 'other.md', 'Second rule.\n')]))
+        row(0, checkout / 'rules.md'), row(1, checkout / 'other.md', 'Second rule.\n')]))
     assert [r['delivery'] for r in data['lesson_outcomes']] == ['pull request', 'pull request']
     first, second = data['lesson_outcomes']
     assert first['lesson_branch'] == second['lesson_branch']
-    assert git(remote, 'show', '--format=', '--name-only', first['commit']).split() == ['AGENTS.md']
+    assert git(remote, 'show', '--format=', '--name-only', first['commit']).split() == ['rules.md']
     assert git(remote, 'show', '--format=', '--name-only', second['commit']).split() == ['other.md']
     report, check, _ = wrap.finish(wrap.file(data))
     assert check.returncode == 0, check.stderr
@@ -573,7 +590,7 @@ def test_branch_other_than_default_is_named_in_the_report(tmp_path, tool):
     git(checkout, 'switch', '-q', '-c', 'topic')
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert check.returncode == 0, check.stderr
     [applied] = report['lessons']['applied']
@@ -584,7 +601,7 @@ def test_persist_unbound_keeps_the_existing_not_pushed_rule(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool, persist=False)
     wrap.plan()
-    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'AGENTS.md')]))
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
     report, check, _ = wrap.finish(wrap.file(data))
     assert check.returncode == 0, check.stderr
     assert report['lessons']['applied'][0]['delivery'] == 'committed, not pushed'
@@ -594,7 +611,7 @@ def test_persist_unbound_keeps_the_existing_not_pushed_rule(tmp_path, tool):
 @pytest.mark.parametrize('case', ['missing text', 'hook refuses', 'detached'])
 def test_failed_lesson_is_reported_kept_and_the_wrap_continues(tmp_path, tool, case):
     checkout, _, _ = clone_pair(tmp_path)
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     before = target.read_text()
     failing = row(0, target, change='Change a line') | {'edits': [{'old': 'No such line', 'new': 'x'}]}
     if case == 'hook refuses':
@@ -627,7 +644,7 @@ def test_failed_lesson_is_reported_kept_and_the_wrap_continues(tmp_path, tool, c
 
 def test_generated_copy_is_never_edited(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
-    source = checkout / 'AGENTS.md'
+    source = checkout / 'rules.md'
     made = checkout / 'other.md'
     routing = f'Produced surfaces:\n  {source}:\n    - path: {made}\n      regeneration command: "make rules"\n'
     wrap = Wrap(tmp_path, tool, routing=routing)
@@ -649,7 +666,7 @@ def test_generated_copy_is_never_edited(tmp_path, tool):
 def test_an_applied_lesson_is_settled_and_never_applied_twice(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool)
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     item = lesson()
     wrap.apply([item], [row(0, target)])
     again = wrap.apply([item], [row(0, target)])
@@ -661,14 +678,14 @@ def test_an_applied_lesson_is_settled_and_never_applied_twice(tmp_path, tool):
 def test_plan_runs_auto_apply_unattended_too(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
     result = wrap.run('plan', '--session-id', SESSION, '--unattended')
-    assert json.loads(result.stdout)['auto_apply'] == {'lessons': 'apply'}
+    assert json.loads(result.stdout)['auto_apply'] == {'lessons': 'apply', 'knowledge': 'apply'}
 
 
 def test_routing_file_that_requires_proposals_wins_and_the_report_says_so(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool, routing='lesson-policy: propose\n')
     assert wrap.plan()['auto_apply']['lessons'] == 'propose'
-    target = checkout / 'AGENTS.md'
+    target = checkout / 'rules.md'
     before = target.read_text()
     item = lesson(choices=['approve', 'decline'])
     data = wrap.apply([item], [row(0, target)])
@@ -689,7 +706,7 @@ def test_setting_off_changes_nothing(tmp_path, tool):
     plan = wrap.plan()
     assert 'auto_apply' not in plan
     refused = wrap.run('apply-lessons', '--handoff', wrap.save('i.json', wrap.payload([lesson()])),
-                       '--lessons', wrap.save('l.json', [row(0, checkout / 'AGENTS.md')]))
+                       '--lessons', wrap.save('l.json', [row(0, checkout / 'rules.md')]))
     assert refused.returncode == 1 and 'setting is off' in refused.stderr
     assert git(checkout, 'rev-parse', 'HEAD') == head and git(checkout, 'status', '--porcelain') == ''
     item = lesson(choices=['approve', 'decline'])
@@ -707,3 +724,274 @@ def test_a_mistyped_setting_is_an_error(tmp_path, tool):
     (tmp_path / 'config.json').write_text('{"auto_apply_lessons": "yes"}')
     result = wrap.run('plan', '--session-id', SESSION)
     assert result.returncode == 1 and 'must be true or false' in result.stderr
+
+
+def load_lessons_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('lessons', ROOT / 'scripts/lib/lessons.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_a_repository_instruction_file_is_always_loaded_and_raises_its_ask(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    target = checkout / ('CLAUDE.md' if tool == 'claude' else 'AGENTS.md')
+    target.write_text('# Instructions\n')
+    git(checkout, 'add', '.')
+    git(checkout, 'commit', '-qm', 'instructions')
+    git(checkout, 'push', '-q')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, target)]))
+    [ask] = data['lesson_asks']
+    assert 'already applied' in ask['text'] and ask['choices'] == []
+
+
+def test_a_malformed_edit_is_rejected_before_anything_is_applied(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    head = git(checkout, 'rev-parse', 'HEAD')
+    bad = row(0, checkout / 'rules.md')
+    bad['edits'] = [{'old': 5, 'new': 'x'}]
+    result = wrap.run('apply-lessons', '--handoff', wrap.save('i.json', wrap.payload([lesson()])),
+                      '--lessons', wrap.save('l.json', [bad]))
+    assert result.returncode == 1 and 'requires target, change, evidence and edits' in result.stderr
+    assert 'Traceback' not in result.stderr and git(checkout, 'rev-parse', 'HEAD') == head
+
+
+def test_a_malformed_routing_file_is_an_error_not_a_traceback(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool, routing='lesson-pull-request-command: "unterminated\n')
+    plan = wrap.run('plan', '--session-id', SESSION)
+    assert plan.returncode == 1 and 'Traceback' not in plan.stderr and plan.stdout == ''
+    assert plan.stderr.startswith('checklist: ') and 'invalid quoted string' in plan.stderr
+    delivered = wrap.run('deliver-lessons', '--handoff', wrap.save('h.json', wrap.payload([])))
+    assert delivered.returncode == 1 and 'Traceback' not in delivered.stderr
+    assert 'invalid quoted string' in delivered.stderr
+    handoff = wrap.save('h.json', wrap.payload([lesson()]))
+    rows = wrap.save('rows.json', [])
+    commands = [('apply-lessons', '--handoff', handoff, '--lessons', rows),
+                ('apply-knowledge', '--handoff', handoff, '--knowledge', rows)]
+    # The over-limit record ships with its own ticket; once this module offers it, it is held
+    # to the same rule.
+    if 'record-over-limit' in wrap.run('--help').stdout:
+        commands.append(('record-over-limit', '--handoff', handoff, '--measure', rows, '--duplicates', rows))
+    for command in commands:
+        result = wrap.run(*command)
+        assert result.returncode == 1 and 'Traceback' not in result.stderr, (command[0], result.stderr)
+        assert 'invalid quoted string' in result.stderr, (command[0], result.stderr)
+    report, _, _ = wrap.finish(wrap.payload([]))
+    assert report['report'] == 'failed'
+    assert any('invalid quoted string' in error for error in report['errors'])
+
+
+def test_routing_keys_allow_comments_and_ignore_fenced_examples(tmp_path, tool):
+    routing = ('# Routing\n\n```\nlesson-policy: propose\n```\n\n'
+               'lesson-policy: apply  # applied at wrap\n'
+               'lesson-pull-requests:\n  - Owner/One  # protected\n  - "owner/two"  # quoted, with a comment\n\n'
+               '- Produced surfaces are listed below, not a repository\n'
+               'Other prose: not a key\n  - owner/not-listed\n')
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    assert wrap.plan()['auto_apply']['lessons'] == 'apply'
+    import os
+    previous = os.environ.get('HIPPOCAMPUS_ROUTING')
+    os.environ['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'routing.md')
+    try:
+        rules = load_lessons_module().routing_rules()
+    finally:
+        if previous is None:
+            os.environ.pop('HIPPOCAMPUS_ROUTING')
+        else:
+            os.environ['HIPPOCAMPUS_ROUTING'] = previous
+    assert rules['pull_requests'] == ['owner/one', 'owner/two'] and rules['propose'] is False
+
+
+def test_lesson_branches_are_valid_and_distinct_per_session():
+    lessons = load_lessons_module()
+    first = lessons._lesson_branch('codex-session-0001-aaaa')
+    second = lessons._lesson_branch('codex-session-0001-bbbb')
+    assert first != second
+    # Two ids that read the same once unsafe characters are replaced still get their own branch.
+    assert lessons._lesson_branch('a.b') != lessons._lesson_branch('a-b')
+    assert lessons._lesson_branch('x' * 200).startswith('lesson/' + 'x' * 40 + '-')
+    for name in (first, second, lessons._lesson_branch('a..b.lock'), lessons._lesson_branch('.x/y'),
+                 lessons._lesson_branch('a.b'), lessons._lesson_branch('a-b'), lessons._lesson_branch('x' * 200)):
+        assert subprocess.run(['git', 'check-ref-format', f'refs/heads/{name}']).returncode == 0, name
+
+
+def test_a_failed_lesson_on_the_lesson_branch_leaves_nothing_for_the_next(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.apply([lesson(), lesson('Second.')], [row(0, checkout / 'rules.md'),
+                                                       row(1, checkout / 'other.md', 'Second rule.\n')])
+    assert all(row['status'] == 'applied' for row in data['lesson_outcomes'])
+    # From here a hook refuses any commit holding rules.md: the first lesson's commit on the
+    # lesson branch fails after its file is staged.
+    hook = checkout / '.git/hooks/pre-commit'
+    hook.write_text('#!/bin/sh\nif git diff --cached --name-only | grep -qx rules.md; then\n'
+                    '  echo "rules.md is frozen" >&2\n  exit 1\nfi\n')
+    hook.chmod(0o755)
+    outcomes = wrap.deliver(data)['lesson_outcomes']
+    failed = next(row for row in outcomes if row['target'].endswith('rules.md'))
+    second = next(row for row in outcomes if row['target'].endswith('other.md'))
+    assert failed['delivery'] == 'committed, not pushed' and second['delivery'] == 'pull request'
+    names = git(remote, 'show', '--format=', '--name-only', second['commit']).split()
+    assert names == ['other.md']
+
+
+def test_a_target_through_a_symlinked_path_still_reaches_its_pull_request(tmp_path, tool):
+    real = tmp_path / 'real'
+    real.mkdir()
+    checkout, remote, _ = clone_pair(real)
+    link = tmp_path / 'link'
+    link.symlink_to(real)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, link / 'rules' / 'rules.md')])
+    [applied] = wrap.deliver(data)['lesson_outcomes']
+    assert applied['delivery'] == 'pull request', applied.get('error')
+
+
+def test_an_applied_lesson_filed_under_another_rule_fails_alone(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md', always_loaded=True)]))
+    other = {'type': 'progress', 'session_id': SESSION, 'produced_at': '2026-11-05T12:00:00Z',
+             'disposition': 'drop', 'context': 'Done already.'}
+    data['resume']['open_loops'].append(other)
+    filed = wrap.run('file', '--handoff', wrap.save('d.json', data), '--filing', wrap.save('f.json', [
+        {'index': 0, 'rule': 'R4', 'status': 'filed', 'destination': 'lessons'},
+        {'index': 1, 'rule': 'R1', 'status': 'dropped', 'reason': 'Information only', 'information_only': True}]))
+    output = json.loads(filed.stdout)
+    rows = output['filing']['items']
+    assert rows[0]['status'] == 'failed' and 'files under R3' in rows[0]['error']
+    assert rows[1]['status'] == 'dropped'
+    assert [item['context'] for item in output['resume']['open_loops']] == [data['resume']['open_loops'][0]['context']]
+
+
+def test_config_get_prints_the_auto_apply_setting(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+
+    def get():
+        return subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'config-get', 'auto_apply_lessons'],
+                              text=True, capture_output=True, env=wrap.env)
+    assert get().stdout == 'true\n'
+    (tmp_path / 'config.json').write_text('{}')
+    assert get().stdout == 'false\n'
+    (tmp_path / 'config.json').write_text('{"auto_apply_lessons": "yes"}')
+    mistyped = get()
+    assert mistyped.returncode == 2 and 'must be true or false' in mistyped.stderr
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_an_untracked_target_in_a_repository_is_written_without_a_commit(tmp_path, tool, ignored):
+    checkout, _, _ = clone_pair(tmp_path)
+    target = checkout / 'local-rules.md'
+    body = ''.join(f'Rule {number}.\n' for number in range(100))
+    target.write_text(body)
+    if ignored:
+        (checkout / '.git/info/exclude').write_text('local-rules.md\n')
+    head = git(checkout, 'rev-parse', 'HEAD')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, target)])
+    [outcome] = data['lesson_outcomes']
+    assert outcome['status'] == 'applied' and outcome['commit'] is None
+    assert outcome['delivery'] == ('ignored by its repository' if ignored else 'not tracked by its repository')
+    assert target.read_text() == body + 'Run the suite first.\n'
+    assert git(checkout, 'rev-parse', 'HEAD') == head
+    assert git(checkout, 'diff', '--cached', '--name-only') == ''
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_a_lesson_creating_a_new_file_in_a_repository_is_committed_unless_ignored(tmp_path, tool, ignored):
+    checkout, remote, _ = clone_pair(tmp_path)
+    target = checkout / 'new-rules.md'
+    if ignored:
+        (checkout / '.git/info/exclude').write_text('new-rules.md\n')
+    head = git(checkout, 'rev-parse', 'HEAD')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, target)])
+    [outcome] = data['lesson_outcomes']
+    assert outcome['status'] == 'applied' and target.read_text() == 'Run the suite first.\n'
+    if ignored:
+        assert outcome['commit'] is None and outcome['delivery'] == 'ignored by its repository'
+        assert git(checkout, 'rev-parse', 'HEAD') == head
+        return
+    assert outcome['commit'] == git(checkout, 'rev-parse', 'HEAD') != head
+    assert git(checkout, 'show', '--format=', '--name-only', 'HEAD').split() == ['new-rules.md']
+    assert git(checkout, 'status', '--porcelain=v1') == ''
+    [delivered] = wrap.deliver(data)['lesson_outcomes']
+    assert delivered['delivery'] == 'pushed', delivered.get('error')
+    assert git(remote, 'show', '--format=', '--name-only', delivered['commit']).split() == ['new-rules.md']
+
+
+def routing_rules_for(tmp_path, text):
+    (tmp_path / 'routing.md').write_text(text)
+    previous = os.environ.get('HIPPOCAMPUS_ROUTING')
+    os.environ['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'routing.md')
+    try:
+        return load_lessons_module().routing_rules()
+    finally:
+        if previous is None:
+            os.environ.pop('HIPPOCAMPUS_ROUTING')
+        else:
+            os.environ['HIPPOCAMPUS_ROUTING'] = previous
+
+
+@pytest.mark.parametrize('entries', ['\t- Owner/One\n\t- owner/two\n', '- Owner/One\n- owner/two\n',
+                                     '  - Owner/One\n\t- owner/two\n'])
+def test_pull_request_entries_parse_however_they_are_indented(tmp_path, entries):
+    rules = routing_rules_for(tmp_path, f'lesson-pull-requests:\n{entries}lesson-policy: apply\n')
+    assert rules['pull_requests'] == ['owner/one', 'owner/two'] and rules['propose'] is False
+
+
+@pytest.mark.parametrize('entry', ['\t-owner/one', '-owner/one', '\t- "unterminated', '  - "owner/one" trailing'])
+def test_an_unreadable_pull_request_entry_is_an_error_not_a_skip(tmp_path, tool, entry):
+    wrap = Wrap(tmp_path, tool, routing=f'lesson-pull-requests:\n{entry}\n')
+    planned = wrap.run('plan', '--session-id', wrap.session)
+    assert planned.returncode == 1 and 'Traceback' not in planned.stderr, planned.stderr
+    assert 'lesson-pull-requests' in planned.stderr or 'invalid quoted string' in planned.stderr
+
+
+def test_a_comment_after_a_quoted_routing_value_is_stripped(tmp_path):
+    rules = routing_rules_for(tmp_path, 'lesson-pull-request-command: "gh pr create --fill"  # opens it\n'
+                                        "lesson-pull-requests:\n  - 'Owner/One' # main\n")
+    assert rules['command'] == 'gh pr create --fill' and rules['pull_requests'] == ['owner/one']
+
+
+@pytest.mark.parametrize('text', ['lesson-pull-requests:\n  - owner/one\n\n- A prose bullet after the list\n',
+                                  'lesson-pull-requests:\n  - owner/one\n  a prose line ends the list\n  - owner/two\n',
+                                  'lesson-pull-requests:\n  - owner/one\n  # a comment ends the list\n  - owner/two\n'])
+def test_the_pull_request_list_ends_at_a_blank_line_or_a_non_entry(tmp_path, text):
+    assert routing_rules_for(tmp_path, text)['pull_requests'] == ['owner/one']
+
+
+def test_one_bad_target_fails_only_its_row_in_a_continued_pull_request_group(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
+        row(0, checkout / 'rules.md'), row(1, checkout / 'other.md', 'Second rule.\n', change='Add the second rule')]))
+    first, second = data['lesson_outcomes']
+    assert first['delivery'] == second['delivery'] == 'pull request'
+    # The same lessons come back for the session's existing branch, and one target has moved outside.
+    lessons = load_lessons_module()
+    good = {**first, 'commit': first['local_commit'], 'lesson_commit': first['commit']}
+    bad = {**second, 'commit': second['local_commit'], 'lesson_commit': second['commit'],
+           'target': str(tmp_path / 'outside.md')}
+    updates = lessons._pull_requests(Path(checkout), 'origin', SESSION, [good, bad], str(tmp_path / 'open-request.sh'))
+    assert updates[0]['delivery'] == 'pull request' and updates[0]['commit'] == first['commit']
+    assert updates[1]['delivery'] == 'committed, not pushed' and 'is not inside' in updates[1]['error']
+    request = json.loads(log.read_text().strip().splitlines()[-1])
+    assert [entry['path'] for entry in request['lessons']] == ['rules.md']

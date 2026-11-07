@@ -165,7 +165,10 @@ wrap summary.
 
 Run this package's knowledge-capture. Present carried knowledge items first,
 intact with their provenance, then new session knowledge. Follow its knowledge
-profile and approval requirements. With nothing to capture, report `nothing`.
+profile and approval requirements. With `auto_apply` in the plan, follow knowledge-capture's
+Auto-apply section in attended and unattended runs alike: wiki captures and retained sources and
+outputs under the knowledge root apply without approval, and a fact about the user becomes an
+ordinary ask. With nothing to capture, report `nothing`.
 With no configured knowledge root, report `not configured`, name
 `hippocampus-set-up`, and keep carried knowledge. An invalid configuration or
 capture error is `failed`, with its error. A refusal is `declined`, with its reason.
@@ -184,11 +187,15 @@ routing file forbids applying: run this step as if the setting were off, includi
 the over-limit and duplicate-rule blocks, which are not recorded.
 
 Both native steps continue to the next checklist step on failure or refusal.
-Remove an item only after an explicit receipt: the knowledge capture disposition,
+Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,
 or a lesson applied or written to the routing file's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
-With the auto-apply setting off, unattended runs, and sweep runs either way, use these same native steps in unattended mode: carry
-items and apply nothing. Report pending proposals and preserve their provenance.
+Only an interactive session runs these steps and their commands (`apply-knowledge`,
+`apply-lessons`, `record-over-limit`); a sweep or scheduled session never does, and the
+module refuses it. In an interactive wrap, attended or unattended, the setting decides: on,
+the steps apply what the setting covers; off, or `auto_apply.lessons: propose` for lessons,
+run them in unattended mode, carry items and apply nothing. Report pending proposals and
+preserve their provenance.
 
 ### 4. Persist — slot `persist`
 
@@ -272,6 +279,11 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `reason`, and a failed row names `error`. Read-dependent rules need
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
+A fact about the user (`user_fact: true`) files only through R4 `destination: "ask"` until the
+user answers; the row that then settles it carries `answer`, the choice the user picked. Only
+the item's `approve` choice lets a row be `filed`; any other answer only drops it, with its
+reason, and nothing is written. A row without that answer, or with the wrong one for what it
+does, fails alone and the fact stays carried.
 A retained native lesson proposal awaiting user approval also keeps non-empty
 `choices` on its item or R4 outcome, even when its destination is `lessons`.
 Native work retained only because a step failed or was declined needs no ask
@@ -468,6 +480,10 @@ every failed lesson with its error. When the routing file forbids applying, prin
 `reason` and `carried` lessons instead. Asks raised appear in the final `asks` list. A
 lesson `committed, not pushed` counts under the saved line's rules: not saved with
 persist bound, `Not pushed:` with it unbound.
+
+With the auto-apply setting on, also print the output's `knowledge`: every captured item with
+its kind and the files created and updated (the wiki articles for a wiki capture), every fact
+about the user asked, and every failed capture with its error.
 
 Immediately before the pending-asks block, print the output's `saved_line`.
 It reads `All saved and pushed: <checkout> (<branch>), ...` only when every item has a matching record-write
