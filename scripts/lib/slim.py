@@ -121,6 +121,16 @@ def _status(slim: Mapping[str, Any]) -> str:
     return PENDING if PENDING in states else REJECTED if REJECTED in states else MERGED
 
 
+def _file_status(slim: Mapping[str, Any]) -> str:
+    """Eligibility follows only the branch that changed the recorded file.
+
+    Other branches still participate in retention and frozen-file protection.
+    If no branch changed this file, it has no pending or rejected edit to suppress.
+    """
+    return next((branch["status"] for branch in slim["branches"]
+                 if branch["repository"] == slim["repository"] and slim["path"] in branch["changed"]), MERGED)
+
+
 def _frozen(state: Mapping[str, Any]) -> dict[tuple[str, str], str]:
     """Every file a slim branch awaiting its decision changed, with that branch."""
     return {(branch["repository"], _canonical(path)): branch["branch"] for slim in state["slims"]
@@ -346,7 +356,8 @@ def _baseline_from(clone: Path, slim: Mapping[str, Any]) -> dict[str, Any] | Non
 def _settle(slim: dict[str, Any], branch: dict[str, Any], status: str, baseline: Mapping[str, Any] | None) -> None:
     branch["status"] = status
     branch["push_status"] = "verified"
-    if status == REJECTED and baseline:
+    if (status == REJECTED and baseline and branch["repository"] == slim["repository"]
+            and slim["path"] in branch["changed"]):
         slim["measured"] = dict(baseline)
 
 
@@ -408,12 +419,12 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
                "failed": [], "closed": None}
         for record in sorted(records, key=lambda row: (-overage(row), row["repository"], row["path"])):
             slim = latest.get(_key(record))
-            if slim and _status(slim) == PENDING:
+            if slim and _file_status(slim) == PENDING:
                 run["skipped"].append(_row(record, PENDING_REASON))
             elif _key(record) in frozen:
                 run["deferred"].append({**_row(record, f"already changed by {frozen[_key(record)]}"),
                                         "changed_by": frozen[_key(record)]})
-            elif slim and _status(slim) == REJECTED and not _changed(record, slim["measured"]):
+            elif slim and _file_status(slim) == REJECTED and not _changed(record, slim["measured"]):
                 run["skipped"].append(_row(record, REJECTED_REASON))
             elif _stalled(state, record):
                 run["skipped"].append(_row(record, STALLED_REASON))
@@ -749,7 +760,12 @@ def _edited(current: dict[str, Any], changes: Sequence[Mapping[str, Any]],
         if content.startswith(lessons.GENERATED_MARK):
             raise ValueError(f"slim finish: {row['path']} is a generated copy; name its source")
         try:
-            edited = lessons._edited(content, row["edits"], "default branch's file")
+            edited = content
+            for edit in row["edits"]:
+                previous = edited
+                edited = lessons._edited(previous, [edit], "default branch's file")
+                if edited == previous:
+                    raise ValueError(f"slim finish: {row['path']}: its edits leave the file as it is")
         except lessons.LessonError as error:
             raise ValueError(f"slim finish: {row['path']}: {error}") from error
         if edited == content:
@@ -801,19 +817,24 @@ def finish(run_id: str, result: Any) -> dict[str, Any]:
                                "report": {key: value for key, value in report.items() if key != "changes"}}
     gaps, surfaces = _surface_gaps(list(dict.fromkeys(_key(row) for row in kept)), report, config)
     slim = None
-    if gaps:
-        outcome.update(status="unverified", gaps=gaps)
-    else:
-        try:
-            for row in kept:
-                _workspace(current, row["repository"], config)
-            _keep_workspaces(run_id, current)
+    candidates = None
+    try:
+        for row in report["changes"]:
+            _workspace(current, row["repository"], config)
+        _keep_workspaces(run_id, current)
+        # Validate every submitted edit, including deferred edits, before any terminal outcome.
+        # This computes bytes only; workspaces remain untouched and refusals keep the slim open.
+        _edited(current, report["changes"], config)
+        if gaps:
+            outcome.update(status="unverified", gaps=gaps)
+        else:
             contents, sizes = _review(current, kept, report, config)
             outcome.update(sizes=sizes, surfaces=list(surfaces))
             candidates = _commit_all(current, contents, config)
-        except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
-            outcome.update(status="failed", error=str(error))
-        else:
+    except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
+        outcome.update(status="failed", error=str(error))
+    else:
+        if candidates is not None:
             if not candidates:
                 outcome.update(status="unchanged", branches=[])
             else:

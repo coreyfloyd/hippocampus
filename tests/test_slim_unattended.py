@@ -1200,3 +1200,58 @@ def test_partial_deferral_reports_each_edit_truthfully(tmp_path, tool, remote):
     assert f'rewritten in second.md: {HEADING.strip()}' in done
     assert f'removed in second.md: {CUT.strip()}' not in done
     assert f'removed in second.md: {CUT.strip()}' in deferred
+
+
+@pytest.mark.parametrize('primary,secondary,reason', [
+    ('merged', 'rejected', None),
+    ('merged', None, None),
+    ('rejected', None, 'over limit, slim rejected'),
+    (None, 'merged', 'slim branch awaiting its decision'),
+])
+def test_recorded_file_eligibility_uses_its_own_branch(tmp_path, tool, remote, primary, secondary, reason):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(308)})
+    other.publish({'core.md': text(290)})
+    slim = Slim(tmp_path, tool, remote, other)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    run = slim.plan(records)
+    slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'repository': 'acme/shared', 'path': 'core.md',
+                              'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    branches = slim.finish(run, result)['branches']
+    slim.begin(run)
+    for branch, decision in zip(branches, (primary, secondary)):
+        if decision:
+            slim.ok('decide', '--repository', branch['repository'], '--branch', branch['branch'], '--decision', decision)
+    later = slim.plan(records)
+    assert later['queued'] == (1 if reason is None else 0)
+    assert [row['reason'] for row in later['skipped']] == ([] if reason is None else [reason])
+    if secondary is None:
+        # Eligibility must not discard the secondary branch's frozen-file protection.
+        frozen_records = slim.records(other.checkout / 'core.md')
+        again = slim.plan(frozen_records)
+        assert again['queued'] == (1 if primary == 'merged' else 0)
+        assert again['deferred'][0]['path'] == 'core.md'
+
+
+@pytest.mark.parametrize('edits', [
+    [{'old': 'A rule not in this file.', 'new': ''}],
+    [{'old': '\n', 'new': ''}],
+    [{'old': HEADING, 'new': HEADING}],
+    [{'old': CUT, 'new': ''}, {'old': HEADING, 'new': HEADING}],
+])
+def test_unverified_surface_does_not_accept_invalid_edits(tmp_path, tool, remote, edits):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    routing(tmp_path, remote.checkout.resolve() / 'AGENTS.md', tmp_path / 'composed.md')
+    run = slim.plan(records)
+    brief = slim.begin(run)
+    result = cut_result()
+    result['changes'][0]['edits'] = edits
+    assert 'slim finish:' in refused(slim, run, result)
+    assert slim.begin(run)['slim_id'] == brief['slim_id']
+    assert remote.branches() == ['main']
+    assert slim.finish(run, cut_result())['status'] == 'unverified'
+    assert len(slim.begin(run)['asks']) == 1
