@@ -301,8 +301,8 @@ def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any], config: Mapping[s
     A branch still on the remote stays pending, because git cannot tell that its pull request
     closed. A branch that is gone merged when its diff reverses cleanly on the default branch.
     It is rejected only when its diff still applies there: the default branch never took the
-    change. When neither holds, the lines were edited after the change, and it counts as
-    merged. A remote that cannot be read, or a git error, is a warning and the branch waits.
+    change. When neither holds, the outcome is unknown and stays pending. A remote that
+    cannot be read, or a git error, is a warning and the branch waits.
     """
     address, reason = _clone_address(config, branch["repository"])
     if address is None:
@@ -311,7 +311,7 @@ def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any], config: Mapping[s
     if listed is None:
         return None, None, f"{_branch_name(branch)}: its remote could not be read; it stays awaiting its decision"
     if listed:
-        return None, None, None
+        return PENDING, None, None
     try:
         clone = clone_of(branch["repository"])
     except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
@@ -324,7 +324,8 @@ def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any], config: Mapping[s
     if forward.returncode == 0:
         return REJECTED, _baseline_from(clone, slim), None
     if forward.returncode == 1:
-        return MERGED, None, None
+        return None, None, (f"{_branch_name(branch)}: neither patch check is conclusive; "
+                            "it stays awaiting its decision")
     return None, None, (f"{_branch_name(branch)}: git apply failed, so it stays awaiting its decision: "
                         f"{lessons._error(forward)}")
 
@@ -344,6 +345,7 @@ def _baseline_from(clone: Path, slim: Mapping[str, Any]) -> dict[str, Any] | Non
 
 def _settle(slim: dict[str, Any], branch: dict[str, Any], status: str, baseline: Mapping[str, Any] | None) -> None:
     branch["status"] = status
+    branch["push_status"] = "verified"
     if status == REJECTED and baseline:
         slim["measured"] = dict(baseline)
 
@@ -692,7 +694,7 @@ def _partition(report: dict[str, Any], frozen: Mapping[tuple[str, str], str]) ->
     """
     changes = report["changes"]
     blocked = {row["group"] for row in changes if _key(row) in frozen and row.get("group")}
-    kept, deferred = [], {}
+    kept, deferred, dropped = [], {}, []
     for row in changes:
         if _key(row) in frozen:
             deferred[_key(row)] = f"already changed by {frozen[_key(row)]}"
@@ -700,6 +702,9 @@ def _partition(report: dict[str, Any], frozen: Mapping[tuple[str, str], str]) ->
             deferred.setdefault(_key(row), "it depends on a change to a deferred file")
         else:
             kept.append(row)
+            continue
+        dropped.append(row)
+    partial = dict(deferred)
     # A file with any change kept is changed on the branch, so it is not deferred.
     deferred = {key: reason for key, reason in deferred.items() if key not in {_key(row) for row in kept}}
     report["deferred"] = [*report["deferred"], *({"repository": repository, "path": path, "reason": reason}
@@ -708,8 +713,18 @@ def _partition(report: dict[str, Any], frozen: Mapping[tuple[str, str], str]) ->
     for key in CHOICE_LISTS:
         done = []
         for row in report[key]:
-            if "path" in row and _key(row) in deferred:
-                report["not_done"].append({**row, "kind": key, "reason": deferred[_key(row)]})
+            affected = "path" in row and _key(row) in partial
+            matching = [change for change in changes if "path" in row and _key(change) == _key(row)]
+            if row.get("group"):
+                matching = [change for change in matching if change.get("group") == row["group"]]
+            elif affected and _key(row) not in deferred:
+                wording = row.get("text", row.get("rule", ""))
+                matching = [change for change in matching if wording and any(
+                    wording in edit.get("old", "") or wording in edit["new"] for edit in change["edits"])]
+            # With ambiguous attribution, do not claim a deferred action was performed.
+            not_done = affected and (not matching or any(change in dropped for change in matching))
+            if not_done:
+                report["not_done"].append({**row, "kind": key, "reason": partial[_key(row)]})
             else:
                 done.append(row)
         report[key] = done
@@ -876,7 +891,11 @@ def _push_all(current: Mapping[str, Any], branches: Sequence[Mapping[str, Any]],
         except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
             # The remote may have taken the branch before the error: what it holds decides.
             address, _ = _clone_address(config, branch["repository"])
-            if not (address and _listed(address, branch["branch"])):
+            listed = _listed(address, branch["branch"]) if address else None
+            if listed is None:
+                pushed.append({**branch, "push_status": "pending-unverified"})
+                continue
+            if not listed:
                 failures.append(f"{branch['repository']} {branch['branch']}: {error}")
                 continue
         pushed.append(dict(branch))
@@ -893,7 +912,7 @@ def _landed(branches: Sequence[Mapping[str, Any]],
         if listed is None:
             warnings.append(f"{branch['repository']} {branch['branch']}: kept as awaiting its decision, its remote "
                             f"could not be read{': ' + reason if reason else ''}")
-            pushed.append(dict(branch))
+            pushed.append({**branch, "push_status": "pending-unverified"})
         elif listed:
             pushed.append(dict(branch))
         else:
@@ -905,7 +924,8 @@ def _landed(branches: Sequence[Mapping[str, Any]],
 def _built(pushed: Sequence[Mapping[str, Any]], failures: Sequence[str]) -> dict[str, Any]:
     if not pushed:
         return {"status": "failed", "error": "; ".join(failures), "branches": []}
-    return {"status": "slimmed", "branches": list(pushed), "failures": list(failures)}
+    status = "pending-unverified" if any(row.get("push_status") == "pending-unverified" for row in pushed) else "slimmed"
+    return {"status": status, "branches": list(pushed), "failures": list(failures)}
 
 
 def _slim(run_id: str, current: Mapping[str, Any], branches: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -970,6 +990,9 @@ def _ask_text(outcome: Mapping[str, Any]) -> str:
         _section("Branches:", [f"- {row['repository']} {row['branch']} from {row['base']}, commit {row['commit']}, "
                                f"changing {', '.join(row['changed'])}" for row in branches]),
     ]
+    if outcome["status"] == "pending-unverified":
+        parts.append("Push result unverified: the remote could not be read. These files stay frozen until "
+                     "a later plan reconciles the branches; branch publication is not confirmed.")
     if outcome.get("failures"):
         parts.append(_section("Branches not pushed:", [f"- {row}" for row in outcome["failures"]]))
     if report["not_done"]:
@@ -1029,7 +1052,7 @@ def _close(state: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         branches = {row["branch"] for row in outcome.get("branches", [])}
         outcome["report"]["deferred"] = [*outcome["report"]["deferred"], *(
             row for row in run["deferred"] if row.get("changed_by") in branches)]
-        if outcome["status"] == "slimmed":
+        if outcome["status"] in ("slimmed", "pending-unverified"):
             state["stalled"].pop(_name(outcome), None)
             asks.append(_ask(run, outcome, _ask_text(outcome), []))
             continue

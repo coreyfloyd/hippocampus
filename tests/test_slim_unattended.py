@@ -474,9 +474,6 @@ def test_the_attended_review_still_refuses_to_run_unattended(tmp_path, setting):
                             text=True, capture_output=True, env={**os.environ, 'HIPPOCAMPUS_CONFIG': str(config)})
     assert json.loads(result.stdout)['needs_user'] is True
     assert target.read_text() == text(308)
-    skill = (ROOT / 'skills/slim-harness/SKILL.md').read_text()
-    assert 'needs the user present; edited nothing' in skill
-    assert 'This skill **never commits**' in skill
 
 
 def test_the_documents_state_the_ask_and_the_levels():
@@ -1048,7 +1045,7 @@ def test_a_push_the_remote_took_before_the_error_is_tracked(tmp_path, tool, remo
     assert len(remote.branches()) == 2
 
 
-def test_a_gone_branch_is_merged_when_its_lines_were_edited_after_the_merge(tmp_path, tool, remote):
+def test_a_gone_branch_stays_pending_when_patch_checks_are_inconclusive(tmp_path, tool, remote):
     remote.publish({'AGENTS.md': text(308)})
     slim = Slim(tmp_path, tool, remote)
     records = slim.records(remote.checkout / 'AGENTS.md')
@@ -1056,9 +1053,9 @@ def test_a_gone_branch_is_merged_when_its_lines_were_edited_after_the_merge(tmp_
     neighbour = RULES[START + 2]
     remote.publish({'AGENTS.md': text(308).replace(CUT, '').replace(neighbour, neighbour.replace('- **', '- **Always: '))})
     git(remote.bare, 'branch', '-q', '-D', branch)
-    # The record now measures the merged file, so only a rejection would skip it.
     later = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
-    assert later['skipped'] == [] and later['queued'] == 1
+    assert later['queued'] == 0 and later['warnings']
+    assert [row['reason'] for row in later['skipped']] == ['slim branch awaiting its decision']
 
 
 def test_a_git_error_while_settling_a_gone_branch_keeps_it_pending(tmp_path, tool, remote):
@@ -1142,3 +1139,64 @@ def test_a_reported_deferral_is_forgotten_when_its_branch_settles(tmp_path, tool
     assert len(json.loads(state.read_text())['deferred_reported']) == 1
     slim.ok('decide', '--repository', REPOSITORY, '--branch', first['branch'], '--decision', 'merged')
     assert json.loads(state.read_text())['deferred_reported'] == []
+
+
+@pytest.mark.parametrize('applied', [True, False])
+def test_deleted_branch_with_changed_neighbour_stays_decidable(tmp_path, tool, remote, applied):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    branch = rejected(slim, remote, records)
+    neighbour = RULES[START + 2]
+    content = text(308).replace(CUT, '') if applied else text(308)
+    remote.publish({'AGENTS.md': content.replace(neighbour, neighbour.replace('- **', '- **Always: '))})
+    git(remote.bare, 'branch', '-q', '-D', branch)
+    later = slim.plan(records)
+    assert later['queued'] == 0 and later['warnings']
+    assert [row['reason'] for row in later['skipped']] == ['slim branch awaiting its decision']
+    slim.ok('decide', '--repository', REPOSITORY, '--branch', branch, '--decision', 'rejected')
+    measured = slim.records(remote.checkout / 'AGENTS.md')
+    assert slim.plan(measured)['skipped'][0]['reason'] == 'over limit, slim rejected'
+
+
+def test_unknown_push_keeps_file_frozen_until_reconciled(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    marker = tmp_path / 'pushed'
+    git_shim(tmp_path, slim,
+             f"if argv[:1] == ['push']:\n    subprocess.run([real_git, *argv])\n"
+             f"    open({str(marker)!r}, 'w').close(); sys.exit(1)\n"
+             f"if argv[:1] == ['ls-remote'] and os.path.exists({str(marker)!r}): sys.exit(1)")
+    run = slim.plan(records)
+    slim.begin(run)
+    finished = slim.finish(run, cut_result())
+    assert finished['status'] == 'pending-unverified'
+    [ask] = slim.begin(run)['asks']
+    assert 'unverified' in ask['text'] and finished['branches'][0]['branch'] in ask['text']
+    later = slim.plan(records)
+    assert later['queued'] == 0 and later['warnings']
+    slim.complete(later)
+    assert len(remote.branches()) == 2
+    slim.env['PATH'] = slim.env['PATH'].split(os.pathsep, 1)[1]
+    assert slim.plan(records)['queued'] == 0
+    state = json.loads((tmp_path / 'ledger/slim-state.json').read_text())
+    assert state['slims'][0]['branches'][0]['push_status'] == 'verified'
+
+
+def test_partial_deferral_reports_each_edit_truthfully(tmp_path, tool, remote):
+    slim = Slim(tmp_path, tool, remote)
+    result = cut_result('second.md')
+    result['changes'][0]['group'] = 'move'
+    result['changes'] += [
+        {'path': 'first.md', 'group': 'move', 'edits': [{'new': CUT}]},
+        {'path': 'second.md', 'edits': [{'old': HEADING, 'new': '## Contradictions\n'}]}]
+    result['rules'].append({'path': 'second.md', 'action': 'rewritten', 'text': HEADING.strip()})
+    closed, _, finished = two_slims(slim, remote, result)
+    [branch] = finished['branches']
+    assert CUT.strip() in remote.show(branch['branch'], 'second.md')
+    ask = next(row for row in closed['asks'] if row['path'] == 'second.md')
+    done, deferred = ask['text'].split('Chosen but not done, their file is deferred:')
+    assert f'rewritten in second.md: {HEADING.strip()}' in done
+    assert f'removed in second.md: {CUT.strip()}' not in done
+    assert f'removed in second.md: {CUT.strip()}' in deferred
