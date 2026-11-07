@@ -81,8 +81,19 @@ def outcomes(module: Any, session_id: str) -> list[dict[str, Any]]:
     """The latest outcome per lesson in this session's ledger, in first-recorded order."""
     latest: dict[tuple[str, ...], dict[str, Any]] = {}
     for row in module._ledger_records(module.ledger_path(session_id)) if session_id else []:
-        if row.get("kind") == OUTCOME:
-            latest[tuple(row["outcome"]["identity"])] = row["outcome"]
+        if row.get("kind") != OUTCOME:
+            continue
+        # A damaged historical row must not prevent unrelated lessons from applying
+        # or delivering. Sweep reports damaged rows separately during ledger search.
+        outcome = row.get("outcome")
+        if not isinstance(outcome, dict):
+            continue
+        identity = outcome.get("identity")
+        if (not isinstance(identity, list) or not identity
+                or not all(isinstance(part, str) for part in identity)
+                or outcome.get("status") not in ("applied", "dropped", "failed")):
+            continue
+        latest[tuple(identity)] = outcome
     return list(latest.values())
 
 
@@ -359,12 +370,15 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 outcome.update(status="failed", target=row["target"], error=str(error))
             if outcome["status"] == "applied":
                 outcome["ask"] = outcome.pop("always_loaded")
+                # The commit stands, so its outcome is kept before anything else can fail.
+                _record(module, session_id, outcome)
                 if outcome.get("checkout"):
                     module.touched_checkouts(session_id, [outcome["checkout"]])
                 if outcome["ask"]:
                     annotated[row["index"]] = _with_ask(item, outcome)
                 else:
                     removed.append(item)
+                continue
         _record(module, session_id, outcome)
     result = copy.deepcopy(dict(handoff))
     if "resume" in result and "open_loops" in result["resume"]:

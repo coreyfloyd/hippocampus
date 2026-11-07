@@ -65,9 +65,10 @@ is R6; a concrete deliverable needing work is R5 only after a successful open
 ticket search. Mentioning a ticket is insufficient for R2 unless it is open and
 the item belongs on it. A proposed change to an approved spec is R3, not R7.
 Knowledge for reuse is R4; information already saved in its named destination is
-R1 only with evidence from a successful read. Knowledge and lessons use the package’s native steps in unattended mode: carry
+R1 only with evidence from a successful read. With the auto-apply setting off, knowledge and lessons use the package’s native steps in unattended mode: carry
 items, apply nothing, and keep their source handoffs. Native proposals do not
-become an ask receipt that consumes their source items.
+become an ask receipt that consumes their source items. With it on, act mode
+applies them; see [Apply lessons and knowledge](#apply-lessons-and-knowledge).
 For an untyped legacy item going to a native step under R4, set `destination` to
 `"lessons"` or `"knowledge"`. That choice supplies its type for validation;
 the original item and identity stay unchanged. Other rules need no added type.
@@ -106,7 +107,9 @@ are still processed into the same report. Command-level errors are reported
 explicitly; do not treat them as an empty store. Watch-only prints a report
 path; act mode prints JSON with `run_id`, `report`, `phase`, and `work`. Read the
 report. With no decisions the command gives a watch-only inventory even when
-act is configured. No archive or removal happens before completion.
+act is configured. No archive or removal happens before completion. With the
+auto-apply setting on, watch-only applies nothing and lists what act mode would
+apply under `would_apply`, each row with the outcome `would apply`.
 
 ## Perform an act plan
 
@@ -221,8 +224,82 @@ as part of watch-only or undo. Read its report and report deletions and failures
 See [undo and retention](../../docs/sweep.md#undo-and-retention) for boundaries.
 
 R4 native work is returned as `operation: "native_step"`, with `native_step`,
-the package `command`, and `unattended: true`. Run that skill in unattended mode
+the package `command`, and `unattended: true`, when the auto-apply setting is off
+or the routing file's `lesson-policy: propose` covers a lesson (its row's `reason` says so). Run that skill in unattended mode
 with the complete original item. Return `carried` (or `nothing`, `not configured`,
 `declined`, `failed`, or `uncertain` as appropriate); native `written` and
 `already_written` results are rejected. No native item is archived by these
 outcomes. Record and ask work retain their existing result contracts.
+
+## Apply lessons and knowledge
+
+With the auto-apply setting on, act mode returns R4 lesson work as
+`operation: "apply_lesson"` and R4 knowledge work as `operation: "apply_knowledge"`,
+each with `native_step`, the package `command` and the complete original item.
+Give these items no `choices` in their decision: a row with choices is an ask
+and stays carried. An item any session's ledger already settles gets no work
+entry: it is never applied or asked again, and a commit not yet pushed goes to
+delivery. The report lists these under `already_settled`, not as this run's work;
+watch-only lists them the same way, apart from `would_apply`. A malformed ledger
+row, including an unknown status, is named in the report's errors and the rest of
+that ledger is still searched; the item it names stays `carried` until the row is
+repaired. An always-loaded lesson's ask follows only a delivered commit.
+`complete` reads the open-session evidence passed on that call before it applies
+anything: pass refreshed `--open-sessions` evidence on every completing call. An
+assessed item whose session is open again comes back `carried` with that reason,
+nothing is committed or pushed for it, and a commit from an earlier round whose
+session is now open stays `not pushed` for a later sweep. Two handoffs carrying one
+fact or always-loaded lesson get one ask; the second row shares its result.
+An unreadable routing file, or a mistyped setting, stops only what it governs: those
+items stay `native_step`, and the report's errors name it.
+
+For `apply_lesson`, assess the item as improve-harness's Auto-apply section does,
+with the abandoned session's handoff as the evidence, and return one row. Do not
+run `apply-lessons`; `complete` writes and commits it:
+
+```json
+[{"write_id":"<from-work>","status":"assessed","lesson":{"recommend":"apply","target":"/absolute/path/to/source","change":"One-line change","evidence":"Where the handoff shows it","edits":[{"new":"Added text"}]}}]
+```
+
+A `skip` row names its `reason` and is dropped. `dictated` and `always_loaded`
+mean what they mean at a wrap.
+
+For `apply_knowledge`, follow knowledge-capture's Auto-apply section for the item
+before calling `complete`, and return its row without `index`. Do not run
+`apply-knowledge`; `complete` checks it. Every file must be written after this
+run started. Pass the knowledge profile:
+
+```json
+[{"write_id":"<from-work>","status":"assessed","knowledge":{"capture":"wiki","created":["wiki/topic.md"],"updated":["wiki/index.md"]}}]
+```
+
+A row that keeps its approval under that section returns `carried`. A
+`user_fact` row returns the same fields it has at a wrap; `complete` adds its
+ask. `written` and `already_written` are rejected for both operations: the sweep
+records the receipt itself.
+
+```bash
+python3 <package>/scripts/lib/sweep.py complete --run-id <run-id> --results <results-file> \
+  --knowledge-profile <knowledge-profile>
+```
+
+One bad assessment fails its own item. After applying, `complete` returns
+`phase: "planned"` with new intents, in this order:
+
+1. `operation: "persist"`, when lessons were committed and persist is bound. Regenerate
+   its `surfaces` as in improve-harness, then run its `command` for each of its
+   `checkouts`. Return `written` with a receipt and destination, or `failed` with its error.
+   Only a confirmed result lets `complete` push what is left, with the same single retry as a
+   wrap; anything else leaves the commits unpushed and the report says so.
+2. `operation: "ask"`, for each fact about the user and each lesson for an
+   always-loaded rules file. A lesson's ask has no choices and names the delivered commit.
+
+Each item's `receipt` names its commit, or its destination when there is none.
+A handoff is archived once each item has a receipt, a drop or a delivered ask.
+With persist unbound, or a push that still fails, `lessons_not_pushed` names each
+commit and why, and the handoff is kept. Report those. A later sweep delivers them
+without applying anything again.
+
+Undo leaves this run's applied lessons and captures in place: it prints them as
+`applied_left_in_place`, with no reversal work, and never lists `already_settled` items. Present them with each commit;
+a lesson commit is reverted through the repository's normal delivery, never by the sweep.

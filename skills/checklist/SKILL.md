@@ -192,7 +192,7 @@ or a lesson applied or written to the routing file's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
 Only an interactive session runs these steps and their commands (`apply-knowledge`,
 `apply-lessons`, `record-over-limit`); a sweep or scheduled session never does, and the
-module refuses it. In an interactive wrap, attended or unattended, the setting decides: on,
+module refuses it. A sweep applies through its own `complete`. In an interactive wrap, attended or unattended, the setting decides: on,
 the steps apply what the setting covers; off, or `auto_apply.lessons: propose` for lessons,
 run them in unattended mode, carry items and apply nothing. Report pending proposals and
 preserve their provenance.

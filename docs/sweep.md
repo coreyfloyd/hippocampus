@@ -192,6 +192,44 @@ asks. Git remote refs are not fetched or changed by watch-only.
 A run with no work still writes a report with `nothing_to_do: true` and
 `Nothing to do.` This is distinct from a run with parse or discovery errors.
 
+## Apply lessons and knowledge
+
+With `"auto_apply_lessons": true` in the hippocampus configuration, a sweep stops
+carrying lessons and knowledge forever. It uses the same rules as a wrap:
+
+- Watch-only applies nothing. The report's `would_apply` lists what act mode would apply, and
+  `already_settled` lists what a ledger already settles, found by the same read-only ledger search.
+- In act mode, each lesson the agent recommends is written and committed, one commit
+  each, and each recommended skip is dropped. Wiki captures and retained sources and
+  outputs under the knowledge root are checked and recorded. A fact about the user
+  becomes an ordinary ask and is never saved by the sweep.
+- Each item's receipt names its commit, or its destination when it has none. A handoff
+  is archived once every item has a receipt, a drop or a delivered ask.
+- Lesson commits go through the persist binding before the run ends, with the wrap's
+  single retry, once persist confirms. With persist unbound or unconfirmed, or a push that
+  still fails, `lessons_not_pushed` says which commits were not pushed and why, and the
+  handoff is kept.
+- Each outcome stays in a session ledger, and the sweep searches every ledger, so a later
+  sweep skips what landed, delivers what did not, and never repeats a delivered ask. What a
+  wrap or an earlier run settled is listed under `already_settled`, not as this run's work.
+  A malformed ledger row, including an unknown status, is named in the report's errors and the
+  rest of that ledger is still read; the item it names is carried until the row is repaired.
+- An always-loaded lesson's ask is raised only after its commit is delivered; while the commit is
+  not pushed, the handoff is kept and no ask goes out.
+- Completion reads the open-session evidence passed on that call, and current activity, before it
+  applies anything: an item whose session is open again is carried, nothing is committed or pushed
+  for it, and its handoff is kept. A commit made in an earlier round of the run whose session is
+  open by the time persist confirms is left unpushed for a later sweep.
+- When two handoffs carry the same fact or always-loaded lesson, the run raises one ask; both
+  handoffs archive once it is delivered, and both are kept when it fails.
+- Undo leaves this run's applied lessons and captures in place and lists them, with their
+  commits, in the undo report. Revert a lesson commit through the repository's normal delivery.
+
+A routing file's `lesson-policy: propose` still wins for lessons: they are carried and
+the row's reason says so. An unreadable routing file stops only lesson applying and is listed
+in the report's errors. With the setting off, a sweep carries both as before. The
+[plan/results contract](../INTERFACE.md#12-sweep-plan-and-results-contract) has the fields.
+
 ## External scheduling
 
 The package ships no scheduler. For example, a user-owned cron entry can run a
