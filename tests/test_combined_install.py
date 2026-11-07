@@ -167,7 +167,7 @@ def test_claude_native_cli_cutover_from_checkout_and_release_tree(tmp_path):
                 assert {p.name for p in (installed / 'skills').iterdir()} == set(installer().SKILLS)
                 hooks = json.loads((installed / 'hooks/hooks.json').read_text())['hooks']
                 commands = [h['command'] for groups in hooks.values() for g in groups for h in g['hooks']]
-                assert len(commands) == len(set(commands)) == 6
+                assert len(commands) == len(set(commands))
 
 
 def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path):

@@ -486,6 +486,7 @@ class CaptureAbsorb(unittest.TestCase):
                 mod.proposal_classes(self.profile)
         self.profile.write_text(self.profile.read_text().split('```hippocampus-classes')[0] +
             (REPO / 'profiles/karpathy-wiki.example.md').read_text().split('## Example custom class:', 1)[1])
+        mod.proposal_classes(self.profile)  # The shipped example must parse, whatever its class names.
 
     def test_legacy_writing_record_remains_readable_without_declaration(self):
         # Existing contract-review fixture shape retained from the original route test.
