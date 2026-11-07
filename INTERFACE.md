@@ -50,7 +50,8 @@ an empty configuration.
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
-| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
+| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
+| `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -400,9 +401,25 @@ completion command succeeds it answers `unattended-checklist` until a passing
 `wrap-check --unattended`, or an explicit attended `plan` starts all steps
 afresh after an unfinished unattended wrap. Without the section every interactive session is `checklist`.
 
+### Unattended slim: `scripts/lib/slim.py`
+
+Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit 1, with the auto-apply setting off or the routing file's `lesson-policy: propose`. State is `slim-state.json` beside the over-limit records, so one machine runs the step; it is given every machine's records. Every path is keyed by its canonical spelling. Clones are shallow, run no hooks, never happen under the state lock, and a plan clones each repository at most once. Remote commands time out after 120 seconds (clones 600), or `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` seconds; a remote that cannot be read is a warning for that repository, never a failed command. All output is JSON.
+
+| Command | Result |
+|---|---|
+| `plan --records F [--records F ...]` | Start a run over the given `{"records": [...]}` files, records of one file merged (the newest measurement per tool and unit; duplicate rules and sessions joined). First settles a slim whose helper stopped mid-push from its remotes (a branch found there is recorded and gets its ask; one not found is a failure), then closes a run that stopped early, composing its asks. Settles each awaiting branch gone from its remote: merged if its diff reverses cleanly on the default branch, rejected only if its diff still applies there. When neither check is conclusive, or a git error occurs, it stays awaiting its decision with a warning. The newest slim's settlement decides the recorded file's eligibility, even if an older slim has another repository's branch awaiting its decision. Returns `run_id`, `queued`, `skipped` (awaiting a decision, `over limit, slim rejected` or `over limit, slim stalled`), `deferred` (a file a waiting branch changed; one frozen by an earlier run's branch gets one ask per branch when the run closes), `unreachable` (the file's repository, or one holding a duplicate of its rule, is not in `slim_checkouts` or cannot be read), `warnings` and `undelivered_asks`. |
+| `begin --run R` | With `done: false`, the open slim: `slim_id`, `repository`, `path`, `file`, `workspaces`, `limits`, `duplicates`, `frozen` and `surfaces`. It repeats the open slim until `finish`. A file an earlier slim froze goes to `deferred` and does not count toward the three. With `done: true`, the closed run: `analyzed`, `asks`, `results`, `waiting`, `skipped`, `deferred`, `unreachable`, `failed`. |
+| `workspace --run R --repository owner/name` | Clone another repository's default branch for the open slim. |
+| `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): reduce each path to its one spelling, drop edits to a frozen file with their `group` and move the contradiction, duplicate and rule rows naming that file to "not done", commit one branch per repository (`slim/<run>-<path>-<digest>`), record the branches, then push them; a push that errors after the remote took the branch counts as pushed. Returns `status`: `slimmed`, `pending-unverified` (publication unconfirmed after a push error; its ask says so and its files stay frozen until a later plan reconciles the push), `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that is malformed, names a path inside `.git`, a directory or a path through a link, has an `old` that does not appear exactly once, has an edit that leaves its file as it is, or leaves the file over a limit with no `left`, is refused, exit 1, before any push: it changes nothing and the slim stays open. While a stopped push is unsettled, `begin` and `finish` refuse until `plan`. |
+| `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. A settled branch refuses, exit 1. |
+| `retry --repository owner/name --path P` | Let a stalled file back into later runs. |
+| `ask-delivered --ask ID --receipt T` | Settle a delivered ask, which `plan` otherwise lists again. |
+
+A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its text lists, in order: contradictions, duplicates, rules removed or rewritten, sizes, branches, then branches not pushed, choices not done because their file is deferred, what was deferred, what is left, surfaces to regenerate, and how to undo or stop it. The package never merges a slim branch and schedules nothing.
+
 ## 7. Skills
 
-26 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
+27 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
 looks for skills. Each resolves its scripts from its own real directory, never from a
 tool-specific home directory.
 
@@ -418,6 +435,7 @@ tool-specific home directory.
 | `wip` | In-flight work, blockers, and pending approvals for the current session. |
 | `improve-harness` | Route a lesson to the user's rules, skills, agent definitions, or memory. |
 | `slim-harness` | Review one instruction source with the user, resolve conflicts, and leave edits uncommitted. |
+| `slim-unattended` | Slim recorded over-limit files without the user, leaving each result on a branch with an ask. |
 | `absorb` | `/hippocampus:absorb` | See the absorb skill. |
 | `dev-research` | `/hippocampus:dev-research` | See the dev-research skill. |
 | `feature-research` | `/hippocampus:feature-research` | See the feature-research skill. |
@@ -453,7 +471,7 @@ repository. `tests/test_shipped_surface.py` runs the check over the whole tree w
 ## 10. Codex installation and normalization
 
 `python3 scripts/install-codex.py [--codex-home PATH] [--codex PATH]` installs a
-runtime copy, the 26 skill links, six hippocampus hooks and the optional actor
+runtime copy, the 27 skill links, six hippocampus hooks and the optional actor
 guard. The installer owns only the registrations and links recorded in
 `hippocampus-install.json`; other hooks and configuration survive. Its seven
 handlers must match `hooks/list` with `trustStatus: trusted`, or it restores the
@@ -606,6 +624,9 @@ position. A successor keeps the original identity. Per-operation fields are:
 | `comment` | `record_writes.tickets` | destination ticket; inherits its priority |
 | `edit_document` | `record_writes.documents` | destination document |
 | `native_step` | package skill in unattended mode | `native_step`: `lessons` or `knowledge`; `command`; `unattended: true` |
+| `apply_lesson` | agent's assessment; `complete` writes and commits it | `native_step`: `lessons`; `command`; `ledger_session` |
+| `apply_knowledge` | package skill's Auto-apply section; `complete` checks the capture | `native_step`: `knowledge`; `command`; `ledger_session` |
+| `persist` | persist binding, after lessons are committed | `command`; `checkouts`; `surfaces` |
 | `ask` | ask binding, or direct presentation for interactive open sessions | `ticket` (possibly null), `choices`; open sessions also carry `activity_at` |
 
 R1/R2 reads use the profile's `record_read`; the agent searches open tickets
@@ -627,6 +648,7 @@ The agent supplies one result per `write_id` in a JSON array:
 | `already_written` | Identity found before writing; original `receipt` and `destination` |
 | `failed` | No write occurred; `error` |
 | `uncertain` | Write may have occurred; optional `error` |
+| `assessed` | `apply_lesson` or `apply_knowledge` only: a `lesson` or `knowledge` object, the wrap's row without `index` |
 
 A missing result is `uncertain`. Missing or malformed acknowledgements and
 lost replies must never be reported as failed. The engine flushes each result
@@ -635,9 +657,47 @@ handoffs. Results cannot overwrite already recorded outcomes. A later run
 resolves uncertain writes through identity lookup. `already_written` does not
 count as new this run and does not belong to this run's undo journal.
 
-Native steps always carry items in sweep and apply nothing. Return `carried`;
+A `native_step` carries its item and applies nothing. Return `carried`;
 `nothing`, `not configured`, `declined`, `failed`, and `uncertain` also retain
 the item. Native `written` and `already_written` are rejected.
+
+With the auto-apply setting on, `run` adds `auto_apply`, as `plan` does at a wrap, and
+act mode plans `apply_lesson` and `apply_knowledge` in place of `native_step`, except a
+lesson under `lesson-policy: propose`, which stays a `native_step` whose `reason` says so.
+Each section adds `would_apply` (watch-only, outcome `would apply`), `lessons_applied`,
+`lessons_not_pushed`, `knowledge_captured` and `already_settled`. Watch-only runs the same ledger
+search as act mode, read-only: an item a ledger already settles is listed under `already_settled`,
+never under `would_apply`. With the setting off none of these appear. An unreadable routing file or a mistyped setting adds an `auto-apply` row to `errors` and sets what it governs to `failed` in `auto_apply`; those items stay `native_step` and the run continues.
+
+Those two operations also accept the `native_step` statuses except `written` and
+`already_written`, which are rejected. `complete --knowledge-profile P` (default
+`~/.config/hippocampus/profile.md`) applies each `assessed` result through the wrap's
+modules, measuring a capture's files from the run's `started_at`; one that cannot apply
+is `failed` alone, whatever it raises; work already in the ledger stands, with a `warning`,
+and goes on to delivery. Before it applies anything, `complete` reads the open-session evidence
+given on that same call (or the configured checks) and the current activity of every handoff: an
+`assessed` item whose handoff's or producing session is open, active again, or of unknown
+abandonment is `carried` with that reason and nothing is written, committed or pushed for it; an
+`applied` commit whose session is open is `not pushed` until a later sweep delivers it, and its
+ask is not raised. New outcomes go to the ledger of the item's producing session, and every
+session's ledger is searched by the item's identity (`ledger_session` names the one used); a
+malformed ledger row, including one whose status is not a known terminal status (`applied`,
+`dropped`, `failed`; `captured`, `asked`, `failed`), fails only itself, named in `errors`, and the
+rest of that ledger is still searched; the item such a row names stays `carried`, with the reason,
+until the row is repaired. A
+settled item (a lesson not failed, a capture, or a fact whose ask was delivered) gets no work
+entry and is reported under `already_settled` with outcome `already_written`, or `dropped`;
+those rows are this run's work in no list, and undo never names them. A row's `receipt` is its commit, its target with no commit,
+or a capture's files; a lesson row also keeps `target`, `change`, `commit`, `branch`,
+`delivery` and any `pull_request`. A commit is `applied` until delivered, then `written`, or
+`not pushed` with `error`, which keeps its handoff. With commits to deliver and persist bound,
+`complete` journals one `persist` intent, returns `planned`, and on the next call delivers
+as `deliver-lessons` does, only when that result is `written` or `already_written`; any other
+result leaves the commits `not pushed` with the reason, including `uncertain` with a null `error`. With persist unbound it delivers at once. Asks for facts about the user and for always-loaded lessons follow in the
+same way, the latter only once its commit is delivered, with `choices: []`; a commit `not pushed` raises no ask yet; a delivered ask settles its item, and its ledger records that, so no later run raises it again.
+One ask per item identity per run: when two handoffs carry the same item, the second's ask row
+carries `shares_ask` (the first ask's write id) and takes that ask's outcome, receipt and error
+instead of journaling a second intent.
 
 If an older slot leaves work pending without writing, return `failed` with `pending:
 true` and an error. Completion journals an ask for that item. If worktree
@@ -721,7 +781,9 @@ overwriting a newer handoff or a changed archive. The undo report is
 `<run-id>.undo.md`; rerunning undo retries only failed items. Reversals use
 the original run id and receipt so an already completed reversal can be
 acknowledged after a lost reply. Worktree removal and local branch deletion
-cannot be undone. Asks and their activity history remain delivered. Optional
+cannot be undone. Asks and their activity history remain delivered. Lessons and captures
+this run applied stay in place: undo plans no reversal for them, and `undo` and the undo report
+list them as `applied_left_in_place`, each with its `commit` or files. Optional
 retention remains a separate operation, off by default; see
 [usage](docs/sweep.md#undo-and-retention).
 

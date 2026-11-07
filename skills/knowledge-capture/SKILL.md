@@ -68,6 +68,9 @@ dropping it, with nothing written. For "edit", write a new `user_fact` row with 
 text; it asks again. The module refuses a row without the answer its action needs. Report
 the articles created or updated from `knowledge_outcomes`.
 
+A sweep in act mode captures a carried item the same way and returns the row to `complete`; see
+the sweep skill's Apply lessons and knowledge section. It never reads an ask's answer.
+
 ## Boundaries
 
 - Approved Action captures may create or update tasks through the configured task workflow. Do not implement the work those tasks own, perform unrelated project status updates, or propose harness/rule changes; route those observations to their owners.
