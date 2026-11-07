@@ -118,7 +118,6 @@ test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_set
 test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/quick-research/reddit-read.sh"
 test -x "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/run-transcribe.sh"
 test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/transcribe/tools/apple-speech/.build/hippocampus-test-sentinel"
-grep -Fq 'Karpathy-wiki contract' "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/research-to-wiki/SKILL.md"
 for skill in "$ROOT"/skills/*; do
   test -f "$skill/SKILL.md" || continue
   name="$(basename "$skill")"

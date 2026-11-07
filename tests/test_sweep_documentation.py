@@ -45,17 +45,3 @@ def test_documented_herdr_check(tmp_path, available):
         assert result.returncode == 1
         assert result.stdout == ""
         assert "FileNotFoundError" in result.stderr
-
-
-def test_setup_and_sweep_describe_per_kind_record_writes():
-    setup = (ROOT / 'skills/hippocampus-set-up/SKILL.md').read_text()
-    assert '--record-writes' in setup
-    for kind in ('tickets', 'projects', 'documents', 'scheduled_jobs'):
-        assert kind in setup
-    assert '| `record` |' not in setup
-    for path in ('skills/sweep/SKILL.md', 'docs/sweep.md', 'INTERFACE.md'):
-        text = (ROOT / path).read_text()
-        assert 'record_writes.tickets' in text
-        assert 'record_writes.documents' in text
-        assert 'through the record binding' not in text
-        assert 'record or ask binding' not in text

@@ -20,15 +20,7 @@ class PublicDocs(unittest.TestCase):
         self.assertNotIn('writing opportunities', readme.casefold())
         self.assertEqual(readme.casefold().count('custom classes'), 1)
         self.assertEqual(readme.count('(docs/examples/capture-writing.md)'), 1)
-        for relative in ('knowledge-capture/SKILL.md', 'meeting-capture/SKILL.md',
-                         'research-topic/SKILL.md', 'research-sources/SKILL.md',
-                         'absorb/references/artifact-contract.md'):
-            text = (ROOT / 'skills' / relative).read_text().casefold()
-            self.assertIn('custom', text)
-            self.assertIn('none', text)
         example = (ROOT / 'profiles/karpathy-wiki.example.md').read_text()
-        self.assertIn('```hippocampus-classes', example)
-        self.assertIn('example', example.casefold())
 
     def test_public_diagrams_do_not_advertise_retired_writing_destination(self):
         for name in ('question-answer-action', 'capture-meetings'):

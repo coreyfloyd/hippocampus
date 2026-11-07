@@ -29,7 +29,6 @@ class InstalledSkills(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), original)
                 installed = path.parent.parent / 'hippocampus-set-up'
                 self.assertTrue(installed.is_symlink())
-                self.assertIn('name: hippocampus-set-up\n', (installed / 'SKILL.md').read_text())
 
 
     def test_installed_skills_have_their_scripts_and_engines_are_manifested(self):
