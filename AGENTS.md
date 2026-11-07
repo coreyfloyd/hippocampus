@@ -18,7 +18,7 @@ one tool is not finished.
 ## No backward compatibility for session features until the public launch
 
 The session features (checklist, checkpoint, handoff-prompt, pickup, sweep, wip,
-improve-harness, slim-harness) are unreleased until the first announced public release, tracked by
+improve-harness, slim-harness, slim-unattended) are unreleased until the first announced public release, tracked by
 the `Public launch` milestone. Until then, replace old shapes outright: no aliases,
 no migration code, no compatibility paths. hippocampus's released surfaces keep
 working: its install path, knowledge profile format and composer entry point.

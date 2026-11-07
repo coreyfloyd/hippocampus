@@ -51,6 +51,7 @@ an empty configuration.
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
 | `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
+| `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -400,9 +401,25 @@ completion command succeeds it answers `unattended-checklist` until a passing
 `wrap-check --unattended`, or an explicit attended `plan` starts all steps
 afresh after an unfinished unattended wrap. Without the section every interactive session is `checklist`.
 
+### Unattended slim: `scripts/lib/slim.py`
+
+Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit 1, with the auto-apply setting off or the routing file's `lesson-policy: propose`. State is `slim-state.json` beside the over-limit records, so one machine runs the step; it is given every machine's records. Every path is keyed by its canonical spelling. Clones are shallow, run no hooks, never happen under the state lock, and a plan clones each repository at most once. Remote commands time out after 120 seconds (clones 600), or `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` seconds; a remote that cannot be read is a warning for that repository, never a failed command. All output is JSON.
+
+| Command | Result |
+|---|---|
+| `plan --records F [--records F ...]` | Start a run over the given `{"records": [...]}` files, records of one file merged (the newest measurement per tool and unit; duplicate rules and sessions joined). First settles a slim whose helper stopped mid-push from its remotes (a branch found there is recorded and gets its ask; one not found is a failure), then closes a run that stopped early, composing its asks. Settles each awaiting branch gone from its remote: merged if its diff reverses cleanly on the default branch, rejected only if its diff still applies there, merged when neither holds (its lines were edited after it); a git error leaves it awaiting with a warning. Returns `run_id`, `queued`, `skipped` (awaiting a decision, `over limit, slim rejected` or `over limit, slim stalled`), `deferred` (a file a waiting branch changed; one frozen by an earlier run's branch gets one ask per branch when the run closes), `unreachable` (the file's repository, or one holding a duplicate of its rule, is not in `slim_checkouts` or cannot be read), `warnings` and `undelivered_asks`. |
+| `begin --run R` | With `done: false`, the open slim: `slim_id`, `repository`, `path`, `file`, `workspaces`, `limits`, `duplicates`, `frozen` and `surfaces`. It repeats the open slim until `finish`. A file an earlier slim froze goes to `deferred` and does not count toward the three. With `done: true`, the closed run: `analyzed`, `asks`, `results`, `waiting`, `skipped`, `deferred`, `unreachable`, `failed`. |
+| `workspace --run R --repository owner/name` | Clone another repository's default branch for the open slim. |
+| `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): reduce each path to its one spelling, drop edits to a frozen file with their `group` and move the contradiction, duplicate and rule rows naming that file to "not done", commit one branch per repository (`slim/<run>-<path>-<digest>`), record the branches, then push them; a push that errors after the remote took the branch counts as pushed. Returns `status`: `slimmed`, `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that is malformed, names a path inside `.git`, a directory or a path through a link, has an `old` that does not appear exactly once, has an edit that leaves its file as it is, or leaves the file over a limit with no `left`, is refused, exit 1, before any push: it changes nothing and the slim stays open. While a stopped push is unsettled, `begin` and `finish` refuse until `plan`. |
+| `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. A settled branch refuses, exit 1. |
+| `retry --repository owner/name --path P` | Let a stalled file back into later runs. |
+| `ask-delivered --ask ID --receipt T` | Settle a delivered ask, which `plan` otherwise lists again. |
+
+A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its text lists, in order: contradictions, duplicates, rules removed or rewritten, sizes, branches, then branches not pushed, choices not done because their file is deferred, what was deferred, what is left, surfaces to regenerate, and how to undo or stop it. The package never merges a slim branch and schedules nothing.
+
 ## 7. Skills
 
-26 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
+27 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
 looks for skills. Each resolves its scripts from its own real directory, never from a
 tool-specific home directory.
 
@@ -418,6 +435,7 @@ tool-specific home directory.
 | `wip` | In-flight work, blockers, and pending approvals for the current session. |
 | `improve-harness` | Route a lesson to the user's rules, skills, agent definitions, or memory. |
 | `slim-harness` | Review one instruction source with the user, resolve conflicts, and leave edits uncommitted. |
+| `slim-unattended` | Slim recorded over-limit files without the user, leaving each result on a branch with an ask. |
 | `absorb` | `/hippocampus:absorb` | See the absorb skill. |
 | `dev-research` | `/hippocampus:dev-research` | See the dev-research skill. |
 | `feature-research` | `/hippocampus:feature-research` | See the feature-research skill. |
@@ -453,7 +471,7 @@ repository. `tests/test_shipped_surface.py` runs the check over the whole tree w
 ## 10. Codex installation and normalization
 
 `python3 scripts/install-codex.py [--codex-home PATH] [--codex PATH]` installs a
-runtime copy, the 26 skill links, six hippocampus hooks and the optional actor
+runtime copy, the 27 skill links, six hippocampus hooks and the optional actor
 guard. The installer owns only the registrations and links recorded in
 `hippocampus-install.json`; other hooks and configuration survive. Its seven
 handlers must match `hooks/list` with `trustStatus: trusted`, or it restores the
