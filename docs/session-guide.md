@@ -164,10 +164,15 @@ file's `lesson-policy: propose` stops this step too.
   slims never change one file on two branches, however a path is spelled. A file with a
   waiting branch is skipped; one left alone because of an earlier run's branch gets one ask
   saying so. A slim interrupted while pushing is settled from its remotes at the next run.
+- If publication cannot be confirmed after a push error, `finish` returns `pending-unverified`.
+  Its ask reports that uncertainty, its files stay frozen, and the next run checks the remote again.
 - Closing a pull request without merging rejects the slim. Have your automation run
   `scripts/lib/slim.py decide --repository owner/name --branch <branch> --decision rejected`
   (or `merged`); a branch deleted from its remote is settled at the next run: rejected only
-  when the default branch still reads as it did before the slim, otherwise merged. A rejected file is reported as "over limit, slim
+  when its diff still applies cleanly on the default branch, merged when it reverses cleanly.
+  When neither check is conclusive, the branch stays awaiting its decision with a warning.
+  The newest slim's settlement decides the recorded file's eligibility; an older rejection
+  never returns because another repository's branch still awaits its decision. A rejected file is reported as "over limit, slim
   rejected" and skipped until a session measures it larger than it was at rejection or records
   a new duplicate rule naming it.
 - A file that produces no branch in two runs in a row is stalled: its ask says why, and later

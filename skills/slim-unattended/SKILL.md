@@ -103,11 +103,18 @@ A branch awaits its decision until its pull request merges or closes. The user's
 says which with `python3 <package>/scripts/lib/slim.py decide --repository <owner/name> --branch <branch> --decision merged`
 (or `rejected`, for a pull request closed without merging). A branch deleted from its remote
 is settled at the next `plan`: merged when its diff reverses cleanly on the default branch,
-rejected only when its diff still applies there (the default branch never took the change),
-and merged when neither holds, because its lines were edited after it. A remote that cannot
-be read or hangs, or a git error, is a warning for that repository: the branch waits, and the
-plan goes on for the others. A settled branch refuses a second decision. A rejected file waits until a session measures it larger than at rejection
-or records a new duplicate rule naming it.
+rejected only when its diff still applies there (the default branch never took the change).
+When neither check is conclusive, the branch stays awaiting its decision with a warning.
+A remote that cannot be read or hangs, or a git error, also leaves the branch awaiting its
+decision with a warning, and the plan goes on for the others. A settled branch refuses a
+second decision. A rejected file waits until a session measures it larger than at rejection
+or records a new duplicate rule naming it. A newer slim's settlement decides the recorded
+file's eligibility; an older rejection never returns because another repository's branch
+is still awaiting its decision.
+
+If a push errors and the remote cannot confirm whether it took the branch, `finish` returns
+`pending-unverified`: publication remains unconfirmed, its ask says so, and every file the
+branch changed stays frozen. The next `plan` checks the remote again before releasing it.
 
 A plan closes a run that stopped early, so the asks of slims it already pushed are not lost;
 a slim left open starts over. A slim whose helper stopped while pushing is settled from its
