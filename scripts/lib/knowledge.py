@@ -197,11 +197,12 @@ def _captured(row: Mapping[str, Any], root: Path, wiki: bool, profile_files: Map
 
 
 def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module: Any,
-          session_id: str, profile: Path) -> dict[str, Any]:
+          session_id: str, profile: Path, since: datetime | None = None) -> dict[str, Any]:
     """Settle each captured item, raise each fact about the user as an ask, keep failures.
 
     `rows` index the filing pass's list: open loops, then unrecorded session items.
-    Knowledge items with no row keep today's approval and stay carried.
+    Knowledge items with no row keep today's approval and stay carried. `since` is when the
+    captures began: a sweep names its run's start, and a wrap uses its first start marker.
     """
     if not session_id:
         raise ValueError("apply-knowledge requires a session id")
@@ -211,7 +212,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     items = [*loops, *current]
     _validate(rows, items)
     root, wiki, profile_files = read_profile(profile)
-    since = started_at(module, session_id)
+    since = since or started_at(module, session_id)
     known = {tuple(outcome["identity"]): outcome for outcome in outcomes(module, session_id)}
     removed: list[Mapping[str, Any]] = []
     annotated: dict[int, dict[str, Any]] = {}
