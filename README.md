@@ -89,7 +89,7 @@ covers every skill, hook and file the package writes.
 | Meetings | One source-linked record per meeting, plus the people, documents and follow-ups it changes | `meetings/` in your knowledge root | `meeting-capture`, `transcribe`, `absorb` |
 | Conversations | Sources and conclusions from the current session that are worth keeping | Wherever the approved disposition says | `knowledge-capture` |
 | Sessions | Handoffs, a ledger of touched files, checklist state | `~/.local/state/hippocampus/` | `checkpoint`, `checklist`, `pickup`, `wip`, `handoff-prompt`, `sweep` |
-| Rules | Rule sources composed into each tool's instruction file; lesson routing | A rules document in your knowledge root, composed into `CLAUDE.md` and `AGENTS.md` | `improve-harness`, `slim-harness`, `hippocampus-set-up` |
+| Rules | Rule sources composed into each tool's instruction file; lesson routing | A rules document in your knowledge root, composed into `CLAUDE.md` and `AGENTS.md` | `improve-harness`, `slim-harness`, `slim-unattended`, `hippocampus-set-up` |
 
 ## The wiki
 
@@ -200,6 +200,16 @@ forward. A routing file can replace the default placement table.
 `slim-harness` reviews one instruction file with you: it finds duplicates and
 conflicts with neighboring files, asks before resolving them, and leaves its
 edits uncommitted for you to check.
+
+One setting, `auto_apply_lessons` in the shared configuration (off by
+default), lets these run without waiting for you. With it on, a wrap applies
+the lessons it recommends and captures wiki and retained knowledge under your
+knowledge root. It records files over their size limits, and a sweep in act
+mode applies the same items from abandoned sessions. `slim-unattended` slims
+the recorded files on a branch per repository for your review and never merges
+it. A fact about you always waits for your answer, and a routing file line
+`lesson-policy: propose` turns lesson applying off. The
+[session guide](docs/session-guide.md) explains each step and how to undo it.
 
 Your rules can live in your knowledge root as plain Markdown, one document for
 every tool and an optional one for development work. The rule composer writes
