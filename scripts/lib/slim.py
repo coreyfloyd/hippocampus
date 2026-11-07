@@ -94,11 +94,12 @@ def _transaction() -> Iterator[dict[str, Any]]:
 
 
 def _key(row: Mapping[str, Any]) -> tuple[str, str]:
-    return row["repository"], row["path"]
+    """A file's one identity: its repository and the canonical spelling of its path."""
+    return row["repository"], _canonical(row["path"])
 
 
 def _name(row: Mapping[str, Any]) -> str:
-    return f"{row['repository']} {row['path']}"
+    return " ".join(_key(row))
 
 
 def _canonical(path: Any) -> str:
@@ -122,7 +123,7 @@ def _status(slim: Mapping[str, Any]) -> str:
 
 def _frozen(state: Mapping[str, Any]) -> dict[tuple[str, str], str]:
     """Every file a slim branch awaiting its decision changed, with that branch."""
-    return {(branch["repository"], path): branch["branch"] for slim in state["slims"]
+    return {(branch["repository"], _canonical(path)): branch["branch"] for slim in state["slims"]
             for branch in slim["branches"] if branch["status"] == PENDING for path in branch["changed"]}
 
 
@@ -139,7 +140,10 @@ def merge_records(paths: Sequence[Path]) -> list[dict[str, Any]]:
         for number, row in enumerate(data["records"], 1):
             if not over_limit._is_record(row):
                 raise ValueError(f"slim: {path} row {number} is not a record")
-            rows.append(row)
+            try:
+                rows.append({**row, "path": _canonical(row["path"])})
+            except ValueError as error:
+                raise ValueError(f"slim: {path} row {number}: {error}") from error
     merged: dict[tuple[str, str], dict[str, Any]] = {}
     for row in sorted(rows, key=lambda row: row.get("last_recorded") or ""):
         entry = merged.setdefault(_key(row), {"repository": row["repository"], "path": row["path"], "size": {},
@@ -180,6 +184,27 @@ def _clone_address(config: Mapping[str, Any], repository: str) -> tuple[str | No
     return address, None
 
 
+def _timeout(default: int) -> int:
+    """Seconds a remote command may take; `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` overrides the default."""
+    value = os.environ.get("HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT")
+    return int(value) if value and value.isdigit() else default
+
+
+def _remote(cwd: Path | str, *args: str) -> subprocess.CompletedProcess:
+    """A git command that talks to a remote. May raise `subprocess.TimeoutExpired`."""
+    return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, timeout=_timeout(120),
+                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+
+
+def _listed(address: str, branch: str) -> bool | None:
+    """Whether a branch is on its remote; None when the remote cannot be read."""
+    try:
+        listed = _remote(".", "ls-remote", "--heads", address, f"refs/heads/{branch}")
+    except subprocess.SubprocessError:
+        return None
+    return bool(lessons._text(listed)) if listed.returncode == 0 else None
+
+
 def _clone(address: str, directory: Path) -> None:
     """Clone the tip of the hosted default branch: the remote's own HEAD, not a checkout's idea of it.
 
@@ -188,7 +213,7 @@ def _clone(address: str, directory: Path) -> None:
     """
     result = subprocess.run(["git", "clone", "--quiet", "--depth", "1", "--single-branch", "--no-tags",
                              "--config", "core.hooksPath=/dev/null", address, str(directory)],
-                            capture_output=True, text=True, timeout=600,
+                            capture_output=True, text=True, timeout=_timeout(600),
                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if result.returncode:
         raise lessons.LessonError(f"git clone failed: {result.stderr.strip()}")
@@ -239,44 +264,94 @@ def _baseline_now(slim: Mapping[str, Any], config: Mapping[str, Any]) -> dict[st
     with tempfile.TemporaryDirectory(prefix="hippocampus-slim-") as directory:
         try:
             _clone(address, Path(directory) / "clone")
-            text = (Path(directory) / "clone" / slim["path"]).read_text(encoding="utf-8")
-            return {**slim["measured"], **_measure(text, slim["measured"])}
-        except (lessons.LessonError, OSError, subprocess.SubprocessError, ValueError):
+        except (lessons.LessonError, OSError, subprocess.SubprocessError):
             return None
+        return _baseline_from(Path(directory) / "clone", slim)
 
 
-def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any],
-           config: Mapping[str, Any]) -> tuple[str | None, dict[str, Any] | None, str | None]:
+def _probe_all(pending: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+               config: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], tuple[Any, Any, Any]]]:
+    """Settle every awaiting branch, cloning each repository at most once for the whole plan."""
+    with tempfile.TemporaryDirectory(prefix="hippocampus-slim-") as directory:
+        clones: dict[str, Path | Exception] = {}
+
+        def clone_of(repository: str) -> Path:
+            if repository not in clones:
+                address, reason = _clone_address(config, repository)
+                try:
+                    if address is None:
+                        raise lessons.LessonError(reason)
+                    clone = Path(directory) / hashlib.sha256(repository.encode()).hexdigest()[:12]
+                    _clone(address, clone)
+                    clones[repository] = clone
+                except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
+                    clones[repository] = error
+            found = clones[repository]
+            if isinstance(found, Exception):
+                raise found
+            return found
+
+        return [(branch, _probe(slim, branch, config, clone_of)) for slim, branch in pending]
+
+
+def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any], config: Mapping[str, Any],
+           clone_of: Any) -> tuple[str | None, dict[str, Any] | None, str | None]:
     """A pending branch's settlement, read from its remote: status, baseline and any warning.
 
     A branch still on the remote stays pending, because git cannot tell that its pull request
-    closed. A branch that is gone merged only if its change is on the default branch: its diff
-    reverses cleanly there. Anything else, files moved by other commits included, is a rejection.
+    closed. A branch that is gone merged when its diff reverses cleanly on the default branch.
+    It is rejected only when its diff still applies there: the default branch never took the
+    change. When neither holds, the lines were edited after the change, and it counts as
+    merged. A remote that cannot be read, or a git error, is a warning and the branch waits.
     """
     address, reason = _clone_address(config, branch["repository"])
     if address is None:
-        return None, None, f"{branch['branch']}: {reason}"
-    listed = lessons._git(".", "ls-remote", "--heads", address, f"refs/heads/{branch['branch']}")
-    if listed.returncode:
-        return None, None, f"{branch['branch']}: {lessons._error(listed)}"
-    if lessons._text(listed):
+        return None, None, f"{_branch_name(branch)}: {reason}"
+    listed = _listed(address, branch["branch"])
+    if listed is None:
+        return None, None, f"{_branch_name(branch)}: its remote could not be read; it stays awaiting its decision"
+    if listed:
         return None, None, None
-    with tempfile.TemporaryDirectory(prefix="hippocampus-slim-") as directory:
-        clone = Path(directory) / "clone"
-        try:
-            _clone(address, clone)
-        except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
-            return None, None, f"{branch['branch']}: {error}"
-        applied = lessons._git(clone, "apply", "--reverse", "--check", stdin=base64.b64decode(branch["diff"]))
-    if applied.returncode == 0:
+    try:
+        clone = clone_of(branch["repository"])
+    except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
+        return None, None, f"{_branch_name(branch)}: {error}"
+    diff = base64.b64decode(branch["diff"])
+    reverse = lessons._git(clone, "apply", "--reverse", "--check", stdin=diff)
+    if reverse.returncode == 0:
         return MERGED, None, None
-    return REJECTED, _baseline_now(slim, config), None
+    forward = lessons._git(clone, "apply", "--check", stdin=diff) if reverse.returncode == 1 else reverse
+    if forward.returncode == 0:
+        return REJECTED, _baseline_from(clone, slim), None
+    if forward.returncode == 1:
+        return MERGED, None, None
+    return None, None, (f"{_branch_name(branch)}: git apply failed, so it stays awaiting its decision: "
+                        f"{lessons._error(forward)}")
+
+
+def _branch_name(branch: Mapping[str, Any]) -> str:
+    return f"{branch['repository']} {branch['branch']}"
+
+
+def _baseline_from(clone: Path, slim: Mapping[str, Any]) -> dict[str, Any] | None:
+    """The baseline with the file's size in a clone of the default branch, or None when unreadable."""
+    try:
+        text = (clone / slim["path"]).read_text(encoding="utf-8")
+        return {**slim["measured"], **_measure(text, slim["measured"])}
+    except (OSError, ValueError):
+        return None
 
 
 def _settle(slim: dict[str, Any], branch: dict[str, Any], status: str, baseline: Mapping[str, Any] | None) -> None:
     branch["status"] = status
     if status == REJECTED and baseline:
         slim["measured"] = dict(baseline)
+
+
+def _prune_reported(state: dict[str, Any]) -> None:
+    """Forget a reported deferral once its branch is settled; the file is free or rejected then."""
+    pending = {branch["branch"] for slim in state["slims"] for branch in slim["branches"] if branch["status"] == PENDING}
+    state["deferred_reported"] = [key for key in state["deferred_reported"] if key.split(" ", 1)[0] in pending]
 
 
 def _find(state: Mapping[str, Any], repository: str, name: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -315,7 +390,7 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
         _remove_workspaces(state["run"])
         pending = [(copy.deepcopy(slim), copy.deepcopy(branch)) for slim in state["slims"]
                    for branch in slim["branches"] if branch["status"] == PENDING]
-    probes = [(branch, _probe(slim, branch, config)) for slim, branch in pending]
+    probes = _probe_all(pending, config)
     with _transaction() as state:
         warnings.extend(warning for _, (_, _, warning) in probes if warning)
         for branch, (status, baseline, _) in probes:
@@ -323,6 +398,7 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
             if status and found and found[1]["status"] == PENDING:
                 _settle(*found, status, baseline)
         state["slims"] = [slim for slim in state["slims"] if _status(slim) != MERGED]
+        _prune_reported(state)
         frozen = _frozen(state)
         latest = {_key(slim): slim for slim in state["slims"]}
         run = {"id": uuid.uuid4().hex[:12], "started": _now(), "queue": [], "analyzed": 0,
@@ -506,9 +582,12 @@ def _briefing(state: Mapping[str, Any], run: Mapping[str, Any]) -> dict[str, Any
 
 def workspace(run_id: str, repository: str) -> dict[str, Any]:
     """A clone of another repository's default branch, for a comparison file or an edit."""
+    _require_setting("slim workspace")
     config = handoff.read_config()
     with _transaction() as state:
-        current = copy.deepcopy(_run(state, run_id)["current"])
+        run = _run(state, run_id)
+        _not_pushing(run)
+        current = copy.deepcopy(run["current"])
         if not current or not current["ready"]:
             raise ValueError("slim workspace: no slim is open")
     path = _workspace(current, repository, config)
@@ -618,9 +697,11 @@ def _partition(report: dict[str, Any], frozen: Mapping[tuple[str, str], str]) ->
         if _key(row) in frozen:
             deferred[_key(row)] = f"already changed by {frozen[_key(row)]}"
         elif row.get("group") in blocked:
-            deferred[_key(row)] = "it depends on a change to a deferred file"
+            deferred.setdefault(_key(row), "it depends on a change to a deferred file")
         else:
             kept.append(row)
+    # A file with any change kept is changed on the branch, so it is not deferred.
+    deferred = {key: reason for key, reason in deferred.items() if key not in {_key(row) for row in kept}}
     report["deferred"] = [*report["deferred"], *({"repository": repository, "path": path, "reason": reason}
                                                  for (repository, path), reason in deferred.items())]
     report["not_done"] = []
@@ -789,10 +870,15 @@ def _push_all(current: Mapping[str, Any], branches: Sequence[Mapping[str, Any]],
     for branch in branches:
         try:
             workspace_path = _workspace(current, branch["repository"], config)
-            lessons._must(workspace_path, "push", "origin", f"HEAD:refs/heads/{branch['branch']}")
+            result = _remote(workspace_path, "push", "origin", f"HEAD:refs/heads/{branch['branch']}")
+            if result.returncode:
+                raise lessons.LessonError(f"git push failed: {lessons._error(result)}")
         except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
-            failures.append(f"{branch['repository']} {branch['branch']}: {error}")
-            continue
+            # The remote may have taken the branch before the error: what it holds decides.
+            address, _ = _clone_address(config, branch["repository"])
+            if not (address and _listed(address, branch["branch"])):
+                failures.append(f"{branch['repository']} {branch['branch']}: {error}")
+                continue
         pushed.append(dict(branch))
     return pushed, failures
 
@@ -803,12 +889,12 @@ def _landed(branches: Sequence[Mapping[str, Any]],
     pushed, failures, warnings = [], [], []
     for branch in branches:
         address, reason = _clone_address(config, branch["repository"])
-        listed = lessons._git(".", "ls-remote", "--heads", address, f"refs/heads/{branch['branch']}") if address else None
-        if listed is None or listed.returncode:
+        listed = _listed(address, branch["branch"]) if address else None
+        if listed is None:
             warnings.append(f"{branch['repository']} {branch['branch']}: kept as awaiting its decision, its remote "
-                            f"could not be read: {reason or lessons._error(listed)}")
+                            f"could not be read{': ' + reason if reason else ''}")
             pushed.append(dict(branch))
-        elif lessons._text(listed):
+        elif listed:
             pushed.append(dict(branch))
         else:
             failures.append(f"{branch['repository']} {branch['branch']}: not on the remote; the helper stopped before "
@@ -853,6 +939,7 @@ def _recover(state: dict[str, Any], current: Mapping[str, Any], pushed: Sequence
         return
     outcome = {**current["pushing"]["outcome"], **_built(pushed, failures)}
     _record(state, run, current["record"], outcome, _slim(run["id"], current, pushed) if pushed else None)
+    shutil.rmtree(current["base"], ignore_errors=True)
 
 
 def _section(title: str, lines: Sequence[str]) -> str:
@@ -1002,16 +1089,18 @@ def decide(repository: str, branch_name: str, decision: str) -> dict[str, Any]:
     with _transaction() as state:
         slim, branch = pending(state)
         _settle(slim, branch, decision, baseline)
+        _prune_reported(state)
         return {"repository": slim["repository"], "path": slim["path"], "branch": branch_name, "status": _status(slim)}
 
 
 def retry(repository: str, path: str) -> dict[str, Any]:
     """Let a stalled file back into later runs, for a user who has fixed what stopped it."""
+    name = _name({"repository": repository, "path": path})
     with _transaction() as state:
-        row = state["stalled"].pop(f"{repository} {path}", None)
+        row = state["stalled"].pop(name, None)
         if row is None:
-            raise ValueError(f"slim retry: {repository} {path} is not stalled")
-        return {"repository": repository, "path": path, "status": "will be slimmed again"}
+            raise ValueError(f"slim retry: {name} is not stalled")
+        return {"repository": repository, "path": _canonical(path), "status": "will be slimmed again"}
 
 
 def ask_delivered(ask_id: str, receipt: str) -> dict[str, Any]:

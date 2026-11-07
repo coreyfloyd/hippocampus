@@ -166,8 +166,8 @@ file's `lesson-policy: propose` stops this step too.
   saying so. A slim interrupted while pushing is settled from its remotes at the next run.
 - Closing a pull request without merging rejects the slim. Have your automation run
   `scripts/lib/slim.py decide --repository owner/name --branch <branch> --decision rejected`
-  (or `merged`); a branch deleted from its remote is settled at the next run, as merged only
-  when its change is on the default branch. A rejected file is reported as "over limit, slim
+  (or `merged`); a branch deleted from its remote is settled at the next run: rejected only
+  when the default branch still reads as it did before the slim, otherwise merged. A rejected file is reported as "over limit, slim
   rejected" and skipped until a session measures it larger than it was at rejection or records
   a new duplicate rule naming it.
 - A file that produces no branch in two runs in a row is stalled: its ask says why, and later

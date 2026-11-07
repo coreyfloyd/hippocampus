@@ -35,7 +35,9 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    send it again. Refused the same way: an `old` that no longer fits the file, a path that is a
    directory or reaches its file through a link, and an edit that leaves its file as it is. A
    push or clone that fails is not refused: the slim ends as `failed`. Every check and commit
-   comes before the first push, so a refusal never follows a pushed branch.
+   comes before the first push, so a refusal never follows a pushed branch; a push that errors
+   after the remote took the branch counts as pushed. Remote commands wait 120 seconds (clones
+   600); `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` in the environment sets another number of seconds.
 5. With `done: true`, hand each row of `asks` to the profile's ask binding, the same way the
    sweep does, whose profile this step shares. After a confirmed delivery run
    `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt <receipt>`. With nothing
@@ -58,7 +60,8 @@ reference. Its questions change here, and only these:
   A contradiction: choose the winner, and edit the other side when the resolution needs it.
   Keep the attended limits on what may be cut: intent, goals, boundaries, exact commands.
 - Never edit a file in `frozen`. Leave it as it is, list it in `deferred`, and plan around it.
-  Give changes that only work together one `group`; a frozen file defers its whole group.
+  Give changes that only work together one `group`; a frozen file defers its whole group. A
+  file with another change kept is still changed on the branch, not deferred.
 - Never edit a generated surface. For each entry in `surfaces`, and each surface of another
   file you change, preview the content as the attended review does and measure it. Name each
   one you verified in `surfaces_verified`. When a preview is not safe or not possible, name
@@ -99,15 +102,17 @@ with no `left`.
 A branch awaits its decision until its pull request merges or closes. The user's automation
 says which with `python3 <package>/scripts/lib/slim.py decide --repository <owner/name> --branch <branch> --decision merged`
 (or `rejected`, for a pull request closed without merging). A branch deleted from its remote
-is settled at the next `plan`: merged only when its diff reverses cleanly on the default
-branch, which shows its change is there, and otherwise rejected. A settled branch refuses a
-second decision. A rejected file waits until a session measures it larger than at rejection
+is settled at the next `plan`: merged when its diff reverses cleanly on the default branch,
+rejected only when its diff still applies there (the default branch never took the change),
+and merged when neither holds, because its lines were edited after it. A remote that cannot
+be read or hangs, or a git error, is a warning for that repository: the branch waits, and the
+plan goes on for the others. A settled branch refuses a second decision. A rejected file waits until a session measures it larger than at rejection
 or records a new duplicate rule naming it.
 
 A plan closes a run that stopped early, so the asks of slims it already pushed are not lost;
 a slim left open starts over. A slim whose helper stopped while pushing is settled from its
 remotes first: each branch found there is recorded, awaiting its decision, and gets its ask;
-one not found is a failure. Until that plan runs, `begin` and `finish` refuse.
+one not found is a failure. Until that plan runs, `begin`, `workspace` and `finish` refuse.
 
 A recorded file left alone because a branch from an earlier run already changed it is
 `deferred` in `plan`, and gets one ask, once per branch, saying it is left as it is and why.
