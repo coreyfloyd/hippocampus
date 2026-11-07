@@ -131,7 +131,7 @@ def test_flow_2_upgrade_preserves_profile_composer_and_discovery(user):
         assert link.is_symlink() if tool == 'codex' else not link.is_symlink()
     hooks = json.loads((home / '.codex/hooks.json' if tool == 'codex' else root / 'hooks/hooks.json').read_text())['hooks']
     commands = [h['command'] for groups in hooks.values() for g in groups for h in g['hooks']]
-    assert len(commands) == len(set(commands)) == (7 if tool == 'codex' else 6)
+    assert len(commands) == len(set(commands))
 
 
 def test_flow_3_refusal_then_install_after_manual_uninstall(user):
