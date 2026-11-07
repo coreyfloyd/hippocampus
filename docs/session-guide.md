@@ -136,7 +136,7 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
 
 A routing file line `lesson-policy: propose` turns lesson applying off, over-limit records included, and the report says so.
 `lesson-pull-requests:` with `- owner/name` list lines sends a repository's lessons through a
-pull request every time. The sweep and the slim review itself are unchanged.
+pull request every time. The slim review itself is unchanged.
 
 The same setting lets a wrap capture knowledge without asking, attended or unattended:
 
@@ -148,6 +148,9 @@ The same setting lets a wrap capture knowledge without asking, attended or unatt
   answer.
 - A capture outside the knowledge root, an action for someone else, a discard and a document
   update keep their approval. Meeting capture and the research workflows are unchanged.
+
+A sweep in act mode applies what abandoned sessions carried by these same rules, so their
+handoffs can be archived; watch-only only lists it. See the [sweep guide](sweep.md#apply-lessons-and-knowledge).
 
 ### Route a lesson, then slim its source
 

@@ -192,6 +192,30 @@ asks. Git remote refs are not fetched or changed by watch-only.
 A run with no work still writes a report with `nothing_to_do: true` and
 `Nothing to do.` This is distinct from a run with parse or discovery errors.
 
+## Apply lessons and knowledge
+
+With `"auto_apply_lessons": true` in the hippocampus configuration, a sweep stops
+carrying lessons and knowledge forever. It uses the same rules as a wrap:
+
+- Watch-only applies nothing. The report's `would_apply` lists what act mode would apply.
+- In act mode, each lesson the agent recommends is written and committed, one commit
+  each, and each recommended skip is dropped. Wiki captures and retained sources and
+  outputs under the knowledge root are checked and recorded. A fact about the user
+  becomes an ordinary ask and is never saved by the sweep.
+- Each item's receipt names its commit, or its destination when it has none. A handoff
+  is archived once every item has a receipt, a drop or a delivered ask.
+- Lesson commits go through the persist binding before the run ends, with the wrap's
+  single retry. With persist unbound, or a push that still fails, `lessons_not_pushed`
+  says which commits were not pushed and why, and the handoff is kept.
+- Each lesson's outcome stays in the session ledger, so a later sweep skips what landed,
+  delivers what did not, and two handoffs carrying one lesson apply it once.
+- Undo leaves applied lessons and captures in place and lists them, with their commits,
+  in the undo report. Revert a lesson commit through the repository's normal delivery.
+
+A routing file's `lesson-policy: propose` still wins for lessons: they are carried and
+the row's reason says so. With the setting off, a sweep carries both as before. The
+[plan/results contract](../INTERFACE.md#12-sweep-plan-and-results-contract) has the fields.
+
 ## External scheduling
 
 The package ships no scheduler. For example, a user-owned cron entry can run a

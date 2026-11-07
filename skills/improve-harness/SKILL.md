@@ -274,6 +274,9 @@ twice does nothing. The persist step delivers the commits, so step 7 does not ap
 A rerun or resumed lesson marked `applied: true` already holds its commit: give it no
 row, and let the checklist deliver its ask.
 
+A sweep in act mode assesses a carried lesson the same way, from its handoff, and returns the
+row to `complete`; see the sweep skill's Apply lessons and knowledge section.
+
 ## Procedure
 
 ### 1. Collect grounded candidates across all surfaces

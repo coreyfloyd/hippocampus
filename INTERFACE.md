@@ -50,7 +50,7 @@ an empty configuration.
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
-| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
+| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
 
 `python3 scripts/lib/handoff.py config-get <key>` prints one value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list one item per line,
 and exits 2 with the reason on stderr when the configuration is unreadable or the value is
@@ -606,6 +606,9 @@ position. A successor keeps the original identity. Per-operation fields are:
 | `comment` | `record_writes.tickets` | destination ticket; inherits its priority |
 | `edit_document` | `record_writes.documents` | destination document |
 | `native_step` | package skill in unattended mode | `native_step`: `lessons` or `knowledge`; `command`; `unattended: true` |
+| `apply_lesson` | agent's assessment; `complete` writes and commits it | `native_step`: `lessons`; `command`; `ledger_session` |
+| `apply_knowledge` | package skill's Auto-apply section; `complete` checks the capture | `native_step`: `knowledge`; `command`; `ledger_session` |
+| `persist` | persist binding, after lessons are committed | `command`; `checkouts`; `surfaces` |
 | `ask` | ask binding, or direct presentation for interactive open sessions | `ticket` (possibly null), `choices`; open sessions also carry `activity_at` |
 
 R1/R2 reads use the profile's `record_read`; the agent searches open tickets
@@ -627,6 +630,7 @@ The agent supplies one result per `write_id` in a JSON array:
 | `already_written` | Identity found before writing; original `receipt` and `destination` |
 | `failed` | No write occurred; `error` |
 | `uncertain` | Write may have occurred; optional `error` |
+| `assessed` | `apply_lesson` or `apply_knowledge` only: a `lesson` or `knowledge` object, the wrap's row without `index` |
 
 A missing result is `uncertain`. Missing or malformed acknowledgements and
 lost replies must never be reported as failed. The engine flushes each result
@@ -635,9 +639,30 @@ handoffs. Results cannot overwrite already recorded outcomes. A later run
 resolves uncertain writes through identity lookup. `already_written` does not
 count as new this run and does not belong to this run's undo journal.
 
-Native steps always carry items in sweep and apply nothing. Return `carried`;
+A `native_step` carries its item and applies nothing. Return `carried`;
 `nothing`, `not configured`, `declined`, `failed`, and `uncertain` also retain
 the item. Native `written` and `already_written` are rejected.
+
+With the auto-apply setting on, `run` adds `auto_apply`, as `plan` does at a wrap, and
+act mode plans `apply_lesson` and `apply_knowledge` in place of `native_step`, except a
+lesson under `lesson-policy: propose`, which stays a `native_step` whose `reason` says so.
+Each section adds `would_apply` (watch-only, outcome `would apply`), `lessons_applied`,
+`lessons_not_pushed` and `knowledge_captured`. With the setting off none of these appear.
+
+Those two operations also accept the `native_step` statuses except `written` and
+`already_written`, which are rejected. `complete --knowledge-profile P` (default
+`~/.config/hippocampus/profile.md`) applies each `assessed` result through the wrap's
+modules, measuring a capture's files from the run's `started_at`; one that cannot apply
+is `failed` alone. Outcomes live in the ledger of the item's producing session, or of the
+handoff's session when that one already holds them (`ledger_session`). An item with a
+recorded outcome gets no work entry. A row's `receipt` is its commit, its target with no commit,
+or a capture's files; a lesson row also keeps `target`, `change`, `commit`, `branch`,
+`delivery` and any `pull_request`. A commit is `applied` until delivered, then `written`, or
+`not pushed` with `error`, which keeps its handoff. With commits to deliver and persist bound,
+`complete` journals one `persist` intent, returns `planned`, and on the next call delivers
+as `deliver-lessons` does; with persist unbound it delivers at once. A `persist` result never
+decides delivery. Asks for facts about the user and for always-loaded lessons follow in the
+same way, the latter after delivery with `choices: []`; a delivered ask settles its item.
 
 If an older slot leaves work pending without writing, return `failed` with `pending:
 true` and an error. Completion journals an ask for that item. If worktree
@@ -721,7 +746,9 @@ overwriting a newer handoff or a changed archive. The undo report is
 `<run-id>.undo.md`; rerunning undo retries only failed items. Reversals use
 the original run id and receipt so an already completed reversal can be
 acknowledged after a lost reply. Worktree removal and local branch deletion
-cannot be undone. Asks and their activity history remain delivered. Optional
+cannot be undone. Asks and their activity history remain delivered. Applied lessons
+and captures stay in place: undo plans no reversal for them, and `undo` and the undo report
+list them as `applied_left_in_place`, each with its `commit` or files. Optional
 retention remains a separate operation, off by default; see
 [usage](docs/sweep.md#undo-and-retention).
 

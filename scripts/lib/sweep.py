@@ -44,6 +44,18 @@ SECTIONS = (
     ('worktrees_removed', 'Worktrees removed'),
     ('handoffs_archived', 'Handoffs archived'),
 )
+# Present only with the auto-apply setting on, so a report with it off is unchanged.
+APPLY_SECTIONS = (
+    ('would_apply', 'Would apply'),
+    ('lessons_applied', 'Lessons applied'),
+    ('lessons_not_pushed', 'Lesson commits not pushed'),
+    ('knowledge_captured', 'Knowledge captured'),
+)
+APPLY_OPERATIONS = {'lessons': 'apply_lesson', 'knowledge': 'apply_knowledge'}
+ITEM_TYPES = {'lessons': 'lesson', 'knowledge': 'knowledge'}
+DELIVERED = ('pushed', checklist.lessons.PULL_REQUEST)
+LESSON_FIELDS = ('target', 'change', 'added', 'evidence', 'commit', 'checkout', 'branch', 'delivery', 'attempts',
+                 'default_branch', 'note', 'lesson_branch', 'local_commit', 'pull_request', 'surfaces')
 
 
 def settings():
@@ -474,17 +486,20 @@ def add_ask(section, candidate, text, choices, reason, ask):
         'directory': candidate['directory'], 'ticket': None, 'choices': choices}})
 
 
-def build_report(discovery, decisions, plan, ask, checks, interactive, started, history=None):
+def build_report(discovery, decisions, plan, ask, checks, interactive, started, history=None, auto_apply=None):
     report = {'run_id': uuid.uuid4().hex, 'host': socket.gethostname(), 'started_at': started.isoformat(),
               'scope': discovery['scope'], 'mode': 'watch-only', 'interactive': interactive,
               'open_session_checks': [checks], 'errors': discovery['errors'], 'directories': {}}
+    if auto_apply:
+        report['auto_apply'] = auto_apply
     asked_sessions = set()
     for candidate in discovery['candidates']:
         is_open = candidate['session_id'] in checks['session_ids']
         if not candidate['abandoned'] and not is_open and not checks.get('failed'):
             continue
         section = report['directories'].setdefault(candidate['directory'],
-            {**{key: [] for key, _ in SECTIONS}, 'filing_outcomes': [], 'worktrees_kept': [], 'handoffs_kept': [], 'handoff_warnings': []})
+            {**{key: [] for key, _ in SECTIONS}, **{key: [] for key, _ in APPLY_SECTIONS if auto_apply},
+             'filing_outcomes': [], 'worktrees_kept': [], 'handoffs_kept': [], 'handoff_warnings': []})
         if candidate.get('warnings'):
             section['handoff_warnings'].append({'path': candidate['path'], 'warnings': candidate['warnings']})
         if is_open:
@@ -519,6 +534,12 @@ def build_report(discovery, decisions, plan, ask, checks, interactive, started, 
             outcomes.append(row)
             section['filing_outcomes'].append(row)
             binding = row.get('binding')
+            if auto_apply and binding in APPLY_OPERATIONS and row['outcome'] == 'carried':
+                if auto_apply[binding] == 'apply':
+                    row.update(outcome='would apply', reason='Auto-apply setting on; act mode applies this item')
+                    section['would_apply'].append(row)
+                else:
+                    row['reason'] = auto_apply['reason']
             if binding == 'ask':
                 section['asks_raised'].append(row)
             elif row.get('rule') in ('R1', 'R6') and row['outcome'] == 'dry run':
@@ -594,6 +615,8 @@ def add_intent(report, row, directory, operation):
     elif operation == 'native_step':
         row.update(native_step=row['binding'], unattended=True,
                    command=checklist.NATIVE[row['binding']]['command'])
+    elif operation in APPLY_OPERATIONS.values():
+        row.update(native_step=row['binding'], command=checklist.NATIVE[row['binding']]['command'])
     report['work'].append(row)
 
 
@@ -607,12 +630,75 @@ def slot_ask(row, directory, bound):
                          choices=['save through ' + slot, 'leave it']))
 
 
-def plan_act(report, discovery, ask, config, path):
+def ledger_item(row):
+    """The item as the ledger knows it: a legacy item takes its identity from the sweep's."""
+    kind = ITEM_TYPES[row.get('native_step') or row['binding']]
+    return {'disposition': 'apply through its native step', **row['item'], 'type': kind,
+            'session_id': row['identity']['session_id'], 'produced_at': row['identity']['produced_at']}
+
+
+def recorded_outcome(row, session, reader, settled):
+    """An earlier outcome of this item and the ledger holding it, else the producer's ledger.
+
+    The producer's ledger is shared by every handoff carrying the item, so two handoffs never
+    apply it twice; the handoff's own ledger holds what its session's wrap already applied.
+    """
+    key = handoff.session_item_identity(ledger_item(row))
+    producer = row['identity']['session_id']
+    for ledger in dict.fromkeys((producer, session)):
+        for outcome in reader(handoff, ledger):
+            if tuple(outcome['identity']) == key and settled(outcome):
+                return ledger, outcome
+    return producer, None
+
+
+def settle_lesson(row, outcome):
+    """Copy a lesson's outcome onto its row. A commit stays `applied` until it is delivered."""
+    row['applied_kind'] = 'lesson'
+    if outcome['status'] == 'dropped':
+        row.update(outcome='dropped', reason=outcome['reason'])
+    elif outcome['status'] == 'failed':
+        row.update(outcome='failed', error=outcome['error'])
+    else:
+        row.update({key: outcome[key] for key in LESSON_FIELDS if outcome.get(key) not in (None, [])})
+        row.update(receipt=outcome.get('commit') or outcome['target'], destination=outcome['target'],
+                   ask_required=bool(outcome.get('ask')),
+                   outcome='applied' if outcome.get('commit') and outcome.get('delivery') not in DELIVERED else 'written')
+
+
+def settle_capture(row, outcome):
+    files = [*outcome.get('created', []), *outcome.get('updated', [])]
+    row.update(applied_kind='knowledge', capture=outcome['capture'], created=outcome.get('created', []),
+               updated=outcome.get('updated', []), receipt=', '.join(files), destination=files[0], outcome='written')
+
+
+def plan_apply(report, row, directory, session):
+    """Journal the item's assessment, unless its ledger already holds the outcome."""
+    if row['binding'] == 'lessons':
+        row['ledger_session'], prior = recorded_outcome(row, session, checklist.lessons.outcomes,
+                                                        lambda outcome: outcome['status'] != 'failed')
+        if prior:
+            settle_lesson(row, prior)
+    else:
+        row['ledger_session'], prior = recorded_outcome(row, session, checklist.knowledge.outcomes,
+                                                        lambda outcome: outcome['status'] == 'captured')
+        if prior:
+            settle_capture(row, prior)
+    if not prior:
+        add_intent(report, row, directory, APPLY_OPERATIONS[row['binding']])
+    elif row['outcome'] != 'dropped':
+        row['reason'] = 'Already applied; its ledger holds the receipt'
+
+
+def plan_act(report, discovery, ask, config, path, persist=None):
     """Journal intents only. The driving agent performs all profile bindings."""
     for candidate in discovery['candidates']:
         candidate['planned_source'] = True
     report.update(mode='act', phase='planned', work=[], undo_items=[],
                   discovery=discovery, ask_bound=ask is not None)
+    if report.get('auto_apply'):
+        report['persist_binding'] = persist
+    sessions = {candidate['path']: candidate['session_id'] for candidate in discovery['candidates']}
     created = 0
     tripwires = {}
     for directory, section in report['directories'].items():
@@ -621,6 +707,8 @@ def plan_act(report, discovery, ask, config, path):
         section['worktrees_kept'] = []
         section['handoffs_archived'] = []
         section['handoffs_kept'] = []
+        if report.get('auto_apply'):
+            section['would_apply'] = []
         # These proposals depend on checks repeated after filing. Never expose
         # them as deliverable intents until completion has refreshed the premise.
         section['asks_raised'] = [row for row in section['asks_raised']
@@ -631,6 +719,9 @@ def plan_act(report, discovery, ask, config, path):
                 row = slot_ask(row, directory, ask is not None)
                 section['filing_outcomes'][index] = row
                 section['asks_raised'].append(row)
+            if row['outcome'] == 'would apply':
+                plan_apply(report, row, directory, sessions[row['source_handoff']])
+                continue
             if row['outcome'] != 'dry run' and not (row['outcome'] == 'carried' and row.get('binding') in checklist.NATIVE):
                 continue
             if row['rule'] in ('R1', 'R6'):
@@ -677,14 +768,21 @@ def load_results(path, work, statuses):
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
         raise ValueError('results must be an array of objects')
     known = {row['write_id'] for row in work}
-    native = {row['write_id'] for row in work if row.get('operation') == 'native_step'}
+    applying = {row['write_id']: row['operation'] for row in work if row.get('operation') in APPLY_OPERATIONS.values()}
+    native = {row['write_id'] for row in work if row.get('operation') == 'native_step'} | set(applying)
     result = {}
     for row in rows:
         key = row.get('write_id')
         if key not in known or key in result:
             raise ValueError('unknown or duplicate write id')
+        if key in applying and row.get('status') in ('written', 'already_written'):
+            raise ValueError('an applied item returns its assessment; the sweep records the receipt')
         if key in native and row.get('status') in ('written', 'already_written'):
             raise ValueError('an unattended native step carries items and applies nothing')
+        if row.get('status') == 'assessed':
+            field = 'lesson' if applying.get(key) == 'apply_lesson' else 'knowledge'
+            if key not in applying or not isinstance(row.get(field), dict):
+                raise ValueError('assessed requires an applied item and its ' + field + ' row')
         if key not in native and row.get('status') in ('carried', 'nothing', 'not configured', 'declined'):
             raise ValueError('native outcomes require a native step')
         if row.get('status') not in statuses:
@@ -706,7 +804,134 @@ def rehydrate(report):
             section[key] = [work.get(row.get('write_id'), row) for row in rows]
 
 
-def complete_act(config, run_id, results_path, evidence=None):
+def apply_lesson(row, assessment):
+    """Write one assessed lesson through the wrap's module; its ledger skips a repeat."""
+    item = ledger_item(row)
+    payload = {'subject': {'session_id': row['ledger_session']}, 'resume': {'open_loops': [item]}}
+    done = checklist.lessons.apply(payload, [dict(assessment, index=0)], handoff, row['ledger_session'])
+    key = handoff.session_item_identity(item)
+    outcome = next((o for o in done['lesson_outcomes'] if tuple(o['identity']) == key), None)
+    if outcome is None:
+        raise ValueError('the lesson was already applied; file its ask under R3')
+    settle_lesson(row, outcome)
+
+
+def apply_knowledge(report, row, assessment, profile):
+    """Check one capture through the wrap's module, measured from this run's start."""
+    item = ledger_item(row)
+    payload = {'subject': {'session_id': row['ledger_session']}, 'resume': {'open_loops': [item]}}
+    done = checklist.knowledge.apply(payload, [dict(assessment, index=0)], handoff, row['ledger_session'],
+                                     checklist.knowledge.profile_path(profile),
+                                     datetime.fromisoformat(report['started_at']))
+    key = handoff.session_item_identity(item)
+    outcome = next(o for o in done['knowledge_outcomes'] if tuple(o['identity']) == key)
+    if outcome['status'] == 'failed':
+        row.update(outcome='failed', error=outcome['error'])
+    elif outcome['status'] == 'captured':
+        settle_capture(row, outcome)
+    else:
+        raise_fact_ask(report, row, done['resume']['open_loops'][0])
+
+
+def raise_fact_ask(report, row, item):
+    """A fact about the user is an ordinary ask; delivering it is what settles the item here."""
+    section = report['directories'][row['directory']]
+    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']})
+    followup = {key: value for key, value in row.items()
+                if key not in ('write_id', 'native_step', 'command', 'operation')}
+    followup.update(binding='ask', destination='ask', outcome='dry run' if report['ask_bound'] else 'unbound',
+                    reason='Fact about the user: never saved without the user',
+                    ask=dict(ask, identity=row['identity']))
+    row.update(outcome='asked')
+    section['filing_outcomes'] = [followup if old is row else old for old in section['filing_outcomes']]
+    section['asks_raised'].append(followup)
+    if report['ask_bound']:
+        add_intent(report, followup, row['directory'], 'ask')
+
+
+def apply_assessed(report, row, result, profile):
+    """One bad assessment fails its own item; the others still apply."""
+    try:
+        if row['operation'] == 'apply_lesson':
+            apply_lesson(row, result['lesson'])
+        else:
+            apply_knowledge(report, row, result['knowledge'], profile)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        row.update(outcome='failed', error=str(exc))
+    except SystemExit:
+        # The profile validator exits after printing why; the item keeps its source.
+        row.update(outcome='failed', error='the knowledge profile is invalid')
+
+
+def lesson_rows(report, *outcomes):
+    return [row for section in report['directories'].values() for row in section['filing_outcomes']
+            if row.get('applied_kind') == 'lesson' and row['outcome'] in outcomes]
+
+
+def deliver_lessons(report, rows):
+    """Push through the wrap's delivery, once per ledger; only a delivered commit is a receipt."""
+    bound = report['persist_binding'] is not None
+    for session in sorted({row['ledger_session'] for row in rows}):
+        group = [row for row in rows if row['ledger_session'] == session]
+        try:
+            delivered = checklist.lessons.deliver(handoff, session, bound, checklist.lessons.routing_rules())
+        except ValueError as exc:
+            for row in group:
+                row.update(outcome='not pushed', delivery=checklist.lessons.NOT_PUSHED, error=str(exc))
+            continue
+        latest = {tuple(outcome['identity']): outcome for outcome in delivered}
+        for row in group:
+            outcome = latest[handoff.session_item_identity(ledger_item(row))]
+            settle_lesson(row, outcome)
+            if row['outcome'] == 'applied':
+                row.update(outcome='not pushed', error=outcome.get('error') or 'not pushed')
+            else:
+                row.pop('error', None)
+
+
+def raise_lesson_ask(report, row):
+    """An applied lesson's ask is text only, written once its delivered commit is known."""
+    section = report['directories'][row['directory']]
+    outcome = next(o for o in checklist.lessons.outcomes(handoff, row['ledger_session'])
+                   if tuple(o['identity']) == handoff.session_item_identity(ledger_item(row)))
+    item = {key: value for key, value in row['item'].items() if key != 'choices'}
+    item.update(applied=True, commit=outcome.get('commit'), ask_text=checklist.lessons.ask_text(outcome))
+    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']})
+    followup = dict(rule='R3', outcome='dry run' if report['ask_bound'] else 'unbound', binding='ask',
+                    destination='ask', reason='Applied lesson for an always-loaded rules file',
+                    source_handoff=row['source_handoff'], identity=row['identity'], directory=row['directory'],
+                    item=row['item'], ask=dict(ask, identity=row['identity']))
+    section['asks_raised'].append(followup)
+    if report['ask_bound']:
+        add_intent(report, followup, row['directory'], 'ask')
+    row['ask_required'] = False
+
+
+def advance_lessons(report):
+    """Move applied lessons toward delivery; true while new work awaits the driving agent.
+
+    Worktree and archive checks wait for this, so they see delivered commits.
+    """
+    rows = lesson_rows(report, 'applied')
+    if rows:
+        persist = next((row for row in report['work'] if row['operation'] == 'persist'), None)
+        if report['persist_binding'] and persist is None:
+            directory = rows[0]['directory']
+            row = dict(report['persist_binding'], binding='persist', rule=None, source_handoff=None, directory=directory,
+                       checkouts=sorted({row['checkout'] for row in rows}),
+                       surfaces=[surface for row in rows for surface in row.get('surfaces', [])],
+                       identity={'session_id': report['run_id'], 'produced_at': report['started_at'],
+                                 'text': 'Persist lesson commits'})
+            add_intent(report, row, directory, 'persist')
+            return True
+        deliver_lessons(report, rows)
+    for row in lesson_rows(report, 'written', 'not pushed'):
+        if row.get('ask_required'):
+            raise_lesson_ask(report, row)
+    return any(row['outcome'] == 'intent' for row in report['work'])
+
+
+def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=None):
     reservation = json.loads(pending_path().read_text())
     if reservation['run_id'] != run_id or reservation['mode'] != 'act':
         raise ValueError('run id does not own the incomplete act plan')
@@ -717,7 +942,7 @@ def complete_act(config, run_id, results_path, evidence=None):
         return path, report
     rehydrate(report)
     results = load_results(results_path, report['work'],
-                           ('written', 'already_written', 'failed', 'uncertain', 'carried', 'nothing', 'not configured', 'declined'))
+                           ('written', 'already_written', 'failed', 'uncertain', 'carried', 'nothing', 'not configured', 'declined', 'assessed'))
     for row in list(report['work']):
         if row['outcome'] != 'intent':
             continue
@@ -730,9 +955,11 @@ def complete_act(config, run_id, results_path, evidence=None):
                 and row['outcome'] in ('written', 'already_written')):
             row.update(ask_outcome=row['outcome'], ask_status='filed', outcome='carried',
                        reason='Ask delivered; native capture remains pending')
-        if row['outcome'] == 'written' and row['operation'] not in ('ask',):
+        if row['outcome'] == 'written' and row['operation'] not in ('ask', 'persist'):
             report['undo_items'].append(dict(row, kind='record',
                 write_operation=row['operation'], write_outcome='written'))
+        if row['outcome'] == 'assessed':
+            apply_assessed(report, row, result, knowledge_profile)
         if row['operation'] == 'file_slot' and row['outcome'] == 'failed' and result.get('pending') is True:
             section = report['directories'][row['directory']]
             followup = slot_ask(row, row['directory'], report['ask_bound'])
@@ -742,6 +969,9 @@ def complete_act(config, run_id, results_path, evidence=None):
             if report['ask_bound']:
                 add_intent(report, followup, row['directory'], 'ask')
         save_act(path, report)
+    if report.get('auto_apply') and advance_lessons(report):
+        save_act(path, report)
+        return path, report
     discovery = report['discovery']
     if evidence is not None:
         discovery['open_session_evidence'] = evidence
@@ -766,11 +996,16 @@ def complete_act(config, run_id, results_path, evidence=None):
     history_config = dict(config, report_location=str(path.parent))
     history = read_ask_history(history_config)
     for section in report['directories'].values():
-        for key in ('new_tickets', 'comments_added', 'documents_changed', 'items_dropped'):
+        for key in ('new_tickets', 'comments_added', 'documents_changed', 'items_dropped',
+                    *(key for key, _ in APPLY_SECTIONS if report.get('auto_apply'))):
             section[key] = []
         section['unfiled_items'] = []
         section['handoffs_kept'] = []
         for row in section['filing_outcomes']:
+            if row.get('applied_kind') and row['outcome'] in ('written', 'not pushed'):
+                key = ('knowledge_captured' if row['applied_kind'] == 'knowledge' else
+                       'lessons_applied' if row['outcome'] == 'written' else 'lessons_not_pushed')
+                section[key].append(row)
             if row['outcome'] == 'dropped':
                 section['items_dropped'].append(row)
             elif row['outcome'] == 'written' and row['rule'] in ('R2', 'R5', 'R7'):
@@ -954,6 +1189,10 @@ def finish_act(report, discovery, ask, path, save, send_ask):
                         all(r['outcome'] in ('written', 'already_written') for r in asks))
             row = dict(path=source, outcome='kept', worktree_check=live_check,
                        reason='unfiled items, asks, or uncommitted files')
+            unpushed = [r for r in outcomes if r['outcome'] == 'not pushed']
+            if unpushed:
+                row['reason'] = 'lesson commits not pushed: ' + '; '.join(
+                    r['commit'] + ': ' + r['error'] for r in unpushed)
             if not clean:
                 failed_check = next(check for check in (initial_check, live_check)
                                     if check is not None and not check['clean'])
@@ -1024,16 +1263,21 @@ def render_operation_report(report):
 def render_report(report):
     lines = ['# Sweep report', '', ('Watch-only: every action below is proposed; no action executed.' if report['mode'] == 'watch-only'
               else 'Act: outcomes and receipts describe executed actions. New this run lists created tickets.'), '',
-             *[report_fields(report[key], key.replace('_', ' ')) for key in ('run_id', 'host', 'started_at', 'ended_at', 'scope', 'mode', 'interactive', 'open_session_checks')]]
+             *[report_fields(report[key], key.replace('_', ' ')) for key in ('run_id', 'host', 'started_at', 'ended_at', 'scope', 'mode', 'interactive', 'open_session_checks',
+                                                                         *(('auto_apply',) if report.get('auto_apply') else ()))]]
     if report['nothing_to_do']:
         lines.extend(['', 'Nothing to do.'])
     for directory, section in sorted(report['directories'].items()):
         lines.extend(['', '## ' + directory])
-        for key, title in (*SECTIONS, ('handoff_warnings', 'Handoff lint warnings'), ('filing_outcomes', 'Every filing outcome'),
+        for key, title in (*SECTIONS, *(APPLY_SECTIONS if report.get('auto_apply') else ()),
+                           ('handoff_warnings', 'Handoff lint warnings'), ('filing_outcomes', 'Every filing outcome'),
                            ('worktrees_kept', 'Worktrees kept'), ('handoffs_kept', 'Handoffs kept'),
                            *((('unfiled_items', 'Unfiled items'),) if report['mode'] == 'act' else ())):
             lines.extend(['', '### ' + title])
             lines.extend([report_row(row) for row in section.get(key, [])] or ['None.'])
+    persists = [row for row in report.get('work', []) if row['operation'] == 'persist']
+    if persists:
+        lines.extend(['', '## Persist for lesson commits', *[report_row(row) for row in persists]])
     if report['errors']:
         lines.extend(['', '## Errors; sources left in place', *[report_row(e) for e in report['errors']]])
     lines.extend(['', '## Structured data', '', '```json', json.dumps(report, indent=2, ensure_ascii=False), '```', ''])
@@ -1074,6 +1318,15 @@ def run_path(config, run_id, suffix='.md'):
     return report_directory(config) / (run_id + suffix)
 
 
+def left_in_place(original):
+    """What undo keeps: an applied lesson is undone by reverting its commit, not by the sweep."""
+    fields = ('applied_kind', 'target', 'change', 'commit', 'delivery', 'pull_request', 'capture', 'created', 'updated')
+    return [{key: row[key] for key in fields if key in row}
+            for section in original['directories'].values()
+            for key in ('lessons_applied', 'lessons_not_pushed', 'knowledge_captured')
+            for row in section.get(key, [])]
+
+
 def plan_undo(config, run_id):
     if pending_path().exists():
         reservation = json.loads(pending_path().read_text())
@@ -1091,6 +1344,10 @@ def plan_undo(config, run_id):
         note='Worktree removal and local branch deletion cannot be reversed. '
              'Asks remain delivered. Check each target immediately before reversal; '
              'changes between the check and reversal are not detected. Only failed items retry.')
+    applied = left_in_place(original)
+    if applied:
+        report.update(applied_left_in_place=applied, applied_note='Applied lessons and captures stay in place; '
+                      'revert a lesson commit through the repository\'s normal delivery.')
     report.update(phase='planned', work=[], archive_restorations=[])
     for index, row in enumerate(report['items']):
         row.setdefault('write_id', hashlib.sha256((run_id + ':undo:' + str(index)).encode()).hexdigest())
@@ -1219,6 +1476,8 @@ def main(argv=None):
     parser.add_argument('--run-id')
     parser.add_argument('--results', type=Path)
     parser.add_argument('--user-started', action='store_true')
+    parser.add_argument('--knowledge-profile', type=Path,
+                        help='complete: the knowledge profile (default ~/.config/hippocampus/profile.md)')
     args = parser.parse_args(argv)
     try:
         config = settings()
@@ -1229,7 +1488,8 @@ def main(argv=None):
                         raise ValueError('completion requires --results')
                     if args.command == 'complete':
                         evidence = read_open_sessions(args.open_sessions) if args.open_sessions else None
-                        path, report = complete_act(config, args.run_id, args.results, evidence)
+                        path, report = complete_act(config, args.run_id, args.results, evidence,
+                                                    args.knowledge_profile)
                     else:
                         path, report = complete_undo(config, args.run_id, args.results)
                 elif args.command == 'undo':
@@ -1245,9 +1505,11 @@ def main(argv=None):
                                       lambda report: save_operation(path, report))
                     print(path)
                     return 0
-                print(json.dumps(dict(report=str(path), run_id=report['run_id'],
-                                      work=report.get('work', []), phase=report['phase'],
-                                      archive_restorations=report.get('archive_restorations', []))))
+                output = dict(report=str(path), run_id=report['run_id'], work=report.get('work', []),
+                              phase=report['phase'], archive_restorations=report.get('archive_restorations', []))
+                if report.get('applied_left_in_place'):
+                    output['applied_left_in_place'] = report['applied_left_in_place']
+                print(json.dumps(output))
             return 0
         if args.scope is None:
             raise ValueError('inspect and run require --scope')
@@ -1283,7 +1545,8 @@ def main(argv=None):
             profiles = [checklist.load_profile(profile_path)] if profile_path else []
             plan = checklist.compose(profiles)
             ask = checklist.ask_binding(profiles[0]) if profiles else None
-            report = build_report(discovery, rows, plan, ask, checks, args.interactive, started, history)
+            auto_apply = checklist.auto_apply_state()
+            report = build_report(discovery, rows, plan, ask, checks, args.interactive, started, history, auto_apply)
             destination = Path(config['report_location']).expanduser().resolve()
             store = Path(handoff.state_dir()).resolve()
             if destination == store or store in destination.parents:
@@ -1293,7 +1556,8 @@ def main(argv=None):
             with path.open('x') as handle:
                 handle.write(render_report(report))
             if config['mode'] == 'act' and args.decisions is not None:
-                plan_act(report, discovery, ask, config, path)
+                plan_act(report, discovery, ask, config, path,
+                         next(step for step in plan if step['id'] == 'persist').get('binding'))
                 print(json.dumps(dict(report=str(path), run_id=report['run_id'], work=report['work'], phase=report['phase'])))
             else:
                 print(path)
