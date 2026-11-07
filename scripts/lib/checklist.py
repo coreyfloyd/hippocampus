@@ -27,6 +27,9 @@ _lessons_spec.loader.exec_module(lessons)
 _knowledge_spec = importlib.util.spec_from_file_location("knowledge", Path(__file__).with_name("knowledge.py"))
 knowledge = importlib.util.module_from_spec(_knowledge_spec)
 _knowledge_spec.loader.exec_module(knowledge)
+_over_limit_spec = importlib.util.spec_from_file_location("over_limit", Path(__file__).with_name("over_limit.py"))
+over_limit = importlib.util.module_from_spec(_over_limit_spec)
+_over_limit_spec.loader.exec_module(over_limit)
 
 SLOTS = ("persist",)
 NATIVE = {"knowledge": {"command": "/hippocampus:knowledge-capture", "consumes": ["knowledge"]},
@@ -1184,7 +1187,7 @@ def _handoff_session(path: Path) -> str | None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("plan", "settle", "apply-lessons", "deliver-lessons", "apply-knowledge",
-                                                      "file", "record",
+                                                      "file", "record", "record-over-limit", "over-limit-records",
                                                       "wrap-check", "report", "wrap-cadence", "actor-guard",
                                                       "is-completion-command"))
     parser.add_argument("--user-profile", type=Path)
@@ -1196,6 +1199,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--knowledge", type=Path, help="apply-knowledge: what was captured for each knowledge item")
     parser.add_argument("--knowledge-profile", type=Path,
                         help="apply-knowledge: the knowledge profile (default ~/.config/hippocampus/profile.md)")
+    parser.add_argument("--measure", type=Path, help="record-over-limit: the slim helper's measure output")
+    parser.add_argument("--duplicates", type=Path, help="record-over-limit: the slim helper's duplicates output")
     parser.add_argument("--written-handoff", type=Path, help="wrap-check: the handoff step 5 wrote")
     parser.add_argument("--record-at", help="wrap-check: time of the record's latest write or passing check")
     parser.add_argument("--unattended", action="store_true",
@@ -1218,6 +1223,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if reason:
                 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                   "permissionDecision": "deny", "permissionDecisionReason": reason}}))
+            return 0
+        if args.operation == "over-limit-records":
+            # Read-only, so a later slim step in any session can read what wraps recorded.
+            print(json.dumps({"records": over_limit.read(_load_handoff_module())}, indent=2))
             return 0
         kind = session_kind({})
         if kind != "interactive":
@@ -1320,6 +1329,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                      *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
             output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}))
                                         for item in items if item.get("user_fact")]
+        elif args.operation == "record-over-limit":
+            state = auto_apply_state()
+            if not state:
+                raise ValueError("record-over-limit: the auto-apply setting is off")
+            # The routing file's `lesson-policy: propose` overrides the setting (glossary,
+            # Auto-apply setting), so the blocks stay as they are with the setting off.
+            if state["lessons"] == "propose":
+                raise ValueError(f"record-over-limit: {state['reason']}")
+            if not args.measure or not args.duplicates:
+                raise ValueError("record-over-limit requires --measure and --duplicates")
+            tool = "codex" if (os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
+                               or os.environ.get("CODEX_THREAD_ID")) else "claude"
+            output = over_limit.record(module, json.loads(args.measure.read_text()),
+                                       json.loads(args.duplicates.read_text()), session_id or None, tool)
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")

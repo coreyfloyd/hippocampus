@@ -120,6 +120,9 @@ each row as a `lesson` item through the AFK delivery path below. Preserve the fi
 measurement, limit and suggested command; no conversation incident or proposed
 diff is required for this measurement-only row. Do not invoke slim-harness.
 
+With `plan` returning `auto_apply.lessons: apply`, record instead, attended or
+unattended; see Over-limit records below. With `propose`, the blocks stay as above.
+
 ## Duplicate rules — independent detection pass
 
 In both Claude Code and Codex, run
@@ -143,6 +146,29 @@ or the AFK `lesson` delivery path below, retaining row type, both spans, match,
 score, and action. No proposed diff is needed; do not invoke slim-harness. With no
 matches, report no duplicate rules found in the supplied loaded set. Repeat
 findings on future runs until resolved; retain no suppression history.
+With the auto-apply setting on, record duplicate rows with the size rows below.
+
+## Over-limit records — auto-apply setting on
+
+With `plan` returning `auto_apply.lessons: apply`, do not present the two blocks,
+ask the user to run the slim review, carry the rows as `lesson` items, or slim.
+Pass both outputs to the checklist module:
+
+```bash
+python3 <checklist-module> record-over-limit --user-profile <user-profile> \
+  --measure <measure-output.json> --duplicates <duplicates-output.json>
+```
+
+Print each `recorded[].line`: one line per file or duplicate rule, kept as an
+over-limit record for a later unattended slim. A measurement replaces only what it
+measured: this tool's limits (a skill only listed, its description limits alone),
+and a duplicate rule only when this wrap loaded every file it names.
+Rows in `reported` (outside git, not tracked by git, no hosted remote, git
+unreadable, or a Codex chain) get today's blocks with their `action` and `reason`;
+they are never recorded or slimmed unattended. Report `unresolved` paths. With the
+setting off or `lesson-policy: propose`, the module refuses; use the blocks above.
+If it fails for any other reason, such as a damaged store, print its error and
+present the blocks above, so no finding is lost.
 
 ## The one rule that makes this safe: every edit must be grounded
 
@@ -201,7 +227,7 @@ reaches only sessions that resume the handoff, not unrelated future sessions.
 The `auto_apply_lessons` setting in the hippocampus configuration is off by default. With
 it on, a wrap does not show the lesson table and wait; `apply-lessons` writes the lessons.
 The setting decides, not whether the user is present. Over-limit and duplicate
-rows are not lessons to apply: report or carry them as above.
+rows are not lessons to apply: record them as in Over-limit records.
 
 A routing file can forbid this with the line `lesson-policy: propose`; it wins, and the
 report says lessons were carried because the routing file requires it. The module reads
@@ -342,8 +368,8 @@ Routing: <routing file path | default>
 Surfaces scanned: rules · skills+agents (<list>) · memory (<n> recalled or written)
 Memory: <policy; reviewed count | skipped — reason>
 Mode: HITL | AFK
-Over-limit files: <measurement rows | none>
-Duplicate rules: <duplicate-rule rows with both spans, match, score and action | none>
+Over-limit files: <measurement rows | recorded lines and reported rows (auto-apply) | none>
+Duplicate rules: <duplicate-rule rows with both spans, match, score and action | recorded lines and reported rows (auto-apply) | none>
 
 <the table from step 5 with impact, strip/compress, and recommend columns, or "nothing grounded — <one line on what was checked>">
 Net: <per file touched, lines added and removed>
