@@ -20,20 +20,24 @@ def span_text(span):
 
 @pytest.mark.parametrize('tool', ['claude', 'codex'])
 def test_exact_and_near_real_instruction_spans(tool, tmp_path):
+    source = tmp_path / 'source.md'
+    source.write_text(RULE + '\n')
     copied = tmp_path / 'rules.md'
     copied.write_text(RULE + '\n\n' + RULE.replace('catalog', 'loaded catalog') + '\n')
-    manifest = dict(tool=tool, files=[entry(SOURCE, 'skill'), entry(copied)])
-    before = {p: p.read_bytes() for p in (SOURCE, copied)}
+    manifest = dict(tool=tool, files=[entry(source, 'skill'), entry(copied)])
+    before = {p: p.read_bytes() for p in (source, copied)}
     script = SKILL / 'scripts/harness.py'
     named = tmp_path / 'manifest.json'; named.write_text(json.dumps(manifest))
     run = subprocess.run([sys.executable, str(script), 'duplicates', str(named)],
                          capture_output=True, text=True)
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout)
+    assert {row['match'] for row in result['duplicates']} == {'exact', 'near'}
+    assert len(result['duplicates']) == 2
     for row in result['duplicates']:
         assert row['type'] == 'duplicate-rule'
         assert len(row['spans']) == 2
-        assert {span['source'] for span in row['spans']} == {str(SOURCE.resolve()), str(copied)}
+        assert {span['source'] for span in row['spans']} == {str(source.resolve()), str(copied)}
         for span in row['spans']:
             assert span['text'].replace('\n', ' ') in span_text(span).replace('\n', ' ')
         assert '/hippocampus:slim-harness' in row['action']

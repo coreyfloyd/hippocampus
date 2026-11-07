@@ -112,8 +112,6 @@ Each removal row identifies one original assertion site; a looped assertion incl
 | tests/test_claude_plugin.py | test_one_install_adds_the_six_skills_and_six_hooks | 438 | assert len(registrations(os.path.join(installed, "hooks", "hooks.json"))) == 6 | R1/R2 |
 | tests/test_codex_adapter.py | test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls | 97 | assert sum(len(g['hooks']) for groups in hooks.values() for g in groups)==8 | R1; R6 |
 | tests/test_combined_install.py | test_codex_install_from_extracted_tree_verifies_native_trust | 191 | assert len(manifest['trust_keys']) == 7 (for operation in ([], [], ['--uninstall'])) | R1; R6 |
-| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | 33 | assert {row['match'] for row in result['duplicates']} == {'exact', 'near'} | R1/R2/R4; R6 |
-| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | 34 | assert len(result['duplicates']) == 2 | R1/R2/R4; R6 |
 | tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | 60 | assert len(rows) == 1 | R1/R2/R4; R6 |
 | tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | 61 | assert len({s['source'] for s in rows[0]['spans']}) == 2 | R1/R2/R4; R6 |
 | tests/test_duplicate_rules.py | test_output_style_scope_and_no_self_duplicates | 69 | assert len(rows) == (2 if tool == 'claude' else 0) | R1/R2/R4; R6 |
@@ -214,7 +212,7 @@ One row per retained test in the reviewed configuration-reader files (including 
 | tests/test-capture-absorb.py | test_replanning_completed_custom_row_preserves_receipt_after_policy_changes | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test-capture-absorb.py | test_completed_custom_row_with_changed_work_still_requires_renewed_approval | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test-capture-absorb.py | test_destination_only_class_cli_and_uncertain_readback | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test-capture-absorb.py | test_invalid_class_declarations_rejected_and_public_example_parses | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
+| tests/test-capture-absorb.py | test_invalid_class_declarations_rejected_and_public_example_parses | R5 / R7 | Invalid declarations are test-authored inputs. The shipped custom-class block is consumed by proposal_classes to require successful parsing, without fixing a configured class name. |
 | tests/test-capture-absorb.py | test_legacy_writing_record_remains_readable_without_declaration | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test-capture-absorb.py | test_writing_routes_and_no_destination_preserve_authored_prose | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test-capture-absorb.py | test_changed_scope_drops_approval_but_preserves_prior_receipt | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
@@ -434,7 +432,7 @@ One row per retained test in the reviewed configuration-reader files (including 
 | tests/test_combined_install.py | test_codex_install_from_extracted_tree_verifies_native_trust | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_combined_install.py | test_codex_runtime_transaction_with_cross_device_home | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_combined_install.py | test_installed_version_integrity_and_narrow_repair | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
+| tests/test_duplicate_rules.py | test_exact_and_near_real_instruction_spans | R7 | Exact and near reports are required for two fully test-authored temporary instruction files. Nonempty output, match kinds, pair spans, source identity, read-only operation and deterministic output are behavior checks. |
 | tests/test_duplicate_rules.py | test_loaded_scope_roles_aliases_and_unresolved | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_duplicate_rules.py | test_output_style_scope_and_no_self_duplicates | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_duplicate_rules.py | test_markdown_boundaries_metadata_and_line_ranges | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
@@ -683,6 +681,8 @@ These tests stay unchanged. They require classification before any further remov
 | tests/test_artifact_documentation.py | test_configuration_example_is_read_by_config_get | The example configuration is nonempty, then every configured value round-trips through config-get. | The per-key round-trip is R5/R7; unclear whether requiring a populated documentation example is validity or an implicit configuration-count assertion. Kept intact. |
 
 ## Commit and integration boundary
+
+Review correction: exact/near output assertions were restored as behavior checks over fully controlled temporary inputs. The public custom-class example is parsed again as an R5 validity check; only its configured-name assertion stays removed. These restorations belong after the deletion-only boundary.
 
 The rule, this inventory and deletion-only test changes precede modifying trims. Later trims remove only fixed-count conjuncts while retaining uniqueness checks; those rows are listed below so the inventory can be reviewed before either change is integrated. The two kinds require separate pull requests. This repository has no suite declaration to edit. The declared commands and every leak guard remain. Linking the committed inventory to the issue, independent evaluation, pull requests and merge are the orchestrator’s work.
 
