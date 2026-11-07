@@ -233,9 +233,10 @@ A routing file can forbid this with the line `lesson-policy: propose`; it wins, 
 report says lessons were carried because the routing file requires it. The module reads
 only these keys, each on an unindented line outside fenced code blocks, so prose and fenced
 examples never set them; a trailing ` # comment` is allowed, and a malformed value is an
-error. `lesson-pull-requests:` followed by `- owner/name` list lines, indented or not (blank and
-comment lines may sit between them), names repositories whose lessons always go through a pull
-request; an entry the module cannot read is an error.
+error. `lesson-pull-requests:` followed by `- owner/name` list lines, indented or not, one per
+line directly below it, names repositories whose lessons always go through a pull request; the
+list ends at the first blank line or non-entry line, and a line in it that starts like an entry
+but cannot be read is an error.
 `lesson-pull-request-command: <command>` names the user's command that opens one
 (see `INTERFACE.md`); the package opens none itself and never merges.
 

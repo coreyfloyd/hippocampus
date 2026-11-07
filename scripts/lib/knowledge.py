@@ -44,8 +44,15 @@ def read_profile(path: Path) -> tuple[Path, bool, dict[str, Path]]:
     if not path.is_file():
         raise ValueError(f"apply-knowledge: no knowledge profile at {path}; run hippocampus-set-up")
     root, values = module.validate(path)
-    files = {key: (root / values[key]).resolve().relative_to(root)
-             for key in {key for keys in COMPILE_FILES.values() for key in keys} if values.get(key)}
+    # A compile file that escapes the root is kept as its reason, so only a row naming a file
+    # outside the folders is affected, and the message names the profile key.
+    files: dict[str, Path | str] = {}
+    for key in sorted({key for keys in COMPILE_FILES.values() for key in keys}):
+        if values.get(key):
+            try:
+                files[key] = (root / values[key]).resolve().relative_to(root)
+            except ValueError:
+                files[key] = f"the profile's {key} ({values[key]}) is outside the knowledge root"
     return root, values.get("wiki_enabled") != "false", files
 
 
@@ -77,11 +84,21 @@ UNANSWERED = ("a fact about the user leaves only through its ask; the row that s
               "the user's answer, one of the ask's choices")
 
 
-def user_answer(item: Mapping[str, Any], row: Mapping[str, Any]) -> str:
-    """The user's recorded answer to the ask about this fact, or the reason the row cannot settle it."""
+def user_answer(item: Mapping[str, Any], row: Mapping[str, Any], *, saving: bool) -> str:
+    """The user's recorded answer to the ask about this fact, checked against what the row does.
+
+    Only the ask's approving choice (`approve`) lets a row save the fact; any other answer
+    settles it without a write, and never the other way round.
+    """
     answer = row.get("answer")
     if not isinstance(answer, str) or answer not in item.get("choices", []):
         raise ValueError(UNANSWERED)
+    approved = answer == item.get("approve")
+    if saving and not approved:
+        raise ValueError(f"the user answered {answer!r}, not {item.get('approve')!r}; "
+                         "a fact about the user is saved only on its approving choice")
+    if approved and not saving:
+        raise ValueError(f"the user answered {answer!r}, approving the save; the fact is not dropped")
     return answer
 
 
@@ -109,9 +126,11 @@ def _validate(rows: Any, items: Sequence[Mapping[str, Any]]) -> None:
                 raise ValueError(f"knowledge: row {index}: a fact about the user requires text, destination and source")
             if not _strings(row.get("choices")) or not row["choices"]:
                 raise ValueError(f"knowledge: row {index}: a fact about the user requires the user's choices")
+            if row.get("approve") not in row["choices"]:
+                raise ValueError(f"knowledge: row {index}: a fact about the user names which choice approves the save")
             if "default" in row:
                 raise ValueError(f"knowledge: row {index}: a fact about the user has no default")
-        elif capture in CAPTURES:
+        elif isinstance(capture, str) and capture in CAPTURES:
             created, updated = row.get("created", []), row.get("updated", [])
             if not _strings(created) or not _strings(updated) or not created + updated:
                 raise ValueError(f"knowledge: row {index}: a capture names the files it created or updated")
@@ -121,17 +140,22 @@ def _validate(rows: Any, items: Sequence[Mapping[str, Any]]) -> None:
 
 
 def started_at(module: Any, session_id: str) -> datetime:
-    """When this session's checklist started: a capture's files are written after it."""
+    """When this session's wrap first started: a capture's files are written after it.
+
+    `plan` marks a start each time it runs, and a wrap may run it again; files compiled
+    between two runs were still written during this wrap, so the first marker counts.
+    """
     stamps = [row["ts"] for row in module._ledger_records(module.ledger_path(session_id))
               if row.get("kind") == START_MARKER and row.get("ts")]
     if not stamps:
         raise ValueError("apply-knowledge: run the checklist's plan first; it marks when the wrap started")
-    return datetime.fromisoformat(stamps[-1].replace("Z", "+00:00"))
+    return datetime.fromisoformat(stamps[0].replace("Z", "+00:00"))
 
 
-def _relative(root: Path, value: str, folders: Sequence[str], files: Sequence[Path], since: datetime) -> Path:
+def _relative(root: Path, value: str, folders: Sequence[str], files: Sequence[Path], since: datetime,
+              unusable: Sequence[str] = ()) -> Path:
     """A file this wrap wrote under one of the capture's folders, or one of the compile's own
-    files, or the reason it is not one."""
+    files, or the reason it is not one; `unusable` names compile files the profile misplaces."""
     candidate = Path(value).expanduser()
     resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
     try:
@@ -144,7 +168,10 @@ def _relative(root: Path, value: str, folders: Sequence[str], files: Sequence[Pa
         allowed = ", ".join(f + "/" for f in folders)
         if files:
             allowed += " and the profile's " + ", ".join(str(file) for file in files)
-        raise ValueError(f"{relative} is outside {allowed} in the knowledge root; a capture there keeps its approval")
+        reason = f"{relative} is outside {allowed} in the knowledge root; a capture there keeps its approval"
+        if unusable:
+            reason += "; " + "; ".join(unusable)
+        raise ValueError(reason)
     if not resolved.is_file():
         raise ValueError(f"{value} was not written")
     # Whole seconds: the start marker and a file system's times may round differently.
@@ -153,14 +180,16 @@ def _relative(root: Path, value: str, folders: Sequence[str], files: Sequence[Pa
     return relative
 
 
-def _captured(row: Mapping[str, Any], root: Path, wiki: bool, profile_files: Mapping[str, Path],
+def _captured(row: Mapping[str, Any], root: Path, wiki: bool, profile_files: Mapping[str, Path | str],
               since: datetime) -> dict[str, Any]:
     capture = row["capture"]
     if capture == "wiki" and not wiki:
         raise ValueError("the wiki is disabled in the knowledge profile")
     folders = CAPTURES[capture]
-    allowed = [profile_files[key] for key in COMPILE_FILES.get(capture, ()) if key in profile_files]
-    files = {change: [str(_relative(root, value, folders, allowed, since)) for value in row.get(change, [])]
+    compile_files = [profile_files[key] for key in COMPILE_FILES.get(capture, ()) if key in profile_files]
+    allowed = [file for file in compile_files if isinstance(file, Path)]
+    unusable = [file for file in compile_files if isinstance(file, str)]
+    files = {change: [str(_relative(root, value, folders, allowed, since, unusable)) for value in row.get(change, [])]
              for change in ("created", "updated")}
     if not any(Path(path).parts[0] == folders[0] for path in [*files["created"], *files["updated"]]):
         raise ValueError(f"a {capture} capture writes under {folders[0]}/ in the knowledge root")
@@ -198,13 +227,13 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                                    "capture": row["capture"]}
         if row["capture"] == USER_FACT:
             outcome.update(status="asked", text=row["text"], destination=row["destination"], source=row["source"])
-            annotated[row["index"]] = {**copy.deepcopy(dict(item)), "user_fact": True,
-                                       "ask_text": ask_text(row), "choices": list(row["choices"])}
+            annotated[row["index"]] = {**copy.deepcopy(dict(item)), "user_fact": True, "ask_text": ask_text(row),
+                                       "choices": list(row["choices"]), "approve": row["approve"]}
         else:
             try:
                 if item.get("user_fact"):
                     # A fact about the user leaves only through its ask: the row carries the answer.
-                    outcome["answer"] = user_answer(item, row)
+                    outcome["answer"] = user_answer(item, row, saving=True)
                 outcome.update(_captured(row, root, wiki, profile_files, since), status="captured")
                 removed.append(item)
             except (OSError, ValueError) as error:

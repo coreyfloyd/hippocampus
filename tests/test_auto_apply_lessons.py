@@ -789,7 +789,8 @@ def test_a_malformed_routing_file_is_an_error_not_a_traceback(tmp_path, tool):
 def test_routing_keys_allow_comments_and_ignore_fenced_examples(tmp_path, tool):
     routing = ('# Routing\n\n```\nlesson-policy: propose\n```\n\n'
                'lesson-policy: apply  # applied at wrap\n'
-               'lesson-pull-requests:\n  - Owner/One  # protected\n\n  # the second one\n  - owner/two\n'
+               'lesson-pull-requests:\n  - Owner/One  # protected\n  - "owner/two"  # quoted, with a comment\n\n'
+               '- Produced surfaces are listed below, not a repository\n'
                'Other prose: not a key\n  - owner/not-listed\n')
     wrap = Wrap(tmp_path, tool, routing=routing)
     assert wrap.plan()['auto_apply']['lessons'] == 'apply'
@@ -811,7 +812,11 @@ def test_lesson_branches_are_valid_and_distinct_per_session():
     first = lessons._lesson_branch('codex-session-0001-aaaa')
     second = lessons._lesson_branch('codex-session-0001-bbbb')
     assert first != second
-    for name in (first, second, lessons._lesson_branch('a..b.lock'), lessons._lesson_branch('.x/y')):
+    # Two ids that read the same once unsafe characters are replaced still get their own branch.
+    assert lessons._lesson_branch('a.b') != lessons._lesson_branch('a-b')
+    assert lessons._lesson_branch('x' * 200).startswith('lesson/' + 'x' * 40 + '-')
+    for name in (first, second, lessons._lesson_branch('a..b.lock'), lessons._lesson_branch('.x/y'),
+                 lessons._lesson_branch('a.b'), lessons._lesson_branch('a-b'), lessons._lesson_branch('x' * 200)):
         assert subprocess.run(['git', 'check-ref-format', f'refs/heads/{name}']).returncode == 0, name
 
 
@@ -943,15 +948,50 @@ def routing_rules_for(tmp_path, text):
 
 
 @pytest.mark.parametrize('entries', ['\t- Owner/One\n\t- owner/two\n', '- Owner/One\n- owner/two\n',
-                                     '  - Owner/One\n\n\t- owner/two\n'])
+                                     '  - Owner/One\n\t- owner/two\n'])
 def test_pull_request_entries_parse_however_they_are_indented(tmp_path, entries):
     rules = routing_rules_for(tmp_path, f'lesson-pull-requests:\n{entries}lesson-policy: apply\n')
     assert rules['pull_requests'] == ['owner/one', 'owner/two'] and rules['propose'] is False
 
 
-@pytest.mark.parametrize('entry', ['\t-owner/one', '  owner/one', '-owner/one', '\t- "unterminated'])
+@pytest.mark.parametrize('entry', ['\t-owner/one', '-owner/one', '\t- "unterminated', '  - "owner/one" trailing'])
 def test_an_unreadable_pull_request_entry_is_an_error_not_a_skip(tmp_path, tool, entry):
     wrap = Wrap(tmp_path, tool, routing=f'lesson-pull-requests:\n{entry}\n')
     planned = wrap.run('plan', '--session-id', wrap.session)
     assert planned.returncode == 1 and 'Traceback' not in planned.stderr, planned.stderr
     assert 'lesson-pull-requests' in planned.stderr or 'invalid quoted string' in planned.stderr
+
+
+def test_a_comment_after_a_quoted_routing_value_is_stripped(tmp_path):
+    rules = routing_rules_for(tmp_path, 'lesson-pull-request-command: "gh pr create --fill"  # opens it\n'
+                                        "lesson-pull-requests:\n  - 'Owner/One' # main\n")
+    assert rules['command'] == 'gh pr create --fill' and rules['pull_requests'] == ['owner/one']
+
+
+@pytest.mark.parametrize('text', ['lesson-pull-requests:\n  - owner/one\n\n- A prose bullet after the list\n',
+                                  'lesson-pull-requests:\n  - owner/one\n  a prose line ends the list\n  - owner/two\n',
+                                  'lesson-pull-requests:\n  - owner/one\n  # a comment ends the list\n  - owner/two\n'])
+def test_the_pull_request_list_ends_at_a_blank_line_or_a_non_entry(tmp_path, text):
+    assert routing_rules_for(tmp_path, text)['pull_requests'] == ['owner/one']
+
+
+def test_one_bad_target_fails_only_its_row_in_a_continued_pull_request_group(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, routing = pull_request_command(tmp_path)
+    wrap = Wrap(tmp_path, tool, routing=routing)
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson('One.'), lesson('Two.')], [
+        row(0, checkout / 'rules.md'), row(1, checkout / 'other.md', 'Second rule.\n', change='Add the second rule')]))
+    first, second = data['lesson_outcomes']
+    assert first['delivery'] == second['delivery'] == 'pull request'
+    # The same lessons come back for the session's existing branch, and one target has moved outside.
+    lessons = load_lessons_module()
+    good = {**first, 'commit': first['local_commit'], 'lesson_commit': first['commit']}
+    bad = {**second, 'commit': second['local_commit'], 'lesson_commit': second['commit'],
+           'target': str(tmp_path / 'outside.md')}
+    updates = lessons._pull_requests(Path(checkout), 'origin', SESSION, [good, bad], str(tmp_path / 'open-request.sh'))
+    assert updates[0]['delivery'] == 'pull request' and updates[0]['commit'] == first['commit']
+    assert updates[1]['delivery'] == 'committed, not pushed' and 'is not inside' in updates[1]['error']
+    request = json.loads(log.read_text().strip().splitlines()[-1])
+    assert [entry['path'] for entry in request['lessons']] == ['rules.md']

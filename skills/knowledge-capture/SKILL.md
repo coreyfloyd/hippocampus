@@ -41,7 +41,8 @@ row per captured item or fact. `index` counts `resume.open_loops`, then unrecord
 [{"index": 0, "capture": "wiki", "created": ["wiki/topic.md", "raw/research/source.md"], "updated": ["wiki/index.md"]},
  {"index": 1, "capture": "source", "created": ["raw/derived/synthesis.md"]},
  {"index": 2, "capture": "user_fact", "text": "Proposed text", "destination": "Where it would go",
-  "source": "Where in this conversation it came from", "choices": ["save", "edit", "discard"]}]
+  "source": "Where in this conversation it came from", "choices": ["save", "edit", "discard"],
+  "approve": "save"}]
 ```
 
 `capture` is `wiki`, `source`, `output` or `user_fact`. Paths are relative to the knowledge root or
@@ -61,8 +62,11 @@ captured item is settled. A file outside the knowledge root or its kind's files,
 not written since the checklist's `plan`, fails: the item stays carried and keeps its approval. Each `knowledge_asks` payload goes to the ask
 binding through an R4 row with `destination: "ask"` and its choices; the fact stays carried until
 the user answers. The row that then settles it, a filing row or a later capture row, carries
-`answer` with the choice the user picked; the module refuses to settle a fact about the user
-without one. Report the articles created or updated from `knowledge_outcomes`.
+`answer` with the choice the user picked. Only the row's `approve` choice saves the fact: a
+capture row or a `filed` filing row needs it, and any other answer settles the fact only by
+dropping it, with nothing written. For "edit", write a new `user_fact` row with the edited
+text; it asks again. The module refuses a row without the answer its action needs. Report
+the articles created or updated from `knowledge_outcomes`.
 
 ## Boundaries
 

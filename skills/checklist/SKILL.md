@@ -190,8 +190,12 @@ Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,
 or a lesson applied or written to the routing file's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
-With the auto-apply setting off, unattended runs, and sweep runs either way, use these same native steps in unattended mode: carry
-items and apply nothing. With the setting on, an unattended run still applies what the setting covers. Report pending proposals and preserve their provenance.
+Only an interactive session runs these steps and their commands (`apply-knowledge`,
+`apply-lessons`, `record-over-limit`); a sweep or scheduled session never does, and the
+module refuses it. In an interactive wrap, attended or unattended, the setting decides: on,
+the steps apply what the setting covers; off, or `auto_apply.lessons: propose` for lessons,
+run them in unattended mode, carry items and apply nothing. Report pending proposals and
+preserve their provenance.
 
 ### 4. Persist — slot `persist`
 
@@ -276,8 +280,10 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
 A fact about the user (`user_fact: true`) files only through R4 `destination: "ask"` until the
-user answers; the row that then files or drops it carries `answer`, the choice the user picked,
-or it fails alone and the fact stays carried.
+user answers; the row that then settles it carries `answer`, the choice the user picked. Only
+the item's `approve` choice lets a row be `filed`; any other answer only drops it, with its
+reason, and nothing is written. A row without that answer, or with the wrong one for what it
+does, fails alone and the fact stays carried.
 A retained native lesson proposal awaiting user approval also keeps non-empty
 `choices` on its item or R4 outcome, even when its destination is `lessons`.
 Native work retained only because a step failed or was declined needs no ask

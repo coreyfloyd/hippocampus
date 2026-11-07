@@ -1,6 +1,9 @@
 """Knowledge capture at a wrap with the auto-apply setting on, driven through the checklist's command line."""
+from datetime import datetime, timezone
+import importlib.util
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -98,7 +101,7 @@ def test_a_fact_about_the_user_is_an_ordinary_ask_that_never_resolves_on_its_own
     item = knowledge('The user reviews work from a phone.')
     fact = {'index': 0, 'capture': 'user_fact', 'text': 'Reviews work from a phone.',
             'destination': 'context/preferences.md', 'source': 'Said in this session at 14:02.',
-            'choices': ['save it', 'edit it', 'discard it']}
+            'choices': ['save it', 'edit it', 'discard it'], 'approve': 'save it'}
     data = wrap.capture([item], [fact])
     [ask] = data['knowledge_asks']
     for text in ('Reviews work from a phone.', 'context/preferences.md', 'Said in this session at 14:02.'):
@@ -117,6 +120,8 @@ def test_a_fact_about_the_user_is_an_ordinary_ask_that_never_resolves_on_its_own
     assert wrap.plan()['handoff']['resume']['open_loops'] == [carried]
     refused = wrap.capture([item], [{**fact, 'default': 'save it'}], expect=1)
     assert 'has no default' in refused.stderr
+    refused = wrap.capture([item], [{**fact, 'approve': 'maybe'}], expect=1)
+    assert 'names which choice approves the save' in refused.stderr
 
 
 def test_capture_outside_the_knowledge_root_keeps_its_approval(tmp_path, tool):
@@ -225,7 +230,7 @@ def test_a_row_naming_the_knowledge_root_fails_alone(tmp_path, tool):
 def fact_row(index=0):
     return {'index': index, 'capture': 'user_fact', 'text': 'Reviews work from a phone.',
             'destination': 'context/preferences.md', 'source': 'Said in this session at 14:02.',
-            'choices': ['save it', 'edit it', 'discard it']}
+            'choices': ['save it', 'edit it', 'discard it'], 'approve': 'save it'}
 
 
 @pytest.mark.parametrize('rule,row', [
@@ -284,3 +289,85 @@ def test_a_capture_row_cannot_settle_a_fact_about_the_user_without_the_users_ans
     report, check, _ = wrap.finish(wrap.file(data))
     assert check.returncode == 0, check.stderr
     assert report['knowledge']['captured'][0]['answer'] == 'save it' and report['asks'] == []
+
+
+def load_knowledge_module():
+    spec = importlib.util.spec_from_file_location('knowledge', Path(__file__).resolve().parents[1] / 'scripts/lib/knowledge.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize('rule,row,answer,reason', [
+    ('R4', {'rule': 'R4', 'status': 'filed', 'destination': 'context/preferences.md'}, 'discard it',
+     'saved only on its approving choice'),
+    ('R4', {'rule': 'R4', 'status': 'filed', 'destination': 'context/preferences.md'}, 'edit it',
+     'saved only on its approving choice'),
+    ('R6', {'rule': 'R6', 'status': 'dropped', 'reason': 'The user declined'}, 'save it',
+     'approving the save; the fact is not dropped')])
+def test_only_the_approving_answer_saves_a_fact_and_only_another_drops_it(tmp_path, tool, rule, row, answer, reason):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.capture([knowledge('The user reviews work from a phone.')], [fact_row()])
+    [carried] = data['resume']['open_loops']
+    assert carried['approve'] == 'save it' and data['knowledge_asks'][0]['approve'] == 'save it'
+    filed = wrap.file(data, [{'index': 0, **row, 'answer': answer}])
+    [entry] = filed['filing']['items']
+    assert entry['status'] == 'failed' and reason in entry['error']
+    assert filed['resume']['open_loops'] == [carried]
+
+
+def test_a_declined_fact_is_dropped_with_nothing_written(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.capture([knowledge('The user reviews work from a phone.')], [fact_row()])
+    [carried] = data['resume']['open_loops']
+    dropped = wrap.file(data, [{'index': 0, 'rule': 'R6', 'status': 'dropped', 'reason': 'The user declined',
+                                'answer': 'discard it'}])
+    assert dropped['filing']['items'][0]['status'] == 'dropped' and dropped['resume']['open_loops'] == []
+    assert not (wrap.root / 'context/preferences.md').exists()
+    # A capture row with a declining answer writes nothing either, whatever the agent compiled.
+    wrap.write('wiki/phone.md')
+    data = wrap.capture([carried], [{'index': 0, 'capture': 'wiki', 'answer': 'discard it', 'created': ['wiki/phone.md']}])
+    assert data['resume']['open_loops'] == [carried]
+    assert 'saved only on its approving choice' in data['knowledge_outcomes'][0]['error']
+
+
+def test_a_misplaced_compile_file_fails_only_the_rows_that_need_it(tmp_path):
+    knowledge_module = load_knowledge_module()
+    root = tmp_path / 'knowledge'
+    for name in ('wiki/a.md', 'raw/research/a.md', 'context/rules.md'):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_text('# A\n')
+    since = datetime.fromtimestamp(0, timezone.utc)
+    profile_files = {'hot_file': "the profile's hot_file (../hot.md) is outside the knowledge root",
+                     'operation_log_file': Path('docs/log.md')}
+    captured = knowledge_module._captured({'capture': 'wiki', 'created': ['wiki/a.md', 'raw/research/a.md']},
+                                          root, True, profile_files, since)
+    assert captured == {'created': ['wiki/a.md', 'raw/research/a.md'], 'updated': []}
+    with pytest.raises(ValueError) as failed:
+        knowledge_module._captured({'capture': 'wiki', 'created': ['wiki/a.md'], 'updated': ['context/rules.md']},
+                                   root, True, profile_files, since)
+    assert "context/rules.md is outside wiki/, raw/ and the profile's docs/log.md" in str(failed.value)
+    assert "the profile's hot_file (../hot.md) is outside the knowledge root" in str(failed.value)
+
+
+def test_running_plan_again_keeps_files_already_compiled_this_wrap(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    wrap.write('wiki/pickup.md')
+    os.utime(wrap.root / 'wiki/pickup.md', None)
+    import time
+    time.sleep(1.1)
+    wrap.plan()
+    data = wrap.capture([knowledge()], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/pickup.md']}])
+    assert data['knowledge_outcomes'][0]['status'] == 'captured', data['knowledge_outcomes'][0]
+    assert data['resume']['open_loops'] == []
+
+
+def test_a_capture_value_that_is_not_text_is_a_clear_error(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    for capture in (['wiki'], {}, 7):
+        refused = wrap.capture([knowledge()], [{'index': 0, 'capture': capture, 'created': ['wiki/a.md']}], expect=1)
+        assert 'capture must be one of' in refused.stderr and 'Traceback' not in refused.stderr, refused.stderr

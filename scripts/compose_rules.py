@@ -218,8 +218,13 @@ LESSON_KEYS = ("lesson-policy", "lesson-pull-request-command", "lesson-pull-requ
 
 
 def _without_comment(value: str) -> str:
-    """Drop a trailing ` # comment` from an unquoted scalar; a quoted one keeps its text."""
+    """Drop a trailing ` # comment` from a scalar; a quoted one keeps the text inside its quotes."""
     value = value.strip()
+    quoted = re.match(r'"(?:[^"\\]|\\.)*"|\'(?:[^\']|\'\')*\'', value)
+    if quoted:
+        rest = value[quoted.end():]
+        # Anything after the closing quote other than a comment stays, so routing_scalar refuses it.
+        return quoted[0] if not rest.strip() or re.match(r"\s+#", rest) else value
     if value.startswith(('"', "'")):
         return value
     return re.split(r"\s+#", value, maxsplit=1)[0].strip()
@@ -230,9 +235,11 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
 
     Each key is an unindented `key: value` line outside fenced code blocks;
     `lesson-pull-requests:` takes `- owner/name` entries, indented with spaces or tabs
-    or not at all, with blank lines and comments allowed between them, until the next
-    unindented line that is not an entry. Prose and fenced examples are ignored.
-    Malformed values and unreadable entries fail closed, like Produced surfaces.
+    or not at all, one per line directly below it. The list ends at the first blank
+    line or at the first line that is not an entry, so prose after it is never a
+    repository. Prose and fenced examples are ignored. Malformed values, and a line
+    in the list that starts like an entry but cannot be read, fail closed, like
+    Produced surfaces.
     """
     rules: dict = {"policy": None, "command": None, "pull_requests": []}
     try:
@@ -251,16 +258,20 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
             fenced = not fenced
             listing = False
             continue
-        if fenced or not line.strip() or line.lstrip().startswith("#"):
+        if fenced:
             continue
-        if line[0] in " \t" or (listing and line.startswith("-")):
-            if listing:
-                entry = re.fullmatch(r"\s*-\s+(.+)", line)
-                if not entry:
-                    fail(f"routing {path}: invalid lesson-pull-requests entry: {line.strip()}")
-                rules["pull_requests"].append(routing_scalar(_without_comment(entry[1])).lower())
+        if not line.strip() or line.lstrip().startswith("#"):
+            listing = False
+            continue
+        if listing and line.lstrip().startswith("-"):
+            entry = re.fullmatch(r"\s*-\s+(.+)", line)
+            if not entry:
+                fail(f"routing {path}: invalid lesson-pull-requests entry: {line.strip()}")
+            rules["pull_requests"].append(routing_scalar(_without_comment(entry[1])).lower())
             continue
         listing = False
+        if line[0] in " \t":
+            continue
         key, separator, value = line.partition(":")
         if not separator or key not in LESSON_KEYS:
             continue

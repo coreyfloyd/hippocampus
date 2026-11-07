@@ -504,7 +504,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         binding = filing_binding(rule, item, row)
         if item.get("user_fact") and binding != "ask" and status in ("filed", "dropped"):
             try:
-                knowledge.user_answer(item, row)
+                knowledge.user_answer(item, row, saving=status == "filed")
             except ValueError as error:
                 # The fact stays carried with its ask; the other items still file.
                 report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,

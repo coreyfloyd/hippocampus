@@ -8,6 +8,7 @@ pass and the report read it. Nothing here runs unless the auto-apply setting is 
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -445,11 +446,15 @@ def _push(checkout: Path, remote: str, branch: str) -> tuple[bool, str, int]:
 
 
 def _lesson_branch(session_id: str) -> str:
-    # Dots are replaced too, so `..`, `.lock` and a leading dot cannot make an invalid ref.
-    name = re.sub(r"-+", "-", re.sub(r"[^A-Za-z0-9_-]", "-", session_id)).strip("-")
+    """`lesson/<readable id>-<digest>`: readable, a valid ref, and distinct for distinct sessions.
+
+    Dots are replaced too, so `..`, `.lock` and a leading dot cannot make an invalid ref; the
+    digest of the exact id keeps two ids that read the same after replacement apart.
+    """
+    name = re.sub(r"-+", "-", re.sub(r"[^A-Za-z0-9_-]", "-", session_id)).strip("-")[:40]
     if not name:
         raise LessonError(f"session id {session_id!r} names no lesson branch")
-    return "lesson/" + name
+    return f"lesson/{name}-{hashlib.sha256(session_id.encode()).hexdigest()[:8]}"
 
 
 def _mark_delivered(checkout: Path, local_commit: str, delivered: str) -> None:
@@ -486,14 +491,17 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
         try:
             for row in rows:
                 update: dict[str, Any] = {"lesson_branch": lesson_branch}
-                if continued and row.get("lesson_commit") and _git(
-                        worktree, "merge-base", "--is-ancestor", row["lesson_commit"], "HEAD").returncode == 0:
-                    update["lesson_commit"] = row["lesson_commit"]
-                else:
-                    try:
+                try:
+                    # One bad target fails its own row; the others still reach the branch.
+                    update["lesson_path"] = _inside(checkout, row["target"]).as_posix()
+                    if continued and row.get("lesson_commit") and _git(
+                            worktree, "merge-base", "--is-ancestor", row["lesson_commit"], "HEAD").returncode == 0:
+                        update["lesson_commit"] = row["lesson_commit"]
+                    else:
                         update["lesson_commit"] = _reapply(checkout, worktree, row)
-                    except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
-                        update.update(delivery=NOT_PUSHED, error=f"{lesson_branch}: {error}")
+                except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
+                    update.pop("lesson_path", None)
+                    update.update(delivery=NOT_PUSHED, error=f"{lesson_branch}: {error}")
                 updates.append(update)
             if any("lesson_commit" in update for update in updates):
                 _must(worktree, "push", remote, f"HEAD:refs/heads/{lesson_branch}")
@@ -505,7 +513,7 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
         _mark_delivered(checkout, row["commit"], update["lesson_commit"])
     if not delivered:
         return updates
-    paths = [_inside(checkout, row["target"]).as_posix() for row, _ in delivered]
+    paths = [update.pop("lesson_path") for _, update in delivered]
     request = {"checkout": str(checkout), "remote": remote, "base": base, "branch": lesson_branch,
                "title": _message(delivered[0][0]["change"]) if len(delivered) == 1
                else f"lessons: {len(delivered)} applied at wrap",

@@ -127,7 +127,7 @@ A knowledge item a wrap captured under the auto-apply setting without an approva
 _Avoid_: auto-capture, applied knowledge
 
 **Fact about the user**:
-A knowledge item that states something about the user: a preference, habit, or circumstance. Under the auto-apply setting it is never captured without the user; it becomes an ordinary ask naming the proposed text, its destination and its source.
+A knowledge item that states something about the user: a preference, habit, or circumstance. Under the auto-apply setting it is never captured without the user; it becomes an ordinary ask naming the proposed text, its destination, its source and which choice approves the save. Only that answer saves it; any other answer settles it with nothing written.
 _Avoid_: personal fact, user memory
 
 **Delivered mark**:
