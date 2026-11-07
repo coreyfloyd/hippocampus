@@ -1143,7 +1143,9 @@ def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=
     for candidate in discovery['candidates']:
         if discovery_failed or checks['failed'] or candidate['session_id'] in checks['session_ids']:
             candidate['abandoned'] = False
-    live = {candidate['session_id'] for candidate in discovery['candidates'] if not candidate['abandoned']}
+    # Open producers and ledger owners may have no handoff in discovery.
+    live = set(checks['session_ids']) | {candidate['session_id'] for candidate in discovery['candidates']
+                                       if not candidate['abandoned']}
 
     def protected(row):
         """An item whose handoff's or producing session is open, or whose abandonment is unknown."""

@@ -861,3 +861,37 @@ def test_unknown_ledger_status_is_malformed_and_keeps_the_item_carried(sandbox, 
     damaged, = run['errors']
     assert 'row 1' in damaged['reason'] and 'pending' in damaged['reason']
     assert path.exists() and commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed
+
+
+def test_open_producer_without_handoff_protects_successor_lesson(sandbox, tool):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    path = source(sandbox, 'successor', loops=[lesson()])
+    configure(sandbox)
+    evidence = sandbox[0] / 'evidence.json'
+    evidence.write_text(json.dumps({'session_ids': [PRODUCER], 'method': 'stub inspection'}))
+    count, pushed = commits(checkout), git(remote, 'rev-parse', 'main')
+    run, rounds = finish(sandbox, start(sandbox), agent(assessment(checkout / 'rules.md')),
+                         '--open-sessions', str(evidence))
+    assert commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed
+    assert path.exists() and not archived(sandbox, 'successor')
+    assert not section(sandbox, run)['lessons_applied']
+    assert all(row['operation'] != 'persist' for group in rounds for row in group)
+    row, = section(sandbox, run)['filing_outcomes']
+    assert row['outcome'] == 'carried' and 'open' in row['reason']
+
+
+@pytest.mark.parametrize('damaged', [
+    {'status': 'applied'}, None,
+    {'identity': [['bad']], 'status': 'applied'},
+    {'identity': ['other', 'time', 'lesson', 'text'], 'status': 'unknown'},
+])
+def test_malformed_producer_outcome_does_not_block_new_lesson(sandbox, tool, damaged):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox)
+    seed_ledger(sandbox, PRODUCER, {'kind': 'lesson_outcome', 'outcome': damaged})
+    run, _ = finish(sandbox, start(sandbox), agent(assessment(checkout / 'rules.md')))
+    row, = section(sandbox, run)['lessons_applied']
+    assert row['receipt'] == git(checkout, 'rev-parse', 'HEAD') == git(remote, 'rev-parse', 'main')
+    assert archived(sandbox, PRODUCER)
+    assert any('row 1' in error['reason'] for error in run['errors'])
