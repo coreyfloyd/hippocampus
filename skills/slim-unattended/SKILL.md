@@ -31,7 +31,9 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    is finished. It stops at three files, largest overage first; the rest wait.
 4. Review the whole file (below), write the result, then run
    `python3 <package>/scripts/lib/slim.py finish --run <run-id> --result <result-file>`, and
-   go back to step 3. A refused result changes nothing: correct it and send it again.
+   go back to step 3. A refused result changes nothing and the slim stays open: correct it and
+   send it again. An `old` that no longer fits the file is refused the same way. A push or
+   clone that fails is not refused: the slim ends as `failed`.
 5. With `done: true`, hand each row of `asks` to the profile's ask binding, the same way the
    sweep does, whose profile this step shares. After a confirmed delivery run
    `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt <receipt>`. With nothing
@@ -89,5 +91,16 @@ with no `left`.
 A branch awaits its decision until its pull request merges or closes. The user's automation
 says which with `python3 <package>/scripts/lib/slim.py decide --repository <owner/name> --branch <branch> --decision merged`
 (or `rejected`, for a pull request closed without merging). A branch deleted from its remote
-is settled at the next `plan`, as merged when its files moved from their base and otherwise
-as rejected. A rejected file waits until a session measures it larger than at rejection.
+is settled at the next `plan`: merged only when its diff reverses cleanly on the default
+branch, which shows its change is there, and otherwise rejected. A settled branch refuses a
+second decision. A rejected file waits until a session measures it larger than at rejection
+or records a new duplicate rule naming it.
+
+A plan closes a run that stopped early, so the asks of slims it already pushed are not lost;
+a slim left open starts over.
+
+A file that produces no branch in two runs in a row (failed, unverified or nothing to change)
+is stalled. Its ask says so, and later runs report it as `over limit, slim stalled` and skip it,
+so it stops taking a slot. It returns when a session measures it larger or records a new
+duplicate, or when the user fixes the cause and runs
+`python3 <package>/scripts/lib/slim.py retry --repository <owner/name> --path <file>`.

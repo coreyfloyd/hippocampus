@@ -71,7 +71,7 @@ class Slim:
         self.configure()
         gitconfig = tmp_path / 'gitconfig'
         gitconfig.write_text('[user]\n\tname = Example\n\temail = example@example.invalid\n' + ''.join(
-            f'[url "{remote.bare}"]\n\tinsteadOf = {remote.address}\n' for remote in remotes))
+            f'[url "file://{remote.bare}"]\n\tinsteadOf = {remote.address}\n' for remote in remotes))
         self.env = {**self.session.env, 'GIT_CONFIG_GLOBAL': str(gitconfig)}
         self.count = 0
 
@@ -486,3 +486,236 @@ def test_the_documents_state_the_ask_and_the_levels():
     for level in ('Low', 'Medium', 'High', 'Critical'):
         assert f'| {level} |' in guide
     assert 'slim-unattended' in guide and 'ships no scheduler' in guide
+
+
+# Round-1 review: each test below fails against the first version of the helper.
+
+def refused(slim, run, result):
+    path = slim.tmp / 'refused.json'
+    path.write_text(json.dumps(result))
+    outcome = slim.run('finish', '--run', run['run_id'], '--result', path)
+    assert outcome.returncode == 1 and 'Traceback' not in outcome.stderr, outcome.stderr
+    return outcome.stderr
+
+
+def test_a_refused_result_can_be_corrected_when_it_reached_another_repository(tmp_path, tool, remote):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(308)})
+    other.publish({'core.md': text(60)})
+    slim = Slim(tmp_path, tool, remote, other)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'repository': 'acme/shared', 'path': 'core.md', 'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    assert 'requires left' in refused(slim, run, {key: value for key, value in result.items() if key != 'left'})
+    assert slim.finish(run, result)['status'] == 'slimmed'
+    assert len(other.branches()) == 2
+
+
+def test_a_run_that_stopped_early_still_raises_its_asks(tmp_path, tool, remote):
+    remote.publish({'first.md': text(308), 'second.md': text(280)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'first.md', remote.checkout / 'second.md')
+    run = slim.plan(records)
+    slim.begin(run)
+    [branch] = slim.finish(run, cut_result('first.md'))['branches']
+    open_slim = slim.begin(run)  # The driver stops here, with the second file open.
+    later = slim.plan(records)
+    [ask] = later['undelivered_asks']
+    assert ask['path'] == 'first.md' and branch['branch'] in ask['text']
+    assert not Path(open_slim['file']).exists()
+    assert later['queued'] == 1, 'the file left open starts over'
+
+
+@pytest.mark.parametrize('path', ['.git/hooks/pre-commit', '.git/config', 'sub/.git/config', '.GIT/config'])
+def test_a_change_inside_git_is_refused(tmp_path, remote, path):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    result = {'left': 'Nothing.', 'changes': [{'path': path, 'edits': [{'new': '#!/bin/sh\ntouch ran\n'}]}]}
+    assert 'inside .git' in refused(slim, run, result)
+    assert not (Path(brief['file']).parent / path).exists() or path.endswith('config')
+    assert remote.branches() == ['main']
+
+
+def test_no_hook_runs_during_a_slim(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    marker = tmp_path / 'hook-ran'
+    hooks = tmp_path / 'template/hooks'
+    hooks.mkdir(parents=True)
+    for name in ('pre-commit', 'commit-msg', 'post-commit', 'post-checkout', 'pre-push'):
+        (hooks / name).write_text(f'#!/bin/sh\necho {name} >> {marker}\n')
+        (hooks / name).chmod(0o755)
+    gitconfig = Path(slim.env['GIT_CONFIG_GLOBAL'])
+    gitconfig.write_text(gitconfig.read_text() + f'[init]\n\ttemplateDir = {tmp_path / "template"}\n')
+    run = slim.plan(records)
+    slim.begin(run)
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+    assert not marker.exists(), marker.read_text()
+
+
+def refuse_pushes(remote):
+    hook = remote.bare / 'hooks/pre-receive'
+    hook.write_text('#!/bin/sh\necho refused by policy >&2\nexit 1\n')
+    hook.chmod(0o755)
+
+
+def test_a_file_that_keeps_failing_is_reported_and_stops_taking_a_slot(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308), 'next.md': text(230)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    refuse_pushes(remote)
+    run = slim.plan(records)
+    slim.begin(run)
+    assert slim.finish(run, cut_result())['status'] == 'failed'
+    assert slim.begin(run)['asks'] == [], 'one failure may be passing'
+    run = slim.plan(records)
+    slim.begin(run)
+    slim.finish(run, cut_result())
+    [ask] = slim.begin(run)['asks']
+    assert 'refused by policy' in ask['text'] and 'no branch in 2 runs' in ask['text'] and ask['choices']
+    later = slim.plan(records)
+    assert later['queued'] == 0
+    assert [row['reason'] for row in later['skipped']] == ['over limit, slim stalled']
+    slim.ok('retry', '--repository', REPOSITORY, '--path', 'AGENTS.md')
+    assert slim.plan(records)['queued'] == 1
+
+
+def test_a_stalled_file_returns_when_measured_larger(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    for _ in range(2):
+        run = slim.plan(records)
+        slim.begin(run)
+        slim.finish(run, {'left': 'Every rule is a boundary.'})
+        slim.begin(run)
+    assert slim.plan(records)['queued'] == 0
+    remote.publish({'AGENTS.md': text(308) + 'A rule added later.\n'})
+    assert slim.plan(slim.records(remote.checkout / 'AGENTS.md'))['queued'] == 1
+
+
+@pytest.mark.parametrize('old', ['Text that is not in the file.\n', '## '], ids=['stale', 'ambiguous'])
+def test_an_old_string_that_does_not_fit_is_a_refusal(tmp_path, remote, old):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    assert 'not once' in refused(slim, run, cut_result(old=old))
+    assert slim.begin(run)['slim_id'] == brief['slim_id'] and Path(brief['file']).read_text() == text(308)
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+def test_clones_are_shallow(tmp_path, remote):
+    remote.publish({'AGENTS.md': text(300)})
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    assert git(Path(brief['file']).parent, 'rev-parse', '--is-shallow-repository') == 'true'
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+def test_no_remote_work_happens_under_the_state_lock(tmp_path, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    log = tmp_path / 'git-calls'
+    shim = tmp_path / 'shim/git'
+    shim.parent.mkdir()
+    real = subprocess.run(['which', 'git'], text=True, capture_output=True).stdout.strip()
+    shim.write_text(f'''#!{sys.executable}
+import fcntl, os, sys
+if sys.argv[1:2] and sys.argv[1] in ('clone', 'ls-remote', 'push'):
+    lock = open({str(tmp_path / 'ledger/slim-state.json.lock')!r}, 'a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        state = 'free'
+    except BlockingIOError:
+        state = 'held'
+    lock.close()
+    open({str(log)!r}, 'a').write(state + ' ' + sys.argv[1] + '\\n')
+os.execv({real!r}, ['git', *sys.argv[1:]])
+''')
+    shim.chmod(0o755)
+    slim.env['PATH'] = f"{shim.parent}{os.pathsep}{slim.env['PATH']}"
+    run = slim.plan(records)
+    slim.begin(run)
+    [branch] = slim.finish(run, cut_result())['branches']
+    slim.begin(run)
+    slim.plan(records)
+    slim.ok('decide', '--repository', REPOSITORY, '--branch', branch['branch'], '--decision', 'rejected')
+    calls = log.read_text().splitlines()
+    assert {'free clone', 'free push', 'free ls-remote'} <= set(calls)
+    assert not [call for call in calls if call.startswith('held')], calls
+
+
+def test_a_gone_branch_is_rejected_when_only_other_commits_moved_its_file(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    branch = rejected(slim, remote, records)
+    remote.publish({'AGENTS.md': text(308).replace(HEADING, HEADING.replace('Push back', 'Always push back'))})
+    git(remote.bare, 'branch', '-q', '-D', branch)
+    assert [row['reason'] for row in slim.plan(records)['skipped']] == ['over limit, slim rejected']
+
+
+def test_a_gone_branch_counts_as_merged_when_later_commits_moved_its_file(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    branch = rejected(slim, remote, records)
+    remote.publish({'AGENTS.md': text(308).replace(CUT, '').replace(HEADING, '## Contradictions\n')})
+    git(remote.bare, 'branch', '-q', '-D', branch)
+    later = slim.plan(records)
+    assert later['skipped'] == [] and later['queued'] == 1
+
+
+def test_a_rejected_duplicate_only_file_returns_on_a_new_duplicate(tmp_path, tool, remote):
+    shared = ''.join(RULES[100:110])
+    remote.publish({'a.md': text(60) + shared, 'b.md': text(60)})
+    slim = Slim(tmp_path, tool, remote)
+    files = [remote.checkout / 'a.md', remote.checkout / 'b.md']
+    records = slim.records(*files)
+    run = slim.plan(records)
+    assert slim.begin(run)['path'] == 'a.md'
+    [branch] = slim.finish(run, cut_result('a.md'))['branches']
+    slim.complete(run)
+    slim.ok('decide', '--repository', REPOSITORY, '--branch', branch['branch'], '--decision', 'rejected')
+    assert 'a.md' in [row['path'] for row in slim.plan(records)['skipped']]
+    remote.publish({'b.md': text(60) + shared})
+    later = slim.plan(slim.records(*files))
+    assert 'a.md' not in [row['path'] for row in later['skipped']]
+
+
+@pytest.mark.parametrize('field,value', [('group', ['a']), ('group', 7), ('repository', 42), ('repository', ['a'])])
+def test_a_malformed_change_is_refused_without_a_traceback(tmp_path, remote, field, value):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    result = cut_result()
+    result['changes'][0][field] = value
+    assert f'{field} must be text' in refused(slim, run, result)
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+@pytest.mark.parametrize('first,second', [('merged', 'rejected'), ('rejected', 'merged'), ('rejected', 'rejected')])
+def test_a_settled_branch_refuses_a_second_decision(tmp_path, remote, first, second):
+    remote.publish({'AGENTS.md': text(308), 'next.md': text(230)})
+    slim = Slim(tmp_path, 'claude', remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    run = slim.plan(records)
+    slim.begin(run)
+    # A second branch keeps a merged slim in the state, where a late decision could find it.
+    result = cut_result()
+    result['changes'].append({'path': 'next.md', 'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    [branch] = slim.finish(run, result)['branches']
+    slim.begin(run)
+    decide = ('decide', '--repository', REPOSITORY, '--branch', branch['branch'], '--decision')
+    slim.ok(*decide, first)
+    outcome = slim.run(*decide, second)
+    assert outcome.returncode == 1 and 'already settled' in outcome.stderr

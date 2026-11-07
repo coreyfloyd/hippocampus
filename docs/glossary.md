@@ -143,8 +143,12 @@ The slim review run without the user, under the auto-apply setting, on the over-
 _Avoid_: auto-slim, nightly slim
 
 **Slim branch**:
-The branch one unattended slim pushes to one repository, built from its hosted default branch and holding only that slim's edits. It awaits its decision until it is settled: merged, or rejected when its pull request closes without merging. The user's automation reports that with `decide`; a branch gone from its remote is settled at the next run. While a branch awaits its decision no other slim edits a file it changed, and such a file is deferred to a later run. A rejected file is skipped and reported as "over limit, slim rejected" until a session measures it larger than it was at rejection.
+The branch one unattended slim pushes to one repository, built from its hosted default branch and holding only that slim's edits. It awaits its decision until it is settled, once: merged, or rejected when its pull request closes without merging. The user's automation reports that with `decide`; a branch gone from its remote is settled at the next run, as merged only when its diff reverses cleanly on the default branch, and otherwise as rejected. While a branch awaits its decision no other slim edits a file it changed, and such a file is deferred to a later run. A rejected file is skipped and reported as "over limit, slim rejected" until a session measures it larger than it was at rejection or records a new duplicate rule naming it.
 _Avoid_: slim PR, slim proposal
+
+**Stalled file**:
+A recorded file that produced no slim branch in two runs of the unattended slim in a row, whether the slim failed, could not verify a generated surface, or found nothing to change. Its ask says so. Later runs report it as "over limit, slim stalled" and skip it, so it stops taking one of the run's three places. It returns when a session measures it larger or records a new duplicate rule naming it, or when the user runs `retry`.
+_Avoid_: stuck file, blocked file
 
 **Always-loaded rules file**:
 A user-level rules file, a file it imports, a repository's instruction file (`CLAUDE.md` or `AGENTS.md`), or a source composed into one of them. An applied lesson for one also raises an ask.

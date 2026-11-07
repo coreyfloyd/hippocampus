@@ -163,9 +163,13 @@ is reported. The routing file's `lesson-policy: propose` stops this step too.
   slims never change one file on two branches. A file with a waiting branch is skipped.
 - Closing a pull request without merging rejects the slim. Have your automation run
   `scripts/lib/slim.py decide --repository owner/name --branch <branch> --decision rejected`
-  (or `merged`); a branch deleted from its remote is settled at the next run. A rejected file is
-  reported as "over limit, slim rejected" and skipped until a session measures it larger than
-  it was at rejection.
+  (or `merged`); a branch deleted from its remote is settled at the next run, as merged only
+  when its change is on the default branch. A rejected file is reported as "over limit, slim
+  rejected" and skipped until a session measures it larger than it was at rejection or records
+  a new duplicate rule naming it.
+- A file that produces no branch in two runs in a row is stalled: its ask says why, and later
+  runs report it as "over limit, slim stalled" and skip it. It returns when measured larger,
+  on a new duplicate rule, or after `scripts/lib/slim.py retry --repository owner/name --path <file>`.
 
 The package never opens or merges the pull request, and ships no scheduler. How much review a
 change gets follows its level:
