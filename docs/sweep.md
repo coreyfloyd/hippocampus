@@ -197,7 +197,8 @@ A run with no work still writes a report with `nothing_to_do: true` and
 With `"auto_apply_lessons": true` in the hippocampus configuration, a sweep stops
 carrying lessons and knowledge forever. It uses the same rules as a wrap:
 
-- Watch-only applies nothing. The report's `would_apply` lists what act mode would apply.
+- Watch-only applies nothing. The report's `would_apply` lists what act mode would apply, and
+  `already_settled` lists what a ledger already settles, found by the same read-only ledger search.
 - In act mode, each lesson the agent recommends is written and committed, one commit
   each, and each recommended skip is dropped. Wiki captures and retained sources and
   outputs under the knowledge root are checked and recorded. A fact about the user
@@ -211,6 +212,13 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
 - Each outcome stays in a session ledger, and the sweep searches every ledger, so a later
   sweep skips what landed, delivers what did not, and never repeats a delivered ask. What a
   wrap or an earlier run settled is listed under `already_settled`, not as this run's work.
+  A malformed ledger row is named in the report's errors and the rest of that ledger is still read.
+- Completion reads the open-session evidence passed on that call, and current activity, before it
+  applies anything: an item whose session is open again is carried, nothing is committed or pushed
+  for it, and its handoff is kept. A commit made in an earlier round of the run whose session is
+  open by the time persist confirms is left unpushed for a later sweep.
+- When two handoffs carry the same fact or always-loaded lesson, the run raises one ask; both
+  handoffs archive once it is delivered, and both are kept when it fails.
 - Undo leaves this run's applied lessons and captures in place and lists them, with their
   commits, in the undo report. Revert a lesson commit through the repository's normal delivery.
 

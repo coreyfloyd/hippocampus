@@ -247,9 +247,10 @@ def test_persist_unbound_reports_the_commit_and_keeps_the_handoff(sandbox, tool)
     assert len(rounds) == 1 and path.exists() and git(remote, 'rev-parse', 'main') == pushed
 
 
-@pytest.mark.parametrize('status,expected', [('failed', 'persist stub failed'), ('uncertain', 'persist stub failed'),
-                                             (None, 'missing result')])
-def test_delivery_waits_for_a_confirmed_persist(sandbox, tool, status, expected):
+@pytest.mark.parametrize('status,error,expected', [
+    ('failed', 'persist stub failed', 'persist stub failed'), ('uncertain', 'persist stub failed', 'persist stub failed'),
+    ('uncertain', None, 'no error given'), (None, None, 'missing result')])
+def test_delivery_waits_for_a_confirmed_persist(sandbox, tool, status, error, expected):
     checkout, remote, _ = clone_pair(sandbox[0])
     pushed = git(remote, 'rev-parse', 'main')
     path = source(sandbox, PRODUCER, loops=[lesson()])
@@ -259,7 +260,7 @@ def test_delivery_waits_for_a_confirmed_persist(sandbox, tool, status, expected)
     def answer(work):
         if work['operation'] != 'persist':
             return base(work)
-        return {'write_id': work['write_id'], 'status': status, 'error': 'persist stub failed'} if status else None
+        return {'write_id': work['write_id'], 'status': status, 'error': error} if status else None
 
     payload = start(sandbox)
     run, _ = finish(sandbox, payload, answer)
@@ -357,13 +358,16 @@ def test_lesson_a_wrap_applied_is_found_in_any_ledger_and_reported_as_settled(sa
     source(sandbox, 'successor', loops=[lesson()])
     configure(sandbox)
     row = wrap_outcome(checkout)
-    seed_ledger(sandbox, ledger, row)
-    seed_ledger(sandbox, 'unreadable-session', {'kind': 'lesson_outcome', 'outcome': {'status': 'applied'}})
+    # One malformed row fails only itself: the settled lesson after it is still found.
+    seed_ledger(sandbox, ledger, {'kind': 'lesson_outcome', 'outcome': {'status': 'applied'}}, row)
     payload = start(sandbox)
     assert payload['work'] == []
     run, _ = finish(sandbox, payload, agent())
     settled, = section(sandbox, run)['already_settled']
     assert settled['receipt'] == row['outcome']['commit'] and settled['outcome'] == 'already_written'
+    damaged, = run['errors']
+    assert damaged['path'].endswith(f'session-touched-paths.{ledger}.jsonl') and 'row 1' in damaged['reason']
+    assert 'session-touched-paths' in Path(payload['report']).read_text().split('```json')[0]
     assert not section(sandbox, run)['lessons_applied']
     assert '### Already settled' in Path(payload['report']).read_text()
     assert archived(sandbox, 'successor')
@@ -388,7 +392,7 @@ def test_capture_a_wrap_recorded_is_reported_as_settled_and_undo_never_lists_it(
 
 
 def test_open_session_evidence_survives_the_rounds_that_deliver_lessons(sandbox, tool):
-    checkout, _, _ = clone_pair(sandbox[0])
+    checkout, remote, _ = clone_pair(sandbox[0])
     path = source(sandbox, PRODUCER, loops=[lesson()])
     configure(sandbox)
     evidence = sandbox[0] / 'evidence.json'
@@ -397,11 +401,81 @@ def test_open_session_evidence_survives_the_rounds_that_deliver_lessons(sandbox,
     work, = payload['work']
     results = sandbox[0] / 'first.json'
     results.write_text(json.dumps([agent(assessment(checkout / 'rules.md'))(work)]))
+    count, pushed = commits(checkout), git(remote, 'rev-parse', 'main')
     command(sandbox, 'complete', '--run-id', payload['run_id'], '--results', str(results),
             '--open-sessions', str(evidence))
     # The next call passes no evidence, as the skill's persist round may.
-    finish(sandbox, payload, agent())
+    run, rounds = finish(sandbox, payload, agent())
     assert path.exists()
+    assert [row['operation'] for group in rounds for row in group] == ['ask']
+    assert commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed
+    assert not section(sandbox, run)['lessons_applied'] and not (sandbox[0] / 'handoff-ledger').exists()
+    assert section(sandbox, run)['open_sessions'][0]['session_id'] == PRODUCER
+    kept, = section(sandbox, run)['handoffs_kept']
+    assert kept['path'] == str(path)
+
+
+@pytest.mark.parametrize('item,destination', [(lesson(), 'lessons'), (knowledge(), 'knowledge')])
+def test_session_named_open_on_the_completing_call_has_nothing_applied(sandbox, tool, item, destination):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    _, extra = knowledge_root(sandbox)
+    path = source(sandbox, PRODUCER, loops=[item])
+    configure(sandbox)
+    evidence = sandbox[0] / 'evidence.json'
+    evidence.write_text(json.dumps({'session_ids': [PRODUCER], 'method': 'stub inspection'}))
+    payload = start(sandbox, destination)
+    work, = payload['work']
+    count, pushed = commits(checkout), git(remote, 'rev-parse', 'main')
+    results = sandbox[0] / 'first.json'
+    results.write_text(json.dumps([agent(assessment(checkout / 'rules.md'),
+                                         {'capture': 'wiki', 'created': ['wiki/pickup.md']})(work)]))
+    command(sandbox, 'complete', '--run-id', payload['run_id'], '--results', str(results),
+            '--open-sessions', str(evidence), *extra)
+    run = read_run(Path(payload['report']))
+    assert commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed
+    # Only the open idle session's own ask is left; nothing is applied, committed or pushed.
+    run, rounds = finish(sandbox, payload, agent(), *extra)
+    assert [row['operation'] for group in rounds for row in group] == ['ask'] and path.exists()
+    assert commits(checkout) == count and git(remote, 'rev-parse', 'main') == pushed
+    assert 'Run the suite first.' not in (checkout / 'rules.md').read_text()
+    assert not (sandbox[0] / 'handoff-ledger').exists()
+    row, = section(sandbox, run)['filing_outcomes']
+    assert row['outcome'] == 'carried' and 'open' in row['reason'] and 'receipt' not in row
+    assert not section(sandbox, run)['lessons_applied'] and not section(sandbox, run)['knowledge_captured']
+    assert section(sandbox, run)['open_sessions'][0]['session_id'] == PRODUCER
+    kept, = section(sandbox, run)['handoffs_kept']
+    assert kept['path'] == str(path)
+    assert 'open' in Path(payload['report']).read_text().split('```json')[0]
+
+
+def test_session_named_open_on_the_persist_round_has_its_commit_left_unpushed(sandbox, tool):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    path = source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox)
+    payload = start(sandbox)
+    work, = payload['work']
+    pushed = git(remote, 'rev-parse', 'main')
+    results = sandbox[0] / 'first.json'
+    results.write_text(json.dumps([agent(assessment(checkout / 'rules.md'))(work)]))
+    command(sandbox, 'complete', '--run-id', payload['run_id'], '--results', str(results))
+    run = read_run(Path(payload['report']))
+    persist, = [row for row in run['work'] if row['outcome'] == 'intent']
+    assert persist['operation'] == 'persist'
+    evidence = sandbox[0] / 'evidence.json'
+    evidence.write_text(json.dumps({'session_ids': [PRODUCER], 'method': 'stub inspection'}))
+    results.write_text(json.dumps([agent()(persist)]))
+    command(sandbox, 'complete', '--run-id', payload['run_id'], '--results', str(results),
+            '--open-sessions', str(evidence))
+    assert git(remote, 'rev-parse', 'main') == pushed
+    run, rounds = finish(sandbox, payload, agent())
+    assert [row['operation'] for group in rounds for row in group] == ['ask'] and path.exists()
+    assert git(remote, 'rev-parse', 'main') == pushed
+    row, = section(sandbox, run)['lessons_not_pushed']
+    assert row['outcome'] == 'not pushed' and 'open' in row['error']
+    assert row['commit'] == git(checkout, 'rev-parse', 'HEAD') and not section(sandbox, run)['lessons_applied']
+    # Once the session is abandoned again, the next run delivers that commit once.
+    run, _ = finish(sandbox, start(sandbox), agent())
+    assert git(remote, 'rev-parse', 'main') == row['commit'] and archived(sandbox, PRODUCER)
 
 
 def in_process(sandbox, monkeypatch):
@@ -683,3 +757,66 @@ def test_untyped_legacy_item_is_applied_with_its_sources_identity(sandbox, tool)
     run, _ = finish(sandbox, start(sandbox), agent(assessment(checkout / 'rules.md')))
     assert section(sandbox, run)['lessons_applied'][0]['delivery'] == 'pushed'
     assert archived(sandbox, PRODUCER)
+
+
+def test_two_handoffs_carrying_one_fact_raise_one_ask_and_both_archive_on_its_delivery(sandbox, tool):
+    _, extra = knowledge_root(sandbox)
+    source(sandbox, PRODUCER, loops=[knowledge()])
+    source(sandbox, 'successor', loops=[knowledge()])
+    configure(sandbox)
+    payload = start(sandbox, 'knowledge')
+    assert len(payload['work']) == 2
+    run, rounds = finish(sandbox, payload, agent(knowledge_row=FACT), *extra)
+    assert [[row['operation'] for row in group] for group in rounds] == [['apply_knowledge', 'apply_knowledge'], ['ask']]
+    asks = [row for row in section(sandbox, run)['asks_raised']]
+    assert len(asks) == 2 and all(row['outcome'] == 'written' for row in asks)
+    assert archived(sandbox, PRODUCER) and archived(sandbox, 'successor')
+
+
+def test_two_handoffs_carrying_one_always_loaded_lesson_raise_one_ask(sandbox, tool):
+    checkout, _, _ = clone_pair(sandbox[0])
+    source(sandbox, PRODUCER, loops=[lesson(choices=['approve', 'decline'])])
+    source(sandbox, 'successor', loops=[lesson(choices=['approve', 'decline'])])
+    configure(sandbox)
+    count = commits(checkout)
+    run, rounds = finish(sandbox, start(sandbox), agent(assessment(checkout / 'rules.md', always_loaded=True)))
+    assert [[row['operation'] for row in group] for group in rounds] == [
+        ['apply_lesson', 'apply_lesson'], ['persist'], ['ask']]
+    assert commits(checkout) == count + 1
+    assert archived(sandbox, PRODUCER) and archived(sandbox, 'successor')
+
+
+def test_shared_ask_that_fails_keeps_both_handoffs(sandbox, tool):
+    _, extra = knowledge_root(sandbox)
+    source(sandbox, PRODUCER, loops=[knowledge()])
+    source(sandbox, 'successor', loops=[knowledge()])
+    configure(sandbox)
+    base = agent(knowledge_row=FACT)
+
+    def answer(work):
+        if work['operation'] == 'ask':
+            return {'write_id': work['write_id'], 'status': 'failed', 'error': 'ask stub failed'}
+        return base(work)
+
+    run, rounds = finish(sandbox, start(sandbox, 'knowledge'), answer, *extra)
+    assert sum(row['operation'] == 'ask' for group in rounds for row in group) == 1
+    assert not archived(sandbox, PRODUCER) and not archived(sandbox, 'successor')
+    assert len(section(sandbox, run)['handoffs_kept']) == 2
+
+
+def test_watch_only_lists_settled_items_apart_from_what_it_would_apply(sandbox, tool):
+    checkout, _, _ = clone_pair(sandbox[0])
+    source(sandbox, PRODUCER, loops=[lesson(), lesson('A second lesson.')])
+    configure(sandbox, mode='watch-only')
+    row = wrap_outcome(checkout)
+    seed_ledger(sandbox, 'a-third-session', row)
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons')])
+    report = Path(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout.strip())
+    run = read_run(report)
+    settled, = section(sandbox, run)['already_settled']
+    assert settled['outcome'] == 'already_written' and settled['receipt'] == row['outcome']['commit']
+    would, = section(sandbox, run)['would_apply']
+    assert would['identity']['text'] == 'A second lesson.'
+    text = report.read_text().split('```json')[0]
+    assert row['outcome']['commit'] in text.split('### Already settled')[1].split('###')[0]
+    assert git(checkout, 'rev-parse', 'HEAD') == row['outcome']['commit']

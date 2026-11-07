@@ -647,15 +647,24 @@ With the auto-apply setting on, `run` adds `auto_apply`, as `plan` does at a wra
 act mode plans `apply_lesson` and `apply_knowledge` in place of `native_step`, except a
 lesson under `lesson-policy: propose`, which stays a `native_step` whose `reason` says so.
 Each section adds `would_apply` (watch-only, outcome `would apply`), `lessons_applied`,
-`lessons_not_pushed`, `knowledge_captured` and `already_settled`. With the setting off none of these appear. An unreadable routing file or a mistyped setting adds an `auto-apply` row to `errors` and sets what it governs to `failed` in `auto_apply`; those items stay `native_step` and the run continues.
+`lessons_not_pushed`, `knowledge_captured` and `already_settled`. Watch-only runs the same ledger
+search as act mode, read-only: an item a ledger already settles is listed under `already_settled`,
+never under `would_apply`. With the setting off none of these appear. An unreadable routing file or a mistyped setting adds an `auto-apply` row to `errors` and sets what it governs to `failed` in `auto_apply`; those items stay `native_step` and the run continues.
 
 Those two operations also accept the `native_step` statuses except `written` and
 `already_written`, which are rejected. `complete --knowledge-profile P` (default
 `~/.config/hippocampus/profile.md`) applies each `assessed` result through the wrap's
 modules, measuring a capture's files from the run's `started_at`; one that cannot apply
 is `failed` alone, whatever it raises; work already in the ledger stands, with a `warning`,
-and goes on to delivery. New outcomes go to the ledger of the item's producing session, and every
-session's ledger is searched by the item's identity (`ledger_session` names the one used). A
+and goes on to delivery. Before it applies anything, `complete` reads the open-session evidence
+given on that same call (or the configured checks) and the current activity of every handoff: an
+`assessed` item whose handoff's or producing session is open, active again, or of unknown
+abandonment is `carried` with that reason and nothing is written, committed or pushed for it; an
+`applied` commit whose session is open is `not pushed` until a later sweep delivers it, and its
+ask is not raised. New outcomes go to the ledger of the item's producing session, and every
+session's ledger is searched by the item's identity (`ledger_session` names the one used); a
+malformed ledger row fails only itself, named in `errors`, and the rest of that ledger is still
+searched. A
 settled item (a lesson not failed, a capture, or a fact whose ask was delivered) gets no work
 entry and is reported under `already_settled` with outcome `already_written`, or `dropped`;
 those rows are this run's work in no list, and undo never names them. A row's `receipt` is its commit, its target with no commit,
@@ -664,8 +673,11 @@ or a capture's files; a lesson row also keeps `target`, `change`, `commit`, `bra
 `not pushed` with `error`, which keeps its handoff. With commits to deliver and persist bound,
 `complete` journals one `persist` intent, returns `planned`, and on the next call delivers
 as `deliver-lessons` does, only when that result is `written` or `already_written`; any other
-result leaves the commits `not pushed` with the reason. With persist unbound it delivers at once. Asks for facts about the user and for always-loaded lessons follow in the
+result leaves the commits `not pushed` with the reason, including `uncertain` with a null `error`. With persist unbound it delivers at once. Asks for facts about the user and for always-loaded lessons follow in the
 same way, the latter after delivery with `choices: []`; a delivered ask settles its item, and its ledger records that, so no later run raises it again.
+One ask per item identity per run: when two handoffs carry the same item, the second's ask row
+carries `shares_ask` (the first ask's write id) and takes that ask's outcome, receipt and error
+instead of journaling a second intent.
 
 If an older slot leaves work pending without writing, return `failed` with `pending:
 true` and an error. Completion journals an ask for that item. If worktree

@@ -239,7 +239,15 @@ each with `native_step`, the package `command` and the complete original item.
 Give these items no `choices` in their decision: a row with choices is an ask
 and stays carried. An item any session's ledger already settles gets no work
 entry: it is never applied or asked again, and a commit not yet pushed goes to
-delivery. The report lists these under `already_settled`, not as this run's work.
+delivery. The report lists these under `already_settled`, not as this run's work;
+watch-only lists them the same way, apart from `would_apply`. A malformed ledger
+row is named in the report's errors and the rest of that ledger is still searched.
+`complete` reads the open-session evidence passed on that call before it applies
+anything: pass refreshed `--open-sessions` evidence on every completing call. An
+assessed item whose session is open again comes back `carried` with that reason,
+nothing is committed or pushed for it, and a commit from an earlier round whose
+session is now open stays `not pushed` for a later sweep. Two handoffs carrying one
+fact or always-loaded lesson get one ask; the second row shares its result.
 An unreadable routing file, or a mistyped setting, stops only what it governs: those
 items stay `native_step`, and the report's errors name it.
 
