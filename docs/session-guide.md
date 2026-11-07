@@ -145,7 +145,8 @@ With the auto-apply setting on, `slim-unattended` works through the over-limit r
 given, from one machine or several, and treats records of one file as one. Name each
 repository's checkout in the configuration, so the step can find its remote and its produced
 surfaces: `"slim_checkouts": {"owner/name": "~/code/name"}`. A repository not named waits and
-is reported. The routing file's `lesson-policy: propose` stops this step too.
+is reported, as does a file whose duplicate rule lives in a repository not named. The routing
+file's `lesson-policy: propose` stops this step too.
 
 - One run analyzes at most three files, largest overage first, one after another. The rest
   wait for the next run.
@@ -160,7 +161,9 @@ is reported. The routing file's `lesson-policy: propose` stops this step too.
 - A file still over its limit gets the best result, and the ask says what is left and why.
 - A generated surface the step cannot verify means no branch, and an ordinary ask with the reason.
 - A file a waiting branch changed is left alone and listed as deferred to a later run, so two
-  slims never change one file on two branches. A file with a waiting branch is skipped.
+  slims never change one file on two branches, however a path is spelled. A file with a
+  waiting branch is skipped; one left alone because of an earlier run's branch gets one ask
+  saying so. A slim interrupted while pushing is settled from its remotes at the next run.
 - Closing a pull request without merging rejects the slim. Have your automation run
   `scripts/lib/slim.py decide --repository owner/name --branch <branch> --decision rejected`
   (or `merged`); a branch deleted from its remote is settled at the next run, as merged only

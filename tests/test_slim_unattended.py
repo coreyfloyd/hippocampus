@@ -719,3 +719,235 @@ def test_a_settled_branch_refuses_a_second_decision(tmp_path, remote, first, sec
     slim.ok(*decide, first)
     outcome = slim.run(*decide, second)
     assert outcome.returncode == 1 and 'already settled' in outcome.stderr
+
+
+# Round-2 review: each test below fails against the helper before its fix.
+
+def two_slims(slim, remote, second_result):
+    """Slim first.md, then finish second.md with the given result; the closed run and both branches."""
+    remote.publish({'first.md': text(308), 'second.md': text(280)})
+    run = slim.plan(slim.records(remote.checkout / 'first.md', remote.checkout / 'second.md'))
+    assert slim.begin(run)['path'] == 'first.md'
+    [first] = slim.finish(run, cut_result('first.md'))['branches']
+    assert slim.begin(run)['path'] == 'second.md'
+    finished = slim.finish(run, second_result)
+    return slim.begin(run), first, finished
+
+
+@pytest.mark.parametrize('spelling', ['./first.md', 'sub/../first.md', 'first.md/'])
+def test_a_frozen_file_stays_frozen_however_its_path_is_spelled(tmp_path, remote, spelling):
+    slim = Slim(tmp_path, 'claude', remote)
+    result = cut_result('second.md')
+    result['changes'].append({'path': spelling, 'edits': [{'old': HEADING, 'new': '## Contradictions\n'}]})
+    closed, first, finished = two_slims(slim, remote, result)
+    [second] = finished['branches']
+    assert second['changed'] == ['second.md']
+    assert HEADING.strip() in remote.show(first['branch'], 'first.md')
+    assert HEADING.strip() in remote.show(second['branch'], 'second.md')
+    second_ask = next(ask for ask in closed['asks'] if ask['path'] == 'second.md')
+    assert 'acme/rules first.md: already changed by' in second_ask['text']
+
+
+def test_a_file_changed_under_another_spelling_is_frozen_by_its_own_path(tmp_path, tool, remote):
+    remote.publish({'first.md': text(308), 'second.md': text(280), 'third.md': text(260)})
+    slim = Slim(tmp_path, tool, remote)
+    run = slim.plan(slim.records(*[remote.checkout / name for name in ('first.md', 'second.md', 'third.md')]))
+    slim.begin(run)
+    result = cut_result('first.md')
+    result['changes'].append({'path': './third.md', 'edits': [{'old': CUT, 'new': ''}]})
+    [first] = slim.finish(run, result)['branches']
+    assert first['changed'] == ['first.md', 'third.md']
+    brief = slim.begin(run)
+    assert brief['path'] == 'second.md'
+    assert {'repository': REPOSITORY, 'path': 'third.md', 'changed_by': first['branch']} in brief['frozen']
+    slim.finish(run, cut_result('second.md'))
+    closed = slim.begin(run)
+    assert closed['analyzed'] == 2
+    assert [row['path'] for row in closed['deferred']] == ['third.md']
+
+
+def test_sizes_are_measured_however_the_recorded_file_is_spelled(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    finished = slim.finish(run, cut_result('./AGENTS.md'))
+    [branch] = finished['branches']
+    assert branch['changed'] == ['AGENTS.md']
+    assert [(row['before'], row['after']) for row in finished['sizes']] == [(308, 306)]
+    [ask] = slim.begin(run)['asks']
+    assert f'{tool} lines: 308 before, 306 after' in ask['text']
+
+
+def test_a_path_through_a_link_is_refused(tmp_path, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    os.symlink('.', remote.checkout / 'link')
+    git(remote.checkout, 'add', 'link')
+    git(remote.checkout, 'commit', '-q', '-m', 'Add a link')
+    git(remote.checkout, 'push', '-q', str(remote.bare), 'main')
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    assert 'name the file by its own path' in refused(slim, run, cut_result('link/AGENTS.md'))
+    assert remote.branches() == ['main']
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+def publish_bytes(remote, path, content):
+    (remote.checkout / path).write_bytes(content)
+    git(remote.checkout, 'add', '-A')
+    git(remote.checkout, 'commit', '-q', '-m', 'Publish bytes')
+    git(remote.checkout, 'push', '-q', str(remote.bare), 'main')
+
+
+def test_a_file_that_is_not_utf8_in_a_second_repository_still_makes_both_branches(tmp_path, tool, remote):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(308)})
+    core = HEADING.encode() + b'Caf\xe9 rules.\n'
+    publish_bytes(other, 'core.md', core)
+    slim = Slim(tmp_path, tool, remote, other)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    run = slim.plan(records)
+    slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'repository': 'acme/shared', 'path': 'core.md', 'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    finished = slim.finish(run, result)
+    assert finished['status'] == 'slimmed' and [row['repository'] for row in finished['branches']] == [REPOSITORY, 'acme/shared']
+    assert len(remote.branches()) == 2 and len(other.branches()) == 2
+    [ask] = slim.begin(run)['asks']
+    assert 'acme/rules slim/' in ask['text'] and 'acme/shared slim/' in ask['text']
+    # Both merged by the user's automation: the binary diff still shows the change is there.
+    remote.publish({'AGENTS.md': text(308).replace(CUT, '')})
+    publish_bytes(other, 'core.md', core.replace(HEADING.encode(), b'## Pushback\n'))
+    for branch in finished['branches']:
+        git((remote if branch['repository'] == REPOSITORY else other).bare, 'branch', '-q', '-D', branch['branch'])
+    later = slim.plan(records)
+    assert later['skipped'] == [] and later['queued'] == 1
+
+
+def test_a_second_repository_whose_push_is_refused_fails_alone(tmp_path, tool, remote):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(308)})
+    other.publish({'core.md': text(60)})
+    refuse_pushes(other)
+    slim = Slim(tmp_path, tool, remote, other)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'repository': 'acme/shared', 'path': 'core.md', 'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    finished = slim.finish(run, result)
+    assert finished['status'] == 'slimmed' and [row['repository'] for row in finished['branches']] == [REPOSITORY]
+    [ask] = slim.begin(run)['asks']
+    assert 'Branches not pushed:' in ask['text'] and 'refused by policy' in ask['text']
+
+
+def test_a_branch_pushed_before_a_crash_is_recovered_by_the_next_plan(tmp_path, tool, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    shim = tmp_path / 'shim/git'
+    shim.parent.mkdir()
+    real = subprocess.run(['which', 'git'], text=True, capture_output=True).stdout.strip()
+    shim.write_text(f'''#!{sys.executable}
+import os, signal, subprocess, sys
+code = subprocess.run([{real!r}, *sys.argv[1:]]).returncode
+if sys.argv[1:2] == ['push']:
+    os.kill(os.getppid(), signal.SIGKILL)  # The helper dies right after the push lands.
+sys.exit(code)
+''')
+    shim.chmod(0o755)
+    slim.env['PATH'] = f"{shim.parent}{os.pathsep}{slim.env['PATH']}"
+    run = slim.plan(records)
+    slim.begin(run)
+    result = tmp_path / 'crash.json'
+    result.write_text(json.dumps(cut_result()))
+    crashed = slim.run('finish', '--run', run['run_id'], '--result', result)
+    assert crashed.returncode != 0
+    assert len(remote.branches()) == 2, 'the branch landed before the crash'
+    slim.env['PATH'] = slim.env['PATH'].split(os.pathsep, 1)[1]
+    later = slim.plan(records)
+    [ask] = later['undelivered_asks']
+    [branch] = [name for name in remote.branches() if name != 'main']
+    assert ask['path'] == 'AGENTS.md' and branch in ask['text'] and ask['choices'] == []
+    assert [row['reason'] for row in later['skipped']] == ['slim branch awaiting its decision']
+    assert later['queued'] == 0
+    slim.complete(later)
+    assert len(remote.branches()) == 2, 'no second branch for the file'
+
+
+def test_an_ask_marks_choices_whose_edit_a_frozen_file_deferred_as_not_done(tmp_path, tool, remote):
+    slim = Slim(tmp_path, tool, remote)
+    result = cut_result('second.md')
+    result['contradictions'] = [{'rules': 'first.md says wait; second.md says act.', 'winner': 'act', 'path': 'first.md'}]
+    result['duplicates'] = [{'rule': HEADING.strip(), 'owner': 'second.md', 'path': 'first.md'}]
+    result['rules'].append({'path': 'first.md', 'action': 'rewritten', 'text': HEADING.strip()})
+    result['changes'].append({'path': 'first.md', 'edits': [{'old': HEADING, 'new': '## Contradictions\n'}]})
+    closed, first, _ = two_slims(slim, remote, result)
+    ask = next(ask for ask in closed['asks'] if ask['path'] == 'second.md')
+    body = ask['text']
+    done, deferred = body.split('Chosen but not done, their file is deferred:')
+    assert f'removed in second.md: {CUT.strip()}' in done
+    assert 'rewritten in first.md' not in done and 'Winner: act' not in done and 'Owner: second.md' not in done
+    assert 'rewritten in first.md' in deferred and 'Winner: act' in deferred and 'Owner: second.md' in deferred
+    assert f"already changed by {first['branch']}" in deferred
+    assert body.index('Chosen but not done') < body.index('Deferred to a later run')
+
+
+def test_a_directory_path_is_refused(tmp_path, remote):
+    remote.publish({'AGENTS.md': text(308), 'docs/guide.md': text(20)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'path': 'docs', 'edits': [{'new': 'A rule.\n'}]})
+    assert 'is not a file' in refused(slim, run, result)
+    assert slim.begin(run)['slim_id'] == brief['slim_id'] and remote.branches() == ['main']
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+def test_an_edit_that_changes_nothing_is_refused(tmp_path, remote):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, 'claude', remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    assert 'leave the file as it is' in refused(slim, run, cut_result(old=HEADING, **{'changes': [
+        {'path': 'AGENTS.md', 'edits': [{'old': HEADING, 'new': HEADING}]}]}))
+    assert slim.begin(run)['slim_id'] == brief['slim_id'] and remote.branches() == ['main']
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+
+
+def test_a_duplicate_in_a_repository_with_no_checkout_is_reported_at_plan_time(tmp_path, tool, remote):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(308)})
+    other.publish({'core.md': text(60)})
+    slim = Slim(tmp_path, tool, remote, other)
+    records = slim.records(remote.checkout / 'AGENTS.md', other.checkout / 'core.md')
+    [entry] = [row for row in json.loads(records.read_text())['records'] if row['path'] == 'AGENTS.md']
+    assert {span['repository'] for finding in entry['duplicates'] for span in finding['spans']} >= {'acme/shared'}
+    (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': True, 'slim_checkouts': {
+        REPOSITORY: str(remote.checkout)}}))
+    run = slim.plan(records)
+    assert run['queued'] == 0
+    row = next(row for row in run['unreachable'] if row['path'] == 'AGENTS.md')
+    assert 'acme/shared' in row['reason'] and 'duplicate' in row['reason']
+    assert slim.begin(run)['asks'] == []
+
+
+def test_a_recorded_file_frozen_by_an_earlier_run_gets_one_ask(tmp_path, tool, remote):
+    remote.publish({'first.md': text(308), 'third.md': text(260)})
+    slim = Slim(tmp_path, tool, remote)
+    records = slim.records(remote.checkout / 'first.md', remote.checkout / 'third.md')
+    run = slim.plan(records)
+    slim.begin(run)
+    result = cut_result('first.md')
+    result['changes'].append({'path': 'third.md', 'edits': [{'old': CUT, 'new': ''}]})
+    [first] = slim.finish(run, result)['branches']
+    slim.complete(run)
+    later = slim.plan(records)
+    assert [row['path'] for row in later['deferred']] == ['third.md']
+    [ask] = slim.complete(later)['asks']
+    assert ask['path'] == 'third.md' and ask['choices'] == []
+    assert 'left as it is' in ask['text'] and first['branch'] in ask['text'] and 'lines' in ask['text']
+    again = slim.plan(records)
+    assert [row['path'] for row in again['deferred']] == ['third.md']
+    assert slim.complete(again)['asks'] == [], 'the deferral is reported once per branch'

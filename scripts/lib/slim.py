@@ -9,6 +9,7 @@ Nothing here merges or schedules. Standard library only.
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import copy
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ REJECTED_REASON = "over limit, slim rejected"
 PENDING_REASON = "slim branch awaiting its decision"
 STALLED_REASON = "over limit, slim stalled"
 REPORT_LISTS = ("contradictions", "duplicates", "rules", "changes", "deferred", "unverified", "surfaces_verified")
+CHOICE_LISTS = ("contradictions", "duplicates", "rules")  # The rows a deferred file marks as not done.
 ORDINARY_CHOICES = ["run the attended slim review on it", "leave it as it is"]
 
 
@@ -68,7 +70,8 @@ def _state_path() -> Path:
 
 
 def _blank_state() -> dict[str, Any]:
-    return {"schema_version": SCHEMA_VERSION, "slims": [], "asks": [], "stalled": {}, "run": None}
+    return {"schema_version": SCHEMA_VERSION, "slims": [], "asks": [], "stalled": {}, "deferred_reported": [],
+            "run": None}
 
 
 @contextlib.contextmanager
@@ -96,6 +99,20 @@ def _key(row: Mapping[str, Any]) -> tuple[str, str]:
 
 def _name(row: Mapping[str, Any]) -> str:
     return f"{row['repository']} {row['path']}"
+
+
+def _canonical(path: Any) -> str:
+    """A repository file's one spelling: relative, with no `.`, `..` or repeated or trailing separators.
+
+    Every key, frozen check and size lookup compares this form, so a spelling cannot slip a
+    file past the frozen rule or hide it from the sizes.
+    """
+    if not isinstance(path, str) or not path or Path(path).is_absolute():
+        raise ValueError(f"{path!r} is not a path inside its repository")
+    normal = os.path.normpath(path)
+    if normal == "." or normal == ".." or normal.startswith("../"):
+        raise ValueError(f"{path} is not a path inside its repository")
+    return normal
 
 
 def _status(slim: Mapping[str, Any]) -> str:
@@ -250,7 +267,7 @@ def _probe(slim: Mapping[str, Any], branch: Mapping[str, Any],
             _clone(address, clone)
         except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
             return None, None, f"{branch['branch']}: {error}"
-        applied = lessons._git(clone, "apply", "--reverse", "--check", stdin=branch["diff"].encode())
+        applied = lessons._git(clone, "apply", "--reverse", "--check", stdin=base64.b64decode(branch["diff"]))
     if applied.returncode == 0:
         return MERGED, None, None
     return REJECTED, _baseline_now(slim, config), None
@@ -282,6 +299,16 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
     records = merge_records(paths)
     config = handoff.read_config()
     with _transaction() as state:
+        run = state["run"]
+        pushing = copy.deepcopy(run["current"]) if run and not run["closed"] and run["current"] and run[
+            "current"].get("pushing") else None
+    warnings: list[str] = []
+    if pushing:
+        # The helper stopped between the push and its record: the remotes say what landed.
+        pushed, failures, warnings = _landed(pushing["pushing"]["branches"], config)
+    with _transaction() as state:
+        if pushing:
+            _recover(state, pushing, pushed, failures)
         # A run that stopped early still owes its asks; a slim left open starts over.
         if state["run"] and not state["run"]["closed"]:
             _close(state, state["run"])
@@ -290,7 +317,7 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
                    for branch in slim["branches"] if branch["status"] == PENDING]
     probes = [(branch, _probe(slim, branch, config)) for slim, branch in pending]
     with _transaction() as state:
-        warnings = [warning for _, (_, _, warning) in probes if warning]
+        warnings.extend(warning for _, (_, _, warning) in probes if warning)
         for branch, (status, baseline, _) in probes:
             found = _find(state, branch["repository"], branch["branch"])
             if status and found and found[1]["status"] == PENDING:
@@ -298,21 +325,22 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
         state["slims"] = [slim for slim in state["slims"] if _status(slim) != MERGED]
         frozen = _frozen(state)
         latest = {_key(slim): slim for slim in state["slims"]}
-        run: dict[str, Any] = {"id": uuid.uuid4().hex[:12], "started": _now(), "queue": [], "analyzed": 0,
-                               "current": None, "results": [], "skipped": [], "deferred": [], "unreachable": [],
-                               "failed": [], "closed": None}
+        run = {"id": uuid.uuid4().hex[:12], "started": _now(), "queue": [], "analyzed": 0,
+               "current": None, "results": [], "skipped": [], "deferred": [], "unreachable": [],
+               "failed": [], "closed": None}
         for record in sorted(records, key=lambda row: (-overage(row), row["repository"], row["path"])):
             slim = latest.get(_key(record))
             if slim and _status(slim) == PENDING:
                 run["skipped"].append(_row(record, PENDING_REASON))
             elif _key(record) in frozen:
-                run["deferred"].append(_row(record, f"already changed by {frozen[_key(record)]}"))
+                run["deferred"].append({**_row(record, f"already changed by {frozen[_key(record)]}"),
+                                        "changed_by": frozen[_key(record)]})
             elif slim and _status(slim) == REJECTED and not _changed(record, slim["measured"]):
                 run["skipped"].append(_row(record, REJECTED_REASON))
             elif _stalled(state, record):
                 run["skipped"].append(_row(record, STALLED_REASON))
             else:
-                _, reason = _clone_address(config, record["repository"])
+                reason = _unreachable(record, config)
                 if reason:
                     run["unreachable"].append(_row(record, reason))
                 else:
@@ -321,6 +349,20 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
         return {"run_id": run["id"], "queued": len(run["queue"]), "files_per_run": FILES_PER_RUN,
                 "skipped": run["skipped"], "deferred": run["deferred"], "unreachable": run["unreachable"],
                 "warnings": warnings, "undelivered_asks": state["asks"]}
+
+
+def _unreachable(record: Mapping[str, Any], config: Mapping[str, Any]) -> str | None:
+    """Why a file waits: its repository, or one holding a duplicate of its rule, cannot be cloned."""
+    _, reason = _clone_address(config, record["repository"])
+    if reason:
+        return reason
+    others = dict.fromkeys(span["repository"] for finding in record["duplicates"] for span in finding["spans"])
+    for repository in others:
+        if repository != record["repository"]:
+            _, reason = _clone_address(config, repository)
+            if reason:
+                return f"{reason}, and it holds a duplicate of this file's rule"
+    return None
 
 
 def _stalled(state: dict[str, Any], record: Mapping[str, Any]) -> bool:
@@ -338,7 +380,7 @@ def _now() -> str:
 
 def _row(record: Mapping[str, Any], reason: str) -> dict[str, Any]:
     limits = over_limit._limits_text(record.get("limits", []))
-    return {"repository": record["repository"], "path": record["path"], "reason": reason,
+    return {"repository": record["repository"], "path": record["path"], "reason": reason, "limits": limits,
             "line": f"{reason}: {_name(record)}" + (f" ({limits})" if limits else "")}
 
 
@@ -364,12 +406,15 @@ def _workspace(current: dict[str, Any], repository: str, config: Mapping[str, An
 
 def _inside(workspace: Path, path: str) -> Path:
     """A repository file in a clone. Git's own directory is no repository file, in any case form."""
+    path = _canonical(path)
     target = (workspace / path).resolve()
     root = workspace.resolve()
-    if Path(path).is_absolute() or not target.is_relative_to(root):
+    if not target.is_relative_to(root):
         raise ValueError(f"{path} is not a path inside its repository")
     if any(part.casefold() == ".git" for part in (*Path(path).parts, *target.relative_to(root).parts)):
         raise ValueError(f"{path} is inside .git, which a slim never edits")
+    if target.relative_to(root) != Path(path):
+        raise ValueError(f"{path} reaches {target.relative_to(root)} through a link; name the file by its own path")
     return target
 
 
@@ -388,6 +433,7 @@ def begin(run_id: str) -> dict[str, Any]:
             run = _run(state, run_id)
             if run["closed"]:
                 return run["closed"]
+            _not_pushing(run)
             if not run["current"]:
                 _next_slim(state, run)
             if not run["current"]:
@@ -524,6 +570,10 @@ def _check_result(result: Any, record: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(row, Mapping) or not all(isinstance(row.get(field), str) and row[field]
                                                        for field in fields):
                 raise ValueError(f"slim finish: {key} row {number} requires {', '.join(fields)}")
+            for field in ("repository", "path"):
+                if field in row and (not isinstance(row[field], str) or not row[field]):
+                    raise ValueError(f"slim finish: {key} row {number}: {field} must be text")
+    checked = {**checked, **{key: [_located(row, record) for row in checked[key]] for key in CHOICE_LISTS}}
     changes = []
     for number, row in enumerate(checked["changes"], 1):
         edits = row.get("edits")
@@ -535,7 +585,10 @@ def _check_result(result: Any, record: Mapping[str, Any]) -> dict[str, Any]:
         for field in ("repository", "group"):
             if field in row and (not isinstance(row[field], str) or not row[field]):
                 raise ValueError(f"slim finish: changes row {number}: {field} must be text")
-        changes.append({**row, "repository": row.get("repository") or record["repository"]})
+        try:
+            changes.append(_located(row, record))
+        except ValueError as error:
+            raise ValueError(f"slim finish: changes row {number}: {error}") from error
     if not all(isinstance(surface, str) for surface in checked["surfaces_verified"]):
         raise ValueError("slim finish: surfaces_verified must list surface paths")
     left = result.get("left")
@@ -544,20 +597,42 @@ def _check_result(result: Any, record: Mapping[str, Any]) -> dict[str, Any]:
     return {**checked, "changes": changes, "left": left}
 
 
-def _partition(changes: Sequence[Mapping[str, Any]], frozen: Mapping[tuple[str, str], str]) -> tuple[list, list]:
-    """Split changes into those to make and those a frozen file defers, with their whole group."""
+def _located(row: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, Any]:
+    """A result row with its file named canonically: `repository` defaults to the recorded file's."""
+    located = {**row, "repository": row.get("repository") or record["repository"]}
+    if "path" in row:
+        located["path"] = _canonical(row["path"])
+    return located
+
+
+def _partition(report: dict[str, Any], frozen: Mapping[tuple[str, str], str]) -> list[dict[str, Any]]:
+    """Keep the changes to make; a frozen file defers its change and its whole group.
+
+    The report's contradiction, duplicate and rule rows whose file is deferred move to
+    `not_done`, so the ask lists as done only what the branch changed.
+    """
+    changes = report["changes"]
     blocked = {row["group"] for row in changes if _key(row) in frozen and row.get("group")}
-    kept, deferred = [], []
+    kept, deferred = [], {}
     for row in changes:
         if _key(row) in frozen:
-            deferred.append({"repository": row["repository"], "path": row["path"],
-                             "reason": f"already changed by {frozen[_key(row)]}"})
+            deferred[_key(row)] = f"already changed by {frozen[_key(row)]}"
         elif row.get("group") in blocked:
-            deferred.append({"repository": row["repository"], "path": row["path"],
-                             "reason": "it depends on a change to a deferred file"})
+            deferred[_key(row)] = "it depends on a change to a deferred file"
         else:
             kept.append(row)
-    return kept, deferred
+    report["deferred"] = [*report["deferred"], *({"repository": repository, "path": path, "reason": reason}
+                                                 for (repository, path), reason in deferred.items())]
+    report["not_done"] = []
+    for key in CHOICE_LISTS:
+        done = []
+        for row in report[key]:
+            if "path" in row and _key(row) in deferred:
+                report["not_done"].append({**row, "kind": key, "reason": deferred[_key(row)]})
+            else:
+                done.append(row)
+        report[key] = done
+    return kept
 
 
 def _edited(current: dict[str, Any], changes: Sequence[Mapping[str, Any]],
@@ -570,15 +645,20 @@ def _edited(current: dict[str, Any], changes: Sequence[Mapping[str, Any]],
     contents: dict[tuple[str, str], bytes] = {}
     for row in changes:
         target = _inside(_workspace(current, row["repository"], config), row["path"])
+        if target.exists() and not target.is_file():
+            raise ValueError(f"slim finish: {row['path']} is not a file")
         content = contents.get(_key(row))
         if content is None:
             content = target.read_bytes() if target.is_file() else b""
         if content.startswith(lessons.GENERATED_MARK):
             raise ValueError(f"slim finish: {row['path']} is a generated copy; name its source")
         try:
-            contents[_key(row)] = lessons._edited(content, row["edits"], "default branch's file")
+            edited = lessons._edited(content, row["edits"], "default branch's file")
         except lessons.LessonError as error:
             raise ValueError(f"slim finish: {row['path']}: {error}") from error
+        if edited == content:
+            raise ValueError(f"slim finish: {row['path']}: its edits leave the file as it is")
+        contents[_key(row)] = edited
     return contents
 
 
@@ -589,18 +669,24 @@ def _sizes(record: Mapping[str, Any], before: str, after: str) -> list[dict[str,
 
 
 def _commit(workspace_path: Path, branch: str, paths: Sequence[str], title: str) -> dict[str, str]:
+    """Commit the written files on a new branch; the diff is kept as base64, so any file's bytes fit."""
     base = lessons._must(workspace_path, "symbolic-ref", "--short", "HEAD")
     lessons._must(workspace_path, "checkout", "-q", "-b", branch)
     lessons._must(workspace_path, "add", "--", *paths)
     lessons._must(workspace_path, "commit", "-q", "-m", title)
-    diff = lessons._git(workspace_path, "diff", "HEAD~1", "HEAD").stdout.decode("utf-8")
-    return {"base": base, "commit": lessons._must(workspace_path, "rev-parse", "HEAD"), "diff": diff}
+    diff = lessons._git(workspace_path, "diff", "--binary", "HEAD~1", "HEAD")
+    if diff.returncode:
+        raise lessons.LessonError(f"git diff failed: {lessons._error(diff)}")
+    return {"base": base, "commit": lessons._must(workspace_path, "rev-parse", "HEAD"),
+            "diff": base64.b64encode(diff.stdout).decode("ascii")}
 
 
 def finish(run_id: str, result: Any) -> dict[str, Any]:
     """Close the open slim: apply its edits on one branch per repository and push them.
 
     A refusal changes nothing and keeps the slim open, so a corrected result can follow it.
+    Every check and commit happens before the first push, and the branches are recorded
+    before it, so a helper that dies mid-push leaves nothing the next `plan` cannot settle.
     """
     _require_setting("slim finish")
     config = handoff.read_config()
@@ -608,12 +694,12 @@ def finish(run_id: str, result: Any) -> dict[str, Any]:
         run = _run(state, run_id)
         if not run["current"] or not run["current"]["ready"]:
             raise ValueError("slim finish: no slim is open")
+        _not_pushing(run)
         current = copy.deepcopy(run["current"])
         frozen = _frozen(state)
     record = current["record"]
     report = _check_result(result, record)
-    kept, deferred = _partition(report["changes"], frozen)
-    report["deferred"] = [*report["deferred"], *deferred]
+    kept = _partition(report, frozen)
     outcome: dict[str, Any] = {"id": current["id"], "repository": record["repository"], "path": record["path"],
                                "measured": _baseline(record),
                                "report": {key: value for key, value in report.items() if key != "changes"}}
@@ -627,18 +713,21 @@ def finish(run_id: str, result: Any) -> dict[str, Any]:
                 _workspace(current, row["repository"], config)
             _keep_workspaces(run_id, current)
             contents, sizes = _review(current, kept, report, config)
-            built, slim = _build(run_id, current, contents, config)
-            outcome.update(built, sizes=sizes, surfaces=list(surfaces))
+            outcome.update(sizes=sizes, surfaces=list(surfaces))
+            candidates = _commit_all(current, contents, config)
         except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
             outcome.update(status="failed", error=str(error))
+        else:
+            if not candidates:
+                outcome.update(status="unchanged", branches=[])
+            else:
+                with _transaction() as state:
+                    _run(state, run_id)["current"]["pushing"] = {"outcome": outcome, "branches": candidates}
+                pushed, failures = _push_all(current, candidates, config)
+                outcome.update(_built(pushed, failures))
+                slim = _slim(run_id, current, pushed) if pushed else None
     with _transaction() as state:
-        run = _run(state, run_id)
-        if slim:
-            # This slim replaces the file's earlier rejection, so a later merge cannot uncover it.
-            state["slims"] = [row for row in state["slims"] if _key(row) != _key(record) or _status(row) == PENDING]
-            state["slims"].append(slim)
-        run["results"].append(outcome)
-        run["current"] = None
+        _record(state, _run(state, run_id), record, outcome, slim)
     shutil.rmtree(current["base"], ignore_errors=True)
     return {key: outcome.get(key) for key in ("id", "repository", "path", "status", "sizes", "branches", "error", "gaps")}
 
@@ -658,34 +747,112 @@ def _review(current: dict[str, Any], kept: Sequence[Mapping[str, Any]], report: 
     return contents, sizes
 
 
-def _build(run_id: str, current: dict[str, Any], contents: Mapping[tuple[str, str], bytes],
-           config: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Commit and push one branch per repository; the result for the ask and the slim to keep."""
+def _commit_all(current: dict[str, Any], contents: Mapping[tuple[str, str], bytes],
+                config: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Write and commit every repository's branch locally, before anything reaches a remote.
+
+    A failure here leaves no branch anywhere: the workspaces are restored, so a refusal can
+    be corrected and the result sent again.
+    """
     record = current["record"]
-    if not contents:
-        return {"status": "unchanged", "branches": []}, None
-    branches, failures = [], []
-    for repository in dict.fromkeys(repository for repository, _ in contents):
-        changed = [path for owner, path in contents if owner == repository]
-        try:
-            # A branch already pushed for another repository stands, so this one fails alone.
+    branches, bases = [], {}
+    try:
+        for repository in dict.fromkeys(repository for repository, _ in contents):
+            changed = [path for owner, path in contents if owner == repository]
             workspace_path = _workspace(current, repository, config)
+            bases[workspace_path] = lessons._must(workspace_path, "symbolic-ref", "--short", "HEAD")
             for path in changed:
                 file = _inside(workspace_path, path)
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_bytes(contents[(repository, path)])
             commit = _commit(workspace_path, current["branch"], changed, f"slim: {record['path']}")
-            lessons._must(workspace_path, "push", "origin", f"HEAD:refs/heads/{current['branch']}")
+            branches.append({"repository": repository, "branch": current["branch"], "changed": changed,
+                             "status": PENDING, **commit})
+    except (lessons.LessonError, OSError, subprocess.SubprocessError, ValueError):
+        _restore(bases, current["branch"])
+        raise
+    return branches
+
+
+def _restore(bases: Mapping[Path, str], branch: str) -> None:
+    """Put each touched workspace back on its default branch with no slim branch and no edit."""
+    for workspace_path, base in bases.items():
+        lessons._git(workspace_path, "checkout", "-q", "-f", base)
+        lessons._git(workspace_path, "branch", "-q", "-D", branch)
+        lessons._git(workspace_path, "clean", "-q", "-fd")
+
+
+def _push_all(current: Mapping[str, Any], branches: Sequence[Mapping[str, Any]],
+              config: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Push each committed branch; one that fails fails alone, and the others stand."""
+    pushed, failures = [], []
+    for branch in branches:
+        try:
+            workspace_path = _workspace(current, branch["repository"], config)
+            lessons._must(workspace_path, "push", "origin", f"HEAD:refs/heads/{branch['branch']}")
         except (lessons.LessonError, OSError, subprocess.SubprocessError) as error:
-            failures.append(f"{repository} {current['branch']}: {error}")
+            failures.append(f"{branch['repository']} {branch['branch']}: {error}")
             continue
-        branches.append({"repository": repository, "branch": current["branch"], "changed": changed,
-                         "status": PENDING, **commit})
-    if not branches:
-        raise lessons.LessonError("; ".join(failures))
-    slim = {"id": current["id"], "run": run_id, "repository": record["repository"], "path": record["path"],
-            "measured": _baseline(record), "branches": branches}
-    return {"status": "slimmed", "branches": branches, "failures": failures}, slim
+        pushed.append(dict(branch))
+    return pushed, failures
+
+
+def _landed(branches: Sequence[Mapping[str, Any]],
+            config: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """Which branches a stopped push left on their remotes; one that cannot be read is kept, with a warning."""
+    pushed, failures, warnings = [], [], []
+    for branch in branches:
+        address, reason = _clone_address(config, branch["repository"])
+        listed = lessons._git(".", "ls-remote", "--heads", address, f"refs/heads/{branch['branch']}") if address else None
+        if listed is None or listed.returncode:
+            warnings.append(f"{branch['repository']} {branch['branch']}: kept as awaiting its decision, its remote "
+                            f"could not be read: {reason or lessons._error(listed)}")
+            pushed.append(dict(branch))
+        elif lessons._text(listed):
+            pushed.append(dict(branch))
+        else:
+            failures.append(f"{branch['repository']} {branch['branch']}: not on the remote; the helper stopped before "
+                            "its push")
+    return pushed, failures, warnings
+
+
+def _built(pushed: Sequence[Mapping[str, Any]], failures: Sequence[str]) -> dict[str, Any]:
+    if not pushed:
+        return {"status": "failed", "error": "; ".join(failures), "branches": []}
+    return {"status": "slimmed", "branches": list(pushed), "failures": list(failures)}
+
+
+def _slim(run_id: str, current: Mapping[str, Any], branches: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    record = current["record"]
+    return {"id": current["id"], "run": run_id, "repository": record["repository"], "path": record["path"],
+            "measured": _baseline(record), "branches": list(branches)}
+
+
+def _record(state: dict[str, Any], run: dict[str, Any], record: Mapping[str, Any], outcome: Mapping[str, Any],
+            slim: Mapping[str, Any] | None) -> None:
+    """Close the slim in the state: its outcome for the ask, and its branches for the frozen rule."""
+    if slim:
+        # This slim replaces the file's earlier rejection, so a later merge cannot uncover it.
+        state["slims"] = [row for row in state["slims"] if _key(row) != _key(record) or _status(row) == PENDING]
+        state["slims"].append(dict(slim))
+    run["results"].append(dict(outcome))
+    run["current"] = None
+
+
+def _not_pushing(run: Mapping[str, Any]) -> None:
+    if run["current"] and run["current"].get("pushing"):
+        raise ValueError("slim: the open slim's branches were being pushed when the helper stopped; "
+                         "run plan to settle them")
+
+
+def _recover(state: dict[str, Any], current: Mapping[str, Any], pushed: Sequence[Mapping[str, Any]],
+             failures: Sequence[str]) -> None:
+    """Record a slim whose helper stopped mid-push, from what its remotes hold."""
+    run = state["run"]
+    if not run or not run["current"] or run["current"]["id"] != current["id"] or not run["current"].get("pushing"):
+        return
+    outcome = {**current["pushing"]["outcome"], **_built(pushed, failures)}
+    _record(state, run, current["record"], outcome, _slim(run["id"], current, pushed) if pushed else None)
 
 
 def _section(title: str, lines: Sequence[str]) -> str:
@@ -718,6 +885,9 @@ def _ask_text(outcome: Mapping[str, Any]) -> str:
     ]
     if outcome.get("failures"):
         parts.append(_section("Branches not pushed:", [f"- {row}" for row in outcome["failures"]]))
+    if report["not_done"]:
+        parts.append(_section("Chosen but not done, their file is deferred:", [
+            f"{_choice_text(row)} Not done: {row['reason']}" for row in report["not_done"]]))
     if report["deferred"]:
         parts.append(_section("Deferred to a later run, left as they are:", [
             f"- {_name(row)}: {row['reason']}" for row in report["deferred"]]))
@@ -730,6 +900,22 @@ def _ask_text(outcome: Mapping[str, Any]) -> str:
         parts.append("To undo or stop it: close the pull request without merging, or delete the branch. "
                      "The package never merges it. Turning the auto-apply setting off stops later slims.")
     return "\n\n".join(parts)
+
+
+def _choice_text(row: Mapping[str, Any]) -> str:
+    if row["kind"] == "contradictions":
+        return f"- {row['rules']} Winner: {row['winner']}"
+    if row["kind"] == "duplicates":
+        return f"- {row['rule']} Owner: {row['owner']}"
+    return f"- {row['action']} in {row['path']}: {row['text']}"
+
+
+def _deferral_text(row: Mapping[str, Any]) -> str:
+    """The ask for a recorded file an earlier run's branch froze: it is left as it is, and why."""
+    limits = f" ({row['limits']})" if row.get("limits") else ""
+    return (f"{_name(row)} is left as it is{limits}: {row['changed_by']} in {row['repository']}, awaiting its "
+            "decision, already changed it. A later run slims it once that branch is merged or rejected. "
+            "Nothing was changed.")
 
 
 def _ask(run: Mapping[str, Any], outcome: Mapping[str, Any], text: str, choices: Sequence[str]) -> dict[str, Any]:
@@ -775,6 +961,13 @@ def _close(state: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
         if stalled:
             asks.append(_ask(run, {**row, "id": f"{run['id']} {_name(row)}"},
                              _failed_text(row, row["reason"], stalled), ORDINARY_CHOICES))
+    this_run = {branch["branch"] for outcome in run["results"] for branch in outcome.get("branches", [])}
+    for row in run["deferred"]:
+        # A file frozen by an earlier run's branch has no slim here to carry it: it gets its own ask, once.
+        key = f"{row.get('changed_by')} {_name(row)}"
+        if row.get("changed_by") and row["changed_by"] not in this_run and key not in state["deferred_reported"]:
+            state["deferred_reported"].append(key)
+            asks.append(_ask(run, {**row, "id": key}, _deferral_text(row), []))
     for ask in asks:
         checklist.validate_ask_payload(ask)
     state["asks"].extend(asks)

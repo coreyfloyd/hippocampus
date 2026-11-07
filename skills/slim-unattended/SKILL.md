@@ -32,8 +32,10 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
 4. Review the whole file (below), write the result, then run
    `python3 <package>/scripts/lib/slim.py finish --run <run-id> --result <result-file>`, and
    go back to step 3. A refused result changes nothing and the slim stays open: correct it and
-   send it again. An `old` that no longer fits the file is refused the same way. A push or
-   clone that fails is not refused: the slim ends as `failed`.
+   send it again. Refused the same way: an `old` that no longer fits the file, a path that is a
+   directory or reaches its file through a link, and an edit that leaves its file as it is. A
+   push or clone that fails is not refused: the slim ends as `failed`. Every check and commit
+   comes before the first push, so a refusal never follows a pushed branch.
 5. With `done: true`, hand each row of `asks` to the profile's ask binding, the same way the
    sweep does, whose profile this step shares. After a confirmed delivery run
    `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt <receipt>`. With nothing
@@ -68,8 +70,10 @@ reference. Its questions change here, and only these:
 
 ```json
 {
-  "contradictions": [{"rules": "<both rules, with their files>", "winner": "<rule kept>", "reason": "<why>"}],
-  "duplicates": [{"rule": "<the rule, with both files>", "owner": "<owning file>", "reason": "<why>"}],
+  "contradictions": [{"rules": "<both rules, with their files>", "winner": "<rule kept>", "reason": "<why>",
+                      "path": "<optional: the file its edit changes>"}],
+  "duplicates": [{"rule": "<the rule, with both files>", "owner": "<owning file>", "reason": "<why>",
+                  "path": "<optional: the file its edit changes>"}],
   "rules": [{"path": "<file>", "action": "removed", "text": "<the rule>", "reason": "<why>"}],
   "changes": [{"repository": "<owner/name>", "path": "<file>", "group": "<optional>",
                "edits": [{"old": "<exact text>", "new": "<replacement, may be empty>"}]}],
@@ -82,7 +86,11 @@ reference. Its questions change here, and only these:
 
 `rules` lists every rule removed or rewritten, with `action` `removed` or `rewritten`. Each
 `old` must appear exactly once in the default branch's file; an edit with no `old` appends
-`new`, which also creates a new subfile. `repository` defaults to the recorded file's.
+`new`, which also creates a new subfile. `repository` defaults to the recorded file's. A
+`path` is relative to its repository; `finish` reduces it to the file's one spelling (no `./`,
+`..` or trailing `/`), and that spelling is what the frozen rule and the ask use. Name the file
+a contradiction's or duplicate's edit changes in its `path`: when that file is deferred, the ask
+lists the choice under "Chosen but not done" instead of as done, as it does a `rules` row.
 `finish` measures the sizes itself, and it refuses a result that leaves the file over a limit
 with no `left`.
 
@@ -97,7 +105,14 @@ second decision. A rejected file waits until a session measures it larger than a
 or records a new duplicate rule naming it.
 
 A plan closes a run that stopped early, so the asks of slims it already pushed are not lost;
-a slim left open starts over.
+a slim left open starts over. A slim whose helper stopped while pushing is settled from its
+remotes first: each branch found there is recorded, awaiting its decision, and gets its ask;
+one not found is a failure. Until that plan runs, `begin` and `finish` refuse.
+
+A recorded file left alone because a branch from an earlier run already changed it is
+`deferred` in `plan`, and gets one ask, once per branch, saying it is left as it is and why.
+A recorded file whose duplicate rule lives in a repository `slim_checkouts` does not name is
+`unreachable`, with the reason: it waits until that repository is named.
 
 A file that produces no branch in two runs in a row (failed, unverified or nothing to change)
 is stalled. Its ask says so, and later runs report it as `over limit, slim stalled` and skip it,
