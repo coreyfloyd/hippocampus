@@ -274,6 +274,9 @@ Each row names `index`, `rule`, and `status` (`filed`, `dropped`, `pending`,
 `reason`, and a failed row names `error`. Read-dependent rules need
 `read_status: "ok"`; any other or missing read status is a read failure. R5
 also needs `priority` and `priority_reason`. R3 and R4-to-ask need `choices`.
+A fact about the user (`user_fact: true`) files only through R4 `destination: "ask"` until the
+user answers; the row that then files or drops it carries `answer`, the choice the user picked,
+or it fails alone and the fact stays carried.
 A retained native lesson proposal awaiting user approval also keeps non-empty
 `choices` on its item or R4 outcome, even when its destination is `lessons`.
 Native work retained only because a step failed or was declined needs no ask

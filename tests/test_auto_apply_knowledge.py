@@ -57,10 +57,13 @@ def test_wiki_capture_is_compiled_without_an_approval_and_listed(tmp_path, tool)
     wrap.write('wiki/pickup.md')
     wrap.write('raw/research/pickup-source.md')
     wrap.write('wiki/index.md', '# Index\n- pickup\n')
+    # wiki-compile finishes by updating the session cache and appending to the operation log.
+    wrap.write('wiki/hot.md', '# Hot\n- pickup\n')
+    wrap.write('docs/log.md', '# Start\n- compiled pickup\n')
     item = knowledge(choices=['approve', 'decline'])
     data = wrap.capture([item], [{'index': 0, 'capture': 'wiki',
                                   'created': ['wiki/pickup.md', 'raw/research/pickup-source.md'],
-                                  'updated': [str(wrap.root / 'wiki/index.md')]}])
+                                  'updated': [str(wrap.root / 'wiki/index.md'), 'wiki/hot.md', 'docs/log.md']}])
     assert data['resume']['open_loops'] == [] and data['knowledge_asks'] == []
     filed = wrap.file(data)
     report, check, handoff = wrap.finish(filed)
@@ -68,7 +71,7 @@ def test_wiki_capture_is_compiled_without_an_approval_and_listed(tmp_path, tool)
     [captured] = report['knowledge']['captured']
     assert captured['capture'] == 'wiki' and captured['context'] == item['context']
     assert captured['created'] == ['wiki/pickup.md', 'raw/research/pickup-source.md']
-    assert captured['updated'] == ['wiki/index.md']
+    assert captured['updated'] == ['wiki/index.md', 'wiki/hot.md', 'docs/log.md']
     assert report['asks'] == [] and report['report'] == 'ok'
     assert handoff['resume']['open_loops'] == []
     assert wrap.plan()['handoff']['resume']['open_loops'] == []
@@ -145,6 +148,12 @@ def test_a_capture_in_the_wrong_place_or_a_disabled_wiki_is_not_applied(tmp_path
     assert 'wiki is disabled' in data['knowledge_outcomes'][0]['error']
     data = wrap.capture([item], [{'index': 0, 'capture': 'source', 'created': ['wiki/pickup.md']}])
     assert 'outside raw/' in data['knowledge_outcomes'][0]['error']
+    # Only a compile writes the operation log; a retained source naming it is not one.
+    wrap.write('docs/log.md', '# Start\n- retained\n')
+    wrap.write('raw/research/a.md')
+    data = wrap.capture([item], [{'index': 0, 'capture': 'source', 'created': ['raw/research/a.md'],
+                                  'updated': ['docs/log.md']}])
+    assert 'docs/log.md is outside raw/ in the knowledge root' in data['knowledge_outcomes'][0]['error']
     data = wrap.capture([item], [{'index': 0, 'capture': 'source', 'created': ['raw/missing.md']}])
     assert 'was not written' in data['knowledge_outcomes'][0]['error']
 
@@ -160,6 +169,7 @@ def test_every_file_of_a_capture_is_in_its_folders_and_written_this_wrap(tmp_pat
     assert data['resume']['open_loops'] == [item]
     error = data['knowledge_outcomes'][0]['error']
     assert 'context/rules.md is outside wiki/, raw/' in error and 'keeps its approval' in error
+    assert "the profile's wiki/hot.md, docs/log.md" in error
     data = wrap.capture([item], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/a.md'],
                                   'updated': ['wiki/index.md']}])
     assert data['resume']['open_loops'] == [item]
@@ -195,3 +205,82 @@ def test_setting_off_changes_nothing(tmp_path, tool):
     assert 'knowledge' not in report
     assert handoff['resume']['open_loops'] == [item]
     assert [ask['text'] for ask in report['asks']] == [item['context']]
+
+
+def test_a_row_naming_the_knowledge_root_fails_alone(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    wrap.write('output/report.md')
+    bad, good = knowledge('Named the root.'), knowledge('Named a file.')
+    data = wrap.capture([bad, good], [{'index': 0, 'capture': 'wiki', 'created': ['.']},
+                                      {'index': 1, 'capture': 'output', 'created': [str(wrap.root / 'output/report.md')]}])
+    failed, captured = data['knowledge_outcomes']
+    assert failed['status'] == 'failed' and 'names the knowledge root itself' in failed['error']
+    assert captured['status'] == 'captured' and captured['created'] == ['output/report.md']
+    assert data['resume']['open_loops'] == [bad]
+    data = wrap.capture([bad], [{'index': 0, 'capture': 'wiki', 'created': [str(wrap.root)]}])
+    assert 'names the knowledge root itself' in data['knowledge_outcomes'][0]['error']
+
+
+def fact_row(index=0):
+    return {'index': index, 'capture': 'user_fact', 'text': 'Reviews work from a phone.',
+            'destination': 'context/preferences.md', 'source': 'Said in this session at 14:02.',
+            'choices': ['save it', 'edit it', 'discard it']}
+
+
+@pytest.mark.parametrize('rule,row', [
+    ('R1', {'rule': 'R1', 'status': 'dropped', 'reason': 'Already known', 'information_only': True}),
+    ('R6', {'rule': 'R6', 'status': 'dropped', 'reason': 'Not worth keeping'}),
+    ('R4', {'rule': 'R4', 'status': 'filed', 'destination': 'context/preferences.md'})])
+def test_a_filing_row_cannot_settle_a_fact_about_the_user_without_the_users_answer(tmp_path, tool, rule, row):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    item = knowledge('The user reviews work from a phone.')
+    data = wrap.capture([item], [fact_row()])
+    [carried] = data['resume']['open_loops']
+    other = {'type': 'progress', 'session_id': SESSION, 'produced_at': '2026-11-06T12:00:00Z',
+             'disposition': 'drop', 'context': 'Done already.'}
+    data['resume']['open_loops'].append(other)
+    filed = wrap.file(data, [{'index': 0, **row},
+                             {'index': 1, 'rule': 'R1', 'status': 'dropped', 'reason': 'Information only',
+                              'information_only': True}])
+    first, second = filed['filing']['items']
+    assert first['status'] == 'failed' and 'leaves only through its ask' in first['error']
+    assert second['status'] == 'dropped'
+    assert filed['resume']['open_loops'] == [carried]
+    # A mis-filed fact fails the wrap, with the ask still raised in full.
+    report, check, handoff = wrap.finish(filed)
+    assert check.returncode == 1 and 'leaves only through its ask' in check.stderr
+    assert [raised['choices'] for raised in report['asks']] == [carried['choices']]
+    assert handoff['resume']['open_loops'] == [carried]
+    # With the user's answer recorded, the same row settles the fact.
+    answered = wrap.file(data, [{'index': 0, **row, 'answer': 'discard it' if rule != 'R4' else 'save it'},
+                                {'index': 1, 'rule': 'R1', 'status': 'dropped', 'reason': 'Information only',
+                                 'information_only': True}])
+    assert answered['filing']['items'][0]['status'] == row['status']
+    assert answered['resume']['open_loops'] == []
+    report, check, handoff = wrap.finish(answered)
+    assert check.returncode == 0, check.stderr
+    assert report['asks'] == [] and handoff['resume']['open_loops'] == []
+
+
+def test_a_capture_row_cannot_settle_a_fact_about_the_user_without_the_users_answer(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    wrap.plan()
+    item = knowledge('The user reviews work from a phone.')
+    [carried] = wrap.capture([item], [fact_row()])['resume']['open_loops']
+    wrap.write('wiki/phone.md')
+    wrap.write('raw/research/phone.md')
+    data = wrap.capture([carried], [{'index': 0, 'capture': 'wiki', 'created': ['wiki/phone.md', 'raw/research/phone.md']}])
+    assert data['resume']['open_loops'] == [carried]
+    assert 'leaves only through its ask' in data['knowledge_outcomes'][0]['error']
+    data = wrap.capture([carried], [{'index': 0, 'capture': 'wiki', 'answer': 'yes',
+                                     'created': ['wiki/phone.md', 'raw/research/phone.md']}])
+    assert data['resume']['open_loops'] == [carried]
+    data = wrap.capture([carried], [{'index': 0, 'capture': 'wiki', 'answer': 'save it',
+                                     'created': ['wiki/phone.md', 'raw/research/phone.md']}])
+    assert data['resume']['open_loops'] == []
+    assert data['knowledge_outcomes'][0]['status'] == 'captured' and data['knowledge_outcomes'][0]['answer'] == 'save it'
+    report, check, _ = wrap.finish(wrap.file(data))
+    assert check.returncode == 0, check.stderr
+    assert report['knowledge']['captured'][0]['answer'] == 'save it' and report['asks'] == []

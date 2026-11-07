@@ -20,6 +20,9 @@ OUTCOME = "knowledge_outcome"
 # Each capture that applies without an approval, and the knowledge root folders it may write.
 # A wiki capture also keeps its provenance under raw/; at least one file is in the first folder.
 CAPTURES = {"wiki": ("wiki", "raw"), "source": ("raw",), "output": ("output",)}
+# The profile's files a compile is required to write after it: the session cache and the
+# operation log. A wiki capture lists them with its articles; no other capture writes them.
+COMPILE_FILES = {"wiki": ("hot_file", "operation_log_file")}
 START_MARKER = "checklist-start"
 USER_FACT = "user_fact"
 
@@ -32,8 +35,8 @@ def profile_path(explicit: Path | None) -> Path:
     return Path(base) / "hippocampus" / "profile.md"
 
 
-def read_profile(path: Path) -> tuple[Path, bool]:
-    """The knowledge root and whether the wiki is enabled, from a validated profile."""
+def read_profile(path: Path) -> tuple[Path, bool, dict[str, Path]]:
+    """The knowledge root, whether the wiki is enabled and the compile's files, from a validated profile."""
     spec = importlib.util.spec_from_file_location("validate_profile",
                                                   Path(__file__).parents[1] / "validate_profile.py")
     module = importlib.util.module_from_spec(spec)
@@ -41,7 +44,9 @@ def read_profile(path: Path) -> tuple[Path, bool]:
     if not path.is_file():
         raise ValueError(f"apply-knowledge: no knowledge profile at {path}; run hippocampus-set-up")
     root, values = module.validate(path)
-    return root, values.get("wiki_enabled") != "false"
+    files = {key: (root / values[key]).resolve().relative_to(root)
+             for key in {key for keys in COMPILE_FILES.values() for key in keys} if values.get(key)}
+    return root, values.get("wiki_enabled") != "false", files
 
 
 def outcomes(module: Any, session_id: str) -> list[dict[str, Any]]:
@@ -68,6 +73,18 @@ def ask_text(row: Mapping[str, Any]) -> str:
             f"Destination: {destination}. Source: {source}.")
 
 
+UNANSWERED = ("a fact about the user leaves only through its ask; the row that settles it records "
+              "the user's answer, one of the ask's choices")
+
+
+def user_answer(item: Mapping[str, Any], row: Mapping[str, Any]) -> str:
+    """The user's recorded answer to the ask about this fact, or the reason the row cannot settle it."""
+    answer = row.get("answer")
+    if not isinstance(answer, str) or answer not in item.get("choices", []):
+        raise ValueError(UNANSWERED)
+    return answer
+
+
 def _strings(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(entry, str) and entry.strip() for entry in value)
 
@@ -84,6 +101,8 @@ def _validate(rows: Any, items: Sequence[Mapping[str, Any]]) -> None:
         if type(index) is not int or not 0 <= index < len(items) or items[index].get("type") != "knowledge":
             raise ValueError(f"knowledge: index {index!r} does not name a knowledge item")
         capture = row.get("capture")
+        if "answer" in row and (not isinstance(row["answer"], str) or not row["answer"].strip()):
+            raise ValueError(f"knowledge: row {index}: answer is the user's choice, as text")
         if capture == USER_FACT:
             if any(not isinstance(row.get(field), str) or not row[field].strip()
                    for field in ("text", "destination", "source")):
@@ -110,17 +129,22 @@ def started_at(module: Any, session_id: str) -> datetime:
     return datetime.fromisoformat(stamps[-1].replace("Z", "+00:00"))
 
 
-def _relative(root: Path, value: str, folders: Sequence[str], since: datetime) -> Path:
-    """A file this wrap wrote under one of the capture's folders, or the reason it is not one."""
+def _relative(root: Path, value: str, folders: Sequence[str], files: Sequence[Path], since: datetime) -> Path:
+    """A file this wrap wrote under one of the capture's folders, or one of the compile's own
+    files, or the reason it is not one."""
     candidate = Path(value).expanduser()
     resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
     try:
         relative = resolved.relative_to(root)
     except ValueError:
         raise ValueError(f"{value} is outside the knowledge root; a capture there keeps its approval") from None
-    if relative.parts[0] not in folders:
-        raise ValueError(f"{relative} is outside {', '.join(f + '/' for f in folders)} in the knowledge root; "
-                         "a capture there keeps its approval")
+    if not relative.parts:
+        raise ValueError(f"{value} names the knowledge root itself, not a file the capture wrote")
+    if relative.parts[0] not in folders and relative not in files:
+        allowed = ", ".join(f + "/" for f in folders)
+        if files:
+            allowed += " and the profile's " + ", ".join(str(file) for file in files)
+        raise ValueError(f"{relative} is outside {allowed} in the knowledge root; a capture there keeps its approval")
     if not resolved.is_file():
         raise ValueError(f"{value} was not written")
     # Whole seconds: the start marker and a file system's times may round differently.
@@ -129,12 +153,14 @@ def _relative(root: Path, value: str, folders: Sequence[str], since: datetime) -
     return relative
 
 
-def _captured(row: Mapping[str, Any], root: Path, wiki: bool, since: datetime) -> dict[str, Any]:
+def _captured(row: Mapping[str, Any], root: Path, wiki: bool, profile_files: Mapping[str, Path],
+              since: datetime) -> dict[str, Any]:
     capture = row["capture"]
     if capture == "wiki" and not wiki:
         raise ValueError("the wiki is disabled in the knowledge profile")
     folders = CAPTURES[capture]
-    files = {change: [str(_relative(root, value, folders, since)) for value in row.get(change, [])]
+    allowed = [profile_files[key] for key in COMPILE_FILES.get(capture, ()) if key in profile_files]
+    files = {change: [str(_relative(root, value, folders, allowed, since)) for value in row.get(change, [])]
              for change in ("created", "updated")}
     if not any(Path(path).parts[0] == folders[0] for path in [*files["created"], *files["updated"]]):
         raise ValueError(f"a {capture} capture writes under {folders[0]}/ in the knowledge root")
@@ -155,7 +181,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     current = [item for item in handoff.get("session_items", []) if item.get("recorded") is not True]
     items = [*loops, *current]
     _validate(rows, items)
-    root, wiki = read_profile(profile)
+    root, wiki, profile_files = read_profile(profile)
     since = started_at(module, session_id)
     known = {tuple(outcome["identity"]): outcome for outcome in outcomes(module, session_id)}
     removed: list[Mapping[str, Any]] = []
@@ -176,7 +202,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                                        "ask_text": ask_text(row), "choices": list(row["choices"])}
         else:
             try:
-                outcome.update(_captured(row, root, wiki, since), status="captured")
+                if item.get("user_fact"):
+                    # A fact about the user leaves only through its ask: the row carries the answer.
+                    outcome["answer"] = user_answer(item, row)
+                outcome.update(_captured(row, root, wiki, profile_files, since), status="captured")
                 removed.append(item)
             except (OSError, ValueError) as error:
                 outcome.update(status="failed", error=str(error))

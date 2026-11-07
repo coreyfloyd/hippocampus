@@ -257,14 +257,16 @@ def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
                                    Path(surface["path"]).name in INSTRUCTION_FILES for surface in surfaces)}
     delivery = "not in a git repository"
     if checkout is not None:
-        # Only a tracked file has a committed copy to build the lesson's commit from; an
-        # untracked or ignored one is written in place, like a file outside git.
+        # A tracked file has a committed copy to build the lesson's commit from, and a new file
+        # the repository would track gets its own first commit. An existing untracked file or
+        # an ignored path is written in place, like a file outside git.
         tracked = _git(checkout, "--literal-pathspecs", "ls-files", "--error-unmatch", "--",
                        str(source)).returncode == 0
         if not tracked:
             ignored = _git(checkout, "check-ignore", "-q", "--", str(source)).returncode == 0
-            delivery = "ignored by its repository" if ignored else "not tracked by its repository"
-            checkout = None
+            if ignored or before is not None:
+                delivery = "ignored by its repository" if ignored else "not tracked by its repository"
+                checkout = None
     if checkout is None:
         _write(source, before, _edited(before or b"", row["edits"], "file"))
         return {**outcome, "delivery": delivery}

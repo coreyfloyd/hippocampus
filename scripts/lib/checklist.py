@@ -499,6 +499,16 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
+        if item.get("user_fact") and binding != "ask" and status in ("filed", "dropped"):
+            try:
+                knowledge.user_answer(item, row)
+            except ValueError as error:
+                # The fact stays carried with its ask; the other items still file.
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
+                                        "status": "failed", "error": str(error)})
+                report["failures"].append(f"{item.get('context', str(item))}: {error}")
+                kept.append(copy.deepcopy(item))
+                continue
         if binding == "record":
             binding = record_write.kind_for(rule, item, row, writes)
             bindings.setdefault(binding, None)

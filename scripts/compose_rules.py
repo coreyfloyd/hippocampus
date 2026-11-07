@@ -229,9 +229,10 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
     """Read the lesson delivery keys in the routing contract's YAML subset.
 
     Each key is an unindented `key: value` line outside fenced code blocks;
-    `lesson-pull-requests:` takes `  - owner/name` entries, with blank lines and
-    comments allowed between them, until the next unindented line. Prose and fenced
-    examples are ignored. Malformed values fail closed, like Produced surfaces.
+    `lesson-pull-requests:` takes `- owner/name` entries, indented with spaces or tabs
+    or not at all, with blank lines and comments allowed between them, until the next
+    unindented line that is not an entry. Prose and fenced examples are ignored.
+    Malformed values and unreadable entries fail closed, like Produced surfaces.
     """
     rules: dict = {"policy": None, "command": None, "pull_requests": []}
     try:
@@ -252,9 +253,9 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
             continue
         if fenced or not line.strip() or line.lstrip().startswith("#"):
             continue
-        if line.startswith(" "):
+        if line[0] in " \t" or (listing and line.startswith("-")):
             if listing:
-                entry = re.fullmatch(r"\s+-\s+(.+)", line)
+                entry = re.fullmatch(r"\s*-\s+(.+)", line)
                 if not entry:
                     fail(f"routing {path}: invalid lesson-pull-requests entry: {line.strip()}")
                 rules["pull_requests"].append(routing_scalar(_without_comment(entry[1])).lower())
@@ -269,7 +270,7 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
         value = _without_comment(value)
         if key == "lesson-pull-requests":
             if value:
-                fail(f"routing {path}: lesson-pull-requests takes `  - owner/name` lines, not a value")
+                fail(f"routing {path}: lesson-pull-requests takes `- owner/name` lines, not a value")
             listing = True
         elif key == "lesson-policy":
             if value not in ("apply", "propose"):

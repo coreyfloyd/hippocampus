@@ -207,8 +207,9 @@ A routing file can forbid this with the line `lesson-policy: propose`; it wins, 
 report says lessons were carried because the routing file requires it. The module reads
 only these keys, each on an unindented line outside fenced code blocks, so prose and fenced
 examples never set them; a trailing ` # comment` is allowed, and a malformed value is an
-error. `lesson-pull-requests:` followed by `  - owner/name` lines (blank and comment lines may
-sit between them) names repositories whose lessons always go through a pull request.
+error. `lesson-pull-requests:` followed by `- owner/name` list lines, indented or not (blank and
+comment lines may sit between them), names repositories whose lessons always go through a pull
+request; an entry the module cannot read is an error.
 `lesson-pull-request-command: <command>` names the user's command that opens one
 (see `INTERFACE.md`); the package opens none itself and never merges.
 
@@ -237,7 +238,7 @@ python3 <checklist-module> apply-lessons --user-profile <user-profile> \
 Keep its output as `<remaining-items>`; `lesson_outcomes` says what happened to each row.
 Each applied lesson is one commit, `lesson: <change>`, on the branch checked out where the
 target's source lives, holding only its own lines even in a file with other changes. A
-target outside git, or untracked or ignored in its repository, is written without a commit. A `skip` is dropped: not carried and never
+target outside git, an existing untracked file, or an ignored path in its repository, is written without a commit; a new file the repository would track gets its own commit. A `skip` is dropped: not carried and never
 an ask. A produced path is traced to its source, and a generated copy is never edited;
 regenerate each outcome's `surfaces` as in the routing contract. A lesson that cannot be
 written or committed is `failed` with its error and stays carried. Applying the same lesson

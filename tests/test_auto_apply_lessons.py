@@ -903,3 +903,55 @@ def test_an_untracked_target_in_a_repository_is_written_without_a_commit(tmp_pat
     assert target.read_text() == body + 'Run the suite first.\n'
     assert git(checkout, 'rev-parse', 'HEAD') == head
     assert git(checkout, 'diff', '--cached', '--name-only') == ''
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_a_lesson_creating_a_new_file_in_a_repository_is_committed_unless_ignored(tmp_path, tool, ignored):
+    checkout, remote, _ = clone_pair(tmp_path)
+    target = checkout / 'new-rules.md'
+    if ignored:
+        (checkout / '.git/info/exclude').write_text('new-rules.md\n')
+    head = git(checkout, 'rev-parse', 'HEAD')
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson()], [row(0, target)])
+    [outcome] = data['lesson_outcomes']
+    assert outcome['status'] == 'applied' and target.read_text() == 'Run the suite first.\n'
+    if ignored:
+        assert outcome['commit'] is None and outcome['delivery'] == 'ignored by its repository'
+        assert git(checkout, 'rev-parse', 'HEAD') == head
+        return
+    assert outcome['commit'] == git(checkout, 'rev-parse', 'HEAD') != head
+    assert git(checkout, 'show', '--format=', '--name-only', 'HEAD').split() == ['new-rules.md']
+    assert git(checkout, 'status', '--porcelain=v1') == ''
+    [delivered] = wrap.deliver(data)['lesson_outcomes']
+    assert delivered['delivery'] == 'pushed', delivered.get('error')
+    assert git(remote, 'show', '--format=', '--name-only', delivered['commit']).split() == ['new-rules.md']
+
+
+def routing_rules_for(tmp_path, text):
+    (tmp_path / 'routing.md').write_text(text)
+    previous = os.environ.get('HIPPOCAMPUS_ROUTING')
+    os.environ['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'routing.md')
+    try:
+        return load_lessons_module().routing_rules()
+    finally:
+        if previous is None:
+            os.environ.pop('HIPPOCAMPUS_ROUTING')
+        else:
+            os.environ['HIPPOCAMPUS_ROUTING'] = previous
+
+
+@pytest.mark.parametrize('entries', ['\t- Owner/One\n\t- owner/two\n', '- Owner/One\n- owner/two\n',
+                                     '  - Owner/One\n\n\t- owner/two\n'])
+def test_pull_request_entries_parse_however_they_are_indented(tmp_path, entries):
+    rules = routing_rules_for(tmp_path, f'lesson-pull-requests:\n{entries}lesson-policy: apply\n')
+    assert rules['pull_requests'] == ['owner/one', 'owner/two'] and rules['propose'] is False
+
+
+@pytest.mark.parametrize('entry', ['\t-owner/one', '  owner/one', '-owner/one', '\t- "unterminated'])
+def test_an_unreadable_pull_request_entry_is_an_error_not_a_skip(tmp_path, tool, entry):
+    wrap = Wrap(tmp_path, tool, routing=f'lesson-pull-requests:\n{entry}\n')
+    planned = wrap.run('plan', '--session-id', wrap.session)
+    assert planned.returncode == 1 and 'Traceback' not in planned.stderr, planned.stderr
+    assert 'lesson-pull-requests' in planned.stderr or 'invalid quoted string' in planned.stderr
