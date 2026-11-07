@@ -1255,3 +1255,60 @@ def test_unverified_surface_does_not_accept_invalid_edits(tmp_path, tool, remote
     assert remote.branches() == ['main']
     assert slim.finish(run, cut_result())['status'] == 'unverified'
     assert len(slim.begin(run)['asks']) == 1
+
+
+@pytest.mark.parametrize('settlement', ['decide', 'deleted'])
+def test_a_newer_merge_never_revives_an_older_rejection(tmp_path, tool, remote, settlement):
+    other = Remote(tmp_path, 'shared', 'acme/shared', 'https://example.invalid/acme/shared.git')
+    remote.publish({'AGENTS.md': text(304)})
+    other.publish({'core.md': text(290)})
+    slim = Slim(tmp_path, tool, remote, other)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    slim.begin(run)
+    result = cut_result()
+    result['changes'].append({'repository': 'acme/shared', 'path': 'core.md',
+                              'edits': [{'old': HEADING, 'new': '## Pushback\n'}]})
+    branches = slim.finish(run, result)['branches']
+    slim.begin(run)
+    primary = next(row for row in branches if row['repository'] == REPOSITORY)
+    secondary = next(row for row in branches if row['repository'] == 'acme/shared')
+    slim.ok('decide', '--repository', REPOSITORY, '--branch', primary['branch'], '--decision', 'rejected')
+    remote.publish({'AGENTS.md': text(305)})
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    assert run['queued'] == 1
+    slim.begin(run)
+    [newer] = slim.finish(run, cut_result())['branches']
+    slim.begin(run)
+    remote.publish({'AGENTS.md': remote.show(newer['branch'], 'AGENTS.md')})
+    if settlement == 'decide':
+        slim.ok('decide', '--repository', REPOSITORY, '--branch', newer['branch'], '--decision', 'merged')
+    else:
+        git(remote.bare, 'branch', '-q', '-D', newer['branch'])
+    records = slim.records(remote.checkout / 'AGENTS.md')
+    for _ in range(2):
+        later = slim.plan(records)
+        assert later['queued'] == 1 and later['skipped'] == []
+    frozen = slim.plan(slim.records(other.checkout / 'core.md', session='secondary'))
+    assert [row['path'] for row in frozen['deferred']] == ['core.md']
+    slim.ok('decide', '--repository', 'acme/shared', '--branch', secondary['branch'], '--decision', 'merged')
+    later = slim.plan(records)
+    assert later['queued'] == 1 and later['skipped'] == [] and later['deferred'] == []
+
+
+@pytest.mark.parametrize('path', ['/outside.md', '../outside.md'])
+def test_a_malformed_deferred_path_is_refused_before_any_commit(tmp_path, tool, remote, path):
+    remote.publish({'AGENTS.md': text(308)})
+    slim = Slim(tmp_path, tool, remote)
+    run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
+    brief = slim.begin(run)
+    workspace = Path(brief['file']).parent
+    before = git(workspace, 'rev-parse', 'HEAD')
+    checkout = remote.snapshot()
+    result = cut_result(deferred=[{'repository': REPOSITORY, 'path': path, 'reason': 'Later.'}])
+    assert 'not a path inside its repository' in refused(slim, run, result)
+    assert git(workspace, 'rev-parse', 'HEAD') == before
+    assert git(workspace, 'status', '--porcelain') == ''
+    assert remote.branches() == ['main'] and remote.snapshot() == checkout
+    assert slim.begin(run)['slim_id'] == brief['slim_id']
+    assert slim.finish(run, cut_result())['status'] == 'slimmed'
+    assert len(slim.begin(run)['asks']) == 1

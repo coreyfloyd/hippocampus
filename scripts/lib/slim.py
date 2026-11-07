@@ -410,7 +410,12 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
             found = _find(state, branch["repository"], branch["branch"])
             if status and found and found[1]["status"] == PENDING:
                 _settle(*found, status, baseline)
-        state["slims"] = [slim for slim in state["slims"] if _status(slim) != MERGED]
+        latest = {_key(slim): slim for slim in state["slims"]}
+        pending_keys = {_key(slim) for slim in state["slims"] if _status(slim) == PENDING}
+        # Keep every pending branch, and the newest settlement while an older slim remains.
+        # Removing a newer merge alone would expose that older slim's rejection again.
+        state["slims"] = [slim for slim in state["slims"] if _status(slim) == PENDING or (
+            slim is latest[_key(slim)] and (_status(slim) != MERGED or _key(slim) in pending_keys))]
         _prune_reported(state)
         frozen = _frozen(state)
         latest = {_key(slim): slim for slim in state["slims"]}
@@ -665,7 +670,8 @@ def _check_result(result: Any, record: Mapping[str, Any]) -> dict[str, Any]:
             for field in ("repository", "path"):
                 if field in row and (not isinstance(row[field], str) or not row[field]):
                     raise ValueError(f"slim finish: {key} row {number}: {field} must be text")
-    checked = {**checked, **{key: [_located(row, record) for row in checked[key]] for key in CHOICE_LISTS}}
+    checked = {**checked, **{key: [_located(row, record) for row in checked[key]]
+                            for key in (*CHOICE_LISTS, "deferred")}}
     changes = []
     for number, row in enumerate(checked["changes"], 1):
         edits = row.get("edits")
