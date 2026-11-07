@@ -205,15 +205,18 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
 - Each item's receipt names its commit, or its destination when it has none. A handoff
   is archived once every item has a receipt, a drop or a delivered ask.
 - Lesson commits go through the persist binding before the run ends, with the wrap's
-  single retry. With persist unbound, or a push that still fails, `lessons_not_pushed`
-  says which commits were not pushed and why, and the handoff is kept.
-- Each lesson's outcome stays in the session ledger, so a later sweep skips what landed,
-  delivers what did not, and two handoffs carrying one lesson apply it once.
-- Undo leaves applied lessons and captures in place and lists them, with their commits,
-  in the undo report. Revert a lesson commit through the repository's normal delivery.
+  single retry, once persist confirms. With persist unbound or unconfirmed, or a push that
+  still fails, `lessons_not_pushed` says which commits were not pushed and why, and the
+  handoff is kept.
+- Each outcome stays in a session ledger, and the sweep searches every ledger, so a later
+  sweep skips what landed, delivers what did not, and never repeats a delivered ask. What a
+  wrap or an earlier run settled is listed under `already_settled`, not as this run's work.
+- Undo leaves this run's applied lessons and captures in place and lists them, with their
+  commits, in the undo report. Revert a lesson commit through the repository's normal delivery.
 
 A routing file's `lesson-policy: propose` still wins for lessons: they are carried and
-the row's reason says so. With the setting off, a sweep carries both as before. The
+the row's reason says so. An unreadable routing file stops only lesson applying and is listed
+in the report's errors. With the setting off, a sweep carries both as before. The
 [plan/results contract](../INTERFACE.md#12-sweep-plan-and-results-contract) has the fields.
 
 ## External scheduling

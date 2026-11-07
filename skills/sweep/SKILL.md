@@ -237,8 +237,11 @@ With the auto-apply setting on, act mode returns R4 lesson work as
 `operation: "apply_lesson"` and R4 knowledge work as `operation: "apply_knowledge"`,
 each with `native_step`, the package `command` and the complete original item.
 Give these items no `choices` in their decision: a row with choices is an ask
-and stays carried. An item whose ledger already holds its outcome gets no work
-entry: it is never applied again, and a commit not yet pushed goes to delivery.
+and stays carried. An item any session's ledger already settles gets no work
+entry: it is never applied or asked again, and a commit not yet pushed goes to
+delivery. The report lists these under `already_settled`, not as this run's work.
+An unreadable routing file, or a mistyped setting, stops only what it governs: those
+items stay `native_step`, and the report's errors name it.
 
 For `apply_lesson`, assess the item as improve-harness's Auto-apply section does,
 with the abandoned session's handoff as the evidence, and return one row. Do not
@@ -276,7 +279,8 @@ One bad assessment fails its own item. After applying, `complete` returns
 1. `operation: "persist"`, when lessons were committed and persist is bound. Regenerate
    its `surfaces` as in improve-harness, then run its `command` for each of its
    `checkouts`. Return `written` with a receipt and destination, or `failed` with its error.
-   `complete` then pushes what is left, with the same single retry as a wrap.
+   Only a confirmed result lets `complete` push what is left, with the same single retry as a
+   wrap; anything else leaves the commits unpushed and the report says so.
 2. `operation: "ask"`, for each fact about the user and each lesson for an
    always-loaded rules file. A lesson's ask has no choices and names the delivered commit.
 
@@ -286,6 +290,6 @@ With persist unbound, or a push that still fails, `lessons_not_pushed` names eac
 commit and why, and the handoff is kept. Report those. A later sweep delivers them
 without applying anything again.
 
-Undo leaves applied lessons and captures in place: it prints them as
-`applied_left_in_place`, with no reversal work. Present them with each commit;
+Undo leaves this run's applied lessons and captures in place: it prints them as
+`applied_left_in_place`, with no reversal work, and never lists `already_settled` items. Present them with each commit;
 a lesson commit is reverted through the repository's normal delivery, never by the sweep.

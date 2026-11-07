@@ -1165,6 +1165,17 @@ def ledger_path(session_id: str) -> str:
     return os.path.join(directory, f"session-touched-paths.{encoded}.jsonl")
 
 
+def ledger_sessions() -> list[str]:
+    """Every session with a ledger, so an outcome can be found whichever session recorded it."""
+    prefix, suffix = "session-touched-paths.", ".jsonl"
+    try:
+        names = os.listdir(os.path.dirname(ledger_path("session")))
+    except OSError:
+        return []
+    return sorted(urllib.parse.unquote(name[len(prefix):-len(suffix)]) for name in names
+                  if name.startswith(prefix) and name.endswith(suffix))
+
+
 def append_ledger(session_id: str, record: Mapping[str, Any]) -> None:
     if not session_id.strip():
         raise ValueError("ledger: a session id is required")

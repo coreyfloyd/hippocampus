@@ -359,12 +359,15 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 outcome.update(status="failed", target=row["target"], error=str(error))
             if outcome["status"] == "applied":
                 outcome["ask"] = outcome.pop("always_loaded")
+                # The commit stands, so its outcome is kept before anything else can fail.
+                _record(module, session_id, outcome)
                 if outcome.get("checkout"):
                     module.touched_checkouts(session_id, [outcome["checkout"]])
                 if outcome["ask"]:
                     annotated[row["index"]] = _with_ask(item, outcome)
                 else:
                     removed.append(item)
+                continue
         _record(module, session_id, outcome)
     result = copy.deepcopy(dict(handoff))
     if "resume" in result and "open_loops" in result["resume"]:

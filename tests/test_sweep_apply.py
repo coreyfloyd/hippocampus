@@ -1,13 +1,13 @@
 """A sweep with the auto-apply setting on, driven through its command line with stub bindings."""
+import importlib.util
 import json
 import os
 from pathlib import Path
-import subprocess
 
 import pytest
 
 from test_auto_apply_lessons import clone_pair, git, move_remote
-from test_sweep import assert_readable_report, command, decisions, read_run, sandbox, source  # noqa: F401
+from test_sweep import ENGINE, assert_readable_report, command, decisions, read_run, sandbox, source  # noqa: F401
 
 PRODUCER = 'abandoned-session'
 
@@ -218,7 +218,8 @@ def test_a_push_that_still_fails_keeps_the_handoff_and_a_rerun_never_applies_twi
     run, rounds = finish(sandbox, payload, agent())
     assert [[row['operation'] for row in group] for group in rounds] == [[], ['persist']]
     assert commits(checkout) == count + 1 and git(remote, 'rev-parse', 'main') == commit
-    assert section(sandbox, run)['lessons_applied'][0]['delivery'] == 'pushed'
+    assert section(sandbox, run)['already_settled'][0]['delivery'] == 'pushed'
+    assert not section(sandbox, run)['lessons_applied']
     assert archived(sandbox, PRODUCER)
 
 
@@ -246,21 +247,29 @@ def test_persist_unbound_reports_the_commit_and_keeps_the_handoff(sandbox, tool)
     assert len(rounds) == 1 and path.exists() and git(remote, 'rev-parse', 'main') == pushed
 
 
-def test_failed_persist_is_reported_and_delivery_still_decides(sandbox, tool):
-    checkout, _, _ = clone_pair(sandbox[0])
-    source(sandbox, PRODUCER, loops=[lesson()])
+@pytest.mark.parametrize('status,expected', [('failed', 'persist stub failed'), ('uncertain', 'persist stub failed'),
+                                             (None, 'missing result')])
+def test_delivery_waits_for_a_confirmed_persist(sandbox, tool, status, expected):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    pushed = git(remote, 'rev-parse', 'main')
+    path = source(sandbox, PRODUCER, loops=[lesson()])
     configure(sandbox)
     base = agent(assessment(checkout / 'rules.md'))
 
     def answer(work):
-        if work['operation'] == 'persist':
-            return {'write_id': work['write_id'], 'status': 'failed', 'error': 'persist stub failed'}
-        return base(work)
+        if work['operation'] != 'persist':
+            return base(work)
+        return {'write_id': work['write_id'], 'status': status, 'error': 'persist stub failed'} if status else None
 
     payload = start(sandbox)
     run, _ = finish(sandbox, payload, answer)
-    assert 'persist stub failed' in Path(payload['report']).read_text().split('```json')[0]
-    assert section(sandbox, run)['lessons_applied'][0]['delivery'] == 'pushed'
+    row, = section(sandbox, run)['lessons_not_pushed']
+    assert row['commit'] == git(checkout, 'rev-parse', 'HEAD') and expected in row['error']
+    assert git(remote, 'rev-parse', 'main') == pushed and path.exists()
+    assert expected in Path(payload['report']).read_text().split('```json')[0]
+    # The commit is not lost: the next run confirms persist and delivers it once.
+    run, _ = finish(sandbox, start(sandbox), agent())
+    assert git(remote, 'rev-parse', 'main') == row['commit'] and archived(sandbox, PRODUCER)
 
 
 def test_undo_lists_lesson_commits_and_reverts_none(sandbox, tool):
@@ -321,23 +330,230 @@ def test_two_handoffs_carrying_one_lesson_apply_it_once(sandbox, tool):
     assert commits(checkout) == count + 1
     assert (checkout / 'rules.md').read_text().count('Run the suite first.') == 1
     assert archived(sandbox, PRODUCER) and archived(sandbox, 'successor')
+    # The second handoff only found the first one's outcome, so this run applied one lesson.
+    assert len(section(sandbox, run)['lessons_applied']) == 1
+    assert len(section(sandbox, run)['already_settled']) == 1
+    undo = json.loads(command(sandbox, 'undo', '--run-id', run['run_id'], '--user-started').stdout)
+    assert len(undo['applied_left_in_place']) == 1
 
 
-def test_lesson_a_wrap_of_the_handoffs_session_applied_is_not_applied_again(sandbox, tool):
+def seed_ledger(sandbox, session, *rows):
+    ledger = sandbox[0] / 'handoff-ledger'
+    ledger.mkdir(exist_ok=True)
+    with (ledger / f'session-touched-paths.{session}.jsonl').open('a') as handle:
+        for row in rows:
+            handle.write(json.dumps(row) + '\n')
+
+
+def wrap_outcome(checkout):
+    return {'kind': 'lesson_outcome', 'outcome': {
+        'identity': [PRODUCER, lesson()['produced_at'], 'lesson', lesson()['context']], 'status': 'applied',
+        'target': str(checkout / 'rules.md'), 'commit': git(checkout, 'rev-parse', 'HEAD'), 'delivery': 'pushed'}}
+
+
+@pytest.mark.parametrize('ledger', ['successor', 'a-third-session'])
+def test_lesson_a_wrap_applied_is_found_in_any_ledger_and_reported_as_settled(sandbox, tool, ledger):
     checkout, _, _ = clone_pair(sandbox[0])
     source(sandbox, 'successor', loops=[lesson()])
     configure(sandbox)
-    row = {'kind': 'lesson_outcome', 'outcome': {
-        'identity': [PRODUCER, lesson()['produced_at'], 'lesson', lesson()['context']], 'status': 'applied',
-        'target': str(checkout / 'rules.md'), 'commit': git(checkout, 'rev-parse', 'HEAD'), 'delivery': 'pushed'}}
-    ledger = sandbox[0] / 'handoff-ledger'
-    ledger.mkdir()
-    (ledger / 'session-touched-paths.successor.jsonl').write_text(json.dumps(row) + '\n')
+    row = wrap_outcome(checkout)
+    seed_ledger(sandbox, ledger, row)
+    seed_ledger(sandbox, 'unreadable-session', {'kind': 'lesson_outcome', 'outcome': {'status': 'applied'}})
     payload = start(sandbox)
     assert payload['work'] == []
     run, _ = finish(sandbox, payload, agent())
-    assert section(sandbox, run)['lessons_applied'][0]['receipt'] == row['outcome']['commit']
+    settled, = section(sandbox, run)['already_settled']
+    assert settled['receipt'] == row['outcome']['commit'] and settled['outcome'] == 'already_written'
+    assert not section(sandbox, run)['lessons_applied']
+    assert '### Already settled' in Path(payload['report']).read_text()
     assert archived(sandbox, 'successor')
+    undo = json.loads(command(sandbox, 'undo', '--run-id', run['run_id'], '--user-started').stdout)
+    assert 'applied_left_in_place' not in undo
+
+
+def test_capture_a_wrap_recorded_is_reported_as_settled_and_undo_never_lists_it(sandbox, tool):
+    source(sandbox, PRODUCER, loops=[knowledge()])
+    configure(sandbox)
+    seed_ledger(sandbox, PRODUCER, {'kind': 'knowledge_outcome', 'outcome': {
+        'identity': [PRODUCER, knowledge()['produced_at'], 'knowledge', knowledge()['context']],
+        'status': 'captured', 'capture': 'wiki', 'context': knowledge()['context'],
+        'created': ['wiki/topic.md'], 'updated': []}})
+    payload = start(sandbox, 'knowledge')
+    assert payload['work'] == []
+    run, _ = finish(sandbox, payload, agent())
+    assert section(sandbox, run)['already_settled'][0]['receipt'] == 'wiki/topic.md'
+    assert not section(sandbox, run)['knowledge_captured'] and archived(sandbox, PRODUCER)
+    assert 'applied_left_in_place' not in json.loads(
+        command(sandbox, 'undo', '--run-id', run['run_id'], '--user-started').stdout)
+
+
+def test_open_session_evidence_survives_the_rounds_that_deliver_lessons(sandbox, tool):
+    checkout, _, _ = clone_pair(sandbox[0])
+    path = source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox)
+    evidence = sandbox[0] / 'evidence.json'
+    evidence.write_text(json.dumps({'session_ids': [PRODUCER], 'method': 'stub inspection'}))
+    payload = start(sandbox)
+    work, = payload['work']
+    results = sandbox[0] / 'first.json'
+    results.write_text(json.dumps([agent(assessment(checkout / 'rules.md'))(work)]))
+    command(sandbox, 'complete', '--run-id', payload['run_id'], '--results', str(results),
+            '--open-sessions', str(evidence))
+    # The next call passes no evidence, as the skill's persist round may.
+    finish(sandbox, payload, agent())
+    assert path.exists()
+
+
+def in_process(sandbox, monkeypatch):
+    """The engine in this process, so a test can make one step of it fail."""
+    for key, value in sandbox[3].items():
+        monkeypatch.setenv(key, value)
+    spec = importlib.util.spec_from_file_location('sweep_under_test', ENGINE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def complete_in_process(sandbox, module, payload, rows, *extra):
+    results = sandbox[0] / 'in-process.json'
+    results.write_text(json.dumps(rows))
+    assert module.main(['complete', '--run-id', payload['run_id'], '--results', str(results), *extra]) == 0
+    return read_run(Path(payload['report']))
+
+
+def fail_with(error):
+    def fail(*_args, **_kwargs):
+        raise error
+    return fail
+
+
+@pytest.mark.parametrize('step', ['touched_checkouts', 'settle_session_items'])
+def test_error_after_the_commit_does_not_report_a_failure_or_stop_delivery(sandbox, tool, monkeypatch, step):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox)
+    payload = start(sandbox)
+    work, = payload['work']
+    module = in_process(sandbox, monkeypatch)
+    monkeypatch.setattr(module.handoff, step, fail_with(OSError('ledger step failed')))
+    run = complete_in_process(sandbox, module, payload, [agent(assessment(checkout / 'rules.md'))(work)])
+    row = section(sandbox, run)['filing_outcomes'][0]
+    assert row['outcome'] == 'applied' and row['commit'] == git(checkout, 'rev-parse', 'HEAD')
+    assert 'ledger step failed' in row['warning'] and 'error' not in row
+    monkeypatch.undo()
+    run, _ = finish(sandbox, payload, agent())
+    assert section(sandbox, run)['lessons_applied'][0]['delivery'] == 'pushed'
+    assert git(remote, 'rev-parse', 'main') == row['commit'] and archived(sandbox, PRODUCER)
+
+
+@pytest.mark.parametrize('error', [RuntimeError('boom'), StopIteration(), IndexError('boom')])
+def test_any_assessment_error_fails_only_its_own_item(sandbox, tool, monkeypatch, error):
+    _, extra = knowledge_root(sandbox)
+    source(sandbox, PRODUCER, loops=[knowledge('First.'), knowledge('Second.')])
+    configure(sandbox)
+    payload = start(sandbox, 'knowledge')
+    module = in_process(sandbox, monkeypatch)
+    real = module.checklist.knowledge.apply
+    calls = []
+
+    def apply(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            raise error
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module.checklist.knowledge, 'apply', apply)
+    rows = [agent(knowledge_row=FACT)(work) for work in payload['work']]
+    run = complete_in_process(sandbox, module, payload, rows, *extra)
+    first, second = section(sandbox, run)['filing_outcomes']
+    assert first['outcome'] == 'failed' and second['binding'] == 'ask' and len(calls) == 2
+
+
+def test_outcome_missing_from_the_module_fails_its_item(sandbox, tool, monkeypatch):
+    source(sandbox, PRODUCER, loops=[knowledge()])
+    configure(sandbox)
+    payload = start(sandbox, 'knowledge')
+    module = in_process(sandbox, monkeypatch)
+    monkeypatch.setattr(module.checklist.knowledge, 'apply', lambda *a, **k: {'knowledge_outcomes': []})
+    rows = [agent(knowledge_row=FACT)(work) for work in payload['work']]
+    run = complete_in_process(sandbox, module, payload, rows)
+    assert 'recorded no outcome' in section(sandbox, run)['filing_outcomes'][0]['error']
+
+
+@pytest.mark.parametrize('error', [OSError('ledger gone'), RuntimeError('boom')])
+def test_delivery_error_reports_the_commit_and_finishes_the_run(sandbox, tool, monkeypatch, error):
+    checkout, _, _ = clone_pair(sandbox[0])
+    path = source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox)
+    payload = start(sandbox)
+    work, = payload['work']
+    module = in_process(sandbox, monkeypatch)
+    run = complete_in_process(sandbox, module, payload, [agent(assessment(checkout / 'rules.md'))(work)])
+    persist = next(row for row in run['work'] if row['operation'] == 'persist')
+    monkeypatch.setattr(module.checklist.lessons, 'deliver', fail_with(error))
+    run = complete_in_process(sandbox, module, payload, [agent()(persist)])
+    assert run['phase'] == 'completed' and path.exists()
+    row, = section(sandbox, run)['lessons_not_pushed']
+    assert str(error) in row['error'] and row['commit'] == git(checkout, 'rev-parse', 'HEAD')
+
+
+def test_malformed_routing_fails_only_lessons_in_act_mode(sandbox, tool):
+    (sandbox[0] / 'routing.md').write_text('lesson-policy: sometimes\n')
+    root, extra = knowledge_root(sandbox)
+    lesson_path = source(sandbox, PRODUCER, loops=[lesson(), knowledge()])
+    configure(sandbox)
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons'), dict(rule='R4', destination='knowledge')])
+    payload = json.loads(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout)
+    assert sorted(work['operation'] for work in payload['work']) == ['apply_knowledge', 'native_step']
+    (root / 'raw/derived/a.md').write_text('# A\n')
+
+    def answer(work):
+        if work['operation'] == 'native_step':
+            return {'write_id': work['write_id'], 'status': 'carried'}
+        return agent(knowledge_row={'capture': 'source', 'created': ['raw/derived/a.md']})(work)
+
+    run, _ = finish(sandbox, payload, answer, *extra)
+    assert 'lesson-policy' in run['errors'][0]['reason'] and run['auto_apply']['lessons'] == 'failed'
+    assert len(section(sandbox, run)['knowledge_captured']) == 1 and lesson_path.exists()
+    native = next(row for row in section(sandbox, run)['filing_outcomes'] if row.get('native_step') == 'lessons')
+    assert 'lesson-policy' in native['reason']
+
+
+@pytest.mark.parametrize('break_it', ['routing', 'setting'])
+def test_unreadable_auto_apply_input_still_writes_a_watch_report(sandbox, tool, break_it):
+    source(sandbox, PRODUCER, loops=[lesson()])
+    configure(sandbox, mode='watch-only')
+    if break_it == 'routing':
+        (sandbox[0] / 'routing.md').write_text('lesson-policy: sometimes\n')
+    else:
+        config = json.loads(sandbox[2].read_text())
+        config['auto_apply_lessons'] = 'yes'
+        sandbox[2].write_text(json.dumps(config))
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons')])
+    report = Path(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout.strip())
+    run = read_run(report)
+    assert run['errors'][0]['path'] == 'auto-apply' and 'auto-apply' in report.read_text().split('```json')[0]
+    assert not section(sandbox, run)['would_apply']
+
+
+def test_delivered_ask_about_a_fact_is_settled_for_the_next_run(sandbox, tool):
+    checkout, remote, _ = clone_pair(sandbox[0])
+    hook = reject_pushes(remote)
+    _, extra = knowledge_root(sandbox)
+    source(sandbox, PRODUCER, loops=[lesson(), knowledge()])
+    configure(sandbox)
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons'), dict(rule='R4', destination='knowledge')])
+    command_args = ['run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))]
+    payload = json.loads(command(sandbox, *command_args).stdout)
+    run, rounds = finish(sandbox, payload, agent(assessment(checkout / 'rules.md'), FACT), *extra)
+    assert sum(row['operation'] == 'ask' for group in rounds for row in group) == 1
+    assert (sandbox[1] / (PRODUCER + '.json')).exists()
+    hook.unlink()
+    payload = json.loads(command(sandbox, *command_args).stdout)
+    run, rounds = finish(sandbox, payload, agent(), *extra)
+    assert not [row for group in rounds for row in group if row['operation'] in ('ask', 'apply_knowledge')]
+    assert any(row['capture'] == 'user_fact' for row in section(sandbox, run)['already_settled'] if 'capture' in row)
+    assert archived(sandbox, PRODUCER)
 
 
 def test_malformed_assessment_fails_its_item_alone(sandbox, tool):
