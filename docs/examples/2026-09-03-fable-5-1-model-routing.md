@@ -69,7 +69,7 @@ The gap over Opus 5 is large on science and business automation and small elsewh
 | GPT-5.6 Sol | 61 | — |
 | Fable 5.1 at xhigh | — | $2.72 |
 
-Fable 5.1 at max used about 1.7 times Fable 5's output tokens. Its run used the default server-side fallback, which routed about 4% of output tokens to Opus 4.8 or Opus 5. Output speed 66 tokens/s versus Opus 5 at 56. Time to first token at max effort: 285 s versus Opus 5 at 82 s.
+Fable 5.1 at max used about 1.7 times Fable 5's output tokens. Its run used the default server-side fallback, which routed about 4% of output tokens to Opus 4.8 or Opus 5. Output speed was 66 tokens/s versus Opus 5 at 56.
 
 **ARC Prize, verified semi-private:**
 
@@ -180,7 +180,7 @@ Hacker News launch thread: an Anthropic employee reports a less stereotypical wr
 - **Cost claims need the denominator.** "25% cheaper" and "45% cheaper" are relative to Fable 5 and depend on cache-read share. Relative to Opus 5, Artificial Analysis measured Fable 5.1 at 1.6 times the cost per task at max, and Techsy at 1.8 times at low. The one direction Fable 5.1 wins on cost is cache-read-dominated sessions, where its $0.25 read rate is half Opus 5's.
 - **Effort, not model, drives the biggest cost swings, and the headline scores hide it.** Every cross-model score in this artifact was taken at max. Willison's 14x cost step from high to xhigh and ARC's 1.5-point high-to-max gain say the same thing from two sides: medium to high is where the value is, and max is a benchmark setting. Any model comparison that does not hold effort constant is not a comparison, and none of the published Fable-vs-Opus-5 comparisons hold it at high.
 - **The fallback caveat applies to the independent numbers too.** Artificial Analysis's score includes about 4% of tokens answered by Opus. The "60% fewer interventions" figure is vendor-reported and unverified.
-- **Latency is the least-reported and most decision-relevant number.** Only one secondary write-up quotes time to first token (285 s vs 82 s at max). This is a secondary source citing Artificial Analysis; the artifact treats it as plausible but unverified against the primary.
+- **Latency is the least-reported and most decision-relevant number.** The assessed sources do not provide a verified Fable 5.1-versus-Opus 5 time-to-first-token comparison, so this artifact does not use one in its routing recommendation.
 - **Community quota reports are directionally consistent with the July Fable 5 pattern** already recorded in the wiki (Max 20x exhausted in about 24 hours of orchestrator use). They are self-selected and do not separate effort level from model.
 - **No contradiction between sources.** The only tension is framing: the videos say "use Fable 5.1 for everything," Anthropic's docs say "start with Opus 5." The evidence supports Anthropic's framing.
 - **The user's harness config does not match the wiki policy** (validated: grep of `agents/*.md` frontmatter). The wiki says Opus 5 is the gen and eval default. The agent files pin gen agents to `sonnet` and eval and investigate agents to `claude-opus-4-8`. This is unrelated to Fable 5.1 but changes what "Opus use cases" means in practice: today almost nothing in the fleet runs Opus 5.
@@ -257,21 +257,20 @@ NotebookLM notebook ["Research: Fable 5.1 performance and model routing"](https:
 | S12 | [Simon Willison](https://simonwillison.net/2026/Sep/1/claude-fable-5-1/) | SECONDARY, practitioner | Fetched. Effort sweep costs. Notebook `ca84912f`. |
 | S13 | [Vellum benchmarks explained](https://www.vellum.ai/blog/claude-fable-5-1-mythos-5-1-benchmarks-explained) | DERIVATIVE | Fetched. Used only to cross-check S3's table and the "floors" caveat. Notebook `77bf07d6`. |
 | S14 | [emergent.sh Fable 5.1 vs Opus 5](https://emergent.sh/learn/claude-fable-5-1-vs-opus-5) | DERIVATIVE | Fetched. Source of the 140K-token cache crossover estimate. Notebook add failed on a JSON parse error, not retried. |
-| S15 | [Secondary model comparison](https://example.invalid/secondary-model-comparison) | DERIVATIVE | Fetched. LMArena numbers and time-to-first-token, attributed to Artificial Analysis but not verified against it. Not added to the research workspace. |
 | S16 | [Hacker News launch thread](https://news.ycombinator.com/item?id=49525378) | Community | Fetched, top 15 comments summarized. Notebook `23da7510`. |
 | S17 | Ethan Mollick early-access post | Community | Surfaced by search summary only, primary post on X not fetched. Quoted phrase is from the search result. |
 | S18 | Quota-exhaustion reports | Community | Surfaced by search summary only, from an X trending page and Reddit. Not fetched directly. Directional only. |
 | Local | `wiki/ai/claude-5-model-family.md`, `wiki/ai/agent-model-assignment.md`, `wiki/ai/claude-5-early-community-reception.md`, `output/2026-08-03-model-comparison-report.md` | Prior work | Read in full. Baseline the plan edits against. |
 | Local | `settings.json`, `<harness repo>/agents/*.md`, `hooks/model-ceiling-guard.sh`, `benchmarks/README.md` | Harness state | Read directly. Source of the settings, agent-pin, and ceiling-guard findings. |
 
-Searched and not found: a SWE-bench Verified score for Fable 5.1 (absent from S3, S9, S13, and S15, which states the omission directly). A system card fetch was not attempted; the launch post links it and no claim here depends on it. No Reddit thread was fetched directly because the community signal was already consistent with the July record and the stakes of one more thread were below its cost.
+Searched and not found: a SWE-bench Verified score for Fable 5.1 (absent from S3, S9, and S13). A system card fetch was not attempted; the launch post links it and no claim here depends on it. No Reddit thread was fetched directly because the community signal was already consistent with the July record and the stakes of one more thread were below its cost.
 
 ## 6. Evidence Gaps
 
 | Gap | Follow-up |
 |---|---|
 | No Fable 5.1 vs Opus 5 measurement on the user's workloads, effort held constant. | The benchmark action in §4. Nothing public will close this. |
-| Time to first token (285 s vs 82 s) comes from a secondary source. | Open the [Artificial Analysis model page](https://artificialanalysis.ai/models/claude-fable-5-1) and read the latency chart. One minute. |
+| No verified Fable 5.1-versus-Opus 5 time-to-first-token comparison in the assessed sources. | Collect a cited comparison before using latency in routing. |
 | The 60% fewer cyber interventions claim is vendor-only. | Observe over two weeks of Fable 5.1 sessions: count model-switch notices. First-party only. |
 | Whether the agent roster's Sonnet and Opus 4.8 pins are deliberate or drift from the July policy. | Not closable from evidence. It is a decision for the user. Named in the wiki edit, not proposed as a fix here. |
 | Quota burn rate on Max with Fable 5.1 at high effort in Claude Code. | First-party only: read `/usage` after a day of normal work. Community numbers do not separate effort from model. |

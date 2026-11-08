@@ -47,23 +47,23 @@ quoting without a shell and have the configured binding timeout. Nonzero exits,
 timeouts, and commands that cannot start prevent every session in scope from
 counting as abandoned; the report names the command and error. Successful checks
 and their ids are recorded too. Checks must be read-only, including in watch-only.
-For example, an optional user-supplied command can print active session
-identifiers:
+For example, replace `REPLACE_WITH_SESSION_COMMAND` with a read-only command
+that prints active session identifiers:
 
 ```bash
-session-tool list-active
+REPLACE_WITH_SESSION_COMMAND
 ```
 
 Every state the command reports counts as open.
 
-Put a Python wrapper for the command in the configuration as a JSON string (the
+Put that command in a Python wrapper in the configuration as a JSON string (the
 double quotes inside the wrapper must be escaped):
 
 ```json
 {
   "sweep": {
     "open_session_checks": [
-      "python3 -c 'import subprocess; subprocess.run([\"session-tool\", \"list-active\"], check=True)'"
+      "python3 -c 'import subprocess; subprocess.run([\"REPLACE_WITH_SESSION_COMMAND\"], check=True)'"
     ]
   }
 }

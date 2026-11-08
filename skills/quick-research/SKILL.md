@@ -51,10 +51,10 @@ Run all searches in parallel.
    Reddit blocks programmatic scrapers but serves the real page to the user's
    own logged-in browser, so the route is: load the thread in that browser,
    extract the rendered text. Use the browser route named in the profile's
-   local policy (blocked-channel routes). The bundled helper is the **browser
-   reference implementation** of that route — background tab, no focus steal,
-   closes its own tab; it requires an interactive macOS session with a browser
-   signed into Reddit:
+   local policy (blocked-channel routes). The bundled helper is the
+   **Safari-only reference implementation** of that route — background tab, no
+   focus steal, closes its own tab; it requires an interactive macOS session
+   with Safari signed into Reddit:
    ```bash
    ./reddit-read.sh "<thread-url>"
    ```

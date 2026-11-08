@@ -31,6 +31,21 @@ scan_tracked() {
   esac
 }
 
+scan_configured_denylist() {
+  local denylist="${PUBLIC_CONTENT_DENYLIST:-}" out status
+  [ -z "$denylist" ] && return 0
+  if [ ! -f "$denylist" ] || [ ! -r "$denylist" ]; then
+    printf 'configured denylist: cannot read %s\n' "$denylist" >&2
+    exit 1
+  fi
+  out="$(git -C "$ROOT" grep -nF -f "$denylist" -- skills contracts profiles README.md 2>&1)" && status=0 || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) printf 'configured denylist: leaked\n%s\n' "$out" >&2; exit 1 ;;
+    *) printf 'configured denylist: scan failed (git grep exit %s)\n%s\n' "$status" "$out" >&2; exit 1 ;;
+  esac
+}
+
 test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
@@ -141,3 +156,4 @@ python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-re
 
 
 scan_tracked 'machine-specific paths or hostnames' '/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.]local\b' skills contracts profiles README.md
+scan_configured_denylist
