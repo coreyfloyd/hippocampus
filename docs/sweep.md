@@ -47,31 +47,30 @@ quoting without a shell and have the configured binding timeout. Nonzero exits,
 timeouts, and commands that cannot start prevent every session in scope from
 counting as abandoned; the report names the command and error. Successful checks
 and their ids are recorded too. Checks must be read-only, including in watch-only.
-For example, this optional Herdr check reads `herdr pane list` and prints the
-session ids from panes whose `agent_session.kind` is `id`:
+For example, an optional user-supplied command can print active session
+identifiers:
 
 ```bash
-python3 -c 'import json,subprocess; out=subprocess.run(["herdr","pane","list"],check=True,capture_output=True,text=True).stdout; [print(p["agent_session"]["value"]) for p in json.loads(out)["result"]["panes"] if (p.get("agent_session") or {}).get("kind")=="id"]'
+session-tool list-active
 ```
 
-Every Herdr agent state (`idle`, `done`, `working`, `blocked`) counts as open.
+Every state the command reports counts as open.
 
-Put the same command in the configuration as a JSON string (the double quotes
-inside the command must be escaped):
+Put a Python wrapper for the command in the configuration as a JSON string (the
+double quotes inside the wrapper must be escaped):
 
 ```json
 {
   "sweep": {
     "open_session_checks": [
-      "python3 -c 'import json,subprocess; out=subprocess.run([\"herdr\",\"pane\",\"list\"],check=True,capture_output=True,text=True).stdout; [print(p[\"agent_session\"][\"value\"]) for p in json.loads(out)[\"result\"][\"panes\"] if (p.get(\"agent_session\") or {}).get(\"kind\")==\"id\"]'"
+      "python3 -c 'import subprocess; subprocess.run([\"session-tool\", \"list-active\"], check=True)'"
     ]
   }
 }
 ```
 
-The command runs without a shell or pipeline. If Herdr is missing or inspection
-fails, it exits nonzero so sweep prevents sessions from counting as abandoned.
-Herdr is an optional example, never a package dependency. Other session managers
+The command runs without a shell or pipeline. If inspection fails, it exits
+nonzero so sweep prevents sessions from counting as abandoned. Session managers
 can implement the same command contract. `new_ticket_limit` (a non-negative
 integer, default 10) and `archive_retention_days` (default null, retention off)
 control creation capacity and optional archive deletion respectively.

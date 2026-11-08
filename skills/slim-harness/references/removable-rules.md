@@ -13,7 +13,7 @@ and output style alongside the comparison files. If a prompt or style is not
 accessible, report the coverage gap; never invent its contents.
 
 Default-behavior rules are deletion candidates, not compression candidates.
-Each finding quotes the supporting system-prompt or output-style text and names
+Each finding quotes the supporting runtime-instruction or output-style text and names
 its source. Model reputation alone is not evidence that a rule is redundant.
 Keep unguessable conventions and mechanisms for the remaining review steps.
 

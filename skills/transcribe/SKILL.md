@@ -15,7 +15,7 @@ Use this skill only to obtain a transcript. The calling workflow retains ownersh
 
 ## Local CLI
 
-The CLI is a runtime-detected optional integration bundled at `tools/apple-speech`. It requires macOS 26+ and uses on-device Apple Speech; when that route is unsupported or unavailable, report the limitation and select another input route. It has no Propeller, network-host, API-key, queue, or persistent-state dependency.
+The CLI is a runtime-detected optional integration bundled at `tools/apple-speech`. It requires macOS 26+ and uses on-device Apple Speech; when that route is unsupported or unavailable, report the limitation and select another input route. It has no network-host, API-key, queue, or persistent-state dependency.
 
 From the installed skill directory (the directory containing this `SKILL.md`), run its launcher. The launcher resolves the bundled package, builds the release executable when needed, and forwards all arguments:
 

@@ -1,6 +1,6 @@
 ---
 name: quick-research
-description: "Fast inline research on non-development topics—products, places, current events, decisions, health, finance, or travel—with cited findings in conversation. Use for general lookups; no notebook or artifact workflow."
+description: "Fast inline research on non-development topics—products, places, current events, decisions, health, finance, or travel—with cited findings in conversation. Use for general lookups; no persisted-workspace or artifact workflow."
 ---
 
 # Quick Research
@@ -32,7 +32,7 @@ Before web search, apply any local knowledge search locations and rules declared
 | **Product/gear facts** | "specifications", "dimensions", "compatibility", "how does X work" | Manufacturer documentation, official compatibility lists, independent measurements |
 | **Place/travel** | city name, "visit", "trip", "restaurant", "hotel", "neighborhood" | TripAdvisor, Atlas Obscura, local subreddits |
 | **Health/wellness** | symptom, medication, diet, supplement, "is X safe" | Mayo Clinic, Examine.com, NIH/PubMed (via search) |
-| **Finance/money** | investing, savings, budget, mortgage, tax, crypto | Investopedia, NerdWallet, Bogleheads |
+| **Finance/money** | investing, savings, budget, mortgage, tax, crypto | Consumer-finance references and relevant investor communities |
 | **Current events** | recent dates, news topics, "what happened with" | Google News, AP, Reuters |
 | **Concept/topic** | "what is", "how does", "explain", abstract nouns | Wikipedia, relevant subreddits |
 | **Service/company facts** | brand name, app name, subscription features | Official service documentation and published terms |
@@ -51,23 +51,23 @@ Run all searches in parallel.
    Reddit blocks programmatic scrapers but serves the real page to the user's
    own logged-in browser, so the route is: load the thread in that browser,
    extract the rendered text. Use the browser route named in the profile's
-   local policy (blocked-channel routes). The bundled helper is the **Safari
+   local policy (blocked-channel routes). The bundled helper is the **browser
    reference implementation** of that route — background tab, no focus steal,
-   closes its own tab; it requires an interactive macOS session with Safari
+   closes its own tab; it requires an interactive macOS session with a browser
    signed into Reddit:
    ```bash
    ./reddit-read.sh "<thread-url>"
    ```
    Other implementations of the same route (a browser-automation tool the
    runtime provides, another browser's scripting interface, delegating the
-   read to another agent runtime with access) are equally valid when local
+   read to a compatible runtime with access) are equally valid when local
    policy names them. When no browser route is available, fall back to
    search-result snippets and note the reduced coverage. Scrape non-Reddit
    sources with `curl https://defuddle.md/<url>` as normal.
 
 ## Output Format
 
-Deliver inline in the conversation. No files, no notebooks.
+Deliver inline in the conversation. No files, no persisted workspace.
 
 ```
 **[Topic]** — [2-sentence synthesis of the overall picture]

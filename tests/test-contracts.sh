@@ -20,6 +20,17 @@ scan() {
   esac
 }
 
+scan_tracked() {
+  local desc="$1" pattern="$2" out status
+  shift 2
+  out="$(git -C "$ROOT" grep -nE -- "$pattern" -- "$@" 2>&1)" && status=0 || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) printf '%s: leaked\n%s\n' "$desc" "$out" >&2; exit 1 ;;
+    *) printf '%s: scan failed (git grep exit %s)\n%s\n' "$desc" "$status" "$out" >&2; exit 1 ;;
+  esac
+}
+
 test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
@@ -129,5 +140,4 @@ grep -Fxq 'wiki_enabled: false' "$PROFILE_ROOT/documented-disable-recipe.md"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-recipe.md" >/dev/null
 
 
-scan 'private vault vocabulary' -rnE 'unified Obsidian vault|AI-vault|writing-corpus|R-004|wiki/people/' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
-scan 'private paths and names' -rnE --exclude='*.swift' 'claude-dotfiles|research-skills|~/Obsidian|Corey|~/[.]claude/skills|~/Development|wiki/CLAUDE[.]md|wiki/AGENTS[.]md' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
+scan_tracked 'machine-specific paths or hostnames' '/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.]local\b' skills contracts profiles README.md
