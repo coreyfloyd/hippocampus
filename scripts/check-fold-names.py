@@ -34,7 +34,7 @@ def disposition(path, line):
     if path in {'docs/architecture/session/runtime.html',
                 'docs/architecture/session/runtime.architecture.json',
                 'tests/test_public_documentation.py'} and re.search(
-                    r'https://github\.com/' + 'corey' + 'floyd/' + OLD + r'(?:\.git|/(?:blob|tree)/[0-9a-f]{40}|["<])', line):
+                    r'https://github\.com/[A-Za-z0-9-]+/' + OLD + r'(?:\.git|/(?:blob|tree)/[0-9a-f]{40}|["<])', line):
         return 'retained: immutable imported architecture source attribution'
     return None
 

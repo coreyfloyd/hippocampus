@@ -155,5 +155,6 @@ grep -Fxq 'wiki_enabled: false' "$PROFILE_ROOT/documented-disable-recipe.md"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-recipe.md" >/dev/null
 
 
-scan_tracked 'machine-specific paths or hostnames' '/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.]local\b' skills contracts profiles README.md
+# POSIX ERE has no portable \b; delimit the hostname suffix explicitly.
+scan_tracked 'machine-specific paths or hostnames' '/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.][lL][oO][cC][aA][lL]([^[:alnum:]_-]|$)' skills contracts profiles README.md
 scan_configured_denylist

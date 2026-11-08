@@ -4,6 +4,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +18,7 @@ def run_contract_guard(tmp_path, *, readme_line, denylist=None):
         readme = worktree / "README.md"
         readme.write_text(readme.read_text(encoding="utf-8") + f"\n{readme_line}\n", encoding="utf-8")
         environment = os.environ.copy()
+        environment.pop("PUBLIC_CONTENT_DENYLIST", None)
         if denylist is not None:
             environment["PUBLIC_CONTENT_DENYLIST"] = str(denylist)
         return subprocess.run(["bash", "tests/test-contracts.sh"], cwd=worktree,
@@ -42,3 +45,25 @@ def test_default_guard_rejects_machine_specific_path(tmp_path):
     result = run_contract_guard(tmp_path, readme_line="/home/fixture-user")
     assert result.returncode != 0
     assert "machine-specific paths or hostnames" in result.stderr
+
+
+@pytest.mark.parametrize("line", [
+    "fixture-host.local",
+    "host: fixture-host.local running",
+    "connect to https://fixture-host.local:8443/health",
+    "(build.box-2.local)",
+    "FIXTURE-HOST.LOCAL",
+])
+def test_default_guard_rejects_local_hostname(tmp_path, line):
+    result = run_contract_guard(tmp_path, readme_line=line)
+    assert result.returncode != 0
+    assert "machine-specific paths or hostnames: leaked" in result.stderr
+    assert line in result.stderr
+
+
+@pytest.mark.parametrize("line", [
+    "ordinary fixture", "fixture-host.locality", "local settings",
+])
+def test_default_guard_accepts_clean_content(tmp_path, line):
+    result = run_contract_guard(tmp_path, readme_line=line)
+    assert result.returncode == 0, result.stdout + result.stderr
