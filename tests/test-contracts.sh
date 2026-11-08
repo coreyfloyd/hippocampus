@@ -156,5 +156,5 @@ python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-re
 
 
 # POSIX ERE has no portable \b; delimit the hostname suffix explicitly.
-scan_tracked 'machine-specific paths or hostnames' '/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.][lL][oO][cC][aA][lL]([^[:alnum:]_-]|$)' skills contracts profiles README.md
+scan_tracked 'machine-specific paths or hostnames' '~/Development|~/[.]claude/skills|/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.][lL][oO][cC][aA][lL]([^[:alnum:]_-]|$)' skills contracts profiles README.md
 scan_configured_denylist

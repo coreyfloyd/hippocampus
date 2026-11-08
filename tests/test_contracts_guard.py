@@ -35,8 +35,12 @@ def test_configured_denylist_rejects_matching_tracked_content(tmp_path):
     assert "configured denylist" in result.stderr
 
 
-def test_unavailable_configured_denylist_fails_closed(tmp_path):
-    result = run_contract_guard(tmp_path, readme_line="ordinary fixture", denylist=tmp_path / "missing-denylist.txt")
+@pytest.mark.parametrize("kind", ["missing", "directory"])
+def test_unavailable_configured_denylist_fails_closed(tmp_path, kind):
+    denylist = tmp_path / "unavailable-denylist"
+    if kind == "directory":
+        denylist.mkdir()
+    result = run_contract_guard(tmp_path, readme_line="ordinary fixture", denylist=denylist)
     assert result.returncode != 0
     assert "configured denylist" in result.stderr
 
@@ -63,7 +67,21 @@ def test_default_guard_rejects_local_hostname(tmp_path, line):
 
 @pytest.mark.parametrize("line", [
     "ordinary fixture", "fixture-host.locality", "local settings",
+    "~/Documents/fixture.txt", "~/.local/share/hippocampus",
 ])
 def test_default_guard_accepts_clean_content(tmp_path, line):
     result = run_contract_guard(tmp_path, readme_line=line)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("line", [
+    "~/Development/fixture-project",
+    "checkout: ~/Development/fixture-project running",
+    "~/.claude/skills/fixture-skill",
+    "skills: ~/.claude/skills/fixture-skill installed",
+])
+def test_default_guard_preserves_existing_tilde_path_protection(tmp_path, line):
+    result = run_contract_guard(tmp_path, readme_line=line)
+    assert result.returncode == 1
+    assert "machine-specific paths or hostnames: leaked" in result.stderr
+    assert line in result.stderr

@@ -56,14 +56,24 @@ REPLACE_WITH_SESSION_COMMAND
 
 Every state the command reports counts as open.
 
-Put that command in a Python wrapper in the configuration as a JSON string (the
-double quotes inside the wrapper must be escaped):
+Represent the command as an explicit Python argv list: the executable is the
+first string, and each argument is a separate string. Replace
+`REPLACE_WITH_SESSION_COMMAND` with the executable path and
+`REPLACE_WITH_ARGUMENT` with an argument; add further strings as needed, or
+remove the argument string for a command that takes none. A single argument
+containing spaces stays in one string. Do not put a whole command line in the
+executable string.
+
+Put that argv list in the Python wrapper below. The configuration stores the
+wrapper as a JSON string, so its double quotes must be escaped. For example,
+an executable `session-tool` invoked with `list` uses
+`["session-tool", "list"]` in the wrapper:
 
 ```json
 {
   "sweep": {
     "open_session_checks": [
-      "python3 -c 'import subprocess; subprocess.run([\"REPLACE_WITH_SESSION_COMMAND\"], check=True)'"
+      "python3 -c 'import subprocess; subprocess.run([\"REPLACE_WITH_SESSION_COMMAND\", \"REPLACE_WITH_ARGUMENT\"], check=True)'"
     ]
   }
 }
