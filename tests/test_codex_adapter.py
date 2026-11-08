@@ -152,6 +152,17 @@ def test_remove_trust_preserves_adjacent_comments_and_blank_lines(codex_installe
     assert installer.remove_trust(text, set()) == text
 
 
+def test_remove_trust_preserves_foreign_multiline_trust_text(
+        codex_installer, trust_then_foreign_block):
+    key, table, _ = trust_then_foreign_block
+    foreign = ('[agents.example]\n'
+               'description = """\n'
+               f'[hooks.state.{json.dumps(key)}]\n'
+               'trusted_hash = "sha256:foreign"\n'
+               '"""\n')
+    assert codex_installer.remove_trust(table + foreign, {key}) == foreign
+
+
 @pytest.mark.parametrize('assignment', [
     'trusted_hash = "sha256:example" # retained inline note\n',
     "trusted_hash = 'sha256:#value' # retained inline note\n",

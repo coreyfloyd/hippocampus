@@ -85,26 +85,35 @@ def remove_trust(text, keys, replacements=None):
     quote=None; depth=0; escaped=False
     preserve_table=False; preserve_value=False
     for line in lines:
+        copied=False
         if quote is None and depth == 0:
             if line.lstrip().startswith('['):
                 key=trust.state_key_from_header(line.strip())
                 skip=key in keys
                 preserve_table=skip and replacements is not None and key in replacements
+                preserve_value=False
                 if skip:
                     if replacements is not None and key in replacements:
                         ending=trust.config_line_ending(line) or '\n'
                         result.extend((line if line.endswith('\n') else line + ending,
                                        f'trusted_hash = {json.dumps(replacements[key])}' + ending))
                     continue
-            if not skip or not re.match(r'^\s*[^#\s][^=]*=', line):
+            if not skip:
+                result.append(line)
+                copied=True
+            elif not re.match(r'^\s*[^#\s][^=]*=', line):
                 result.append(line)
                 continue
-            preserve_value=preserve_table and assignment_key(line) != 'trusted_hash'
+            else:
+                preserve_value=preserve_table and assignment_key(line) != 'trusted_hash'
+        elif not skip:
+            result.append(line)
+            copied=True
         if preserve_value:
             result.append(line)
         # Outside strings, comments and blank lines survive even within arrays.
         if quote is None and (not line.strip() or line.lstrip().startswith('#')):
-            if not preserve_value:
+            if not preserve_value and not copied:
                 result.append(line)
             continue
         # Follow the complete value, so continuation lines cannot become tables.
@@ -128,7 +137,7 @@ def remove_trust(text, keys, replacements=None):
             elif char == '#':
                 # Keep trailing comments as standalone lines, excluding string content.
                 indent=line[:len(line) - len(line.lstrip())]
-                if not preserve_value:
+                if not preserve_value and not copied:
                     result.append(indent + line[index:])
                 break
             elif char in ('"', "'"):
