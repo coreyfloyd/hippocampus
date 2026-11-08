@@ -41,7 +41,7 @@ The placeholder whitelist still matches the six documented tokens. The record/ro
 
 ## Exact verification
 
-Executed on the MacBook (`MacBook-Pro-M5.local`). All final commands below exited 0. Expected refusal output in negative tests does not indicate suite failure. Logs remain scratch artifacts; results are recorded here durably.
+Executed on the generator host. All final commands below exited 0. Expected refusal output in negative tests does not indicate suite failure. Logs remain scratch artifacts; results are recorded here durably.
 
 | Command | Result |
 |---|---|
@@ -66,6 +66,6 @@ Result: five unchanged Swift tests pass in two suites. Temporary build/cache pat
 
 No README, installation/migration prose, profile, contract, image, architecture diagram, example, presentation or rendered review content changed from `db8425b`. Verified with `git diff --name-only db8425b -- README.md INSTALLATION.md MIGRATION.md profiles contracts docs/presentation.html docs/images docs/architecture docs/reviews docs/examples`. No public review regeneration was necessary; earlier dated artifacts remain history. Added implementation/test content was scanned for private machine paths, with no matches. (validated: diff and added-line scan)
 
-The orchestrator reports independent MacBook Playwright verification of all 11 presentation slides, forward/Previous navigation counters, slide bounds, visual inspection of slides 5–8, hosted comparison HTTP 200, four images and two presentation iframes loading without HTTP errors, 390px mobile width and the Light theme button. This is attributed browser evidence supplied in the review-response brief; the generator did not rerun it and does not claim a full Archify PASS.
+The orchestrator reports independent host-browser verification of all 11 presentation slides, forward/Previous navigation counters, slide bounds, visual inspection of slides 5–8, hosted comparison HTTP 200, four images and two presentation iframes loading without HTTP errors, 390px mobile width and the Light theme button. This is attributed browser evidence supplied in the review-response brief; the generator did not rerun it and does not claim a full Archify PASS.
 
 Live provider behavior and agent adherence to semantic contracts remain outside the isolated tests. Independent runtime evaluation and maintainer approval of rendered public documentation/public communication remain later gates. This generator performed no reviewer/evaluator dispatch, lifecycle mutation, merge, production install, live capture/backfill, personal task write, publication or worktree change. The prior generator report remains dated history; this document records only the round-one repairs and their checks.

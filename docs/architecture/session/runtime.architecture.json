@@ -6,10 +6,10 @@
     "output": "runtime.html",
     "quality_profile": "showcase",
     "repository": {
-      "url": "https://github.com/coreyfloyd/continuity.git",
+      "url": "https://github.com/coreyfloyd/hippocampus.git",
       "provider": "github",
       "link_mode": "web",
-      "revision": "55c11867d403c8754409f2b1c0670413ff9abda7"
+      "revision": "6bf290ea594119a586d90bc6e49a0e4e46ac9708"
     }
   },
   "components": [

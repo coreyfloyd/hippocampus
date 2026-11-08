@@ -49,7 +49,7 @@ Identify the venues where real users of this topic congregate. Always include Re
 | **Hobbies / practice** | Reddit, dedicated forums, Facebook/Discord groups, Stack Exchange |
 | **Places / travel** | Reddit (city/region subs), TripAdvisor forums, Fodor's, local FB groups |
 | **Health / fitness** | Reddit, condition-specific forums, Examine.com community, patient groups |
-| **Finance** | Reddit (r/personalfinance, r/Bogleheads), Bogleheads forum, FairMark |
+| **Finance** | Relevant finance communities, established investor forums, consumer-finance reference sites |
 
 Pick the 2-4 most relevant venues. Name any user groups, Discords, or local meetups worth following if they exist for the topic.
 
@@ -60,11 +60,11 @@ Run searches in parallel.
 1. **Reddit — always.** `WebSearch` with `allowed_domains: ["reddit.com"]`. Target the decision: e.g. "<subject> stability daily driver worth it", "<subject> problems after a month". Pull the 4-8 most relevant threads.
 2. **Primary community forum** for the topic (from Phase 2).
 3. **Official source for hard constraints** when the decision has a factual gate (system requirements, compatibility, pricing). Sentiment can't override a hard requirement.
-4. **Read full Reddit threads** through the user's signed-in browser session — comment bodies are the lived-experience signal this skill exists for. Use the browser route named in the profile's local policy; the bundled Safari reference implementation is:
+4. **Read full Reddit threads** through the user's signed-in browser session — comment bodies are the lived-experience signal this skill exists for. Use the browser route named in the profile's local policy; the bundled browser-helper reference implementation is:
    ```bash
    ../quick-research/reddit-read.sh "<thread-url>"
    ```
-   Run it on the 3-5 most relevant threads. See `quick-research` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to another agent runtime with access) before settling for snippet-level coverage. Extract non-Reddit forums with `curl https://defuddle.md/<url>` as normal.
+   Run it on the 3-5 most relevant threads. See `quick-research` Phase 2 step 4 for the route contract and alternate implementations; when no browser route is available, check local policy for another blocked-channel route (for example, delegating the read to a compatible runtime with access) before settling for snippet-level coverage. Extract non-Reddit forums with `curl https://defuddle.md/<url>` as normal.
 
 ## Phase 4 — Synthesize (sentiment-weighted)
 
