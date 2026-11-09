@@ -2,6 +2,7 @@
 """Reject private history and unavailable package references in shipped skills."""
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -25,13 +26,71 @@ ADAPTER_TOOLS = {
     "functions.write_stdin": "Codex",
 }
 
+CLIENT = re.compile(r"\b(?:Claude Code|Codex)\b", re.IGNORECASE)
+CLAUSE_BREAK = re.compile(
+    r"(;|[.!?]\s+|,|[—–|]|\s-\s|\b(?:and|while|whereas|but|instead of|rather than)\b)",
+    re.IGNORECASE,
+)
+TOOL = re.compile(
+    r"(?<![\w.])(?:" + "|".join(map(re.escape, ADAPTER_TOOLS)) + r")(?![\w]|\.[\w])"
+)
+
+
+def unavailable_adapter_tools(line):
+    clients = set()
+    pending_subjects = False
+    separator = ""
+    for index, clause in enumerate(CLAUSE_BREAK.split(line)):
+        if index % 2:
+            separator = clause.strip().lower()
+            if separator in {";", ".", "!", "?", "—", "–", "|", "-"}:
+                clients = set()
+                pending_subjects = False
+            continue
+        named = {match.group().lower() for match in CLIENT.finditer(clause)}
+        tools = list(TOOL.finditer(clause))
+        if named:
+            # A shared subject ("Codex and Claude Code") applies to both clients.
+            clients = clients | named if separator == "and" and pending_subjects else named
+        for match in tools:
+            tool = match.group()
+            if clients != {ADAPTER_TOOLS[tool].lower()}:
+                yield tool
+        if tools:
+            pending_subjects = False
+        elif named:
+            pending_subjects = True
+
+
+def skill_contents(root, ancestors=frozenset()):
+    real = root.resolve()
+    if real in ancestors:
+        return
+    ancestors = ancestors | {real}
+    for path in sorted(root.iterdir()):
+        if path.is_dir():
+            if path.is_symlink():
+                # In a checkout only tracked links ship. Exported installations
+                # have no Git index, so follow their links with cycle protection.
+                tracked = subprocess.run(
+                    ["git", "-C", str(path.parent), "ls-files", "--error-unmatch", "--", path.name],
+                    capture_output=True, text=True,
+                )
+                if tracked.returncode == 1:
+                    continue
+                if tracked.returncode and "not a git repository" not in tracked.stderr:
+                    raise OSError(tracked.stderr.strip())
+            yield from skill_contents(path, ancestors)
+        elif path.is_file():
+            yield path
+
 
 def skill_files(paths):
     for root in paths:
         if root.is_file():
             yield root
         elif (root / "SKILL.md").is_file():
-            yield from sorted(path for path in root.rglob("*") if path.is_file())
+            yield from skill_contents(root)
         else:
             for skill in sorted(root.iterdir()):
                 if (skill / "SKILL.md").is_file():
@@ -89,9 +148,8 @@ def findings(paths):
                 name = command.removeprefix("hippocampus:")
                 if name not in skills and command not in BUILTIN_COMMANDS:
                     rows.append((path, number, f"unshipped skill: {name}"))
-            for tool, adapter in ADAPTER_TOOLS.items():
-                if tool in line and adapter.lower() not in line.lower():
-                    rows.append((path, number, f"unavailable adapter tool: {tool}"))
+            for tool in unavailable_adapter_tools(line):
+                rows.append((path, number, f"unavailable adapter tool: {tool}"))
     return rows
 
 

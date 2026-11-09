@@ -168,3 +168,104 @@ def test_scans_skill_code_comments_and_literals(tmp_path, text, expected):
     assert result.returncode == expected, result.stdout + result.stderr
     if expected:
         assert f"{script}:1:" in result.stdout
+
+
+@pytest.mark.parametrize("text, tool", [
+    ("In Claude Code use TaskList; in Codex use TaskGet.", "TaskGet"),
+    ("In Claude Code use TaskList. In Codex use TaskGet.", "TaskGet"),
+    ("In Claude Code, use TaskList, while in Codex, use TaskGet.", "TaskGet"),
+    ("Claude Code: TaskList; Codex: BashOutput.", "BashOutput"),
+    ("Use TaskList in Claude Code and TaskGet in Codex.", "TaskGet"),
+    ("TaskList (Claude Code), TaskOutput (Codex).", "TaskOutput"),
+    ("In Codex use collaboration.list_agents; in Claude Code use functions.write_stdin.", "functions.write_stdin"),
+    ("In Codex use functions.write_stdin, whereas Claude Code uses collaboration.list_agents.", "collaboration.list_agents"),
+    ("In Claude Code use TaskList; in Codex use TaskList.", "TaskList"),
+    ("In Claude Code use TaskList — in Codex use TaskGet.", "TaskGet"),
+    ("Claude Code: TaskList | Codex: TaskGet.", "TaskGet"),
+    ("In Codex and Claude Code use TaskList.", "TaskList"),
+    ("In Claude Code and Codex use collaboration.list_agents.", "collaboration.list_agents"),
+])
+def test_attributes_each_adapter_tool_to_its_clause(tmp_path, text, tool):
+    path = write_skill(tmp_path, text + "\n")
+
+    result = run_check(tmp_path / "skills")
+
+    assert result.returncode == 1
+    assert f"{path}:1: unavailable adapter tool: {tool}" in result.stdout
+
+
+@pytest.mark.parametrize("text", [
+    "In Claude Code use TaskList; in Codex use collaboration.list_agents.",
+    "In Claude Code use TaskList. In Codex use functions.write_stdin.",
+    "In Claude Code, use TaskList, while in Codex, use collaboration.list_agents.",
+    "Claude Code: TaskList; Codex: functions.write_stdin.",
+    "Use TaskList in Claude Code and functions.write_stdin in Codex.",
+    "TaskList (Claude Code), collaboration.list_agents (Codex).",
+    "In Claude Code use TaskList — in Codex use functions.write_stdin.",
+    "Claude Code: TaskList | Codex: functions.write_stdin.",
+    "In Claude Code use TaskList and TaskGet; in Codex use functions.write_stdin.",
+    "In Codex use functions.write_stdin, whereas Claude Code uses BashOutput.",
+])
+def test_accepts_adapter_tools_in_their_own_client_clauses(tmp_path, text):
+    write_skill(tmp_path, text + "\n")
+
+    result = run_check(tmp_path / "skills")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def make_git_repository(root):
+    subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("# 2026-08-30: a resumed session reported stale status.\n", 1),
+    ("Run /record-update.\n", 1), ("See #123.\n", 1),
+    ("Sources checked 2026-10-01; run /sample.\n", 0),
+])
+def test_scans_tracked_nested_directory_links(tmp_path, text, expected):
+    make_git_repository(tmp_path)
+    skill = write_skill(tmp_path, "# Sample\n")
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "notes.md").write_text(text)
+    link = skill.parent / "references"
+    link.symlink_to(shared, target_is_directory=True)
+    subprocess.run(["git", "-C", tmp_path, "add", "skills", "shared"], check=True)
+
+    result = run_check(tmp_path / "skills")
+
+    assert result.returncode == expected, result.stdout + result.stderr
+    if expected:
+        assert f"{link / 'notes.md'}:1:" in result.stdout
+
+
+def test_does_not_follow_untracked_build_directory_links(tmp_path):
+    make_git_repository(tmp_path)
+    skill = write_skill(tmp_path, "# Sample\n")
+    shared = tmp_path / "build-output"
+    shared.mkdir()
+    (shared / "notes.md").write_text("Run /record-update.\n")
+    build = skill.parent / ".build"
+    build.mkdir()
+    (build / "debug").symlink_to(shared, target_is_directory=True)
+    subprocess.run(["git", "-C", tmp_path, "add", str(skill)], check=True)
+
+    result = run_check(tmp_path / "skills")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_scans_nested_links_in_exported_skills_without_looping(tmp_path):
+    skill = write_skill(tmp_path, "# Sample\n")
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "notes.md").write_text("Run /record-update.\n")
+    (shared / "cycle").symlink_to(skill.parent, target_is_directory=True)
+    link = skill.parent / "references"
+    link.symlink_to(shared, target_is_directory=True)
+
+    result = run_check(tmp_path / "skills")
+
+    assert result.returncode == 1
+    assert result.stdout.count("unshipped skill: record-update") == 1
