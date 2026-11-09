@@ -31,7 +31,7 @@ Two kinds of things need checking, and neither is a fixed checklist — reason f
 - **Things another actor could have changed underneath you** — anything whose truth this session is *assuming* rather than just-verified, where a concurrent session, agent, scheduled job, or human could have altered it since. The risk isn't "is this stale" in general, it's "would this specific assumption break the report if it's wrong."
 
 Typical examples of each (illustrative, not exhaustive — the point is the two categories above, not this list):
-- Subagents dispatched this session — `TaskList`/`TaskGet`/`TaskOutput` for their real status; `BashOutput` for background Bash.
+- Subagents and background shell commands — use the status capability the active client provides. In Claude Code, use `TaskList`/`TaskGet`/`TaskOutput` for subagents and `BashOutput` for background Bash. In Codex, use `collaboration.list_agents` for subagents and `functions.write_stdin` for a running command. If an embedded Codex client does not expose those controls, report that the status cannot be verified; never invent a task or command identity.
 - Repos this session edited — `git status` (and `git worktree list` if multiple worktrees) for actual uncommitted/unpushed/unmerged state.
 - Tickets referenced as open/blocked/awaiting-action — read the current record, since another session or a human could have closed, relabeled, or commented on it.
 - Ops jobs / launchd jobs / long-running processes referenced — their actual current state (`launchctl list`, job status/log output), since scheduled runs happen independently of this session.
@@ -41,7 +41,7 @@ Apply the same reasoning to any other surface that fits the two categories, even
 
 This is scoped verification, not a fresh audit — check what Section 0 already surfaced, don't go hunting for new items or surfaces unrelated to this session's work. These are cheap, targeted reads, not the "heavy queries" the Constraints section warns off.
 
-If verification contradicts what Section 0 surfaced — something finished, closed, failed, or got picked up/changed elsewhere — report the corrected reality in Sections 2/3 and flag the discrepancy explicitly (e.g. "handoff said still running; TaskList shows it completed 20m ago with no report given"). Silently updating the number without calling out the mismatch hides exactly the kind of drift this step exists to catch.
+If verification contradicts what Section 0 surfaced — something finished, closed, failed, or got picked up/changed elsewhere — report the corrected reality in Sections 2/3 and flag the discrepancy explicitly (e.g. "handoff said still running; the client status check shows it completed with no report given"). Silently updating the number without calling out the mismatch hides exactly the kind of drift this step exists to catch.
 
 ## 1.5 Catch-up mode (what did I miss)
 
@@ -54,7 +54,7 @@ Everything currently running or recently finished-but-unacted. For each item giv
 - **Dispatched / started** — when, if known
 - **State** — running / blocked / completed-awaiting-action, plus progress if available
 
-Cover: background agents you dispatched that are still running; background bash commands started with `run_in_background: true`; long-running operations (scheduled jobs, multi-step sequences, migrations); and recent dispatches that finished but whose results haven't been reported or acted on.
+Cover: background agents you dispatched that are still running; background shell commands; long-running operations (scheduled jobs, multi-step sequences, migrations); and recent dispatches that finished but whose results haven't been reported or acted on.
 
 If nothing is in flight, say so directly.
 

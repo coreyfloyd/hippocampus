@@ -43,6 +43,7 @@ Run the checks in `RELEASING.md` § Verify the candidate. At minimum:
 git diff --check
 python3 scripts/generate-release-metadata.py --check
 python3 tests/test-fold-names.py
+python3 scripts/check-skill-surface.py skills
 python3 -m pytest -q tests
 bash tests/test-pickup-wrapper.sh
 bash tests/test-pickup-branch-scan.sh

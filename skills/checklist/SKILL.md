@@ -40,7 +40,7 @@ all remote-tracking branches.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
-optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/ask-step"}`. The ask
+optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>"}`. The ask
 binding is one user command, not a slot or a spine step. Repository profiles
 cannot bind it. A binding has a `command` and a list of item types it
 `consumes`; a step has a unique `id`, an `after` anchor, and `instructions` (or

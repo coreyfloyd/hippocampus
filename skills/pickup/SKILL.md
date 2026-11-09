@@ -86,7 +86,7 @@ An explicit id never falls back to a guess. Each failure is a JSON error object 
 
 ### Rendering the resume briefing (`version: 2`)
 
-The JSON is a deterministic worklog that YOU, the agent, turn into the user's actual briefing. **Rendering it is your job, not the script's.** **Every open ask the dead session left is re-rendered in full** — context, options with tradeoffs, recommendation — never as the prior session's `R3`/`O2` codes: the user has no memory of those labels, and a briefing that says "R6: release, manual, or arm" cannot be answered (2026-09-05).
+The JSON is a deterministic worklog that YOU, the agent, turn into the user's actual briefing. **Rendering it is your job, not the script's.** **Every open ask the dead session left is re-rendered in full** — context, options with tradeoffs, recommendation — never as the prior session's `R3`/`O2` codes: the user has no memory of those labels, and a briefing that says "R6: release, manual, or arm" cannot be answered.
 
 Top-level transcript fields: `session`, `provider`, `transcript_files`, `messages`, `first_ts`, `last_ts`, `first_user`, `last_user`, `last_assistant` (the last sign-off), `git`, `branches`, `files_by_repo`, `staleness`, `skipped_candidates`, `session_repo_cwd`, and `session_repo_readable`.
 

@@ -287,7 +287,7 @@ Scan the conversation once for the motivations above. Cover:
 
 **(b) Skills used** — invoked by name, loaded as guidance, or whose workflow you followed.
 
-**(c) Skills that should have fired but didn't.** The available-skills list has been in your context all session; check the work you actually did against it. Signals, strongest first: the user pointed you at a skill mid-task ("why didn't you use /foo?") — ground truth; you reinvented a workflow a skill already encodes; a skill's domain matched but its "when to use" phrasing didn't match how the task arose.
+**(c) Skills that should have fired but didn't.** The available-skills list has been in your context all session; check the work you actually did against it. Signals, strongest first: the user pointed you at a skill mid-task ("why didn't you use /<skill>?") — ground truth; you reinvented a workflow a skill already encodes; a skill's domain matched but its "when to use" phrasing didn't match how the task arose.
 
 When (c) holds and the skill genuinely applied, the fix is almost always a **description / triggering edit** — broaden or sharpen the when-to-use so it fires next time on that phrasing. Stay grounded: flag a skill only when you can point at the work *in this conversation* it was built for. Distinguish **correctly didn't fire** (leave it alone) from **trigger missed** (fix the description). If work recurred and *no* skill exists, that is "extract a new skill", out of scope here.
 

@@ -17,12 +17,12 @@ REPORT_VERSION = 2
 HANDOFF_SCHEMA_VERSION = 2
 
 
-# ================================================================== handoff-first resume (#1024)
+# ================================================================== handoff-first resume
 # Handoff discovery deliberately owns no harness-specific dependency. The
 # candidate interface accepts only a state directory and current subject; a
 # handoff itself supplies its repository, branch, anchors, and resume text.
-# That makes this stdlib-only module movable without importing ticket-update,
-# record-update, factory, or issue-workflow.
+# That makes this stdlib-only module movable without importing external record
+# workflows.
 
 def _canonical(path):
     return os.path.realpath(os.path.abspath(path))
@@ -477,7 +477,7 @@ def last_assistant_message(asst):
     return "", None
 
 
-# ================================================================== git helpers (ported #909, cwd-parameterized)
+# ================================================================== git helpers
 # CLAUDE.md gotcha: never reuse a cwd-implicit git() across repos. Every call
 # here takes an explicit cwd/repo argument.
 
@@ -498,19 +498,12 @@ def git_ok(cwd, *args):
 
 
 def default_trunk(repo_cwd=None):
-    """#910 eval F9 (round 1) hardcoded "main" at six new call sites,
-    silently breaking every classification and log range on a
-    master/trunk/develop repo. round 1's fix added PICKUP_TRUNK but
-    rejected auto-detection on the theory that it meant guessing among
-    main/master/trunk/develop by trial — which conflated detection with
-    guessing (#910 eval round 2 correction). `git symbolic-ref
-    refs/remotes/origin/HEAD` is DETERMINISTIC: it names the one branch the
-    remote itself designates as default, and is simply empty when unset —
-    never a wrong guess between candidates. PICKUP_TRUNK still wins
-    when set (an explicit override always should); "main" is the last
-    resort only for a repo with no remote HEAD configured at all, which is
-    not a guess between competing names either — it is the one case
-    nothing else answers."""
+    """Resolve the remote's default branch before using the fallback name.
+
+    `git symbolic-ref refs/remotes/origin/HEAD` names the branch designated
+    by the remote and is empty when unset. PICKUP_TRUNK remains an explicit
+    override; "main" is only the fallback when neither supplies an answer.
+    """
     override = os.environ.get("PICKUP_TRUNK")
     if override:
         return override
@@ -590,9 +583,7 @@ def merge_log(repo_cwd, trunk):
 
 
 def find_merge(merge_log_rows, branch):
-    """Anchored on non-identifier boundaries so "feature-scope" does not
-    also match the merge subject for "feature-scope-2" (#909 review
-    finding, guarded by test Case E)."""
+    """Anchor branch names so one branch cannot match another's merge subject."""
     pat = re.compile(r"(^|[^A-Za-z0-9_-])" + re.escape(branch) + r"([^A-Za-z0-9_-]|$)")
     for h, s in merge_log_rows:
         if pat.search(s):
@@ -624,11 +615,7 @@ def branch_state(repo_cwd, branch, wt_by_path, path_by_branch, cwd_status, merge
     rep["merge_evidence"] = None
 
     if rep["worktree_exists"] and rep["dirty"] is None:
-        # #910 eval F6: status_short() returning None ("could not read", a
-        # git error) must never fall through as falsy into "not dirty". The
-        # ONE classification path whose purpose is to raise an alarm was
-        # failing toward the reassuring answer — fail toward the alarm
-        # instead, distinctly from every other state.
+        # A git error leaves the worktree state unknown, not clean.
         rep["state"] = "unknown"
     elif rep["dirty"]:
         rep["state"] = "dirty"
@@ -640,10 +627,7 @@ def branch_state(repo_cwd, branch, wt_by_path, path_by_branch, cwd_status, merge
         mc = find_merge(merge_log_rows, branch)
         rep["merge_evidence"] = mc
         rep["state"] = "landed" if mc else "deleted_no_merge"
-    # #910 eval round 2 F5: ALARM_RANK's only consumer used to be the
-    # deleted render_text() — a dead constant with a live-looking test. A
-    # JSON-only consumer has no severity signal at all without it, and
-    # would otherwise have to re-derive SKILL.md's ordering prose. Emit it.
+    # Emit the severity order so every consumer gets the same priority.
     rep["alarm_rank"] = ALARM_RANK.get(rep["state"], 9)
     return rep
 
@@ -661,8 +645,8 @@ def _merge_evidence_for(repo_root, rep, merge_log_rows):
     whose local/remote ref still exists also has an empty trunk..branch
     range (it is fully contained in trunk), so branch_commits and
     files_for_repo need the same merge-commit fallback there too. One
-    anchored lookup (find_merge, #909's Case E regression guard) reused by
-    both instead of a second unanchored path."""
+    anchored lookup (find_merge) reused by both instead of a second
+    unanchored path."""
     if rep.get("merge_evidence"):
         return rep["merge_evidence"]
     if merge_log_rows is None:
@@ -671,12 +655,11 @@ def _merge_evidence_for(repo_root, rep, merge_log_rows):
 
 
 def branch_commits(repo_root, rep, merge_log_rows, trunk):
-    """Commit subjects for one #909 branch report — the session's own
-    contemporaneous, ticket-tagged summary of what it did on that branch.
+    """Commit subjects for one branch report.
 
     Returns (commits, source). source distinguishes WHY the list is what it
-    is (#910 eval F4: a branch whose contribution genuinely could not be
-    resolved was serializing identically to one that touched nothing):
+    is (a branch whose contribution genuinely could not be determined must
+    not be reported as an empty contribution):
 
     - "direct"        — trunk..branch (or trunk..origin/branch) is
                          authoritative. For an unmerged branch (on_main is
@@ -727,11 +710,12 @@ _ABS_PATH_RE = re.compile(r"(/[\w.\-]+(?:/[\w.\-]+)+\.[A-Za-z0-9_]{1,10})")
 
 
 def extract_transcript_paths(rows):
-    """A6 — paths this session touched, scraped from tool_use blocks. Direct
-    Read/Write/Edit/NotebookEdit calls carry a file_path field; bypass-mode
-    edits route through Bash (heredocs, sed, python3 -c) and only show up as
-    absolute-path-shaped substrings in the command string (#910: tool-name
-    extraction alone caught 5 of 26 real paths in the sample session)."""
+    """A6 — paths this session touched, scraped from tool_use blocks.
+
+    Direct Read/Write/Edit/NotebookEdit calls carry a file_path field;
+    bypass-mode edits route through Bash and only show up as absolute paths in
+    the command string.
+    """
     paths = set()
     for r in rows:
         for b in tool_use_blocks(r):
@@ -765,13 +749,10 @@ def discover_repos(seen_cwds):
 
 def files_for_repo(repo_root, cwds, branch_reports_here, transcript_paths, merge_log_rows, trunk,
                     unresolved_branches):
-    """A6 — committed + uncommitted + transcript-scraped files for one repo.
-    #910 eval F2: earlier drafts also returned a `reconciled` per-path
-    {committed,uncommitted,transcript: bool} map — pure restatement of set
-    membership already visible in these three lists (measured at 48% of the
-    entire JSON payload on the real sample session). Dropped; a consumer
-    that wants per-path provenance can intersect the three lists itself at
-    negligible cost."""
+    """A6 — committed, uncommitted, and transcript-scraped files for one repo.
+
+    The separate lists retain provenance without a redundant per-path map.
+    """
     committed = set()
     for rep in branch_reports_here:
         found = []
@@ -807,11 +788,8 @@ def files_for_repo(repo_root, cwds, branch_reports_here, transcript_paths, merge
         "committed": sorted(committed),
         "uncommitted": sorted(uncommitted),
         "transcript_scraped": sorted(scraped),
-        # #910 eval F4: names the branches in THIS repo whose contribution
-        # could not be resolved (state "merged", ref present, no direct log
-        # AND no merge commit found by name) — their real files are simply
-        # absent above, not confirmed empty. Cross-reference against
-        # branches[].commits_source == "unresolved".
+        # Names branches whose contribution is unresolved, so their missing
+        # files are not treated as confirmed empty.
         "unresolved_branches": sorted(unresolved_branches),
     }
 
@@ -839,7 +817,7 @@ def staleness(rows):
             "stale": after > 0}
 
 
-# ================================================================== session sources (#1453)
+# ================================================================== session sources
 # A session id names a transcript in exactly one provider's store. The owner
 # is decided by what the stores actually hold, never by the id's UUID
 # version or by ambient CLAUDE_*/CODEX_* variables (a nested session carries
@@ -1329,8 +1307,7 @@ def pick_candidate(cands):
 
 def build_report(cands):
     """Returns a single JSON-serializable dict — always an object, never a
-    bare list, whether or not a substantive transcript was found (#910 eval
-    F1: the caller must never see a shape that depends on cwd)."""
+    bare list, whether or not a substantive transcript was found."""
     path, rows, skipped = pick_candidate(cands)
     if path is None:
         return error_report("no_substantive_transcript", "no substantive transcript found",
@@ -1341,14 +1318,8 @@ def build_report(cands):
 def report_from_rows(rows, sid, skipped=0):
     """The version-2 report for one already-loaded session's rows."""
     session_repo_cwd = next((r.get("cwd") for r in reversed(rows) if r.get("cwd")), os.getcwd())
-    # #910 eval round 2 F5: every OTHER cwd in cwd_status gets an isdir
-    # check; this one, the one everything else is computed relative to,
-    # did not. A gone session_repo_cwd makes all 44+ git calls fail
-    # silently and cascades every branch to deleted_no_merge (the highest
-    # alarm) with nothing distinguishing "git itself was unreadable" from
-    # a real, resolved all-red report. Marking it, not working around it —
-    # falling back to a different cwd changes WHOSE git state is being
-    # reported without saying so, which is its own silent-wrong-answer risk.
+    # A missing session cwd makes git state unreadable. Do not substitute a
+    # different directory, which would report another repository's state.
     session_repo_readable = os.path.isdir(session_repo_cwd)
     trunk = default_trunk(session_repo_cwd if session_repo_readable else None)
 
@@ -1428,7 +1399,7 @@ def report_from_rows(rows, sid, skipped=0):
                                                 cwd_status, merge_log_rows, trunk))
             covered.add(cb)
 
-    # ---- #910 additive worklog ----
+    # ---- additive worklog ----
     for rep in branch_reports:
         commits, source = branch_commits(session_repo_cwd, rep, merge_log_rows, trunk)
         rep["commits"] = commits
@@ -1436,19 +1407,8 @@ def report_from_rows(rows, sid, skipped=0):
 
     transcript_paths = extract_transcript_paths(rows)
     repos = discover_repos(seen_cwds)
-    # #910 eval round 2 F1: every entry in branch_reports was resolved
-    # against session_repo_cwd (branch_state/branch_commits are always
-    # called with it) -- there is exactly ONE repo whose branches this
-    # report tracks at all, and it is repo_root_for(session_repo_cwd), not
-    # "whichever repo the session happened to be sitting in when it last
-    # wrote a cwd." The old predicate (worktree_path in cwds, i.e. "did the
-    # SESSION ITSELF sit in this worktree", OR root == session_repo_cwd, a
-    # repo-root-vs-cwd comparison true only when the session ended AT the
-    # repo root) silently dropped every branch for any session that ended
-    # inside a worktree -- reproduced on a real transcript (15 resolvable
-    # files from a found merge commit, absent with no marker). One
-    # comparison against the single owning repo fixes both broken clauses
-    # at once because they were both proxies for this one fact.
+    # Resolve all branch reports against the session repository, regardless
+    # of the worktree where the session ended.
     session_repo_root = repo_root_for(session_repo_cwd) or session_repo_cwd
     files_by_repo = {}
     for root, cwds in repos.items():
@@ -1470,7 +1430,7 @@ def report_from_rows(rows, sid, skipped=0):
         "last_assistant": la,
         "git": git_info,
         "branches": branch_reports,
-        # additive (#910)
+        # additive
         "files_by_repo": files_by_repo,
         "staleness": stale,
         "skipped_candidates": skipped,
