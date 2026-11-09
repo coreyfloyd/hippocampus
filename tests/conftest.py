@@ -8,6 +8,8 @@ import pytest
 @pytest.fixture
 def requires_codex_cli():
     if not shutil.which('codex'):
+        if os.environ.get('CI'):
+            pytest.fail('codex command required in CI', pytrace=False)
         pytest.skip('codex command unavailable')
 
 

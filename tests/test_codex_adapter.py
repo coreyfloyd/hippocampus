@@ -398,14 +398,14 @@ def test_reinstalls_preserve_unicode_config_values(
         assert config.read_bytes() == configured
 
 
-def test_install_collision_and_verification_failure_do_not_change_user_files(sandbox, requires_codex_cli):
+def test_install_collision_and_verification_failure_do_not_change_user_files(sandbox):
     home,_=sandbox;codex=home/'.codex';(codex/'skills/checklist').mkdir(parents=True)
-    result=cli(INSTALL,'--codex-home',codex)
+    fake=home/'codex-fail';fake.write_text('#!/bin/sh\nexit 1\n');fake.chmod(0o755)
+    result=cli(INSTALL,'--codex-home',codex,'--codex',fake)
     assert result.returncode != 0
     assert 'existing skill' in result.stderr
     assert not (codex/'hooks.json').exists()
     (codex/'skills/checklist').rmdir()
-    fake=home/'codex-fail';fake.write_text('#!/bin/sh\nexit 1\n');fake.chmod(0o755)
     result=cli(INSTALL,'--codex-home',codex,'--codex',fake)
     assert result.returncode != 0
     assert not (codex/'hooks.json').exists()

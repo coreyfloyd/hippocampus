@@ -12,23 +12,34 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_codex_cli_checks_skip_without_the_codex_command(tmp_path):
+@pytest.mark.parametrize('ci', [False, True])
+def test_codex_cli_checks_skip_without_the_codex_command(tmp_path, ci):
     path = tmp_path / 'bin'
     path.mkdir()
     git = shutil.which('git')
     assert git
     (path / 'git').symlink_to(git)
-    env = dict(os.environ, PATH=str(path), PYTHONDONTWRITEBYTECODE='1')
+    env = dict(os.environ, PATH=str(path), HOME=str(tmp_path / 'home'),
+               CODEX_HOME=str(tmp_path / 'home/.codex'), PYTHONDONTWRITEBYTECODE='1')
+    env.pop('CI', None)
+    env.pop('GITHUB_ACTIONS', None)
+    if ci:
+        env.update(CI='true', GITHUB_ACTIONS='true')
     checks = {
         'tests/test_codex_adapter.py::test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls': ('1 skipped', 'codex command unavailable'),
+        'tests/test_codex_adapter.py::test_install_collision_and_verification_failure_do_not_change_user_files': ('1 passed',),
         'tests/test_codex_adapter.py::test_remove_trust_preserves_adjacent_comments_and_blank_lines': ('1 passed',),
         'tests/test_combined_install.py::test_codex_install_from_extracted_tree_verifies_native_trust': ('1 skipped', 'codex command unavailable'),
     }
     for node, expected in checks.items():
         result = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-rs', node], cwd=ROOT,
                                 env=env, capture_output=True, text=True)
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert all(value in result.stdout for value in expected)
+        if ci and '1 skipped' in expected:
+            assert result.returncode != 0, result.stdout + result.stderr
+            assert 'codex command required in CI' in result.stdout
+        else:
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert all(value in result.stdout for value in expected)
 
 
 def installer():
