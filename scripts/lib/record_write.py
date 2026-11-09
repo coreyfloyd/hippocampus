@@ -110,3 +110,27 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
         output.update(status='failed' if phase == 'lookup' or isinstance(error, Rejected) else 'uncertain',
                       error=f'{phase}: {error}')
     return output
+
+
+def reverse(binding: Mapping[str, Any], kind: str, identity: Mapping[str, Any], receipt: Mapping[str, Any],
+            *, run_id: str, write_operation: str) -> dict[str, Any]:
+    """Ask a record write to reverse this run's confirmed write."""
+    if kind not in KINDS:
+        raise ValueError(f'unknown record write kind {kind!r}')
+    expected = ('session_id', 'produced_at', 'text')
+    if set(identity) != set(expected) or not all(isinstance(identity[key], str) and identity[key].strip()
+                                                 for key in expected):
+        raise ValueError('reverse requires a complete item identity')
+    if receipt.get('identity') != identity or not isinstance(receipt.get('destination'), str) or not receipt['destination'].strip():
+        raise ValueError('reverse requires the original receipt')
+    if not isinstance(run_id, str) or not run_id.strip() or not isinstance(write_operation, str) or not write_operation.strip():
+        raise ValueError('reverse requires the original run and write operation')
+    response = invoke(binding, {'operation': 'reverse', 'kind': kind, 'identity': dict(identity),
+                                'receipt': dict(receipt), 'run_id': run_id,
+                                'write_operation': write_operation})
+    if response == {'status': 'reversed'}:
+        return response
+    if (set(response) == {'status', 'reason'} and response.get('status') == 'conflict' and
+            isinstance(response['reason'], str) and response['reason'].strip()):
+        return response
+    raise ValueError('malformed reverse response')

@@ -283,8 +283,9 @@ The plan includes stable write ids, operations, identities, sources and
 operation fields. The agent performs record reads and the open-ticket search
 before choosing R5: one match becomes R2, several become an R3 ask. Successful
 `read_status` is agent evidence; the engine does not repeat the read or search.
-The R5 search uses `record_writes.tickets`. Filing uses that same ticket record
-write for new tickets and comments, and `record_writes.documents` for document
+The R5 search uses the read-only `record_read` skill's `open_ticket_search`
+request. Filing uses `record_writes.tickets` for new tickets and comments, and
+`record_writes.documents` for document
 changes. The plan carries the selected command; undo retains it with the receipt.
 Before every write the agent checks the selected record write or ask binding's durable identity
 index. Bindings store the identity with each write, covering closed destinations

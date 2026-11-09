@@ -21,7 +21,7 @@ Take the requested directory or `all` as scope. If none is given, use the
 working directory. Read the user checklist profile at `$CHECKLIST_USER_PROFILE`,
 else `hippocampus/checklist-profile.md` under `$XDG_CONFIG_HOME` (default `~/.config`). Omit
 `--user-profile` when absent. The existing profile binds `record_read`, the
-per-kind record writes, persist slot, and the one ask command; do not invent bindings. A retired `bindings.record` profile is refused with
+per-kind record writes, persist slot, and the one ask command; do not invent bindings. A retired legacy record profile is refused with
 the `record_writes` shape; never convert it silently.
 
 ## Inspect and decide
@@ -73,8 +73,8 @@ For an untyped legacy item going to a native step under R4, set `destination` to
 `"lessons"` or `"knowledge"`. That choice supplies its type for validation;
 the original item and identity stay unchanged. Other rules need no added type.
 
-Use the profile's read-only `record_read` skill for R1 already-recorded checks
-and R2 ticket status, and `record_writes.tickets` for R5 matching searches. A failed, unbound, unsupported or
+Use the profile's read-only `record_read` skill for R1 already-recorded checks,
+R2 ticket status, and the `open_ticket_search` request before an R5 decision. A failed, unbound, unsupported or
 malformed read is unknown: supply `read_status: "failed"` and the error. Never
 write as part of those reads. For multiple plausible matches, choose R3 with
 choices naming the candidates; one matching open ticket becomes R2. Give R5
@@ -124,7 +124,7 @@ already written. Bindings must store the identity, original run id, receipt
 and destination with every write and prevent duplicate identities. If found,
 return `already_written` with that receipt and destination. If lookup fails,
 do not write; report failed with the lookup error. Do not infer absence from
-an unsupported lookup. For R5, the successful open-ticket search was performed
+an unsupported lookup. For R5, the successful `open_ticket_search` was performed
 before deciding: one match is R2 and several are an R3 ask. Never skip it.
 
 For absent identities, use the record-write command carried in the intent:
@@ -186,8 +186,9 @@ python3 <package>/scripts/lib/sweep.py undo --run-id <run-id> --user-started --u
 
 Undo prints JSON with the journaled reversal work and proposed archive
 restorations; planning changes no destination or archive. For each work entry,
-check its target immediately before reversing it through the original per-kind record write
-whose command is carried in the undo work entry. A ticket created by the run is closed as not planned; a
+check its target immediately before reversing it through the original per-kind command
+whose command is carried in the undo work entry. Send its `reverse` request with the
+original run id, receipt, and write operation. A ticket created by the run is closed as not planned; a
 comment is edited to a stub; a document or slot edit restores the saved
 preimage. The comment stub consists of the line `Removed by sweep undo <run_id>`,
 followed by a blank line, then the original record marker, unchanged. Never
