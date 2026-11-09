@@ -67,3 +67,35 @@ def test_reference_links_checked_but_code_examples_ignored(tmp_path):
     result = check(tmp_path, '# Scope\n', '[x][ref]\n\n[ref]: RELEASE_CANDIDATE.md#absent\n\n'
                    '```md\n[x](example.md#example)\n```\n\n`[x](inline.md)`\n')
     assert result.stdout.splitlines() == ['missing anchor: RELEASE_CANDIDATE.md#absent']
+
+
+@pytest.mark.parametrize('wrapper', ['{}', '<div>\n{}\n</div>'])
+@pytest.mark.parametrize('tag,attribute', [('a', 'href'), ('img', 'src')])
+def test_raw_html_missing_destinations_are_reported(tmp_path, wrapper, tag, attribute):
+    html = wrapper.format(f'<{tag} {attribute}="missing.svg">')
+    result = check(tmp_path, '# Scope\n', html)
+    assert result.stdout.splitlines() == ['missing: missing.svg']
+
+
+@pytest.mark.parametrize('anchor,missing', [('scope', False), ('sco!pe', True), ('absent', True)])
+def test_raw_html_fragments_use_the_same_exact_heading_check(tmp_path, anchor, missing):
+    result = check(tmp_path, '# Scope\n', f'<a href="RELEASE_CANDIDATE.md#{anchor}">link</a>')
+    expected = f'missing anchor: RELEASE_CANDIDATE.md#{anchor}\n' if missing else ''
+    assert result.stdout == expected
+
+
+def test_raw_html_existing_and_external_destinations_are_valid(tmp_path):
+    (tmp_path / 'image.svg').write_text('<svg/>')
+    result = check(tmp_path, '', '<div>\n<A HREF="INSTALLATION.md">install</A>\n'
+                   '<IMG SRC="image.svg"/>\n<a href="https://example.test/missing">external</a>\n'
+                   '<img src="//example.test/missing.svg">\n</div>')
+    assert result.stdout == ''
+
+
+def test_raw_html_in_comments_and_code_is_not_a_rendered_link(tmp_path):
+    result = check(tmp_path, '', '<!-- <a href="comment.md">comment</a> -->\n\n'
+                   '```html\n<a href="fenced.md">fenced</a>\n```\n\n'
+                   '~~~html\n<img src="tilde.svg">\n~~~\n\n'
+                   '`<a href="inline.md">inline</a>`\n\n'
+                   '    <img src="indented.svg">\n')
+    assert result.stdout == ''

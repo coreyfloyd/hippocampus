@@ -17,13 +17,21 @@ from urllib.parse import unquote, urlsplit
 from markdown_it import MarkdownIt
 
 
-class HeadingText(HTMLParser):
-    """Read rendered text without tags or formatting (including HTML entities)."""
+class RenderedContent(HTMLParser):
+    """Read rendered text and link destinations, including raw HTML."""
 
     def __init__(self, rendered):
         super().__init__(convert_charrefs=True)
         self.parts = []
+        self.links = []
         self.feed(rendered)
+
+    def handle_starttag(self, tag, attrs):
+        attribute = {'a': 'href', 'img': 'src'}.get(tag)
+        if attribute:
+            for name, value in attrs:
+                if name == attribute and value is not None:
+                    self.links.append(value)
 
     def handle_data(self, data):
         self.parts.append(data)
@@ -32,13 +40,13 @@ class HeadingText(HTMLParser):
 def document(path):
     parser = MarkdownIt('commonmark').enable(['strikethrough', 'table'])
     tokens = parser.parse(path.read_text())
-    anchors, links = set(), []
+    anchors = set()
     for index, token in enumerate(tokens):
         if token.type != 'inline':
             continue
         if index and tokens[index - 1].type == 'heading_open':
             rendered = parser.renderer.renderInline(token.children, parser.options, {})
-            text = ''.join(HeadingText(rendered).parts).lower()
+            text = ''.join(RenderedContent(rendered).parts).lower()
             # GitHub keeps letters, numbers, combining marks, underscores and
             # hyphens. Each space becomes a hyphen; runs are not collapsed.
             base = ''.join(c for c in text if c in ' -_' or
@@ -48,12 +56,10 @@ def document(path):
                 suffix += 1
                 anchor = f'{base}-{suffix}'
             anchors.add(anchor)
-        for child in token.children or []:
-            if child.type == 'link_open':
-                links.append(child.attrGet('href'))
-            elif child.type == 'image':
-                links.append(child.attrGet('src'))
-    return anchors, links
+    # Rendering escapes code examples while preserving actual HTML links.
+    # One collector therefore handles both Markdown and raw HTML destinations.
+    rendered = parser.renderer.render(tokens, parser.options, {})
+    return anchors, RenderedContent(rendered).links
 
 
 def main(sources):
