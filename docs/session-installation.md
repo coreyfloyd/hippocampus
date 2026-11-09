@@ -302,6 +302,9 @@ the Codex checks because CI is expected to install it. The architecture ancestor
 check skips in extracted archives without git history. The fixtures are captured sessions with identifying values
 replaced by neutral stand-ins; their provenance lives beside them.
 
+CLI-independent Codex checks keep running without `codex`, using a queue-only
+stub for test timers. Native installation checks still require the installed CLI.
+
 The existing personal-reference check walks the shipped tree, including the new
 documents. Its term list stays outside the repository. To run that check:
 

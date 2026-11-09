@@ -29,6 +29,8 @@ def test_codex_cli_checks_skip_without_the_codex_command(tmp_path, ci):
         'tests/test_codex_adapter.py::test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls': ('1 skipped', 'codex command unavailable'),
         'tests/test_codex_adapter.py::test_install_collision_and_verification_failure_do_not_change_user_files': ('1 passed',),
         'tests/test_codex_adapter.py::test_remove_trust_preserves_adjacent_comments_and_blank_lines': ('1 passed',),
+        'tests/test_record_writes.py::test_mid_session_then_checkpoint_and_wrap_in_both_tools': ('1 passed',),
+        'tests/test_record_writes.py::test_record_skill_is_shipped_in_both_installations': ('1 skipped', 'codex command unavailable'),
         'tests/test_combined_install.py::test_codex_install_from_extracted_tree_verifies_native_trust': ('1 skipped', 'codex command unavailable'),
     }
     for node, expected in checks.items():

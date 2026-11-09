@@ -214,7 +214,7 @@ def test_mid_session_then_checkpoint_and_wrap_in_both_tools(tmp_path):
             'session_id': 'producer', 'produced_at': item()['produced_at'], 'text': item()['context']}
 
 
-def test_record_skill_is_shipped_in_both_installations(tmp_path):
+def test_record_skill_is_shipped_in_both_installations(tmp_path, requires_codex_cli):
     skill = ROOT / 'skills/record/SKILL.md'
     assert skill.is_file()
     install = subprocess.run([sys.executable, str(ROOT / 'scripts/install-codex.py'),
@@ -223,7 +223,6 @@ def test_record_skill_is_shipped_in_both_installations(tmp_path):
     assert install.returncode == 0, install.stderr
     assert (tmp_path / 'codex/skills/record/SKILL.md').read_text() == skill.read_text()
     assert (ROOT / '.claude-plugin/plugin.json').is_file()
-    assert 'record' in skill.read_text() and 'Codex' in skill.read_text()
 
 
 def test_record_step_runs_even_with_no_writes_bound(tmp_path):

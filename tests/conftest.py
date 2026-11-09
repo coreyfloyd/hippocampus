@@ -6,8 +6,14 @@ import pytest
 
 
 @pytest.fixture
-def requires_codex_cli():
-    if not shutil.which('codex'):
+def codex_cli():
+    """Resolve the installed CLI before timer isolation adds its queue-only stub."""
+    return shutil.which('codex')
+
+
+@pytest.fixture
+def requires_codex_cli(codex_cli):
+    if not codex_cli:
         if os.environ.get('CI'):
             pytest.fail('codex command required in CI', pytrace=False)
         pytest.skip('codex command unavailable')
@@ -54,10 +60,19 @@ def isolate_git_configuration(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def isolate_timed_checkpoints(tmp_path, monkeypatch):
+def isolate_timed_checkpoints(tmp_path, tmp_path_factory, monkeypatch, codex_cli):
     """Test timers cannot survive as future queues into the caller's sessions."""
     directory = tmp_path / 'timed-checkpoints'
     monkeypatch.setenv('HANDOFF_TIMER_DIR', str(directory))
+    if not codex_cli:
+        # Timer scheduling only needs queue. Keep native verification unavailable,
+        # and put the stub outside tmp_path so fixture git repositories stay clean.
+        commands = tmp_path_factory.mktemp('codex-timer-bin')
+        stub = commands / 'codex'
+        stub.write_text('#!/bin/sh\n[ "$1" = queue ] && exit 0\n'
+                        'echo "codex timer stub only supports queue" >&2\nexit 1\n')
+        stub.chmod(0o755)
+        monkeypatch.setenv('PATH', str(commands), prepend=os.pathsep)
     yield
     # Workers observe removal under their schedule lock and then exit.
     for path in directory.glob('*.pending.json'):
