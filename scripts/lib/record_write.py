@@ -126,9 +126,12 @@ def reverse(binding: Mapping[str, Any], kind: str, identity: Mapping[str, Any], 
         raise ValueError('reverse requires the original receipt')
     if not isinstance(run_id, str) or not run_id.strip() or not isinstance(write_operation, str) or not write_operation.strip():
         raise ValueError('reverse requires the original run and write operation')
-    response = invoke(binding, {'operation': 'reverse', 'kind': kind, 'identity': dict(identity),
-                                'receipt': dict(receipt), 'run_id': run_id,
-                                'write_operation': write_operation})
+    try:
+        response = invoke(binding, {'operation': 'reverse', 'kind': kind, 'identity': dict(identity),
+                                    'receipt': dict(receipt), 'run_id': run_id,
+                                    'write_operation': write_operation})
+    except Rejected as error:
+        return {'status': 'failed', 'error': str(error).strip() or 'record write failed'}
     if response == {'status': 'reversed'}:
         return response
     if (set(response) == {'status', 'reason'} and response.get('status') == 'conflict' and
