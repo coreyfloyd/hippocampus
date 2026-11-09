@@ -163,6 +163,59 @@ def test_config_get_prints_a_string_a_list_and_nothing_for_an_absent_key(tmp_pat
     assert bad.returncode == 2 and "example_string" in bad.stderr
 
 
+def test_config_get_matches_its_contract_table(tmp_path):
+    interface = (Path(ROOT) / "INTERFACE.md").read_text()
+    start, end = "<!-- config-get-contract -->", "<!-- /config-get-contract -->"
+    assert interface.count(start) == interface.count(end) == 1, "Missing config-get contract table"
+    table, closing, _ = interface.split(start, 1)[1].partition(end)
+    assert closing, "Unterminated config-get contract table"
+    lines = [line.strip() for line in table.splitlines() if line.strip()]
+    assert len(lines) > 2, "Empty config-get contract table"
+    assert all(line.startswith("|") and line.endswith("|") for line in lines), (
+        "Unparseable config-get contract table: expected Markdown rows")
+    assert set(lines[1]) <= set("|-: "), "Invalid config-get contract table separator"
+    config = tmp_path / "config.json"
+    env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home"))
+    for row in lines[2:]:
+        cells = [cell.strip().strip("`") for cell in row[1:-1].split("|")]
+        assert len(cells) == 5, f"Invalid config-get contract row: {row}"
+        try:
+            _, keys, value, output, status = cells
+            keys = json.loads(keys)
+            keys = [keys] if isinstance(keys, str) else keys
+            absent = value == "absent"
+            value = None if absent else json.loads(value)
+            output, status = json.loads(output), json.loads(status)
+        except ValueError as exc:
+            pytest.fail(f"Unparseable config-get contract row: {row}: {exc}")
+        assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys), (
+            f"Invalid keys in config-get contract row: {row}")
+        assert isinstance(output, str) and type(status) is int and status in (0, 2), (
+            f"Invalid expected result in config-get contract row: {row}")
+        for key in keys:
+            config.write_text(json.dumps({} if absent else {key: value}))
+            result = subprocess.run([sys.executable, MODULE, "config-get", key],
+                                    text=True, capture_output=True, env=env)
+            assert (result.stdout, result.returncode) == (output, status), (row, key, result)
+            assert bool(result.stderr) == (status == 2), (row, key, result)
+
+
+@pytest.mark.parametrize("contents", ["{broken", "[]", None])
+def test_config_get_refuses_unreadable_configuration(tmp_path, contents):
+    config = tmp_path / "config.json"
+    if contents is None:
+        # A directory cannot be read as JSON, even with elevated test privileges.
+        config.mkdir()
+    else:
+        config.write_text(contents)
+    result = subprocess.run(
+        [sys.executable, MODULE, "config-get", "unknown_key"],
+        text=True, capture_output=True,
+        env=dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home")),
+    )
+    assert result.returncode == 2 and result.stdout == "" and result.stderr
+
+
 def test_automated_cycle_handoff_requires_one_fresh_session_for_the_subject(tmp_path, monkeypatch):
     handoff = load_module()
     state = tmp_path / "state"
