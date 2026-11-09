@@ -297,9 +297,13 @@ uv run --with pytest python -m pytest -q tests
 ```
 
 CLI-backed installation checks use isolated homes and skip if the corresponding
-CLI is unavailable. The architecture ancestor check skips in extracted archives
-without git history. The fixtures are captured sessions with identifying values
+CLI is unavailable locally. When `CI` is set, a missing `codex` command fails
+the Codex checks because CI is expected to install it. The architecture ancestor
+check skips in extracted archives without git history. The fixtures are captured sessions with identifying values
 replaced by neutral stand-ins; their provenance lives beside them.
+
+CLI-independent Codex checks keep running without `codex`, using a queue-only
+stub for test timers. Native installation checks still require the installed CLI.
 
 The existing personal-reference check walks the shipped tree, including the new
 documents. Its term list stays outside the repository. To run that check:

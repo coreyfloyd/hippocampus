@@ -73,7 +73,9 @@ def installed(tmp_path, signed, request):
 
 
 @pytest.mark.parametrize('route', ['plain', 'plugin', 'codex', 'both'])
-def test_signed_release_tool_routes(installed, route):
+def test_signed_release_tool_routes(installed, route, request):
+    if route in ('codex', 'both'):
+        request.getfixturevalue('requires_codex_cli')
     home, env, current = installed
     if route in ('plugin', 'both'):
         run(env, sys.executable, current / 'scripts/install-claude.py')
@@ -159,7 +161,7 @@ def test_plugin_verification_preserves_foreign_plain_skills(installed):
     run(env, 'bash', current / 'install.sh', '--verify')
 
 
-def test_shared_codex_update_refuses_a_different_source_tree(installed):
+def test_shared_codex_update_refuses_a_different_source_tree(installed, requires_codex_cli):
     home, env, current = installed
     run(env, sys.executable, current / 'scripts/install-codex.py')
     before = (home / '.codex/hippocampus-install.json').read_bytes()
@@ -171,7 +173,7 @@ def test_shared_codex_update_refuses_a_different_source_tree(installed):
 
 
 @pytest.mark.parametrize('installed', [True], indirect=True)
-def test_signed_route_accepts_a_symlinked_home(installed):
+def test_signed_route_accepts_a_symlinked_home(installed, requires_codex_cli):
     _, env, current = installed
     run(env, sys.executable, current / 'scripts/install-codex.py')
     assert current.is_symlink()

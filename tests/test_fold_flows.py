@@ -28,6 +28,8 @@ def run(env, *args, data=None, check=True):
 
 @pytest.fixture(params=['claude', 'codex'])
 def user(tmp_path, request):
+    if request.param == 'codex':
+        request.getfixturevalue('requires_codex_cli')
     home = tmp_path / 'home'
     home.mkdir()
     env = {k: v for k, v in os.environ.items()
