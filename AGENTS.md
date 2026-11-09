@@ -37,18 +37,15 @@ No test fails because configuration changed. Configuration is settings, per-node
 
 ## Verify before handing off
 
-Run the checks in `RELEASING.md` § Verify the candidate. At minimum:
+Run the tests that cover the changed files, plus these quick checks. Do not run
+the full suite locally; CI on the pull request is the full gate:
 
 ```bash
 git diff --check
 python3 scripts/generate-release-metadata.py --check
 python3 tests/test-fold-names.py
-python3 scripts/check-skill-surface.py skills
-python3 -m pytest -q tests
-bash tests/test-pickup-wrapper.sh
-bash tests/test-pickup-branch-scan.sh
 python3 tests/test-public-docs.py
-bash tests/test-contracts.sh
+python3 scripts/check-skill-surface.py skills
 ```
 
 Tests live in `tests/` and assert what the user sees: the report, the handoff, or
