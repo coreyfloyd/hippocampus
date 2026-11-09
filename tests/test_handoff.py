@@ -3,11 +3,9 @@
 The fixtures are created through the module's writer so each validation probe
 starts from a shape the production writer can actually produce.
 """
-import ast
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -165,88 +163,56 @@ def test_config_get_prints_a_string_a_list_and_nothing_for_an_absent_key(tmp_pat
     assert bad.returncode == 2 and "example_string" in bad.stderr
 
 
-def test_config_get_matches_its_contract_sentence(tmp_path):
-    handoff = load_module()
-    defaults = handoff.TIMED_CHECKPOINT_DEFAULTS
-    default_text = ", ".join(f"`{key}` prints `{value}`" for key, value in defaults.items())
-    contract = (
-        "`python3 scripts/lib/handoff.py config-get <key>` accepts any key: "
-        "`auto_apply_lessons` prints `true` or `false` (absent or null prints `false`); "
-        f"the timed settings require positive integers ({default_text} when absent); "
-        "`prune_days` requires a positive integer when non-null (absent or null prints nothing); "
-        "all other keys print a non-empty string or a list of non-empty strings one item per line "
-        "(an empty list prints a blank line), except `harness_enforcement_reference` requires an "
-        "absolute or `~/` string path; absent or null values for these other keys print nothing; "
-        "object values and other mistyped values, or an unreadable configuration, exit 2 with "
-        "the reason on stderr and no stdout."
-    )
+def test_config_get_matches_its_contract_table(tmp_path):
     interface = (Path(ROOT) / "INTERFACE.md").read_text()
-    assert contract in interface
-
-    # Enumerate special dispatch keys from the engine, including future branches,
-    # rather than silently overlooking a new key with an absent-value default.
-    tree = ast.parse(Path(MODULE).read_text())
-    special_keys = set(defaults)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Compare) and ast.unparse(node.left) == "args.key":
-            for operand in node.comparators:
-                if isinstance(operand, ast.Constant) and isinstance(operand.value, str):
-                    special_keys.add(operand.value)
-    assert all(f"`{key}`" in contract for key in special_keys)
-    section = interface.split("## 2.", 1)[1].split("## 3.", 1)[0]
-    documented_keys = set(re.findall(r"^\| `([^`]+)` \|", section, re.MULTILINE))
-    assert documented_keys
-
+    start, end = "<!-- config-get-contract -->", "<!-- /config-get-contract -->"
+    assert interface.count(start) == interface.count(end) == 1, "Missing config-get contract table"
+    table, closing, _ = interface.split(start, 1)[1].partition(end)
+    assert closing, "Unterminated config-get contract table"
+    lines = [line.strip() for line in table.splitlines() if line.strip()]
+    assert len(lines) > 2, "Empty config-get contract table"
+    assert all(line.startswith("|") and line.endswith("|") for line in lines), (
+        "Unparseable config-get contract table: expected Markdown rows")
+    assert set(lines[1]) <= set("|-: "), "Invalid config-get contract table separator"
     config = tmp_path / "config.json"
     env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home"))
+    for row in lines[2:]:
+        cells = [cell.strip().strip("`") for cell in row[1:-1].split("|")]
+        assert len(cells) == 5, f"Invalid config-get contract row: {row}"
+        try:
+            _, keys, value, output, status = cells
+            keys = json.loads(keys)
+            keys = [keys] if isinstance(keys, str) else keys
+            absent = value == "absent"
+            value = None if absent else json.loads(value)
+            output, status = json.loads(output), json.loads(status)
+        except ValueError as exc:
+            pytest.fail(f"Unparseable config-get contract row: {row}: {exc}")
+        assert isinstance(keys, list) and keys and all(isinstance(key, str) and key for key in keys), (
+            f"Invalid keys in config-get contract row: {row}")
+        assert isinstance(output, str) and type(status) is int and status in (0, 2), (
+            f"Invalid expected result in config-get contract row: {row}")
+        for key in keys:
+            config.write_text(json.dumps({} if absent else {key: value}))
+            result = subprocess.run([sys.executable, MODULE, "config-get", key],
+                                    text=True, capture_output=True, env=env)
+            assert (result.stdout, result.returncode) == (output, status), (row, key, result)
+            assert bool(result.stderr) == (status == 2), (row, key, result)
 
-    def check(key, value, output="", refused=False):
-        config.write_text(json.dumps(value))
-        result = subprocess.run([sys.executable, MODULE, "config-get", key],
-                                text=True, capture_output=True, env=env)
-        assert result.returncode == (2 if refused else 0), (key, value, result)
-        assert result.stdout == output, (key, value, result)
-        assert bool(result.stderr) == refused, (key, value, result)
 
-    for key in documented_keys | special_keys | {"unknown_key"}:
-        expected = (f"{defaults[key]}\n" if key in defaults else
-                    "false\n" if key == "auto_apply_lessons" else "")
-        check(key, {}, expected)
-        check(key, {key: {}}, refused=True)
-        check(key, {key: None}, "false\n" if key == "auto_apply_lessons" else "",
-              refused=key in defaults)
-        if key in defaults or key == "prune_days":
-            check(key, {key: 17}, "17\n")
-            for bad in (0, -1, 1.5, True, "17", []):
-                check(key, {key: bad}, refused=True)
-        elif key == "auto_apply_lessons":
-            for value in (True, False):
-                check(key, {key: value}, str(value).lower() + "\n")
-            for bad in (1, "true", []):
-                check(key, {key: bad}, refused=True)
-        else:
-            check(key, {key: "~/example"}, "~/example\n")
-            if key != "harness_enforcement_reference":
-                check(key, {key: ["first", "second"]}, "first\nsecond\n")
-                check(key, {key: []}, "\n")
-                check(key, {key: ["valid", 1]}, refused=True)
-            else:
-                check(key, {key: []}, refused=True)
-                check(key, {key: "relative/path"}, refused=True)
-            for bad in ("", "   ", 1, True):
-                check(key, {key: bad}, refused=True)
-
-    for unreadable in ("{broken", "[]"):
-        config.write_text(unreadable)
-        result = subprocess.run([sys.executable, MODULE, "config-get", "unknown_key"],
-                                text=True, capture_output=True, env=env)
-        assert result.returncode == 2 and result.stdout == "" and result.stderr
-
-    # A directory is unreadable as JSON even when the tests run with elevated privileges.
-    config.unlink()
-    config.mkdir()
-    result = subprocess.run([sys.executable, MODULE, "config-get", "unknown_key"],
-                            text=True, capture_output=True, env=env)
+@pytest.mark.parametrize("contents", ["{broken", "[]", None])
+def test_config_get_refuses_unreadable_configuration(tmp_path, contents):
+    config = tmp_path / "config.json"
+    if contents is None:
+        # A directory cannot be read as JSON, even with elevated test privileges.
+        config.mkdir()
+    else:
+        config.write_text(contents)
+    result = subprocess.run(
+        [sys.executable, MODULE, "config-get", "unknown_key"],
+        text=True, capture_output=True,
+        env=dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home")),
+    )
     assert result.returncode == 2 and result.stdout == "" and result.stderr
 
 

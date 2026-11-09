@@ -53,7 +53,50 @@ an empty configuration.
 | `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
 | `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
-`python3 scripts/lib/handoff.py config-get <key>` accepts any key: `auto_apply_lessons` prints `true` or `false` (absent or null prints `false`); the timed settings require positive integers (`timed_checkpoint_minutes` prints `55`, `timed_checkpoint_token_limit` prints `200000` when absent); `prune_days` requires a positive integer when non-null (absent or null prints nothing); all other keys print a non-empty string or a list of non-empty strings one item per line (an empty list prints a blank line), except `harness_enforcement_reference` requires an absolute or `~/` string path; absent or null values for these other keys print nothing; object values and other mistyped values, or an unreadable configuration, exit 2 with the reason on stderr and no stdout.
+`python3 scripts/lib/handoff.py config-get <key>` follows the executable contract
+below. Each row supplies a key (or keys sharing a case), a configured JSON value,
+and the exact stdout as a JSON string, including newlines. `absent` means the key
+is omitted from an otherwise empty configuration. “Other key” includes unknown
+keys: the command reads strings and lists generically, rather than limiting them
+to the settings listed above. Refused values exit 2 with a reason on stderr and
+no stdout; successful reads exit 0 without stderr. An unreadable configuration
+also exits 2 with a reason on stderr and no stdout.
+
+<!-- config-get-contract -->
+| Class | Key(s), JSON | Configured input | Stdout, JSON | Exit |
+|---|---|---|---|---|
+| Boolean | `"auto_apply_lessons"` | `true` | `"true\n"` | 0 |
+| Boolean | `"auto_apply_lessons"` | `false` | `"false\n"` | 0 |
+| Boolean default | `"auto_apply_lessons"` | `absent` | `"false\n"` | 0 |
+| Boolean null | `"auto_apply_lessons"` | `null` | `"false\n"` | 0 |
+| Mistyped boolean | `"auto_apply_lessons"` | `1` | `""` | 2 |
+| Scalar default | `"timed_checkpoint_minutes"` | `absent` | `"55\n"` | 0 |
+| Scalar default | `"timed_checkpoint_token_limit"` | `absent` | `"200000\n"` | 0 |
+| Positive integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `17` | `"17\n"` | 0 |
+| Non-positive integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `0` | `""` | 2 |
+| Mistyped integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `true` | `""` | 2 |
+| Fractional integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `1.5` | `""` | 2 |
+| Integer string | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `"17"` | `""` | 2 |
+| Timed null | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit"]` | `null` | `""` | 2 |
+| Scalar without a default | `"prune_days"` | `absent` | `""` | 0 |
+| Optional scalar null | `"prune_days"` | `null` | `""` | 0 |
+| Other key, string | `["handoff_dir", "example_key"]` | `"~/example"` | `"~/example\n"` | 0 |
+| Other key, absent | `["handoff_dir", "example_key", "checklist_surfaces", "slim_checkouts"]` | `absent` | `""` | 0 |
+| Other key, null | `["handoff_dir", "example_key", "checklist_surfaces", "slim_checkouts"]` | `null` | `""` | 0 |
+| Other key, list | `["checklist_surfaces", "example_key"]` | `["first", "second"]` | `"first\nsecond\n"` | 0 |
+| Other key, empty list | `"example_key"` | `[]` | `"\n"` | 0 |
+| Object | `["cycle_sessions", "unattended", "slim_checkouts", "example_key"]` | `{}` | `""` | 2 |
+| Mistyped string | `"example_key"` | `1` | `""` | 2 |
+| Empty string | `"example_key"` | `""` | `""` | 2 |
+| Blank string | `"example_key"` | `"   "` | `""` | 2 |
+| Mistyped list | `"example_key"` | `["valid", 1]` | `""` | 2 |
+| Reference path | `"harness_enforcement_reference"` | `"~/example"` | `"~/example\n"` | 0 |
+| Absolute reference path | `"harness_enforcement_reference"` | `"/example"` | `"/example\n"` | 0 |
+| Absent reference path | `"harness_enforcement_reference"` | `absent` | `""` | 0 |
+| Null reference path | `"harness_enforcement_reference"` | `null` | `""` | 0 |
+| Relative reference path | `"harness_enforcement_reference"` | `"relative/path"` | `""` | 2 |
+| List reference path | `"harness_enforcement_reference"` | `["/example"]` | `""` | 2 |
+<!-- /config-get-contract -->
 
 ## 3. Handoff engine: `scripts/lib/handoff.py`
 
