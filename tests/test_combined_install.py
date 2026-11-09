@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -11,8 +12,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_codex_cli_checks_skip_without_the_codex_command():
-    env = dict(os.environ, PATH='/usr/bin:/bin', PYTHONDONTWRITEBYTECODE='1')
+def test_codex_cli_checks_skip_without_the_codex_command(tmp_path):
+    path = tmp_path / 'bin'
+    path.mkdir()
+    git = shutil.which('git')
+    assert git
+    (path / 'git').symlink_to(git)
+    env = dict(os.environ, PATH=str(path), PYTHONDONTWRITEBYTECODE='1')
     checks = {
         'tests/test_codex_adapter.py::test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls': ('1 skipped', 'codex command unavailable'),
         'tests/test_codex_adapter.py::test_remove_trust_preserves_adjacent_comments_and_blank_lines': ('1 passed',),
