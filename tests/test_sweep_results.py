@@ -3,10 +3,13 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+
+from test_record_writes import record_write
 
 import pytest
 from test_sweep import (sandbox, source, command, decisions, bound_profile,
-                        outside_report_snapshot, FIXTURE, archive_test_repository, assert_readable_report)
+                        outside_report_snapshot, write_receipt, FIXTURE, archive_test_repository, assert_readable_report)
 
 
 def read_run(path):
@@ -37,7 +40,7 @@ def complete(sandbox, run, statuses=None, verb='complete'):
     for work, status in zip(run['work'], statuses):
         if status is None:
             continue
-        rows.append(dict(write_id=work['write_id'], status=status, receipt='receipt-' + work['write_id'],
+        rows.append(dict(write_id=work['write_id'], status=status, receipt=write_receipt(work, work.get('destination') or 'record:created'),
                          destination=work.get('destination') or 'record:created', error='rejected'))
     path = sandbox[0] / 'results.json'
     path.write_text(json.dumps(rows))
@@ -288,15 +291,22 @@ def test_carried_successor_identity_and_existing_archive_are_preserved(sandbox):
     assert len([r for r in done['undo_items'] if r['kind'] == 'record']) == 1
 
 
-@pytest.mark.parametrize('bad', ['duplicate', 'unknown', 'malformed-receipt', 'bad-status'])
+@pytest.mark.parametrize('bad', ['duplicate', 'unknown', 'malformed-receipt', 'string-receipt',
+                                  'wrong-identity', 'wrong-destination', 'bad-status'])
 def test_invalid_results_leave_the_intent_and_source_reserved(sandbox, bad):
     source(sandbox)
     run = act(sandbox)
-    row = dict(write_id=run['work'][0]['write_id'], status='written', receipt='ack', destination='record:created')
+    row = dict(write_id=run['work'][0]['write_id'], status='written', receipt=write_receipt(run['work'][0], 'record:created'), destination='record:created')
     if bad == 'unknown':
         row['write_id'] = 'unknown'
     elif bad == 'malformed-receipt':
         row['receipt'] = ''
+    elif bad == 'string-receipt':
+        row['receipt'] = 'old-string-receipt'
+    elif bad == 'wrong-identity':
+        row['receipt']['identity'] = {}
+    elif bad == 'wrong-destination':
+        row['destination'] = 'record:other'
     elif bad == 'bad-status':
         row['status'] = 'success'
     path = sandbox[0] / 'invalid-results.json'
@@ -388,7 +398,7 @@ def test_act_and_undo_change_only_declared_surfaces(sandbox):
     changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
     assert changed == {'.handoffs.sweep-pending.json'}
     work = run['work'][0]
-    results.write_text(json.dumps([dict(write_id=work['write_id'], status='written', receipt='ack', destination='record:new')]))
+    results.write_text(json.dumps([dict(write_id=work['write_id'], status='written', receipt=write_receipt(work, 'record:new'), destination='record:new')]))
     before = outside_report_snapshot(sandbox)
     command(sandbox, 'complete', '--run-id', run['run_id'], '--results', str(results))
     after = outside_report_snapshot(sandbox)
@@ -609,23 +619,70 @@ def test_native_r4_ask_is_delivered_but_never_consumes_sweep_item(sandbox, kind)
     assert done['directories'][str(sandbox[0])]['asks_raised'][0]['receipt']
 
 
-@pytest.mark.parametrize('rule,kind', [('R2', 'tickets'), ('R5', 'tickets'), ('R7', 'documents')])
-def test_record_write_command_is_carried_from_filing_through_undo(sandbox, rule, kind):
-    source(sandbox)
-    entry = dict(new_work(), rule=rule, destination='record:target')
-    run = act(sandbox, [entry])
+@pytest.mark.parametrize('rule,kind,operation', [
+    ('R2', 'tickets', 'comment'), ('R5', 'tickets', 'create_ticket'),
+    ('R7', 'documents', 'edit_document')])
+def test_record_write_command_is_carried_from_filing_through_undo(sandbox, rule, kind, operation):
+    path = source(sandbox, loops=[dict(context='Follow through', disposition='consider',
+        session_id='producer', produced_at='2026-10-01T00:00:00Z')])
+    cfg = json.loads(sandbox[2].read_text())
+    cfg['sweep']['mode'] = 'act'
+    sandbox[2].write_text(json.dumps(cfg))
+    store = sandbox[0] / 'record-store.py'
+    requests = sandbox[0] / 'requests.jsonl'
+    store.write_text("""import json, sys
+from pathlib import Path
+request = json.load(sys.stdin)
+with Path(sys.argv[1]).open('a') as handle:
+    handle.write(json.dumps(request) + '\\n')
+if request['operation'] == 'lookup':
+    response = {'status': 'not_found'}
+elif request['operation'] == 'write':
+    response = {'status': 'saved', 'receipt': {'identity': request['identity'],
+        'destination': 'record:target', 'version': {'token': 'original-write'}}}
+else:
+    response = {'status': 'reversed'}
+print(json.dumps(response))
+""")
+    binding = {'command': [sys.executable, str(store), str(requests)]}
+    profile = json.loads(bound_profile(sandbox).read_text())
+    profile['record_writes'][kind] = binding
+    profile_path = sandbox[0] / 'profile.json'
+    profile_path.write_text(json.dumps(profile))
+    args = decisions(sandbox, [dict(new_work(), rule=rule, destination='record:target')])
+    payload = json.loads(command(sandbox, 'run', '--scope', 'all', *args,
+                                 '--user-profile', str(profile_path)).stdout)
+    run = read_run(payload['report'])
     work, = run['work']
-    profile = json.loads((sandbox[0] / 'profile.json').read_text())
-    assert work['binding'] == kind
-    assert work['command'] == profile['record_writes'][kind]['command']
-    done = complete(sandbox, run)
-    payload = json.loads(command(sandbox, 'undo', '--run-id', done['run_id'], '--user-started').stdout)
+    assert work['binding'] == kind and work['operation'] == operation
+    assert work['command'] == binding['command']
+    filed = record_write.execute({'command': work['command']}, kind, work['item'], work,
+                                 context={'run_id': run['run_id'], 'write_operation': operation})
+    assert filed['status'] == 'filed', filed
+    receipt = filed['receipt']
+    results = sandbox[0] / 'results.json'
+    results.write_text(json.dumps([dict(write_id=work['write_id'], status='written',
+                                       receipt=receipt, destination=filed['destination'])]))
+    payload = json.loads(command(sandbox, 'complete', '--run-id', run['run_id'], '--results', str(results)).stdout)
+    done = read_run(payload['report'])
+    assert done['work'][0]['receipt'] == receipt
+    assert done['directories'][str(sandbox[0])]['filing_outcomes'][0]['receipt'] == receipt
+    assert_readable_report(Path(payload['report']).read_text(), done)
+    assert not path.exists()
+    payload = json.loads(command(sandbox, 'undo', '--run-id', run['run_id'], '--user-started').stdout)
     undo = read_run(payload['report'])
     reversal, = undo['work']
-    assert reversal['binding'] == kind and reversal['command'] == work['command']
-    assert reversal['identity'] == work['identity']
-    assert reversal['receipt'] == done['work'][0]['receipt']
-    complete(sandbox, undo, ['reversed'], 'complete-undo')
+    assert reversal['receipt'] == receipt
+    response = record_write.reverse({'command': reversal['command']}, reversal['binding'],
+        reversal['identity'], reversal['receipt'], run_id=undo['run_id'],
+        write_operation=reversal['write_operation'])
+    sent = [json.loads(line) for line in requests.read_text().splitlines()]
+    assert [row['operation'] for row in sent] == ['lookup', 'write', 'reverse']
+    assert sent[-1] == dict(operation='reverse', kind=kind, identity=work['identity'], receipt=receipt,
+                            run_id=run['run_id'], write_operation=operation)
+    results.write_text(json.dumps([dict(write_id=reversal['write_id'], **response)]))
+    command(sandbox, 'complete-undo', '--run-id', run['run_id'], '--results', str(results))
+    assert path.exists()
 
 
 def test_sweep_refuses_retired_record_binding_without_a_report(sandbox):

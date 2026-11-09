@@ -121,7 +121,8 @@ def reverse(binding: Mapping[str, Any], kind: str, identity: Mapping[str, Any], 
     if set(identity) != set(expected) or not all(isinstance(identity[key], str) and identity[key].strip()
                                                  for key in expected):
         raise ValueError('reverse requires a complete item identity')
-    if receipt.get('identity') != identity or not isinstance(receipt.get('destination'), str) or not receipt['destination'].strip():
+    if (not isinstance(receipt, Mapping) or receipt.get('identity') != identity or
+            not isinstance(receipt.get('destination'), str) or not receipt['destination'].strip()):
         raise ValueError('reverse requires the original receipt')
     if not isinstance(run_id, str) or not run_id.strip() or not isinstance(write_operation, str) or not write_operation.strip():
         raise ValueError('reverse requires the original run and write operation')

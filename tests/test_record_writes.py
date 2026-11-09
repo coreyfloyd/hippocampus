@@ -5,6 +5,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'scripts/lib/checklist.py'
 sys.path.insert(0, str(ROOT / 'scripts/lib'))
@@ -121,6 +123,14 @@ print(json.dumps({'status': 'reversed'}))
     assert json.loads(request.read_text()) == {
         'operation': 'reverse', 'kind': 'tickets', 'identity': identity, 'receipt': receipt,
         'run_id': 'sweep-run', 'write_operation': 'create_ticket'}
+
+
+@pytest.mark.parametrize('receipt', ['old-string-receipt', None, [], {}])
+def test_reverse_rejects_malformed_receipt_before_invoking_command(receipt):
+    identity = dict(session_id='producer', produced_at='2026-11-03T12:00:00Z', text='change')
+    with pytest.raises(ValueError, match='original receipt'):
+        record_write.reverse({'command': ['must-not-run']}, 'tickets', identity, receipt,
+                             run_id='sweep-run', write_operation='comment')
 
 
 def test_explicit_write_failure_keeps_store_error(tmp_path):

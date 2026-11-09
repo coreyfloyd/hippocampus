@@ -392,7 +392,9 @@ error naming `record_read`. The `plan` result includes `record_read` as that obj
 or `null` when unbound; it adds no spine step. The composer never executes it.
 The binding and validator contract below is identical for Claude Code and Codex.
 
-**Record-write protocol.** A per-kind record-write command receives one JSON
+### Record-write protocol
+
+A per-kind record-write command receives one JSON
 request on stdin and returns one JSON response on stdout. `lookup` and `write`
 carry the complete item and filing row with the unchanged identity. Before any
 write, lookup returns either `{"status":"not_found"}` or
@@ -705,7 +707,7 @@ remain `read failed`, never absence. Information-only R1 needs no read.
 The agent supplies one result per `write_id` in a JSON array:
 
 ```json
-[{"write_id":"<from-work>","status":"written","receipt":"<binding-receipt>","destination":"<actual-destination>"}]
+[{"write_id":"<from-work>","status":"written","receipt":{"identity":{"session_id":"<producer>","produced_at":"<timestamp>","text":"<item text>"},"destination":"<actual-destination>"},"destination":"<actual-destination>"}]
 ```
 
 | Status | Meaning and required fields |
@@ -715,6 +717,12 @@ The agent supplies one result per `write_id` in a JSON array:
 | `failed` | No write occurred; `error` |
 | `uncertain` | Write may have occurred; optional `error` |
 | `assessed` | `apply_lesson` or `apply_knowledge` only: a `lesson` or `knowledge` object, the wrap's row without `index` |
+
+For per-kind record writes, `receipt` is the complete object returned by the
+record-write command: its `identity` must match the planned item and its
+`destination` must match the result's destination. Preserve any additional
+receipt fields unchanged in results, reports, and undo requests. Ask and persist
+receipts remain nonempty strings.
 
 A missing result is `uncertain`. Missing or malformed acknowledgements and
 lost replies must never be reported as failed. The engine flushes each result

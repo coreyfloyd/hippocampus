@@ -91,6 +91,12 @@ def command(sandbox, *args, code=0):
     return result
 
 
+def write_receipt(work, destination):
+    if work.get('binding') in ('tickets', 'projects', 'documents', 'scheduled_jobs'):
+        return dict(identity=work['identity'], destination=destination)
+    return 'receipt-' + work['write_id']
+
+
 def report(sandbox, *args):
     # This test driver stands in for the agent; the engine never executes stubs.
     args = list(args)
@@ -124,7 +130,8 @@ def report(sandbox, *args):
                     target.write_bytes(raw)
         for _ in range(3):
             rows = [dict(write_id=w['write_id'], status='failed' if behavior.get('fail') == w['operation'] else 'written',
-                         receipt='fixture-' + w['write_id'], destination=w.get('destination') or 'record:created',
+                         receipt=write_receipt(w, w.get('destination') or 'record:created'),
+                         destination=w.get('destination') or 'record:created',
                          error='fixture rejection') for w in run['work'] if w['outcome'] == 'intent']
             results = sandbox[0] / 'agent-results.json'
             results.write_text(json.dumps(rows))

@@ -141,8 +141,13 @@ close from a reply.
 Write a caller-owned results JSON array, one result per write id:
 
 ```json
-[{"write_id":"<copied-from-work>","status":"written","receipt":"<receipt>","destination":"<actual-destination>"}]
+[{"write_id":"<copied-from-work>","status":"written","receipt":{"identity":{"session_id":"<producer>","produced_at":"<timestamp>","text":"<item text>"},"destination":"<actual-destination>"},"destination":"<actual-destination>"}]
 ```
+
+For per-kind record writes, copy the entire receipt object returned by the
+command, including any extra fields. Its identity must match the work item and
+its destination must match the result. Keep it unchanged through undo. Ask and
+persist receipts are nonempty strings.
 
 Use `written` only for confirmed writes, `already_written` for identities found
 before writing, `failed` with `error` only when no write occurred, or `uncertain`
