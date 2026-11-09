@@ -392,6 +392,22 @@ error naming `record_read`. The `plan` result includes `record_read` as that obj
 or `null` when unbound; it adds no spine step. The composer never executes it.
 The binding and validator contract below is identical for Claude Code and Codex.
 
+### Record-write protocol
+
+A per-kind record-write command receives one JSON
+request on stdin and returns one JSON response on stdout. `lookup` and `write`
+carry the complete item and filing row with the unchanged identity. Before any
+write, lookup returns either `{"status":"not_found"}` or
+`{"status":"found","receipt":{"identity":<same identity>,"destination":"durable location"}}`.
+A write returns `{"status":"saved","receipt":<same receipt shape>}`.
+
+Sweep undo uses `reverse` with `kind`, the original `identity` and `receipt`,
+the original `run_id`, and `write_operation`. It returns exactly
+`{"status":"reversed"}`, or `{"status":"conflict","reason":"..."}` when
+the destination changed and must be preserved. A store rejection returns
+`{"status":"failed","error":"reason"}`. Reverse requests never create a
+new receipt: they use the receipt from the confirmed write being reversed.
+
 **Ask binding and filing outcomes.** A user profile may declare
 `"ask": {"command": "/ask-step"}`: exactly one non-empty command, separate
 from slots and steps. Repository profiles cannot bind it. `plan` returns `ask`
@@ -576,6 +592,15 @@ are non-empty. `title` and `link` are non-empty except for a `not_found` row.
 reserved state for an unresolvable reference; other non-empty state strings come
 from the record. References cannot repeat within a response.
 
+### Open-ticket search
+
+Input: `{"kind": "open_ticket_search", "text": "carried item text"}`. The
+text is the unchanged item text that needs a possible ticket destination. Output
+has exactly `kind` and `rows`; each row has exactly `reference`, `title`,
+`state`, and `link`, all non-empty strings. `state` is exactly `open`, so a
+response cannot use a closed ticket as a filing destination. References cannot
+repeat. An empty `rows` array is a successful search with no match.
+
 ### Commitments
 
 Input: `{"kind": "commitments", "session_id": "resumed-session-id",
@@ -605,9 +630,10 @@ service-specific enumeration. The handoff is input context, not a response field
 
 ### Empty results, errors, and validation
 
-Successful responses with no work use `{"kind": "ticket_status", "rows": []}` or
-`{"kind": "commitments", "rows": []}`. For ticket status, an empty list is appropriate
-only when no references were requested. Either request may instead return exactly
+Successful responses with no work use `{"kind": "ticket_status", "rows": []}`,
+`{"kind": "commitments", "rows": []}`, or
+`{"kind": "open_ticket_search", "rows": []}`. For ticket status, an empty list is
+appropriate only when no references were requested. Any request may instead return exactly
 `{"kind": "error", "reason": "record unavailable"}` with a non-empty reason. An
 error is never interpreted as an empty list or reported as `valid`.
 
@@ -616,6 +642,7 @@ Pass a response on stdin to either command:
 ```sh
 python3 scripts/lib/record_read.py --expect ticket_status < response.json
 python3 scripts/lib/record_read.py --expect commitments < response.json
+python3 scripts/lib/record_read.py --expect open_ticket_search < response.json
 ```
 
 | Stdout (one line) | Exit status | Meaning |
@@ -624,7 +651,7 @@ python3 scripts/lib/record_read.py --expect commitments < response.json
 | `invalid: <reason>` | 1 | Malformed JSON, missing or extra fields, wrong types, duplicate fields or references, unknown shape, or unexpected response kind. |
 | `error: <reason>` | 2 | An explicit failure reported by the binding. Whitespace in its reason is collapsed to keep the verdict on one line. |
 
-Without `--expect`, either success kind is accepted. An error is accepted as a
+Without `--expect`, any success kind is accepted. An error is accepted as a
 failure for either expected kind. Validation uses only the Python standard library,
 reads stdin, prints a deterministic verdict, and never executes a skill or contacts
 the record. It validates response structure; the calling agent must also check
@@ -637,7 +664,7 @@ The shared command defaults to watch-only. `sweep.mode: "act"` enables planning
 when `run` receives `--decisions`. Without decisions it writes a watch-only
 inventory, even with act configured. The agent performs every profile binding
 call, following its `command` and `instructions` as during a checklist wrap.
-The package executes record writes as described in `skills/record/SKILL.md`; it never executes record-read, persist or ask bindings. Skill
+The agent executes record writes as described in `skills/record/SKILL.md`; the package never executes record-read, persist or ask bindings. Skill
 commands need no executable adapter or JSON stdin/stdout protocol.
 `--user-profile` overrides `CHECKLIST_USER_PROFILE`, then
 `$XDG_CONFIG_HOME/hippocampus/checklist-profile.md` (default `~/.config/hippocampus/checklist-profile.md`).
@@ -670,8 +697,8 @@ position. A successor keeps the original identity. Per-operation fields are:
 | `persist` | persist binding, after lessons are committed | `command`; `checkouts`; `surfaces` |
 | `ask` | ask binding, or direct presentation for interactive open sessions | `ticket` (possibly null), `choices`; open sessions also carry `activity_at` |
 
-R1/R2 reads use the profile's `record_read`; the agent searches open tickets
-through `record_writes.tickets` before choosing R5. One match becomes R2 and its
+R1/R2 reads use the profile's `record_read`; R5 uses its `open_ticket_search`
+request before choosing a new ticket. One match becomes R2 and its
 `destination` names that match; several become R3 with choices listing the
 candidates. The engine treats `read_status: "ok"` as agent evidence, without
 performing a read or search. Missing, failed, unsupported or malformed reads
@@ -680,7 +707,7 @@ remain `read failed`, never absence. Information-only R1 needs no read.
 The agent supplies one result per `write_id` in a JSON array:
 
 ```json
-[{"write_id":"<from-work>","status":"written","receipt":"<binding-receipt>","destination":"<actual-destination>"}]
+[{"write_id":"<from-work>","status":"written","receipt":{"identity":{"session_id":"<producer>","produced_at":"<timestamp>","text":"<item text>"},"destination":"<actual-destination>"},"destination":"<actual-destination>"}]
 ```
 
 | Status | Meaning and required fields |
@@ -690,6 +717,12 @@ The agent supplies one result per `write_id` in a JSON array:
 | `failed` | No write occurred; `error` |
 | `uncertain` | Write may have occurred; optional `error` |
 | `assessed` | `apply_lesson` or `apply_knowledge` only: a `lesson` or `knowledge` object, the wrap's row without `index` |
+
+For per-kind record writes, `receipt` is the complete object returned by the
+record-write command: its `identity` must match the planned item and its
+`destination` must match the result's destination. Preserve any additional
+receipt fields unchanged in results, reports, and undo requests. Ask and persist
+receipts remain nonempty strings.
 
 A missing result is `uncertain`. Missing or malformed acknowledgements and
 lost replies must never be reported as failed. The engine flushes each result
@@ -797,10 +830,12 @@ python3 scripts/lib/sweep.py complete-undo --run-id <act-run-id> --results /exam
 ```
 
 Only an explicit user request starts undo. Planning returns a journaled work
-list of confirmed record/slot writes belonging to that run, plus
+list of confirmed reversible writes belonging to that run, plus
 `archive_restorations`; it performs no reversal or restoration. Asks and
 preexisting identities are excluded. The agent checks each target immediately
-before reversing it through its profile binding. For an unchanged target,
+before reversing it through the per-kind command carried by the undo work entry.
+It sends the contract's `reverse` request with the original run id, receipt, and
+write operation. For an unchanged target,
 close a ticket this run created as not planned, edit its comment to a stub, or
 restore its document/slot preimage. The comment stub consists of the line
 `Removed by sweep undo <run_id>`, followed by a blank line, then the original
@@ -832,7 +867,7 @@ Checklist setup's `skills/hippocampus-set-up/scripts/profile.py` accepts only
 `persist` in `--bindings`. `--record-writes` accepts an object of changed
 `tickets`, `projects`, `documents` and `scheduled_jobs` commands, with JSON
 `null` unbinding an individual kind. Omission preserves existing record writes.
-Retired `bindings.record` profiles are refused with the `record_writes` shape. `--ask` accepts the JSON command object or
+Retired legacy record profiles are refused with the `record_writes` shape. `--ask` accepts the JSON command object or
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.

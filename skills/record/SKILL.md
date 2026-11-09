@@ -47,7 +47,7 @@ and never runs a shell. Null or omitted kinds are unbound. Repository profiles
 cannot bind record writes. The retired `bindings.record` shape is refused.
 
 Every invocation reads one JSON request on stdin and writes one JSON response
-on stdout. A request contains `operation` (`lookup` or `write`), `kind`, the
+on stdout. A regular filing request contains `operation` (`lookup` or `write`), `kind`, the
 complete `item`, the chosen `filing` row, and `identity`:
 `{"session_id": "producer", "produced_at": "original time", "text": "original context"}`.
 Lookup returns exactly `{"status": "not_found"}` or
@@ -62,6 +62,13 @@ If a write ends without a usable receipt (including timeout or invalid output),
 its outcome is uncertain. Retry with the unchanged item: lookup must succeed
 before another write is attempted. Stores must make identity lookup durable and
 make their writes idempotent for that identity, including concurrent requests.
+
+Sweep undo sends the same command a `reverse` request instead of a filing
+request. It contains the kind, original identity and receipt, original run id,
+and original write operation. It returns `{"status":"reversed"}` or
+`{"status":"conflict","reason":"..."}`; a conflict preserves the changed
+destination. See the full request contract in
+[INTERFACE.md](../../INTERFACE.md#record-write-protocol).
 
 At wrap the checklist agent composes the session summary from every history
 entry and close outcome in the chain, storing it in `resume.session_summary`.

@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-KINDS = ('ticket_status', 'commitments')
+KINDS = ('ticket_status', 'commitments', 'open_ticket_search')
 ROW_FIELDS = ('reference', 'title', 'state', 'link')
 
 
@@ -50,7 +50,7 @@ def verdict(text, expected=None):
             # A verdict is always one line, including a multi-line binding reason.
             return 2, 'error: ' + ' '.join(reason.split())
         if kind not in KINDS:
-            raise ValueError('unknown shape: kind must be ticket_status, commitments, or error')
+            raise ValueError('unknown shape: kind must be ticket_status, commitments, open_ticket_search, or error')
         if expected is not None and kind != expected:
             raise ValueError(f'expected {expected}, got {kind}')
         _fields(response, ('kind', 'rows'), kind)
@@ -73,6 +73,8 @@ def verdict(text, expected=None):
                     raise ValueError(f'{location}.{field} must be non-empty')
             if row['reference'] in references:
                 raise ValueError(f'{location}: duplicate reference {row["reference"]}')
+            if kind == 'open_ticket_search' and row['state'] != 'open':
+                raise ValueError(f'{location}.state must be open')
             references.add(row['reference'])
         return 0, 'valid'
     except (ValueError, RecursionError) as error:

@@ -21,10 +21,12 @@ def row(kind):
     item = dict(reference='work:17', title='Carry the work', state='active', link='https://example.org/work/17')
     if kind == 'ticket_status':
         item['latest_progress'] = 'Contract approved'
+    if kind == 'open_ticket_search':
+        item['state'] = 'open'
     return item
 
 
-@pytest.mark.parametrize('kind', ['ticket_status', 'commitments'])
+@pytest.mark.parametrize('kind', ['ticket_status', 'commitments', 'open_ticket_search'])
 @pytest.mark.parametrize('empty', [False, True])
 def test_valid_responses(kind, empty):
     result = validate(dict(kind=kind, rows=[] if empty else [row(kind)]), '--expect', kind)
@@ -35,6 +37,15 @@ def test_unresolvable_ticket_has_explicit_not_found_row():
     item = dict(reference='work:missing', title='', state='not_found', link='', latest_progress='')
     result = validate(dict(kind='ticket_status', rows=[item]))
     assert (result.returncode, result.stdout) == (0, 'valid\n')
+
+
+def test_open_ticket_search_accepts_only_open_candidates():
+    candidate = row('open_ticket_search')
+    assert validate(dict(kind='open_ticket_search', rows=[candidate])).returncode == 0
+    candidate['state'] = 'closed'
+    result = validate(dict(kind='open_ticket_search', rows=[candidate]))
+    assert result.returncode == 1
+    assert 'open' in result.stdout
 
 
 @pytest.mark.parametrize('payload,reason', [

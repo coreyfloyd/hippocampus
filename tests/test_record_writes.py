@@ -5,8 +5,12 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'scripts/lib/checklist.py'
+sys.path.insert(0, str(ROOT / 'scripts/lib'))
+import record_write
 
 
 def run(tmp_path, operation, profile, payload, rows):
@@ -99,6 +103,34 @@ def test_failed_or_malformed_lookup_never_writes(tmp_path):
     assert result.returncode == 1
     assert json.loads(result.stdout)['resume']['open_loops'] == [item()]
     assert not (tmp_path / 'store.json').exists()
+
+
+def test_reverse_uses_the_original_receipt_and_run(tmp_path):
+    script = tmp_path / 'reverse.py'
+    request = tmp_path / 'reverse-request.json'
+    script.write_text('''import json, sys
+from pathlib import Path
+r = json.load(sys.stdin)
+Path(sys.argv[1]).write_text(json.dumps(r))
+print(json.dumps({'status': 'reversed'}))
+''')
+    identity = dict(session_id='producer', produced_at='2026-11-03T12:00:00Z', text='change')
+    receipt = dict(identity=identity, destination='tickets:7')
+    response = record_write.reverse(
+        dict(command=[sys.executable, str(script), str(request)]), 'tickets', identity, receipt,
+        run_id='sweep-run', write_operation='create_ticket')
+    assert response == dict(status='reversed')
+    assert json.loads(request.read_text()) == {
+        'operation': 'reverse', 'kind': 'tickets', 'identity': identity, 'receipt': receipt,
+        'run_id': 'sweep-run', 'write_operation': 'create_ticket'}
+
+
+@pytest.mark.parametrize('receipt', ['old-string-receipt', None, [], {}])
+def test_reverse_rejects_malformed_receipt_before_invoking_command(receipt):
+    identity = dict(session_id='producer', produced_at='2026-11-03T12:00:00Z', text='change')
+    with pytest.raises(ValueError, match='original receipt'):
+        record_write.reverse({'command': ['must-not-run']}, 'tickets', identity, receipt,
+                             run_id='sweep-run', write_operation='comment')
 
 
 def test_explicit_write_failure_keeps_store_error(tmp_path):

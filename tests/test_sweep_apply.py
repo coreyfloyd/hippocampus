@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from test_auto_apply_lessons import clone_pair, git, move_remote
-from test_sweep import ENGINE, assert_readable_report, command, decisions, read_run, sandbox, source  # noqa: F401
+from test_sweep import ENGINE, assert_readable_report, command, decisions, read_run, sandbox, source, write_receipt  # noqa: F401
 
 PRODUCER = 'abandoned-session'
 
@@ -88,7 +88,7 @@ def agent(lesson_row=None, knowledge_row=None):
             return {**result, 'status': 'assessed', 'lesson': lesson_row}
         if work['operation'] == 'apply_knowledge':
             return {**result, 'status': 'assessed', 'knowledge': knowledge_row}
-        return {**result, 'status': 'written', 'receipt': 'receipt-' + work['operation'],
+        return {**result, 'status': 'written', 'receipt': write_receipt(work, work['operation']),
                 'destination': work['operation']}
     return answer
 

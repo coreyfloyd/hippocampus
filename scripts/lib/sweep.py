@@ -861,7 +861,7 @@ def load_results(path, work, statuses):
     rows = json.loads(path.read_text())
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
         raise ValueError('results must be an array of objects')
-    known = {row['write_id'] for row in work}
+    known = {row['write_id']: row for row in work}
     applying = {row['write_id']: row['operation'] for row in work if row.get('operation') in APPLY_OPERATIONS.values()}
     native = {row['write_id'] for row in work if row.get('operation') == 'native_step'} | set(applying)
     result = {}
@@ -881,9 +881,15 @@ def load_results(path, work, statuses):
             raise ValueError('native outcomes require a native step')
         if row.get('status') not in statuses:
             raise ValueError('unsupported result status')
-        if row['status'] in ('written', 'already_written') and not all(
-                isinstance(row.get(k), str) and row[k].strip() for k in ('receipt', 'destination')):
-            raise ValueError('confirmed writes require receipt and destination')
+        if row['status'] in ('written', 'already_written'):
+            original = known[key]
+            if original.get('binding') in checklist.record_write.KINDS:
+                receipt = checklist.record_write.receipt(row, original['identity'])
+                if row.get('destination') != receipt['destination']:
+                    raise ValueError('confirmed write destination must match its receipt')
+            elif not all(isinstance(row.get(k), str) and row[k].strip()
+                         for k in ('receipt', 'destination')):
+                raise ValueError('confirmed writes require receipt and destination')
         if row['status'] == 'failed' and not (row.get('error') or row.get('reason')):
             raise ValueError('failed results require an error')
         result[key] = row
