@@ -204,8 +204,25 @@ the source of truth.
    any file moves in this release.
 
    ```bash
-   grep -rn -oE '\]\([^)#][^)]*\)' README.md | sed 's/.*(\(.*\))/\1/' \
-     | grep -v '^http' | while read -r f; do test -e "$f" || echo "missing: $f"; done
+   python3 - README.md RELEASE_CANDIDATE.md INSTALLATION.md <<'PY'
+   import re
+   import sys
+   from pathlib import Path
+
+   def slug(heading):
+       return re.sub(r'[ -]+', '-', re.sub(r'[^a-z0-9 -]', '', heading.lower())).strip('-')
+
+   for source in map(Path, sys.argv[1:]):
+       for link in re.findall(r'\]\((?!https?://)([^ )]+)\)', source.read_text()):
+           target, separator, anchor = link.partition('#')
+           destination = source.parent / target if target else source
+           if not destination.is_file():
+               print(f'missing: {link}')
+           elif separator:
+               headings = re.findall(r'^#+\s+(.+)$', destination.read_text(), re.M)
+               if slug(anchor) not in {slug(heading) for heading in headings}:
+                   print(f'missing anchor: {link}')
+   PY
    ```
 
 Fix anything the sweep finds, commit, push, and rerun both the suites and this

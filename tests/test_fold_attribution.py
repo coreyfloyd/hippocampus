@@ -37,3 +37,10 @@ def test_fold_audit_classifies_historical_source_for_any_owner(owner, reference)
     url = f"https://github.com/{owner}/{SOURCE_PACKAGE}/{reference}/{'a' * 40}/source.py"
     assert disposition("docs/architecture/session/runtime.html", url) == (
         "retained: immutable imported architecture source attribution")
+
+
+def test_fold_audit_classifies_each_release_record_as_history():
+    disposition = load_function("check-fold-names.py", "disposition")
+
+    assert disposition("docs/releases/0.13.1.md", SOURCE_PACKAGE) == (
+        "retained: release history and explicit manual cutover instructions (issue 64)")
