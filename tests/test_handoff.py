@@ -3,9 +3,11 @@
 The fixtures are created through the module's writer so each validation probe
 starts from a shape the production writer can actually produce.
 """
+import ast
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -163,27 +165,89 @@ def test_config_get_prints_a_string_a_list_and_nothing_for_an_absent_key(tmp_pat
     assert bad.returncode == 2 and "example_string" in bad.stderr
 
 
-def test_config_get_contract_refuses_object_valued_settings(tmp_path):
+def test_config_get_matches_its_contract_sentence(tmp_path):
+    handoff = load_module()
+    defaults = handoff.TIMED_CHECKPOINT_DEFAULTS
+    default_text = ", ".join(f"`{key}` prints `{value}`" for key, value in defaults.items())
     contract = (
-        "`python3 scripts/lib/handoff.py config-get <key>` prints one supported scalar value "
-        "(a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), "
-        "a list-valued setting one item per line, and nothing for an absent key; it exits 2 with "
-        "the reason on stderr when the configuration is unreadable, a value is mistyped, or the "
-        "setting is object-valued."
+        "`python3 scripts/lib/handoff.py config-get <key>` accepts any key: "
+        "`auto_apply_lessons` prints `true` or `false` (absent or null prints `false`); "
+        f"the timed settings require positive integers ({default_text} when absent); "
+        "`prune_days` requires a positive integer when non-null (absent or null prints nothing); "
+        "all other keys print a non-empty string or a list of non-empty strings one item per line "
+        "(an empty list prints a blank line), except `harness_enforcement_reference` requires an "
+        "absolute or `~/` string path; absent or null values for these other keys print nothing; "
+        "object values and other mistyped values, or an unreadable configuration, exit 2 with "
+        "the reason on stderr and no stdout."
     )
-    assert contract in (Path(ROOT) / "INTERFACE.md").read_text()
+    interface = (Path(ROOT) / "INTERFACE.md").read_text()
+    assert contract in interface
+
+    # Enumerate special dispatch keys from the engine, including future branches,
+    # rather than silently overlooking a new key with an absent-value default.
+    tree = ast.parse(Path(MODULE).read_text())
+    special_keys = set(defaults)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare) and ast.unparse(node.left) == "args.key":
+            for operand in node.comparators:
+                if isinstance(operand, ast.Constant) and isinstance(operand.value, str):
+                    special_keys.add(operand.value)
+    assert all(f"`{key}`" in contract for key in special_keys)
+    section = interface.split("## 2.", 1)[1].split("## 3.", 1)[0]
+    documented_keys = set(re.findall(r"^\| `([^`]+)` \|", section, re.MULTILINE))
+    assert documented_keys
 
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({"slim_checkouts": {"owner/repository": "/checkout"}}))
-    result = subprocess.run(
-        [sys.executable, MODULE, "config-get", "slim_checkouts"],
-        text=True,
-        capture_output=True,
-        env=dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home")),
-    )
-    assert result.returncode == 2
-    assert result.stdout == ""
-    assert result.stderr
+    env = dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home"))
+
+    def check(key, value, output="", refused=False):
+        config.write_text(json.dumps(value))
+        result = subprocess.run([sys.executable, MODULE, "config-get", key],
+                                text=True, capture_output=True, env=env)
+        assert result.returncode == (2 if refused else 0), (key, value, result)
+        assert result.stdout == output, (key, value, result)
+        assert bool(result.stderr) == refused, (key, value, result)
+
+    for key in documented_keys | special_keys | {"unknown_key"}:
+        expected = (f"{defaults[key]}\n" if key in defaults else
+                    "false\n" if key == "auto_apply_lessons" else "")
+        check(key, {}, expected)
+        check(key, {key: {}}, refused=True)
+        check(key, {key: None}, "false\n" if key == "auto_apply_lessons" else "",
+              refused=key in defaults)
+        if key in defaults or key == "prune_days":
+            check(key, {key: 17}, "17\n")
+            for bad in (0, -1, 1.5, True, "17", []):
+                check(key, {key: bad}, refused=True)
+        elif key == "auto_apply_lessons":
+            for value in (True, False):
+                check(key, {key: value}, str(value).lower() + "\n")
+            for bad in (1, "true", []):
+                check(key, {key: bad}, refused=True)
+        else:
+            check(key, {key: "~/example"}, "~/example\n")
+            if key != "harness_enforcement_reference":
+                check(key, {key: ["first", "second"]}, "first\nsecond\n")
+                check(key, {key: []}, "\n")
+                check(key, {key: ["valid", 1]}, refused=True)
+            else:
+                check(key, {key: []}, refused=True)
+                check(key, {key: "relative/path"}, refused=True)
+            for bad in ("", "   ", 1, True):
+                check(key, {key: bad}, refused=True)
+
+    for unreadable in ("{broken", "[]"):
+        config.write_text(unreadable)
+        result = subprocess.run([sys.executable, MODULE, "config-get", "unknown_key"],
+                                text=True, capture_output=True, env=env)
+        assert result.returncode == 2 and result.stdout == "" and result.stderr
+
+    # A directory is unreadable as JSON even when the tests run with elevated privileges.
+    config.unlink()
+    config.mkdir()
+    result = subprocess.run([sys.executable, MODULE, "config-get", "unknown_key"],
+                            text=True, capture_output=True, env=env)
+    assert result.returncode == 2 and result.stdout == "" and result.stderr
 
 
 def test_automated_cycle_handoff_requires_one_fresh_session_for_the_subject(tmp_path, monkeypatch):

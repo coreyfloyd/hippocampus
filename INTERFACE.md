@@ -53,7 +53,7 @@ an empty configuration.
 | `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
 | `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
-`python3 scripts/lib/handoff.py config-get <key>` prints one supported scalar value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list-valued setting one item per line, and nothing for an absent key; it exits 2 with the reason on stderr when the configuration is unreadable, a value is mistyped, or the setting is object-valued.
+`python3 scripts/lib/handoff.py config-get <key>` accepts any key: `auto_apply_lessons` prints `true` or `false` (absent or null prints `false`); the timed settings require positive integers (`timed_checkpoint_minutes` prints `55`, `timed_checkpoint_token_limit` prints `200000` when absent); `prune_days` requires a positive integer when non-null (absent or null prints nothing); all other keys print a non-empty string or a list of non-empty strings one item per line (an empty list prints a blank line), except `harness_enforcement_reference` requires an absolute or `~/` string path; absent or null values for these other keys print nothing; object values and other mistyped values, or an unreadable configuration, exit 2 with the reason on stderr and no stdout.
 
 ## 3. Handoff engine: `scripts/lib/handoff.py`
 
