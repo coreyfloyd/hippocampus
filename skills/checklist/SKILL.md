@@ -62,8 +62,8 @@ for filing and settling: save it as `<remaining-items>`. Optional `--handoff`
 must name the path pickup recorded, even if that file no longer exists; a
 different path fails. Without pickup, a brief or pasted prompt starts its own
 chain and contributes no earlier history. `plan` writes a start marker row to the current session's
-ledger; `--session-id` defaults to the Claude Code session in the environment,
-so pass it in Codex. No profile is also a valid plan: omit the profile arguments, and the plan is the
+ledger; `--session-id` defaults to the current session from `CODEX_THREAD_ID`, then
+`CLAUDE_SESSION_ID`, then `CLAUDE_CODE_SESSION_ID`. No profile is also a valid plan: omit the profile arguments, and the plan is the
 five spine steps ending with the handoff. Record has no bound record writes and persist is unbound.
 Knowledge always runs the package’s knowledge-capture, consuming `knowledge`;
 lessons always runs improve-harness, consuming `lesson`. In Claude Code these

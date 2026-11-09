@@ -163,6 +163,29 @@ def test_config_get_prints_a_string_a_list_and_nothing_for_an_absent_key(tmp_pat
     assert bad.returncode == 2 and "example_string" in bad.stderr
 
 
+def test_config_get_contract_refuses_object_valued_settings(tmp_path):
+    contract = (
+        "`python3 scripts/lib/handoff.py config-get <key>` prints one supported scalar value "
+        "(a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), "
+        "a list-valued setting one item per line, and nothing for an absent key; it exits 2 with "
+        "the reason on stderr when the configuration is unreadable, a value is mistyped, or the "
+        "setting is object-valued."
+    )
+    assert contract in (Path(ROOT) / "INTERFACE.md").read_text()
+
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"slim_checkouts": {"owner/repository": "/checkout"}}))
+    result = subprocess.run(
+        [sys.executable, MODULE, "config-get", "slim_checkouts"],
+        text=True,
+        capture_output=True,
+        env=dict(os.environ, HIPPOCAMPUS_CONFIG=str(config), HOME=str(tmp_path / "home")),
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr
+
+
 def test_automated_cycle_handoff_requires_one_fresh_session_for_the_subject(tmp_path, monkeypatch):
     handoff = load_module()
     state = tmp_path / "state"

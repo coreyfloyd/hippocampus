@@ -53,9 +53,7 @@ an empty configuration.
 | `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
 | `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
 
-`python3 scripts/lib/handoff.py config-get <key>` prints one value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list one item per line,
-and exits 2 with the reason on stderr when the configuration is unreadable or the value is
-mistyped.
+`python3 scripts/lib/handoff.py config-get <key>` prints one supported scalar value (a boolean as `true` or `false`, so `auto_apply_lessons` prints `false` when absent), a list-valued setting one item per line, and nothing for an absent key; it exits 2 with the reason on stderr when the configuration is unreadable, a value is mistyped, or the setting is object-valued.
 
 ## 3. Handoff engine: `scripts/lib/handoff.py`
 
