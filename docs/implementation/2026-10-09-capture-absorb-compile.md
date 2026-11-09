@@ -2,7 +2,7 @@
 
 ## Your execution role
 
-You are the implementation generator, already launched by the orchestrating interactive session through the approved runtime slate. Read the canonical generator role contracts at `~/.claude/dotfiles/roles/generate/runtime/core.md` and `~/.claude/dotfiles/roles/generate/runtime/feature.md` before executing this brief. Implement the approved specification in this assigned candidate, run its required checks, commit your work and return evidence.
+You are the implementation generator, already launched by the orchestrating interactive session through the approved runtime slate. Read the supplied generator role contracts before executing this brief. Implement the approved specification in this assigned candidate, run its required checks, commit your work and return evidence.
 
 Do not re-dispatch this ticket, run a launch-generator command, ask for another go, or act as the interactive orchestrator. the maintainer already approved the specification and the execution slate. The external orchestrator owns launch planning, independent review, evaluation, ticket lifecycle and approval communication. Your job is the implementation within this brief’s scope. You may read repository and skill constraints, but the dev-execute orchestrator steps are not your generator task.
 

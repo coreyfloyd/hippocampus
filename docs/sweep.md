@@ -47,31 +47,40 @@ quoting without a shell and have the configured binding timeout. Nonzero exits,
 timeouts, and commands that cannot start prevent every session in scope from
 counting as abandoned; the report names the command and error. Successful checks
 and their ids are recorded too. Checks must be read-only, including in watch-only.
-For example, this optional Herdr check reads `herdr pane list` and prints the
-session ids from panes whose `agent_session.kind` is `id`:
+For example, replace `REPLACE_WITH_SESSION_COMMAND` with a read-only command
+that prints active session identifiers:
 
 ```bash
-python3 -c 'import json,subprocess; out=subprocess.run(["herdr","pane","list"],check=True,capture_output=True,text=True).stdout; [print(p["agent_session"]["value"]) for p in json.loads(out)["result"]["panes"] if (p.get("agent_session") or {}).get("kind")=="id"]'
+REPLACE_WITH_SESSION_COMMAND
 ```
 
-Every Herdr agent state (`idle`, `done`, `working`, `blocked`) counts as open.
+Every state the command reports counts as open.
 
-Put the same command in the configuration as a JSON string (the double quotes
-inside the command must be escaped):
+Represent the command as an explicit Python argv list: the executable is the
+first string, and each argument is a separate string. Replace
+`REPLACE_WITH_SESSION_COMMAND` with the executable path and
+`REPLACE_WITH_ARGUMENT` with an argument; add further strings as needed, or
+remove the argument string for a command that takes none. A single argument
+containing spaces stays in one string. Do not put a whole command line in the
+executable string.
+
+Put that argv list in the Python wrapper below. The configuration stores the
+wrapper as a JSON string, so its double quotes must be escaped. For example,
+an executable `session-tool` invoked with `list` uses
+`["session-tool", "list"]` in the wrapper:
 
 ```json
 {
   "sweep": {
     "open_session_checks": [
-      "python3 -c 'import json,subprocess; out=subprocess.run([\"herdr\",\"pane\",\"list\"],check=True,capture_output=True,text=True).stdout; [print(p[\"agent_session\"][\"value\"]) for p in json.loads(out)[\"result\"][\"panes\"] if (p.get(\"agent_session\") or {}).get(\"kind\")==\"id\"]'"
+      "python3 -c 'import subprocess; subprocess.run([\"REPLACE_WITH_SESSION_COMMAND\", \"REPLACE_WITH_ARGUMENT\"], check=True)'"
     ]
   }
 }
 ```
 
-The command runs without a shell or pipeline. If Herdr is missing or inspection
-fails, it exits nonzero so sweep prevents sessions from counting as abandoned.
-Herdr is an optional example, never a package dependency. Other session managers
+The command runs without a shell or pipeline. If inspection fails, it exits
+nonzero so sweep prevents sessions from counting as abandoned. Session managers
 can implement the same command contract. `new_ticket_limit` (a non-negative
 integer, default 10) and `archive_retention_days` (default null, retention off)
 control creation capacity and optional archive deletion respectively.

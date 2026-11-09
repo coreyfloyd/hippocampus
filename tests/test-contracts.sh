@@ -20,6 +20,32 @@ scan() {
   esac
 }
 
+scan_tracked() {
+  local desc="$1" pattern="$2" out status
+  shift 2
+  out="$(git -C "$ROOT" grep -nE -- "$pattern" -- "$@" 2>&1)" && status=0 || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) printf '%s: leaked\n%s\n' "$desc" "$out" >&2; exit 1 ;;
+    *) printf '%s: scan failed (git grep exit %s)\n%s\n' "$desc" "$status" "$out" >&2; exit 1 ;;
+  esac
+}
+
+scan_configured_denylist() {
+  local denylist="${PUBLIC_CONTENT_DENYLIST:-}" out status
+  [ -z "$denylist" ] && return 0
+  if [ ! -f "$denylist" ] || [ ! -r "$denylist" ]; then
+    printf 'configured denylist: cannot read %s\n' "$denylist" >&2
+    exit 1
+  fi
+  out="$(git -C "$ROOT" grep -nF -f "$denylist" -- skills contracts profiles README.md 2>&1)" && status=0 || status=$?
+  case "$status" in
+    1) return 0 ;;
+    0) printf 'configured denylist: leaked\n%s\n' "$out" >&2; exit 1 ;;
+    *) printf 'configured denylist: scan failed (git grep exit %s)\n%s\n' "$status" "$out" >&2; exit 1 ;;
+  esac
+}
+
 test -f "$CONTRACT"
 test -f "$PROFILE"
 test -f "$ROOT/MIGRATION.md"
@@ -129,5 +155,6 @@ grep -Fxq 'wiki_enabled: false' "$PROFILE_ROOT/documented-disable-recipe.md"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-recipe.md" >/dev/null
 
 
-scan 'private vault vocabulary' -rnE 'unified Obsidian vault|AI-vault|writing-corpus|R-004|wiki/people/' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
-scan 'private paths and names' -rnE --exclude='*.swift' 'claude-dotfiles|research-skills|~/Obsidian|Corey|~/[.]claude/skills|~/Development|wiki/CLAUDE[.]md|wiki/AGENTS[.]md' "$ROOT/skills" "$ROOT/contracts" "$ROOT/profiles" "$ROOT/README.md"
+# POSIX ERE has no portable \b; delimit the hostname suffix explicitly.
+scan_tracked 'machine-specific paths or hostnames' '~/Development|~/[.]claude/skills|/(Users|home)/[^/[:space:]]+|[[:alnum:]][[:alnum:].-]*[.][lL][oO][cC][aA][lL]([^[:alnum:]_-]|$)' skills contracts profiles README.md
+scan_configured_denylist

@@ -19,7 +19,7 @@ def git(*args):
 
 def assignment(path, line):
     # Immutable source attribution is reviewed and retained by the rename slice.
-    if re.search(r'github\.com/coreyfloyd/continuity/(?:blob|commit)/[0-9a-f]{7,40}', line):
+    if re.search(r'github\.com/[A-Za-z0-9-]+/continuity/(?:blob|commit)/[0-9a-f]{7,40}', line):
         return 59, 'keep historical source attribution'
     if path in {'RELEASING.md', 'RELEASE_SIGNING_FINGERPRINT', 'scripts/build-release.sh', 'scripts/verify-release.sh'} or path.startswith(('tests/test_release', 'keys/')):
         return 64, 'replace package release naming and signing references'

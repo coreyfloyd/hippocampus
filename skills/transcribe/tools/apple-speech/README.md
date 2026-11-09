@@ -2,7 +2,7 @@
 
 Standalone macOS 26+ command-line transcription using on-device Apple Speech.
 
-It accepts an audio file or a video file containing an audio track and writes a timestamped Markdown or JSON transcript. It has no dependency on Propeller, remote machines, APIs, queues, or persistent state.
+It accepts an audio file or a video file containing an audio track and writes a timestamped Markdown or JSON transcript. It has no dependency on remote machines, APIs, queues, or persistent state.
 
 ## Build
 
