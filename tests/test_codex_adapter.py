@@ -83,7 +83,7 @@ def test_each_derived_payload_traces_to_its_recorded_probe_payload():
     assert all((FIX/name).is_file() for name in PROBE_PAYLOAD_SHA256)
 
 
-def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls(sandbox):
+def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls(sandbox, requires_codex_cli):
     home, work = sandbox
     codex = home/'.codex';codex.mkdir()
     (codex/'config.toml').write_text('model = "custom"\n')
@@ -252,7 +252,7 @@ def test_reinstalls_leave_whole_config_stable(
     'trusted_hash', '"trusted_hash"', "'trusted_hash'",
     r'"trusted\u005fhash"', r'"trusted\U0000005fhash"',
 ])
-def test_reinstalls_preserve_all_user_trust_settings(sandbox, codex_installer, monkeypatch, hash_key):
+def test_reinstalls_preserve_all_user_trust_settings(sandbox, codex_installer, monkeypatch, hash_key, requires_codex_cli):
     home, _ = sandbox
     codex = home / '.codex'
     monkeypatch.setattr(sys, 'argv', [str(INSTALL), '--codex-home', str(codex),
@@ -295,7 +295,7 @@ def test_reinstalls_preserve_all_user_trust_settings(sandbox, codex_installer, m
 @pytest.mark.parametrize('quote', ['"' * 3, "'" * 3])
 @pytest.mark.parametrize('content_kind', ['table', 'assignment'])
 def test_reinstalls_preserve_config_syntax_inside_user_strings(
-        sandbox, codex_installer, monkeypatch, quote, content_kind):
+        sandbox, codex_installer, monkeypatch, quote, content_kind, requires_codex_cli):
     home, _ = sandbox
     codex = home / '.codex'
     monkeypatch.setattr(sys, 'argv', [str(INSTALL), '--codex-home', str(codex),
@@ -322,7 +322,7 @@ def test_reinstalls_preserve_config_syntax_inside_user_strings(
 @pytest.mark.parametrize('before_agent_block', [True, False])
 def test_install_inserts_trust_with_config_crlf(
         sandbox, codex_installer, monkeypatch, trust_then_foreign_block,
-        first_install, final_newline, before_agent_block):
+        first_install, final_newline, before_agent_block, requires_codex_cli):
     home, _ = sandbox
     codex = home / '.codex'
     codex.mkdir()
@@ -370,7 +370,7 @@ def test_config_writer_preserves_unowned_bytes(
 @pytest.mark.parametrize('location', ['owned', 'foreign'])
 def test_reinstalls_preserve_unicode_config_values(
         sandbox, codex_installer, monkeypatch, trust_then_foreign_block,
-        separator, quote, location):
+        separator, quote, location, requires_codex_cli):
     home, _ = sandbox
     codex = home / '.codex'
     monkeypatch.setattr(sys, 'argv', [str(INSTALL), '--codex-home', str(codex),
@@ -398,7 +398,7 @@ def test_reinstalls_preserve_unicode_config_values(
         assert config.read_bytes() == configured
 
 
-def test_install_collision_and_verification_failure_do_not_change_user_files(sandbox):
+def test_install_collision_and_verification_failure_do_not_change_user_files(sandbox, requires_codex_cli):
     home,_=sandbox;codex=home/'.codex';(codex/'skills/checklist').mkdir(parents=True)
     result=cli(INSTALL,'--codex-home',codex)
     assert result.returncode != 0
@@ -527,7 +527,7 @@ def test_codex_cli_uses_child_identity_instead_of_inherited_claude_identity(sand
     assert not (Path(os.environ['HANDOFF_LEDGER_DIR'])/'session-touched-paths.parent-session.jsonl').exists()
 
 
-def test_uninstall_preserves_trust_for_a_user_hook_added_after_install(sandbox):
+def test_uninstall_preserves_trust_for_a_user_hook_added_after_install(sandbox, requires_codex_cli):
     import importlib.util
     spec=importlib.util.spec_from_file_location('codex_trust_test',ROOT/'scripts/lib/codex_trust.py')
     trust=importlib.util.module_from_spec(spec);spec.loader.exec_module(trust)
@@ -650,7 +650,7 @@ def test_codex_stop_retains_renamed_file_ownership(sandbox, owned, newer, expect
     assert decision == expected
 
 
-def test_uninstall_finishes_when_runtime_copy_is_already_gone(sandbox):
+def test_uninstall_finishes_when_runtime_copy_is_already_gone(sandbox, requires_codex_cli):
     home, work = sandbox
     codex = home / '.codex'
     codex.mkdir()

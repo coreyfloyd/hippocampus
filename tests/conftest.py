@@ -1,7 +1,14 @@
 """Keep hippocampus tests independent of the caller's live handoff ledger."""
 import os
+import shutil
 
 import pytest
+
+
+@pytest.fixture
+def requires_codex_cli():
+    if not shutil.which('codex'):
+        pytest.skip('codex command unavailable')
 
 
 @pytest.fixture(autouse=True)

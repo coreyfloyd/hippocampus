@@ -11,6 +11,20 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_codex_cli_checks_skip_without_the_codex_command():
+    env = dict(os.environ, PATH='/usr/bin:/bin', PYTHONDONTWRITEBYTECODE='1')
+    checks = {
+        'tests/test_codex_adapter.py::test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_uninstalls': ('1 skipped', 'codex command unavailable'),
+        'tests/test_codex_adapter.py::test_remove_trust_preserves_adjacent_comments_and_blank_lines': ('1 passed',),
+        'tests/test_combined_install.py::test_codex_install_from_extracted_tree_verifies_native_trust': ('1 skipped', 'codex command unavailable'),
+    }
+    for node, expected in checks.items():
+        result = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-rs', node], cwd=ROOT,
+                                env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert all(value in result.stdout for value in expected)
+
+
 def installer():
     sys.path.insert(0, str(ROOT / 'scripts'))
     spec = importlib.util.spec_from_file_location('combined_codex', ROOT / 'scripts/install-codex.py')
@@ -170,12 +184,9 @@ def test_claude_native_cli_cutover_from_checkout_and_release_tree(tmp_path):
                 assert len(commands) == len(set(commands))
 
 
-def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path):
+def test_codex_install_from_extracted_tree_verifies_native_trust(tmp_path, requires_codex_cli):
     import shutil
-    import pytest
     codex = shutil.which('codex')
-    if not codex:
-        pytest.fail('codex executable required for native trust verification')
     source = tmp_path / 'extracted-release'
     shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__', '.pytest_cache'))
     home = tmp_path / 'home'
