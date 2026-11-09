@@ -201,11 +201,12 @@ the source of truth.
    afterthought and hides the change the release exists to make.
 
 5. **Stale links and paths.** Confirm every relative link still resolves after
-   any file moves in this release.
+   any file moves in this release. Install [uv](https://github.com/astral-sh/uv#installation)
+   to run the check with its pinned Markdown parser. Missing files or heading
+   anchors produce diagnostics and a nonzero exit status.
 
    ```bash
-   grep -rn -oE '\]\([^)#][^)]*\)' README.md | sed 's/.*(\(.*\))/\1/' \
-     | grep -v '^http' | while read -r f; do test -e "$f" || echo "missing: $f"; done
+   uv run --quiet scripts/check-doc-links.py README.md RELEASE_CANDIDATE.md INSTALLATION.md
    ```
 
 Fix anything the sweep finds, commit, push, and rerun both the suites and this

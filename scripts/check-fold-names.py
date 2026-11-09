@@ -21,7 +21,7 @@ HISTORICAL = {
 
 
 def disposition(path, line):
-    if path in {'MIGRATION.md', 'RELEASE_CANDIDATE.md', 'docs/releases/0.13.0.md'}:
+    if path in {'MIGRATION.md', 'RELEASE_CANDIDATE.md'} or path.startswith('docs/releases/') and path.endswith('.md'):
         return 'retained: release history and explicit manual cutover instructions (issue 64)'
     if path == 'README.md':
         return 'retained: README pointer to the manual cutover for unreleased users'

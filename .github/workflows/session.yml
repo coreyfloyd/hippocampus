@@ -29,7 +29,7 @@ jobs:
       # The installation checks run against the real CLIs. Without codex they fail
       # instead of skipping, and without claude the plugin checks skip.
       - run: npm install -g @openai/codex@0.162.0 @anthropic-ai/claude-code@2.1.300
-      - run: python -m pip install pytest
+      - run: python -m pip install pytest uv==0.10.2
       - run: python tests/test-staged-release.py
         working-directory: .
       - run: python tests/test-fold-names.py
