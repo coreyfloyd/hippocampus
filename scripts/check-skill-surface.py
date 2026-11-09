@@ -8,7 +8,13 @@ from pathlib import Path
 
 DATE = re.compile(r"20\d{2}-\d{2}-\d{2}")
 TICKET = re.compile(r"(?<![\w/])#\d+")
-SKILL = re.compile(r"/hippocampus:([a-z0-9-]+)")
+# A slash command starts a token; paths, URLs and division are not invocations.
+SKILL = re.compile(
+    r"(?<![^\s`\"'(\[{])(?:\*{1,2})?/([A-Za-z][A-Za-z0-9_-]*(?::[A-Za-z][A-Za-z0-9_-]*)?)"
+    r"(?![\w/-]|:[\w]|\.[\w])"
+)
+# Client built-ins, rather than package skills (Claude Code / Codex CLI docs).
+BUILTIN_COMMANDS = {"clear", "compact", "doctor", "help", "init", "resume", "status"}
 ADAPTER_TOOLS = {
     "TaskList": "Claude Code",
     "TaskGet": "Claude Code",
@@ -41,17 +47,25 @@ def available_skills(paths):
     }
 
 
-def inline_code(line, index):
-    return line[:index].count("`") % 2 == 1
-
-
-def date_is_allowed(line, match, in_fence):
-    if in_fence or inline_code(line, match.start()):
+def date_is_allowed(line, match):
+    before, after = line[:match.start()], line[match.end():]
+    if re.search(r"\bchecked\s*$", before, re.IGNORECASE):
         return True
-    before = line[:match.start()].lower()
-    if "checked" in before:
+    if re.search(r"https?://\S*$", before):
         return True
-    return bool(re.search(r"https?://\S*$", line[:match.start()]))
+    # A date within a file name is sample data, even in a comment.
+    if re.match(r"[-\w]*\.[a-zA-Z0-9]+", after):
+        return True
+    # Permit exact date/timestamp literals, not narrative hidden in inline code.
+    for literal in re.finditer(r"([`\"'])([^`\"']*)\1", line):
+        if literal.start(2) == match.start() and re.fullmatch(
+            r"20\d{2}-\d{2}-\d{2}(?:T[0-9:.+Z-]+)?", literal.group(2)
+        ):
+            return True
+    return bool(re.fullmatch(
+        r"\s*(?:-\s+)?[\w-]+:\s*20\d{2}-\d{2}-\d{2}(?:T[0-9:.+Z-]+)?\s*",
+        line,
+    ))
 
 
 def findings(paths):
@@ -62,20 +76,18 @@ def findings(paths):
             lines = path.read_text(encoding="utf-8").splitlines()
         except UnicodeDecodeError:
             continue
-        in_fence = False
         for number, line in enumerate(lines, start=1):
-            if line.lstrip().startswith("```"):
-                in_fence = not in_fence
             for match in DATE.finditer(line):
-                if not date_is_allowed(line, match, in_fence):
+                if not date_is_allowed(line, match):
                     rows.append((path, number, "dated incident note"))
             for match in TICKET.finditer(line):
                 own = f"coreyfloyd/hippocampus{match.group()}"
                 if own not in line:
                     rows.append((path, number, f"internal ticket reference: {match.group()}"))
             for match in SKILL.finditer(line):
-                name = match.group(1)
-                if name not in skills:
+                command = match.group(1)
+                name = command.removeprefix("hippocampus:")
+                if name not in skills and command not in BUILTIN_COMMANDS:
                     rows.append((path, number, f"unshipped skill: {name}"))
             for tool, adapter in ADAPTER_TOOLS.items():
                 if tool in line and adapter.lower() not in line.lower():
