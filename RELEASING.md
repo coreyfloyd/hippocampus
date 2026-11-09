@@ -201,7 +201,7 @@ the source of truth.
    afterthought and hides the change the release exists to make.
 
 5. **Stale links and paths.** Confirm every relative link still resolves after
-   any file moves in this release. Install [uv](https://docs.astral.sh/uv/)
+   any file moves in this release. Install [uv](https://github.com/astral-sh/uv#installation)
    to run the check with its pinned Markdown parser. Missing files or heading
    anchors produce diagnostics and a nonzero exit status.
 
