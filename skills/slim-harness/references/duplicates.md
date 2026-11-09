@@ -26,7 +26,7 @@ a period, question mark, or exclamation mark followed by whitespace or end of
 block ends a sentence. A final fragment also counts. Every span retains its text
 and its original inclusive, one-based physical line range, including soft wraps.
 
-## Deterministic threshold (chosen 2026-10-17)
+## Deterministic threshold
 
 Normalize Unicode with NFKC, case-fold, fold curly apostrophes to straight ones,
 and tokenize words (including internal apostrophes). Punctuation, Markdown

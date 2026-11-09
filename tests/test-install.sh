@@ -45,6 +45,8 @@ release_manifest_legacy() {
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/test-compose-rules.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/test-rules-setup.py"
 HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh"
+python3 "$SOURCE_ROOT/scripts/check-skill-surface.py" \
+  "$TEST_HOME/.claude/skills" "$TEST_HOME/.codex/skills"
 test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/__pycache__"
 test ! -e "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/skills/absorb/scripts/distribution.test.pyo"
 if HOME="$TEST_HOME" CODEX_HOME="$TEST_HOME/.codex" bash "$SOURCE_ROOT/install.sh" --verify; then

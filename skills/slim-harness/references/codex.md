@@ -4,7 +4,7 @@ Checked 2026-10-12. Measure only the Codex session's loaded files. Auto-loaded
 instructions and skills/agent definitions read in full are in context; a
 listed-only skill gets the description check only. Parent sessions resolve and
 measure every required role path themselves; report an unresolved path, not a size.
-Codex has no known output-style equivalent as of 2026-10-12.
+Checked 2026-10-12: Codex has no known output-style equivalent.
 
 | File | Limit | Unit |
 |---|---:|---|

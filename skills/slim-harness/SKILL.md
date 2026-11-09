@@ -138,7 +138,7 @@ Every situational subfile is pointed to directly from the always-loaded file:
 **one level deep**. Every pointed-to file over **100 lines** starts with a table of
 contents. Path-scoped rules are exempt from pointers because matching files load
 them. For skills, these come from Anthropic's published best-practices page; their
-extension to rules files is this **skill’s own rule**, chosen 2026-10-11 without a
+extension to rules files is this **skill’s own rule**, chosen without a
 depth experiment. Do not attribute that extension to Anthropic. The published page
 wins over skill-creator guidance that permits deeper references or a 300-line TOC.
 
