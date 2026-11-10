@@ -474,3 +474,34 @@ def test_supported_cancellation_cli_handles_legacy_orphan(runtime):
     assert receipt['cancelled']
     result = subprocess.run(argv, capture_output=True, text=True, cwd=runtime, timeout=10)
     assert result.returncode == 0 and not json.loads(result.stdout)['cancelled']
+
+
+@pytest.mark.parametrize('failure', ['missing-codex', 'spawn-failure'])
+def test_productive_rearm_failure_disables_but_preserves_checkpoint(runtime, session, monkeypatch, failure):
+    _, incoming = session
+    enable(runtime)
+    first = state()
+    if first['harness'] != 'codex':
+        pytest.skip('Codex rearm failure seam')
+    incoming('Requested build result arrived; fixed its failure')
+    incoming(h.keep_warm_prompt('test', first['activation'], 1))
+    monkeypatch.setattr(h.time, 'time', lambda: first['due_at'])
+    with monkeypatch.context() as failing:
+        if failure == 'missing-codex':
+            failing.setattr(h.shutil, 'which', lambda _: None)
+        else:
+            def cannot_spawn(*args, **kwargs):
+                raise OSError('controlled spawn failure')
+            failing.setattr(h.subprocess, 'Popen', cannot_spawn)
+        result = h.keep_warm_wake('test', first['activation'], 1)
+    assert result['checkpoint'] is True and result['enabled'] is False
+    assert result['error']
+    assert not h.timer_file('test', '.keep-warm.json').exists()
+    assert not h.timer_file('test', '.pending.json').exists()
+    assert h.read_json(str(h.timer_file('test', '.wake-result.json'))) == result
+    assert h.read_json(str(h.timer_file('test', '.receipt.json'))) == result
+    assert not h.maintenance_only('test')
+    assert not enable(runtime)['enabled']  # no self-renewal from the wake
+    incoming('keep-warm on')
+    assert enable(runtime)['enabled']  # a fresh explicit activation can recover
+    assert state()['activation'] != first['activation']

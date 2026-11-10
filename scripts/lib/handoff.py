@@ -367,7 +367,15 @@ def keep_warm_wake(session_id: str, activation: str, wake: int) -> dict:
             if enabled:
                 state["due_at"] = state["activated_at"] + 6600
                 atomic_write(str(timer_file(session_id, ".keep-warm.json")), state)
-                result["instructions"] = (cancelled.get("instructions", "") + "\n" + arm_keep_warm(session_id, state)).strip()
+                try:
+                    result["instructions"] = (cancelled.get("instructions", "") + "\n" + arm_keep_warm(session_id, state)).strip()
+                except (OSError, ValueError) as error:
+                    # Work already authorized preservation. A failed second wake
+                    # must not strand an enabled subscription or revoke that work.
+                    result = _cancel_timer(session_id) | {
+                        "checkpoint": True, "enabled": False, "prompt": prompt,
+                        "error": f"keep-warm rearm failed: {error}"}
+                    atomic_write(str(timer_file(session_id, ".receipt.json")), result)
         atomic_write(str(timer_file(session_id, ".wake-result.json")), result)
         return result
 
