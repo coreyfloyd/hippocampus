@@ -71,10 +71,13 @@ task route you describe in set-up.
   files their open items.
 
 Handoffs live outside either tool's data folder, so you can checkpoint in
-Claude Code and pick up in Codex. Each checkpoint schedules a replacement timed
-checkpoint, by default at least 55 minutes later when context is below 200,000 tokens.
-The pre-compaction hook writes a checkpoint itself from retained facts, preserving
-your continuation. Both settings are [configurable](docs/session-installation.md#shared-configuration).
+Claude Code and pick up in Codex. Checkpoints never schedule timers.
+Use `keep-warm on` only while waiting on a specific result or reply that will
+message this session, expected within about two hours. It starts off, allows at
+most two wakes around 55 and 110 minutes from activation, and stops at the first
+wake without new incoming work. Empty wakes write no handoff. `keep-warm off`
+cancels pending work; Claude Code executes native CronDelete.
+The pre-compaction hook preserves real work from retained facts.
 Hooks also remind you to checkpoint when context
 passes 50%, restore the handoff after compaction, and suggest a wrap after a
 commit, push or passing test run. The [session guide](docs/session-guide.md)

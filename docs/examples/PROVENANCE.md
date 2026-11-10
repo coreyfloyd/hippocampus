@@ -13,8 +13,8 @@ the other captured values remain from the original capture.
 `profile.md` and `config.json` are **validated inputs**, not captured outputs:
 the package reads these files and has no command that generates them. The profile
 is an unchanged copy of `tests/fixtures/profiles/user.md`. The configuration is
-a documented handoff-directory override and enforcement-reference path, plus the
-55-minute timed checkpoint interval and 200,000-token limit defaults. It is
+a documented handoff-directory override and enforcement-reference path. Automatic
+timer settings were removed when explicit keep-warm replaced timed checkpoints. It is
 serialized with two-space indentation and a trailing newline. Its shape and keys
 are defined by `INTERFACE.md` section 2 and round-trip through `config-get` in
 `test_configuration_example_is_read_by_config_get`. No private configuration was copied.

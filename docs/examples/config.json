@@ -1,6 +1,4 @@
 {
   "handoff_dir": "~/state/session-handoffs",
-  "harness_enforcement_reference": "~/state/harness/enforcement.md",
-  "timed_checkpoint_minutes": 55,
-  "timed_checkpoint_token_limit": 200000
+  "harness_enforcement_reference": "~/state/harness/enforcement.md"
 }

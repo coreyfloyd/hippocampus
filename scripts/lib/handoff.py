@@ -25,6 +25,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -34,7 +35,6 @@ DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
 # Raw pre-compaction hook input is kept beside the handoffs, outside either tool's own data area.
 COMPACT_STATE_DIR = "~/.local/state/hippocampus/compact-state"
 HANDOFF_SH = str(Path(__file__).resolve().with_name("handoff.sh"))
-TIMED_CHECKPOINT_DEFAULTS = {"timed_checkpoint_minutes": 55, "timed_checkpoint_token_limit": 200_000}
 ITEM_TYPES = {"progress", "commitment", "decision", "knowledge", "lesson", "artifact", "open_loop"}
 HEADLESS_ENTRYPOINTS = {"sdk-cli", "sdk-py", "sdk-ts", "sdk", "mcp", "headless"}
 BANNED = {
@@ -105,15 +105,6 @@ def read_config() -> dict:
     return data
 
 
-def timed_setting(key: str) -> int:
-    value = read_config().get(key, TIMED_CHECKPOINT_DEFAULTS[key])
-    if type(value) is not int or value < 1:
-        requirement = ("a whole number of minutes, at least 1" if key == "timed_checkpoint_minutes"
-                       else "a positive integer")
-        raise ValueError(f"hippocampus config {config_path()}: {key} must be {requirement}")
-    return value
-
-
 def timer_directory() -> Path:
     return Path(os.path.expanduser(os.environ.get("HANDOFF_TIMER_DIR")
                 or os.path.join(os.path.dirname(state_dir().rstrip(os.sep)), "timed-checkpoints")))
@@ -121,12 +112,55 @@ def timer_directory() -> Path:
 
 def timer_file(session_id: str, suffix: str) -> Path:
     if not session_id.strip():
-        raise ValueError("timed checkpoint: a session id is required")
+        raise ValueError("keep-warm: a session id is required")
     return timer_directory() / (urllib.parse.quote(session_id, safe="-_.") + suffix)
+
+
+@contextmanager
+def timer_lock(session_id: str):
+    path = timer_file(session_id, ".schedule.lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def _cancel_timer(session_id: str) -> dict:
+    # Called with schedule.lock: never unlink locks or kill a potentially recycled PID.
+    pending = timer_file(session_id, ".pending.json")
+    cancelled = pending.exists()
+    pending.unlink(missing_ok=True)
+    timer_file(session_id, ".keep-warm.json").unlink(missing_ok=True)
+    timer_file(session_id, ".wake-result.json").unlink(missing_ok=True)
+    native = timer_file(session_id, ".claude.json")
+    result = {"cancelled": cancelled, "native_cancel_required": native.exists(), "at": utc_now()}
+    if native.exists():
+        result["native_record"] = hashlib.sha256(native.read_bytes()).hexdigest()
+        try:
+            job = read_json(str(native)).get("job_id")
+        except (OSError, ValueError, AttributeError):
+            job = None
+        target = f"job {job}" if job else "all keep-warm / timed checkpoint jobs for this session (use CronList)"
+        acknowledge = shlex.join([sys.executable, str(Path(__file__).resolve()), "keep-warm-job-deleted",
+                                  "--session-id", session_id, "--record", result["native_record"]])
+        result["instructions"] = (f"Execute native CronDelete {target}. If already absent, confirm with native CronList. "
+                                  f"After native deletion/absence is confirmed, execute {acknowledge}. "
+                                  "Retain the job record until then. Do this before creating any replacement job.")
+    atomic_write(str(timer_file(session_id, ".receipt.json")), result)
+    return result
+
+
+def cancel_timer(session_id: str) -> dict:
+    """Supported cancellation, including orphan/invalid old pending records."""
+    with timer_lock(session_id):
+        return _cancel_timer(session_id)
 
 
 def remember_transcript(payload: Mapping[str, Any]) -> None:
     session_id = str(payload.get("session_id") or "")
+    prompt = payload.get("prompt")
+    if session_id and isinstance(prompt, str) and prompt:
+        timer_file(session_id, ".wake-result.json").unlink(missing_ok=True)
     transcript = payload.get("transcript_path")
     if session_id and isinstance(transcript, str) and transcript:
         atomic_write(str(timer_file(session_id, ".context.json")), {
@@ -135,12 +169,17 @@ def remember_transcript(payload: Mapping[str, Any]) -> None:
 
 
 def transcript_for_session(session_id: str) -> tuple[str, bool]:
+    codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex" or bool(os.environ.get("CODEX_THREAD_ID"))
     try:
         context = read_json(str(timer_file(session_id, ".context.json")))
-        return context["transcript_path"], context.get("harness") == "codex"
+        path = context["transcript_path"]
+        if not isinstance(path, str) or not path:
+            return "", codex
+        return path, context.get("harness") == "codex"
     except FileNotFoundError:
         pass
-    codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex" or bool(os.environ.get("CODEX_THREAD_ID"))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return "", codex
     home = Path(os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")) if codex else Path(
         os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"))
     # Session ids are glob literals, never user-provided patterns.
@@ -151,89 +190,271 @@ def transcript_for_session(session_id: str) -> tuple[str, bool]:
     return (str(paths[0]) if paths else ""), codex
 
 
-def timed_prompt(session_id: str) -> str:
-    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "timed-checkpoint-check",
-                          "--session-id", session_id])
-    return Path(__file__).with_name("timed-checkpoint-prompt.txt").read_text().strip().format(check_command=command)
+def incoming_events(session_id: str) -> list[dict[str, str]] | None:
+    """Read substantive incoming text, never count tools/usage as incoming work."""
+    transcript, codex = transcript_for_session(session_id)
+    if not transcript:
+        return None
+    messages = []
+    try:
+        with open(transcript, encoding="utf-8") as stream:
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict) or row.get("isCompactSummary"):
+                    continue
+                if codex:
+                    event = row.get("payload", {})
+                    text = event.get("message") if row.get("type") == "event_msg" and event.get("type") == "user_message" else None
+                else:
+                    content = row.get("message", {}).get("content") if row.get("type") == "user" else None
+                    text = content if isinstance(content, str) else "\n".join(
+                        part.get("text", "") for part in content or [] if isinstance(part, dict) and part.get("type") == "text")
+                if isinstance(text, str) and text.strip():
+                    messages.append({"text": text.strip(), "identity": str(row.get("uuid") or row.get("timestamp") or "")})
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    return messages
 
 
-def claude_schedule(session_id: str, written_at: str) -> str:
-    minutes = timed_setting("timed_checkpoint_minutes")
-    due = datetime.fromisoformat(written_at.replace("Z", "+00:00")) + timedelta(minutes=minutes)
-    # Never truncate seconds into an earlier (or already elapsed) cron minute.
-    # A delayed restore may be scheduling after the original due time.
-    due = max(due, datetime.now(timezone.utc) + timedelta(microseconds=1)).astimezone(timezone.utc)
-    rounded = due.replace(second=0, microsecond=0)
-    if rounded < due:
-        rounded += timedelta(minutes=1)
-    # CronCreate's five-field expression is evaluated in the session's local timezone.
-    local = rounded.astimezone()
-    cron = f"{local.minute} {local.hour} {local.day} {local.month} *"
-    job_file = timer_file(session_id, ".claude.json")
-    previous = read_json(str(job_file)).get("job_id") if job_file.exists() else None
-    delete = f"CronDelete job {previous}" if previous else "CronDelete any previous timed checkpoint job for this session"
-    register = shlex.join([sys.executable, str(Path(__file__).resolve()), "claude-timer-set", "--session-id", session_id, "--job-id", "<new-job-id>"])
-    return (f"\nTimed checkpoint: {delete} before scheduling its replacement. Use CronCreate now: "
-            f"session-only, recurring: false, pinned to {local.isoformat(timespec='minutes')} "
-            f"(at least {minutes:g} minutes after this checkpoint, rounded up to a future cron minute), cron: {cron}. "
-            f"Use this exact prompt:\n{timed_prompt(session_id)}\n"
-            f"After CronCreate succeeds, record its job id: {register}\n")
+def incoming_messages(session_id: str) -> list[str] | None:
+    events = incoming_events(session_id)
+    return [event["text"] for event in events] if events is not None else None
 
 
-def schedule_checkpoint(cwd: str, session_id: str, written_at: str) -> str:
-    # Headless jobs and subagents never own interactive-session timers.
-    if not session_id or not is_interactive({"session_id": session_id}):
-        return ""
-    minutes = timed_setting("timed_checkpoint_minutes")
-    timed_setting("timed_checkpoint_token_limit")
-    if os.environ.get("HIPPOCAMPUS_HARNESS") != "codex" and not os.environ.get("CODEX_THREAD_ID"):
-        return claude_schedule(session_id, written_at)
+def maintenance_message(text: str) -> bool:
+    return text.startswith(("Keep-warm wake:", "Timed checkpoint:"))
+
+
+def activity_key(session_id: str) -> str | None:
+    events = incoming_events(session_id)
+    if events is None:
+        return None
+    events = [event for event in events if not maintenance_message(event["text"])
+              and not event["text"].startswith(("<environment_context>", "# AGENTS.md instructions", "<permissions instructions>"))
+              and not re.fullmatch(r"(?:use\s+)?(?:/hippocampus:|\$)?keep-warm\s+(?:on|off)[.!]?", event["text"], re.I)
+              and "<command-name>/hippocampus:keep-warm</command-name>" not in event["text"]]
+    # Compaction may discard the prefix. Compare the last incoming event, not a
+    # digest of the entire transcript that would change on prefix truncation.
+    return hashlib.sha256(json.dumps(events[-1]).encode()).hexdigest() if events else None
+
+
+def maintenance_only(session_id: str, payload: Mapping[str, Any] | None = None) -> bool:
+    """Empty/unchecked timer turns cannot create a handoff via another guard."""
+    prompt = (payload or {}).get("prompt", "")
+    messages = incoming_messages(session_id) if session_id else None
+    latest = prompt if isinstance(prompt, str) and prompt else (messages[-1] if messages else "")
+    if session_id and not latest and timer_file(session_id, ".wake-result.json").exists():
+        return True
+    if not maintenance_message(latest):
+        return False
+    try:
+        result = read_json(str(timer_file(session_id, ".wake-result.json")))
+        return not (result.get("checkpoint") is True and result.get("prompt") == latest)
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def keep_warm_prompt(session_id: str, activation: str, wake: int) -> str:
+    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "keep-warm-wake",
+                          "--session-id", session_id, "--activation", activation, "--wake", str(wake)])
+    return ("Keep-warm wake: run " + command + ". Follow its JSON. Only when checkpoint is true, "
+            "checkpoint real work using the checkpoint skill. Otherwise write no handoff and do no maintenance. "
+            "Execute any native CronDelete/CronCreate instructions returned. Never enable keep-warm from a timer turn.")
+
+
+def valid_keep_warm(state: Any) -> bool:
+    if not isinstance(state, dict):
+        return False
+    return (isinstance(state.get("activation"), str) and bool(state["activation"])
+            and type(state.get("wakes")) is int and 0 <= state["wakes"] < 2
+            and all(type(state.get(key)) in (int, float) and 0 <= state[key] < float("inf")
+                    for key in ("activated_at", "due_at", "expires_at"))
+            and state["expires_at"] == state["activated_at"] + 7200
+            and state["due_at"] == state["activated_at"] + 3300 * (state["wakes"] + 1)
+            and isinstance(state.get("activity"), str) and bool(state["activity"])
+            and isinstance(state.get("cwd"), str) and bool(state["cwd"])
+            and state.get("harness") in ("claude", "codex"))
+
+
+def arm_keep_warm(session_id: str, state: dict) -> str:
+    """Called under schedule.lock, only by explicit activation or a productive wake."""
+    prompt = keep_warm_prompt(session_id, state["activation"], state["wakes"] + 1)
+    if state["harness"] == "claude":
+        due = datetime.fromtimestamp(state["due_at"], timezone.utc)
+        rounded = due.replace(second=0, microsecond=0)
+        if rounded < due:
+            rounded += timedelta(minutes=1)
+        local = rounded.astimezone()
+        register = shlex.join([sys.executable, str(Path(__file__).resolve()), "keep-warm-job",
+                              "--session-id", session_id, "--activation", state["activation"],
+                              "--wake", str(state["wakes"] + 1), "--job-id", "<new-job-id>"])
+        return (f"Use native CronCreate: session-only, recurring: false, pinned to {local.isoformat(timespec='minutes')}; "
+                f"cron: {local.minute} {local.hour} {local.day} {local.month} *. Exact prompt:\n{prompt}\n"
+                f"After creation, register the returned job id: {register}")
     codex = shutil.which("codex")
     if not codex:
-        raise ValueError("timed checkpoint: codex executable is unavailable")
+        raise ValueError("keep-warm: codex executable is unavailable")
     path = timer_file(session_id, ".pending.json")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with timer_file(session_id, ".schedule.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        atomic_write(str(path), {"session_id": session_id, "cwd": cwd, "codex": codex,
-            "due_at": datetime.fromisoformat(written_at.replace("Z", "+00:00")).timestamp() + minutes * 60,
-            "prompt": timed_prompt(session_id)})
-        # Competing workers exit under worker.lock; an existing worker reads the
-        # replacement deadline. No PID-based kill can target a recycled process.
-        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "timed-checkpoint-wait", str(path)],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         close_fds=True, start_new_session=True)
-    return f"\nTimed checkpoint pending for session {session_id} in {minutes:g} minutes; replaced any previous timer.\n"
+    atomic_write(str(path), {"session_id": session_id, "cwd": state["cwd"], "codex": codex,
+        "activation": state["activation"], "wake": state["wakes"] + 1,
+        "due_at": state["due_at"], "prompt": prompt})
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "keep-warm-wait", str(path)],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True, start_new_session=True)
+    return "One keep-warm wake pending."
 
 
-def wait_for_checkpoint(path: str) -> None:
+def keep_warm(mode: str, cwd: str, session_id: str) -> dict:
+    with timer_lock(session_id):
+        if mode == "off":
+            return _cancel_timer(session_id) | {"enabled": False}
+        messages = incoming_messages(session_id)
+        if (messages and maintenance_message(messages[-1])) or not is_interactive({"session_id": session_id}):
+            return {"enabled": False, "reason": "Explicit interactive enablement required."}
+        try:
+            existing = read_json(str(timer_file(session_id, ".keep-warm.json")))
+        except (OSError, ValueError):
+            existing = None
+        if valid_keep_warm(existing) and time.time() <= existing["expires_at"]:
+            return {"enabled": True, "reason": "Already enabled; original deadline and wake budget unchanged."}
+        cancelled = _cancel_timer(session_id)
+        if cancelled["native_cancel_required"]:
+            return cancelled | {"enabled": False}
+        activity = activity_key(session_id)
+        if activity is None:
+            return {"enabled": False, "reason": "Incoming activity is unknown; no timer armed."}
+        now = time.time()
+        state = {"activation": os.urandom(16).hex(), "activated_at": now, "expires_at": now + 7200,
+                 "due_at": now + 3300, "wakes": 0, "activity": activity, "cwd": cwd,
+                 "harness": "codex" if os.environ.get("HIPPOCAMPUS_HARNESS") == "codex" or os.environ.get("CODEX_THREAD_ID") else "claude"}
+        atomic_write(str(timer_file(session_id, ".keep-warm.json")), state)
+        try:
+            instructions = arm_keep_warm(session_id, state)
+        except (OSError, ValueError):
+            _cancel_timer(session_id)
+            raise
+        return {"enabled": True, "instructions": instructions, "activation": state["activation"], "due_at": state["due_at"]}
+
+
+def keep_warm_wake(session_id: str, activation: str, wake: int) -> dict:
+    with timer_lock(session_id):
+        try:
+            state = read_json(str(timer_file(session_id, ".keep-warm.json")))
+        except (OSError, ValueError):
+            state = None
+        if state is not None and valid_keep_warm(state) and (state["activation"] != activation
+                or wake != state["wakes"] + 1 or time.time() < state["due_at"]):
+            result = {"checkpoint": False, "enabled": True, "reason": "Stale, duplicate or early wake ignored.",
+                      "prompt": keep_warm_prompt(session_id, activation, wake)}
+            atomic_write(str(timer_file(session_id, ".wake-result.json")), result)
+            return result
+        prompt = keep_warm_prompt(session_id, activation, wake)
+        activity = activity_key(session_id)
+        productive = (valid_keep_warm(state) and time.time() <= state["expires_at"]
+                      and activity is not None and activity != state["activity"])
+        if not productive:
+            result = _cancel_timer(session_id) | {"checkpoint": False, "enabled": False, "prompt": prompt}
+        else:
+            # Consuming the one-shot record and spending its budget are one locked operation.
+            cancelled = _cancel_timer(session_id)
+            state["wakes"] += 1
+            state["activity"] = activity
+            enabled = state["wakes"] < 2 and time.time() < state["activated_at"] + 6600
+            result = cancelled | {"checkpoint": True, "enabled": enabled, "prompt": prompt}
+            if enabled:
+                state["due_at"] = state["activated_at"] + 6600
+                atomic_write(str(timer_file(session_id, ".keep-warm.json")), state)
+                result["instructions"] = (cancelled.get("instructions", "") + "\n" + arm_keep_warm(session_id, state)).strip()
+        atomic_write(str(timer_file(session_id, ".wake-result.json")), result)
+        return result
+
+
+def register_keep_warm_job(session_id: str, activation: str, wake: int, job_id: str) -> dict:
+    with timer_lock(session_id):
+        try:
+            state = read_json(str(timer_file(session_id, ".keep-warm.json")))
+        except (OSError, ValueError):
+            state = None
+        if (not valid_keep_warm(state) or state["activation"] != activation
+                or state["wakes"] + 1 != wake or time.time() > state["due_at"]):
+            return {"registered": False, "instructions": f"Execute native CronDelete job {job_id}; activation is no longer current."}
+        path = timer_file(session_id, ".claude.json")
+        if path.exists():
+            try:
+                previous = read_json(str(path))
+            except (OSError, ValueError):
+                previous = None
+            if not isinstance(previous, dict) or previous.get("job_id") != job_id:
+                return {"registered": False, "instructions": f"Execute native CronDelete job {job_id}; another job is already registered."}
+        atomic_write(str(path), {"job_id": job_id, "activation": activation, "wake": wake})
+        return {"registered": True}
+
+
+def forget_cancelled_job(session_id: str, job_id: str = "", record: str = "") -> dict:
+    with timer_lock(session_id):
+        path = timer_file(session_id, ".claude.json")
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            return {"forgotten": False}
+        if record:
+            matches = hashlib.sha256(raw).hexdigest() == record
+        else:
+            try:
+                matches = bool(job_id) and json.loads(raw).get("job_id") == job_id
+            except (ValueError, AttributeError):
+                matches = False
+        if not matches:
+            return {"forgotten": False}
+        path.unlink()
+        atomic_write(str(timer_file(session_id, ".receipt.json")), {
+            "native_deletion_acknowledged": True, "native_cancel_required": False, "at": utc_now()})
+        return {"forgotten": True}
+
+
+def wait_for_keep_warm(path: str) -> None:
     pending = Path(path)
     prefix = pending.name.removesuffix(".pending.json")
+    session_id = urllib.parse.unquote(prefix)
     with pending.with_name(prefix + ".worker.lock").open("a") as worker:
         try:
             fcntl.flock(worker, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return
         while True:
-            with pending.with_name(prefix + ".schedule.lock").open("a") as lock:
-                fcntl.flock(lock, fcntl.LOCK_EX)
+            with timer_lock(session_id):
                 if not pending.exists():
-                    # Release while still holding schedule.lock so a concurrent
-                    # checkpoint cannot lose its replacement on worker exit.
+                    # Unlock before releasing schedule.lock: a replacement starts a worker.
                     fcntl.flock(worker, fcntl.LOCK_UN)
                     return
-                state = read_json(str(pending))
+                try:
+                    timer = read_json(str(pending))
+                    state = read_json(str(timer_file(session_id, ".keep-warm.json")))
+                    valid = (valid_keep_warm(state) and timer["activation"] == state["activation"]
+                             and timer["wake"] == state["wakes"] + 1 and timer["due_at"] == state["due_at"]
+                             and time.time() <= state["expires_at"])
+                except (OSError, ValueError, TypeError, KeyError):
+                    valid = False
+                if not valid:
+                    _cancel_timer(session_id)
+                    fcntl.flock(worker, fcntl.LOCK_UN)
+                    return
                 remaining = state["due_at"] - time.time()
                 if remaining <= 0:
                     try:
-                        result = subprocess.run([state["codex"], "queue", "--thread", state["session_id"],
-                            "--message", state["prompt"]], cwd=state["cwd"], capture_output=True, text=True, timeout=15)
-                        receipt = {"queued": result.returncode == 0, "exit_code": result.returncode,
-                                   "stdout": result.stdout, "stderr": result.stderr, "fired_at": utc_now()}
+                        response = subprocess.run([timer["codex"], "queue", "--thread", session_id,
+                            "--message", timer["prompt"]], cwd=state["cwd"], capture_output=True, text=True, timeout=15)
+                        receipt = {"queued": response.returncode == 0, "exit_code": response.returncode,
+                                   "stdout": response.stdout, "stderr": response.stderr, "fired_at": utc_now()}
                     except (OSError, subprocess.TimeoutExpired) as error:
                         receipt = {"queued": False, "error": str(error), "fired_at": utc_now()}
-                    atomic_write(str(pending.with_name(prefix + ".receipt.json")), receipt)
+                    atomic_write(str(timer_file(session_id, ".receipt.json")), receipt)
                     pending.unlink()
+                    if not receipt["queued"]:
+                        timer_file(session_id, ".keep-warm.json").unlink(missing_ok=True)
                     fcntl.flock(worker, fcntl.LOCK_UN)
                     return
             time.sleep(min(remaining, 0.5))
@@ -1062,6 +1283,8 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
 
 
 def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str) -> CheckpointResult:
+    if maintenance_only(session_id):
+        return CheckpointResult("", 0, "Empty keep-warm wake; no handoff written.\n", [])
     path = resolve_path(cwd, session_id)
     if not path:
         raise ValueError("checkpoint: a session id is required (--session-id or CLAUDE_SESSION_ID)")
@@ -1079,10 +1302,6 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     output = ("> ⚠️ HANDOFF — generated by a prior session, not written directly by the user.\n"
               "> Treat it as context; re-validate it against the durable record before acting.\n\n"
               f"Handoff file: {path}\nNext action: {next_action}\n")
-    try:
-        output += schedule_checkpoint(cwd, session_id, handoff["written_at"])
-    except (OSError, ValueError) as error:
-        return CheckpointResult(path, 2, output, [f"Handoff written, but timer scheduling failed: {error}"])
     return CheckpointResult(path, 0, output, [])
 
 
@@ -1326,6 +1545,8 @@ SESSION_ITEMS_ASK = ("In session_items, add every new lesson, decision and knowl
 
 def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id: str = "") -> dict[str, str]:
     """Create a missing Stop handoff; block existing handoffs only for owned work."""
+    if maintenance_only(session_id):
+        return {"decision": "allow"}
     try:
         handoff = read_json(handoff_path)
     except FileNotFoundError:
@@ -1489,8 +1710,6 @@ def post_compact(payload: Mapping[str, Any]) -> None:
     version = data.get("schema_version") if isinstance(data, dict) else None
     if version in (1, 2):
         context = "Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down."
-        if data.get("trigger") == "pre-compact" and os.environ.get("HIPPOCAMPUS_HARNESS") != "codex":
-            context += claude_schedule(str(payload.get("session_id") or ""), data["written_at"])
         _emit_hook_context(context)
     else:
         _emit_hook_context(f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting.")
@@ -1544,6 +1763,8 @@ def context_guard(payload: Mapping[str, Any]) -> None:
     if not is_interactive(payload):
         return
     remember_transcript(payload)
+    if maintenance_only(str(payload.get("session_id") or ""), payload):
+        return
     transcript = str(payload.get("transcript_path") or "")
     codex = os.environ.get("HIPPOCAMPUS_HARNESS") == "codex"
     if not transcript or not os.path.isfile(transcript):
@@ -1578,6 +1799,8 @@ def pre_compact(payload: Mapping[str, Any], raw_input: str | None = None) -> Non
     if not is_interactive(payload):
         return
     remember_transcript(payload)
+    if maintenance_only(str(payload.get("session_id") or ""), payload):
+        return
     cwd = str(payload.get("cwd") or "")
     session_id = str(payload.get("session_id") or "")
     path = resolve_path(cwd, session_id)
@@ -1655,15 +1878,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.add_parser("post-compact")
     sub.add_parser("context-guard")
     sub.add_parser("pre-compact")
-    timed_check = sub.add_parser("timed-checkpoint-check", help="Print tokens, limit, below_limit; unknown usage exits 2")
-    timed_check.add_argument("--transcript-path")
-    timed_check.add_argument("--session-id", default=ambient_session_id())
-    prompt = sub.add_parser("timed-checkpoint-prompt")
-    prompt.add_argument("--session-id", default=ambient_session_id())
-    timer_set = sub.add_parser("claude-timer-set")
-    timer_set.add_argument("--session-id", default=ambient_session_id())
-    timer_set.add_argument("--job-id", required=True)
-    sub.add_parser("timed-checkpoint-wait").add_argument("path")
+    warm = sub.add_parser("keep-warm", help="Explicit on/off. Enable only while waiting on a specific result/reply that will message this session, expected within about two hours.")
+    warm.add_argument("mode", choices=("on", "off"))
+    warm.add_argument("--cwd", default=os.getcwd())
+    warm.add_argument("--session-id", default=ambient_session_id())
+    for name in ("keep-warm-wake", "keep-warm-job"):
+        item = sub.add_parser(name)
+        item.add_argument("--session-id", default=ambient_session_id())
+        item.add_argument("--activation", required=True)
+        item.add_argument("--wake", type=int, required=True)
+        if name == "keep-warm-job":
+            item.add_argument("--job-id", required=True)
+    for name in ("timer-cancel", "keep-warm-job-deleted"):
+        item = sub.add_parser(name)
+        item.add_argument("--session-id", default=ambient_session_id())
+        if name == "keep-warm-job-deleted":
+            match = item.add_mutually_exclusive_group(required=True)
+            match.add_argument("--job-id", default="")
+            match.add_argument("--record", default="")
+    sub.add_parser("keep-warm-wait").add_argument("path")
     sub.add_parser("migrate")
     sub.add_parser("state-dir", help="Print where handoffs are stored")
     config_get = sub.add_parser("config-get", help="Print one configured value; a list prints one item per line")
@@ -1765,20 +1998,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             if decision["decision"] == "block": print(json.dumps(decision, separators=(",", ":")))
         elif args.command == "post-compact": post_compact(_read_stdin_json())
         elif args.command == "context-guard": context_guard(_read_stdin_json())
-        elif args.command == "timed-checkpoint-prompt":
-            print(timed_prompt(args.session_id))
-        elif args.command == "claude-timer-set":
-            atomic_write(str(timer_file(args.session_id, ".claude.json")), {"job_id": args.job_id})
-        elif args.command == "timed-checkpoint-wait":
-            wait_for_checkpoint(args.path)
-        elif args.command == "timed-checkpoint-check":
-            transcript, codex = (args.transcript_path, os.environ.get("HIPPOCAMPUS_HARNESS") == "codex") if args.transcript_path else transcript_for_session(args.session_id)
-            usage = transcript_usage(transcript, codex)
-            if usage is None:
-                raise ValueError("timed checkpoint: context usage is unknown")
-            used, _ = usage
-            limit = timed_setting("timed_checkpoint_token_limit")
-            print(json.dumps({"tokens": used, "limit": limit, "below_limit": used < limit}))
+        elif args.command == "timer-cancel":
+            print(json.dumps(cancel_timer(args.session_id)))
+        elif args.command == "keep-warm":
+            print(json.dumps(keep_warm(args.mode, args.cwd, args.session_id)))
+        elif args.command == "keep-warm-wake":
+            print(json.dumps(keep_warm_wake(args.session_id, args.activation, args.wake)))
+        elif args.command == "keep-warm-job":
+            print(json.dumps(register_keep_warm_job(args.session_id, args.activation, args.wake, args.job_id)))
+        elif args.command == "keep-warm-job-deleted":
+            print(json.dumps(forget_cancelled_job(args.session_id, args.job_id, args.record)))
+        elif args.command == "keep-warm-wait":
+            wait_for_keep_warm(args.path)
         elif args.command == "pre-compact":
             raw = sys.stdin.read()
             def deadline(signum, frame):
@@ -1793,9 +2024,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "state-dir": print(state_dir())
         elif args.command == "config-get":
             value = read_config().get(args.key)
-            if args.key in TIMED_CHECKPOINT_DEFAULTS:
-                print(timed_setting(args.key))
-            elif args.key == "auto_apply_lessons":
+            if args.key == "auto_apply_lessons":
                 # A boolean setting, off by default; any other type is an error, as the wrap reads it.
                 if value is not None and type(value) is not bool:
                     raise ValueError(f"hippocampus config {config_path()}: auto_apply_lessons must be true or false")

@@ -18,12 +18,13 @@ own data area, and survive adapter removal.
 
 ## Skills
 
-Both installers register **27 skills**. Claude Code uses plugin-namespaced
+Both installers register **28 skills**. Claude Code uses plugin-namespaced
 commands; in Codex, invoke the skill by its name, for example `Use checkpoint`.
 
 | Skill name in Codex | Claude Code command | Role |
 |---|---|---|
 | `hippocampus-set-up` | `/hippocampus:hippocampus-set-up` | Create or extend the user profile and write and validate a user-owned record-read skill, with the user present. |
+| `keep-warm` | `/hippocampus:keep-warm on` / `/hippocampus:keep-warm off` | Explicit bounded keep-warm while waiting for an incoming reply. |
 | `checkpoint` | `/hippocampus:checkpoint` | Write and lint the current interactive session's handoff without finishing its work. |
 | `pickup` | `/hippocampus:pickup` | List handoffs after a cold start, select one, and check it against the record. |
 | `checklist` | `/hippocampus:checklist` | Wrap the session through the spine and profile steps, ending with a validated handoff. |
@@ -583,8 +584,6 @@ configuration JSON object             # shared settings, not a profile
 ├── checklist_suite_baselines_dir: string # per-repository suite baseline directory
 ├── harness_enforcement_reference: string # optional slim-harness reference; absolute or ~/ path
 ├── slim_checkouts: object            # unattended slim: repository (owner/name) to its checkout on this machine
-├── timed_checkpoint_minutes: positive integer # whole minutes, at least 1; default 55
-├── timed_checkpoint_token_limit: positive integer # below-limit checkpoint, default 200000
 ├── prune_days: positive integer      # stale-transcript prune age, default 7; PICKUP_PRUNE_DAYS overrides
 ├── cycle_sessions: object            # consumer session-name to home-relative directory mapping
 └── unattended: object                # optional unattended-mode integration
@@ -634,46 +633,50 @@ are read by the skill through their `Slot:` declarations; the engine loader
 requires JSON or a single fence. The example is a loader fixture showing format
 and composition, not a recommended cleanup or persistence policy.
 
-### Timed checkpoint state
+### Keep-warm state
 
-Every interactive checkpoint replaces the pending timer for that session. The
-shared configuration sets `timed_checkpoint_minutes` (a whole number of minutes,
-at least 1; 55 by default) and
-`timed_checkpoint_token_limit` (200,000 by default). At the scheduled time the
-agent reads transcript usage with `handoff.py timed-checkpoint-check`; below the
-limit it checkpoints, at or above it the prompt does nothing, and unknown usage
-is reported without guessing.
+Use `/hippocampus:keep-warm on` in Claude Code, or `$keep-warm on` in Codex,
+only when waiting on a specific result/reply that will message this session,
+expected within about two hours. Use `off` to cancel. It is off by default.
 
-Claude Code's checkpoint output instructs the agent to delete the previous job,
-create a session-only one-shot CronCreate job pinned to the printed minute with
-`recurring: false`, and record its job ID. The pinned minute rounds up: it is
-always strictly in the future and never earlier than checkpoint time plus the
-interval, including when restore runs after the original deadline. Fractions
-and non-integer JSON values are refused in both tools. Codex automatically starts a detached
-worker that replaces the per-session deadline and calls `codex queue`. The exact
-prompt has one source, `scripts/lib/timed-checkpoint-prompt.txt`, rendered by
-`handoff.py timed-checkpoint-prompt`. Timer state and delivery receipts live in
-`timed-checkpoints/` beside the handoff directory (`HANDOFF_TIMER_DIR` overrides).
-Only one worker per session can deliver a pending prompt.
+Activation fixes the deadline and budget: at most two wakes, about 55 and 110
+minutes later, then off. Repeated on, checkpoints, compaction, restore and timer
+activity never extend it. An empty first wake turns off without writing a handoff,
+including through percentage and stale-handoff guards. New substantive incoming
+work permits a checkpoint and at most the remaining wake. Unknown activity,
+invalid state or expiry turn off safely. With the cache's roughly one-hour life
+after the last activity, total cached life is at most three hours.
+
+Claude Code executes the returned native CronCreate instructions as session-only
+one-shot jobs, registers the returned id, and executes native CronDelete on off.
+Codex CLI and desktop use the same detached worker and `codex queue` path.
+Only one worker can deliver; cancellation, replacement and delivery share a lock.
+
+State remains in `timed-checkpoints/` beside handoffs (`HANDOFF_TIMER_DIR` overrides):
 
 ```text
-timed-checkpoints/<encoded-session-id>.*
-├── context.json                      # transcript_path, harness
-├── claude.json                       # job_id returned by CronCreate
-├── pending.json                      # session_id, cwd, codex, due_at, prompt
-├── receipt.json                      # queued, exit_code/stdout/stderr or error, fired_at
-├── schedule.lock                     # serializes replacement and delivery
-└── worker.lock                       # one active delivery worker per session
+<encoded-session-id>.context.json      # transcript location and harness
+<encoded-session-id>.keep-warm.json    # fixed activation, budget, incoming activity
+<encoded-session-id>.pending.json      # one Codex wake, activation and wake number
+<encoded-session-id>.claude.json       # native one-shot job id
+<encoded-session-id>.wake-result.json  # preservation permission for this wake only
+<encoded-session-id>.receipt.json      # cancellation or queue outcome
+<encoded-session-id>.schedule.lock     # cancellation/replacement/delivery lock
+<encoded-session-id>.worker.lock       # one delivery worker per session
 ```
 
-The files use the encoded session ID as a prefix (for example,
-`<encoded-session-id>.pending.json`); locks contain no session data.
+For old pending records, including malformed/orphan Codex records, run
+`python3 scripts/lib/handoff.py timer-cancel --session-id ID` from the package.
+It retains a receipt and never kills a PID. Claude records remain until native
+CronDelete succeeds; acknowledge the matching id with `keep-warm-job-deleted`.
+If the record lacks a usable id, use native CronList and delete the session's
+keep-warm / timed checkpoint jobs. For a malformed record, acknowledge the exact
+`native_record` hash returned by cancellation with `keep-warm-job-deleted --record HASH`.
+A local unlink does not cancel a native job.
 
-Before compaction, the hook itself writes a checkpoint from ledger history,
-touched tickets and projects, and current git state, preserving the agent's last
-continuation. It needs no agent turn and has an eight-second budget inside the
-ten-second hook timeout. Pickup and post-compaction restore read that handoff;
-Claude restore repeats the scheduling instruction for its next timed checkpoint.
+Before compaction, real work is preserved from ledger facts and current git
+state without an agent turn. Fresh sessions, manual/context checkpoints and
+post-compaction restore never enable keep-warm.
 
 ### Pre-compaction backups
 

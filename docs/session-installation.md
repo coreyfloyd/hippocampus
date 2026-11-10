@@ -171,8 +171,6 @@ These are every key in [INTERFACE.md section 2](../INTERFACE.md#2-configuration)
 | `checklist_surfaces` | list of strings | Standing directories the surface detector reports alongside the session's repository. |
 | `checklist_suite_baselines_dir` | string | Per-repository suite baseline directory reported by the surface detector. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
-| `timed_checkpoint_minutes` | positive integer | Whole-minute timer interval, at least 1; default 55. Both tools refuse fractions and other JSON types. Claude rounds its pinned cron minute up, never earlier than the interval and always in the future. |
-| `timed_checkpoint_token_limit` | positive integer | Timed checkpoints run below this count; default 200,000. |
 | `prune_days` | positive integer | Transcript age in days for `stale_transcript` prune candidates; default 7, overridden by `PICKUP_PRUNE_DAYS`. |
 | `cycle_sessions` | object | Session names mapped to home-relative directories for an external session-cycling consumer. The package does not run that consumer. |
 | `unattended` | object | Optional unattended-mode adapter: `state_module`, `completion_command`, and `completed_by`, described in interface section 6. Absent by default. |
@@ -186,7 +184,7 @@ Default shared storage sits outside both tools' data areas:
 | Handoffs | `~/.local/state/hippocampus/handoffs/` | `HANDOFF_STATE_DIR`, then `handoff_dir` |
 | Ledger | the parent of the handoff directory (`~/.local/state/hippocampus/`) | `HANDOFF_LEDGER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
-| Timed checkpoint state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
+| Keep-warm state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
 | Checklist state | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, then `checklist_state_dir` |
 
 The ledger holds one `session-touched-paths.<session-id>.jsonl` file per session.

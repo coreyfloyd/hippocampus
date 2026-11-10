@@ -86,20 +86,8 @@ Close outcomes and touched tickets are also recovered from the session ledger
 into `resume.close_outcomes` and `resume.touched_tickets`. Preserve those facts
 unchanged; never reconstruct milestone or epic state during checkpoint.
 
-After every successful checkpoint, replace this session's timed checkpoint. Follow
-its command output: Claude Code must CronDelete the previous job before CronCreate,
-using the printed pinned minute, `recurring: false`, and session-only persistence.
-The interval must be a whole number of minutes, at least 1, in both tools. Claude
-rounds its due minute up so it stays strictly in the future and never precedes
-checkpoint time plus the interval.
-Record the new job ID with the printed `claude-timer-set` command. The exact prompt
-comes from `handoff.py timed-checkpoint-prompt --session-id <session>`; never paraphrase
-it. Codex schedules its detached timer automatically and replaces the pending deadline.
-
-The prompt calls `handoff.py timed-checkpoint-check --session-id <session>`: its JSON
-reports `tokens`, `limit`, and `below_limit`. Only `below_limit: true` authorizes the
-timed checkpoint. At or above the limit do nothing. Unknown usage exits nonzero;
-report it rather than assuming the session is below the limit. Hooks retain the
-session's transcript location for this command. The pre-compaction hook writes a
-checkpoint itself from the ledger and git state while keeping the agent's continuation;
-post-compaction restore returns that checkpoint and any Claude scheduling instruction.
+Checkpoint writes never arm or renew a timer. Keep-warm is off by default and
+requires the user's explicit `keep-warm on`; see the keep-warm skill. An empty
+keep-warm wake writes no handoff, including through context or staleness guards.
+The pre-compaction hook preserves real work directly from retained facts and git
+state; restore reads that handoff without scheduling anything.
