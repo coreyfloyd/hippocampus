@@ -12,6 +12,17 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture
+def install_home(monkeypatch):
+    """Route each fixture's installer and CLI to the same test-owned home."""
+    def bind(home):
+        for key, path in (("HOME", home), ("CLAUDE_CONFIG_DIR", home / ".claude"),
+                          ("CODEX_HOME", home / ".codex")):
+            monkeypatch.setenv(key, str(path))
+        return dict(os.environ)
+    return bind
+
+
 @pytest.mark.parametrize('ci', [False, True])
 def test_codex_cli_checks_skip_without_the_codex_command(tmp_path, ci):
     path = tmp_path / 'bin'
@@ -94,10 +105,11 @@ def test_codex_failed_adoption_restores_old_runtime_and_links(tmp_path, monkeypa
     assert not (home / 'hippocampus-install.json').exists()
 
 
-def test_claude_cutover_and_failure_restore(tmp_path):
+def test_claude_cutover_and_failure_restore(tmp_path, install_home):
     import pytest
     for fail in (False, True):
         home = tmp_path / str(fail)
+        env = install_home(home)
         skills = home / '.claude/skills'
         skills.mkdir(parents=True)
         owned = skills / 'checkpoint'
@@ -108,7 +120,7 @@ def test_claude_cutover_and_failure_restore(tmp_path):
         cli.write_text('#!/bin/sh\nmkdir -p "$HOME/.claude/plugins"\necho changed > "$HOME/.claude/plugins/test"\nexit '+('1' if fail else '0')+'\n')
         cli.chmod(0o755)
         result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-claude.py'), '--claude', str(cli)],
-                                env=dict(os.environ, HOME=str(home)), capture_output=True, text=True)
+                                env=env, capture_output=True, text=True)
         if fail:
             assert result.returncode != 0
             assert owned.is_symlink()
@@ -120,8 +132,8 @@ def test_claude_cutover_and_failure_restore(tmp_path):
         assert foreign.is_symlink()
 
 
-def test_codex_uninstall_after_adoption_keeps_claude_release(tmp_path, monkeypatch):
-    monkeypatch.setenv('HOME', str(tmp_path))
+def test_codex_uninstall_after_adoption_keeps_claude_release(tmp_path, monkeypatch, install_home):
+    install_home(tmp_path)
     home = tmp_path / '.codex'
     subprocess.run(['bash', str(ROOT / 'install.sh')], env=dict(os.environ, CODEX_HOME=str(home)),
                    check=True, capture_output=True)
@@ -155,8 +167,9 @@ def test_codex_failed_uninstall_restores_files(tmp_path, monkeypatch):
     assert (home / 'hooks.json').read_bytes() == before
 
 
-def test_claude_failed_update_restores_existing_settings_and_plugin(tmp_path):
+def test_claude_failed_update_restores_existing_settings_and_plugin(tmp_path, install_home):
     home = tmp_path
+    env = install_home(home)
     config = home / '.claude'
     (config / 'plugins').mkdir(parents=True)
     (config / 'plugins/installed_plugins.json').write_text('previous plugin registry')
@@ -165,7 +178,7 @@ def test_claude_failed_update_restores_existing_settings_and_plugin(tmp_path):
     cli.write_text('#!/bin/sh\necho partial > "$HOME/.claude/settings.json"\nrm "$HOME/.claude/plugins/installed_plugins.json"\nexit 1\n')
     cli.chmod(0o755)
     result = subprocess.run([sys.executable, str(ROOT / 'scripts/install-claude.py'), '--claude', str(cli)],
-                            env=dict(os.environ, HOME=str(home)), capture_output=True)
+                            env=env, capture_output=True)
     assert result.returncode != 0
     assert (config / 'plugins/installed_plugins.json').read_text() == 'previous plugin registry'
     assert (config / 'settings.json').read_text() == '{"enabledPlugins":{"other":true}}'

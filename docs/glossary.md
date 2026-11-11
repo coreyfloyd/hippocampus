@@ -60,12 +60,13 @@ _Avoid_: duplicate, related session
 Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
-**Timed checkpoint**:
-A per-session prompt scheduled after each checkpoint. Below the configured token limit,
-the agent writes another checkpoint; at or above it, the prompt does nothing. Claude Code
-uses a session-only one-shot job; Codex uses a detached timer that queues the same prompt.
-Each checkpoint replaces the pending timer. Before compaction the hook writes a checkpoint
-from retained facts, preserving the agent's continuation without requiring an agent turn.
+**Keep-warm**:
+An explicitly enabled, per-session subscription while waiting on a specific result
+or reply that will message the session, expected within about two hours. It is off
+by default. It permits at most two wakes, about 55 and 110 minutes from activation,
+then turns off. The first wake without new incoming work turns it off and writes
+no handoff. Only real work can require a checkpoint. Automatic activity never
+moves the activation deadline or replenishes the wake budget.
 
 **Wrap**:
 Finishing a session: running the checklist, which is the spine plus any checklist profile steps, and ending by writing and validating the handoff. Unlike a checkpoint, a wrap fails, and says why, when the handoff fails its validity check.

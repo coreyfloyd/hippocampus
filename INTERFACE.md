@@ -12,7 +12,7 @@ directory it installs it into, never by importing it: every entry point is a com
 |---|---|---|
 | Handoffs | `~/.local/state/hippocampus/handoffs/` | `HANDOFF_STATE_DIR`, else `handoff_dir` in the configuration |
 | Ledger (one file per session) | the parent of the handoff directory | `HANDOFF_LEDGER_DIR` |
-| Timed checkpoint state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
+| Keep-warm state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
 | Checklist state (the unattended-wrap marker) | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, else `checklist_state_dir` in the configuration |
 
@@ -45,8 +45,6 @@ an empty configuration.
 | `checklist_surfaces` | list of strings | Standing surfaces the surface detector reports in addition to the session's own repository. |
 | `checklist_suite_baselines_dir` | string | Directory of per-repository suite baseline files the surface detector reports. |
 | `harness_enforcement_reference` | string | Optional slim-harness enforcement reference; require an absolute path or a `~/` path (expand `~` to the current user’s home). Ordinary relative paths are configuration errors, never relative to the working directory. If absent, report “no enforcement reference configured” and inspect hooks directly. |
-| `timed_checkpoint_minutes` | positive integer | Whole-minute interval after each checkpoint; at least 1, default 55. Fractional values and other JSON types are refused in both tools. |
-| `timed_checkpoint_token_limit` | positive integer | Timed prompts checkpoint only below this token count; default 200,000. |
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
@@ -70,14 +68,11 @@ also exits 2 with a reason on stderr and no stdout.
 | Boolean default | `"auto_apply_lessons"` | `absent` | `"false\n"` | 0 |
 | Boolean null | `"auto_apply_lessons"` | `null` | `"false\n"` | 0 |
 | Mistyped boolean | `"auto_apply_lessons"` | `1` | `""` | 2 |
-| Scalar default | `"timed_checkpoint_minutes"` | `absent` | `"55\n"` | 0 |
-| Scalar default | `"timed_checkpoint_token_limit"` | `absent` | `"200000\n"` | 0 |
-| Positive integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `17` | `"17\n"` | 0 |
-| Non-positive integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `0` | `""` | 2 |
-| Mistyped integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `true` | `""` | 2 |
-| Fractional integer | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `1.5` | `""` | 2 |
-| Integer string | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit", "prune_days"]` | `"17"` | `""` | 2 |
-| Timed null | `["timed_checkpoint_minutes", "timed_checkpoint_token_limit"]` | `null` | `""` | 2 |
+| Positive integer | `"prune_days"` | `17` | `"17\n"` | 0 |
+| Non-positive integer | `"prune_days"` | `0` | `""` | 2 |
+| Mistyped integer | `"prune_days"` | `true` | `""` | 2 |
+| Fractional integer | `"prune_days"` | `1.5` | `""` | 2 |
+| Integer string | `"prune_days"` | `"17"` | `""` | 2 |
 | Scalar without a default | `"prune_days"` | `absent` | `""` | 0 |
 | Optional scalar null | `"prune_days"` | `null` | `""` | 0 |
 | Other key, string | `["handoff_dir", "example_key"]` | `"~/example"` | `"~/example\n"` | 0 |
@@ -118,10 +113,12 @@ returned, so a broken hook never blocks a session.
 | `is-interactive [JSON]` | Exit 0 for an interactive session, 1 for a headless entry point or a subagent (`agent_id` in the payload). |
 | `state-dir`, `config-get KEY` | Where handoffs are stored, and one configured value. |
 | `migrate` | Rename handoffs keyed by directory alone to their per-session path. Idempotent. |
-| `timed-checkpoint-check [--session-id ID] [--transcript-path P]` | Print JSON with `tokens`, `limit`, `below_limit`. Read the same latest transcript usage as the context guard; unknown usage exits 2 and never means below the limit. |
-| `timed-checkpoint-prompt [--session-id ID]` | Print the exact shared timed prompt, rendered from `scripts/lib/timed-checkpoint-prompt.txt`. |
-| `claude-timer-set --session-id ID --job-id ID` | Retain the CronCreate job ID for the next checkpoint's CronDelete instruction. |
-| `timed-checkpoint-wait PATH` | Internal detached Codex worker; locks ensure one pending timer per session. |
+| `keep-warm on&#124;off [--cwd D] [--session-id ID]` | Explicit activation/cancellation. Off by default; only while waiting for a specific result/reply that will message this session, expected within about two hours. Repeated on never renews the activation. |
+| `timer-cancel --session-id ID` | Supported locked cancellation, including orphan/invalid old Codex pending records; retain a receipt and return native CronDelete instructions for Claude jobs. |
+| `keep-warm-wake --session-id ID --activation A --wake N` | Consume the matching due wake once. Empty/unknown/expired wakes switch off with no handoff; productive wakes authorize a checkpoint and at most the second fixed wake. |
+| `keep-warm-job --session-id ID --activation A --wake N --job-id J` | Register a native one-shot job only for the current activation and wake; stale registration returns CronDelete instructions. |
+| `keep-warm-job-deleted --session-id ID (--job-id J or --record HASH)` | Acknowledge successful native deletion; forget only the matching job id or exact malformed-record snapshot. |
+| `keep-warm-wait PATH` | Internal Codex worker; schedule and worker locks serialize cancellation, replacement and delivery. |
 | `post-compact`, `pre-compact`, `context-guard`, `ledger-record`, `guard-decide` | Hook decisions, section 5. |
 | `cycle-request-*`, `automated-cycle-handoff` | Support for a consumer that cycles sessions, section 8. |
 
@@ -267,26 +264,25 @@ entry point in `sdk-cli`, `sdk-py`, `sdk-ts`, `sdk`, `mcp`, or `headless`
 tool call, it denies a subagent or headless session the checklist and the checkpoint
 writers, using `checklist.py actor-guard`.
 
-Every successful interactive checkpoint replaces its timed checkpoint. Claude Code
-receives a pinned local cron minute rounded up so it is strictly in the future
-and never earlier than checkpoint time plus the interval, `recurring: false`, session-only CronCreate,
-CronDelete of the previous job, and the exact shared prompt. The agent records
-the new job ID with `claude-timer-set`. Codex starts a detached worker that reads
-the session's replaceable deadline and queues the same prompt through
-`codex queue --thread ID --message TEXT`. One worker lock serializes delivery;
-a scheduling lock makes replacement and delivery mutually exclusive. No PID is
-killed. A delivery receipt records command failures as well as success. Timers,
-receipts, Claude job IDs, and transcript locations live in `timed-checkpoints/`
-beside the handoff directory; `HANDOFF_TIMER_DIR` overrides it.
+Checkpoint writes, fresh sessions, context guards, pre-compaction and restore
+never arm or renew timers. Explicit keep-warm allows at most two wakes, at about
+55 and 110 minutes from activation. The first empty wake switches off and writes
+no handoff; a productive wake permits a checkpoint and at most one more wake.
+Unknown activity and invalid/expired state switch off. No automatic turn renews
+this activation. Codex uses the documented `codex queue --thread ID --message TEXT`
+command (see `codex queue --help`); Claude Code uses native session-only one-shot
+CronCreate and CronDelete with job-id registration. Off retains a receipt;
+a local unlink never claims native cancellation. Scheduling locks serialize
+cancellation and queueing without killing PIDs. State lives in `timed-checkpoints/`
+beside handoffs, overridden by `HANDOFF_TIMER_DIR`, so supported cancellation can
+also find old pending records.
 
-At or above the configured token limit the timed prompt does nothing. Below it,
-the agent writes a checkpoint. The pre-compaction hook writes one itself from
+The pre-compaction hook writes one itself from
 ledger history, touched tickets and projects, and git state; it preserves any
 agent-written continuation and appends a factual history entry. It keeps the
 five raw-input backups as well. The command has an eight-second budget inside
 the hook's ten-second timeout. Post-compaction restore and pickup read the
-updated handoff; Claude restore repeats the scheduling instruction because
-PreCompact cannot call CronCreate.
+updated handoff without scheduling another wake.
 
 An automatic stop handoff is marked `skeleton: true`, carries earlier history
 entries from the ledger, and adds no entry. Every handoff, including a skeleton,
@@ -476,13 +472,14 @@ A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its 
 
 ## 7. Skills
 
-27 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
+28 skills, each a directory with a `SKILL.md`. An adapter installs them where its tool
 looks for skills. Each resolves its scripts from its own real directory, never from a
 tool-specific home directory.
 
 | Skill | Role |
 |---|---|
 | `hippocampus-set-up` | Create or extend the user profile and write and validate the user-owned record-read skill, with the user present. |
+| `keep-warm` | Explicit on/off for a bounded two-wake subscription. |
 | `checkpoint` | Checkpoint the current session. `scripts/checkpoint.sh` is the entry point the checklist also calls. |
 | `pickup` | Resume after a cold start. Its engine is `scripts/pickup.py`. |
 | `checklist` | Wrap through the spine plus profile steps. |
@@ -528,7 +525,7 @@ repository. `tests/test_shipped_surface.py` runs the check over the whole tree w
 ## 10. Codex installation and normalization
 
 `python3 scripts/install-codex.py [--codex-home PATH] [--codex PATH]` installs a
-runtime copy, the 27 skill links, six hippocampus hooks and the optional actor
+runtime copy, the 28 skill links, six hippocampus hooks and the optional actor
 guard. The installer owns only the registrations and links recorded in
 `hippocampus-install.json`; other hooks and configuration survive. Its seven
 handlers must match `hooks/list` with `trustStatus: trusted`, or it restores the
