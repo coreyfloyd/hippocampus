@@ -67,11 +67,28 @@ a sweep's native steps now apply items instead of only carrying them.
 
 ## Verification and publication state
 
-Not yet published. The existing public `v0.15.0` tag is preserved at its
-original commit; this maintenance release uses `v0.15.1`. Each ticket was reviewed and evaluated on its own branch
-(#131 and #133 conditional pass, #132 conditional pass in round 3, #134
-accepted at the round cap with its remaining defect fixed and passed in #186).
-CI passed on Ubuntu and macOS for the epic pull requests.
+Published [v0.15.1](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.1)
+on 2026-11-11 at 01:08:49 UTC from commit
+`6096c4a19bb26678a2182527ffab261e1bc2ebce`. The existing public `v0.15.0`
+tag is preserved at its original commit.
+
+- PR #218 passed Linux and macOS CI: 2,521 tests and 71 subtests passed on
+  each OS, with five skips. PR #219, containing the final release notes and
+  metadata, also passed both OS checks. The release commit's tree equals
+  PR #219's tested head.
+- Quick repository checks, documentation-link validation, the staged-release
+  test and release round-trip tests passed. Full pytest ran in PR CI.
+- The maintainer signed. The local archive equals `git archive` of the tagged
+  release commit; archive layout, version and cache/build exclusions were checked.
+- All six published assets were downloaded again. The checksum and signature
+  verified against the pinned fingerprint; the public key and both installer
+  scripts match the tagged repository files.
+
+Published assets: `hippocampus-0.15.1.tar.gz`,
+`hippocampus-0.15.1.tar.gz.sha256`, `hippocampus-0.15.1.tar.gz.asc`,
+`hippocampus-release.asc`, `install-release.sh`, and `verify-release.sh`.
+Archive SHA-256:
+`2c1df3e250ac483638f648644a2229c519ef13cb6eac6883a41fa17fe3d66101`.
 
 Previous records: [0.14.1](docs/releases/0.14.1.md),
 [0.14.0](docs/releases/0.14.0.md), [0.13.2](docs/releases/0.13.2.md).
