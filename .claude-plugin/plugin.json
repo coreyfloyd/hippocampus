@@ -1,6 +1,6 @@
 {
   "name": "hippocampus",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Session hippocampus: record through per-kind writes, checkpoint, wrap and pick up interactive sessions through a thin handoff; explicit bounded keep-warm while waiting for an incoming result.",
   "author": {
     "name": "hippocampus contributors"

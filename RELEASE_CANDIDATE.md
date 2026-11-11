@@ -1,4 +1,4 @@
-# Release candidate: 0.15.0
+# Release candidate: 0.15.1
 
 ## Scope
 
@@ -67,7 +67,8 @@ a sweep's native steps now apply items instead of only carrying them.
 
 ## Verification and publication state
 
-Not yet published. Each ticket was reviewed and evaluated on its own branch
+Not yet published. The existing public `v0.15.0` tag is preserved at its
+original commit; this maintenance release uses `v0.15.1`. Each ticket was reviewed and evaluated on its own branch
 (#131 and #133 conditional pass, #132 conditional pass in round 3, #134
 accepted at the round cap with its remaining defect fixed and passed in #186).
 CI passed on Ubuntu and macOS for the epic pull requests.
@@ -77,7 +78,7 @@ Previous records: [0.14.1](docs/releases/0.14.1.md),
 
 ## Release-note draft
 
-Hippocampus v0.15.0 is a maintenance release with opt-in wrap automation and
+Hippocampus v0.15.1 is a maintenance release with opt-in wrap automation and
 explicit bounded keep-warm in Claude Code and Codex.
 
 One setting, `auto_apply_lessons`, off by default, turns on wrap automation. With it on, a
