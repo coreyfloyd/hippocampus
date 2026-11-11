@@ -2,6 +2,16 @@
 
 Scope: [hippocampus issue 172](https://github.com/coreyfloyd/hippocampus/issues/172). Assertion locations below use the origin/main source at revision `83a9de2220946e86d65a0840648b72f0c307bde3`. Rules R1–R9 are defined in the issue. No fixtures, shared setup or runners are removed.
 
+## Retired automatic-timer coverage
+
+The automatic-timer test module named in the original source revision was
+removed under [hippocampus issue 214](https://github.com/coreyfloyd/hippocampus/issues/214).
+Rows labelled **Retired automatic-timer coverage** preserve that historical
+classification; they do not name a currently shipped script. Automatic timer
+and timer-setting checks are retired. Current explicit keep-warm lifecycle
+coverage is in `tests/test_keep_warm.py`; the three retained compaction
+preservation checks moved to `tests/test_compaction_preservation.py`.
+
 ## Search and classification
 
 Commands used to locate candidates and verify the positive search class:
@@ -162,9 +172,9 @@ Each removal row identifies one original assertion site; a looped assertion incl
 | tests/test_sweep_documentation.py | test_setup_and_sweep_describe_per_kind_record_writes | 59 | assert 'record_writes.documents' in text (for path in ('skills/sweep/SKILL.md', 'docs/sweep.md', 'INTERFACE.md')) | R4 |
 | tests/test_sweep_documentation.py | test_setup_and_sweep_describe_per_kind_record_writes | 60 | assert 'through the record binding' not in text (for path in ('skills/sweep/SKILL.md', 'docs/sweep.md', 'INTERFACE.md')) | R4 |
 | tests/test_sweep_documentation.py | test_setup_and_sweep_describe_per_kind_record_writes | 61 | assert 'record or ask binding' not in text (for path in ('skills/sweep/SKILL.md', 'docs/sweep.md', 'INTERFACE.md')) | R4 |
-| tests/test_timed_checkpoint.py | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 99 | assert 'timed-checkpoint-check' in PROMPT.read_text() | R4; R6 |
-| tests/test_timed_checkpoint.py | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 101 | assert 'CronCreate' in skill and 'CronDelete' in skill | R4 |
-| tests/test_timed_checkpoint.py | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 102 | assert 'timed-checkpoint-prompt' in skill | R4 |
+| Retired automatic-timer coverage | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 99 | assert 'timed-checkpoint-check' in PROMPT.read_text() | R4; R6 |
+| Retired automatic-timer coverage | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 101 | assert 'CronCreate' in skill and 'CronDelete' in skill | R4 |
+| Retired automatic-timer coverage | test_claude_schedule_output_replaces_job_and_uses_single_prompt | 102 | assert 'timed-checkpoint-prompt' in skill | R4 |
 
 ## Kept checks
 
@@ -626,20 +636,20 @@ One row per retained test in the reviewed configuration-reader files (including 
 | tests/test_sweep.py | test_future_lint_messages_block_even_in_warn_only_fields | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_sweep.py | test_reports_have_readable_entries_and_unchanged_json | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
 | tests/test_sweep_documentation.py | test_documented_herdr_check | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_token_boundary | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_limit_setting_and_unknown_usage | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_invalid_settings_rejected | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_claude_schedule_output_replaces_job_and_uses_single_prompt | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_pre_compact_writes_and_restores_current_facts_preserving_continuation | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_pre_compact_without_prior_handoff_and_headless_exclusion | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_codex_timer_fires_once_after_replacement_and_retains_session_context | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_timer_defaults_and_latest_usage | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_invalid_usage_is_unknown_and_never_below_limit | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_claude_pinned_minute_is_calculated_from_write_time | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_pre_compaction_has_bounded_hook_runtime | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_interval_requires_whole_minutes_in_both_tools | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_one_minute_is_a_valid_interval | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
-| tests/test_timed_checkpoint.py | test_claude_due_minute_rounds_up_and_remains_future | R7 | Behavior uses an input constructed by the test or a retained fixture; expected results describe code handling, not shipped configuration. |
+| Retired automatic-timer coverage | test_token_boundary | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_limit_setting_and_unknown_usage | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_invalid_settings_rejected | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_claude_schedule_output_replaces_job_and_uses_single_prompt | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| tests/test_compaction_preservation.py | test_pre_compact_writes_and_restores_current_facts_preserving_continuation | R7 | Preservation coverage moved from the retired automatic-timer module; current checks never arm timers. |
+| tests/test_compaction_preservation.py | test_pre_compact_without_prior_handoff_and_headless_exclusion | R7 | Preservation coverage moved from the retired automatic-timer module; current checks never arm timers. |
+| Retired automatic-timer coverage | test_codex_timer_fires_once_after_replacement_and_retains_session_context | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_timer_defaults_and_latest_usage | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_invalid_usage_is_unknown_and_never_below_limit | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_claude_pinned_minute_is_calculated_from_write_time | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| tests/test_compaction_preservation.py | test_pre_compaction_has_bounded_hook_runtime | R7 | Preservation coverage moved from the retired automatic-timer module; current checks never arm timers. |
+| Retired automatic-timer coverage | test_interval_requires_whole_minutes_in_both_tools | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_one_minute_is_a_valid_interval | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
+| Retired automatic-timer coverage | test_claude_due_minute_rounds_up_and_remains_future | Historical R7; retired | Retained at the original classification; removed with automatic-timer behavior. |
 | tests/test-contracts.sh | profile schema and validator cases | R5 / R7 | The accepted profile version, always-required artifact follow-up field and unknown-field rejection remain. Controlled invalid variants exercise parser rejection; wiki enable/disable cases and the documented recipe execute the validator. |
 | tests/test-contracts.sh | scan: private vocabulary; private paths and names | R8 | Both fail-closed public leak scans remain byte-for-byte. |
 | tests/test-install.sh | installation scenarios other than removed prose grep | R5 / R7 | Dynamic installed/source skill parity, profile validation, conflicts, upgrade, recovery, tampering and uninstall behavior remain. |
