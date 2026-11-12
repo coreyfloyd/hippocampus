@@ -1757,7 +1757,7 @@ def post_compact(payload: Mapping[str, Any]) -> None:
             _emit_hook_context(context)
         else:
             _emit_hook_context(_targeted_restore_context(
-                os.path.realpath(path), f"The handoff has an unrecognized schema (unknown {version})."))
+                os.path.realpath(path), "The handoff has an unrecognized schema."))
 
 
 def transcript_usage(transcript: str, codex: bool) -> tuple[int, int] | None:

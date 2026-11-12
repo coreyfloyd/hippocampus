@@ -153,19 +153,31 @@ def test_post_compact_requires_targeted_read_when_active_continuation_cannot_fit
     assert 'Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.' in output
 
 
-def test_post_compact_never_dumps_large_unknown_schema(runtime):
-    directory, _, _ = runtime
+@pytest.mark.parametrize('version', [
+    99, None, 'x' * 8_000, {'untrusted': 'x' * 8_000},
+    ['x' * 8_000], '界' * 8_000,
+], ids=['numeric', 'null', 'string', 'object', 'array', 'unicode'])
+def test_post_compact_never_dumps_large_unknown_schema(runtime, version):
+    directory, env, _ = runtime
+    assert checkpoint(runtime).returncode == 0
     handoff_path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
-    handoff_path.parent.mkdir(parents=True, exist_ok=True)
-    handoff_path.write_text(json.dumps({'schema_version': 99, 'untrusted': 'x' * 8_000}, separators=(',', ':')))
+    handoff_path.write_text(json.dumps({'schema_version': version, 'untrusted': 'x' * 8_000}, separators=(',', ':')))
+    before_handoff = handoff_path.read_bytes()
+    before_ledger = {path: path.read_bytes() for path in Path(env['HANDOFF_LEDGER_DIR']).glob('*')}
 
-    restored = run(runtime, 'post-compact', payload=event(runtime, source='compact'))
-    output = context(restored)
+    claude, codex = restore_through_adapters(runtime, event(runtime, source='compact'))
 
-    assert len(output.encode()) <= POST_COMPACT_CONTEXT_BYTES
-    assert 'x' * 100 not in output
-    assert 'unrecognized schema' in output
-    assert 'targeted read required' in output
+    assert claude == codex
+    for output in (claude, codex):
+        assert len(output.encode()) <= POST_COMPACT_CONTEXT_BYTES
+        assert 'x' * 100 not in output
+        assert 'unrecognized schema' in output
+        assert 'targeted read required' in output
+        assert str(handoff_path.resolve()) in output
+        assert 'Read the relevant fields' in output
+        assert 'Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.' in output
+    assert handoff_path.read_bytes() == before_handoff
+    assert {path: path.read_bytes() for path in Path(env['HANDOFF_LEDGER_DIR']).glob('*')} == before_ledger
 
 
 def test_post_compact_malformed_handoff_does_not_echo_unbounded_input(runtime):
