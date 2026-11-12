@@ -283,14 +283,16 @@ def test_adapters_recover_long_handoff_paths_without_mutation(runtime, branch, o
     assert resolved.returncode == 0, resolved.stderr
     handoff_path = Path(resolved.stdout.strip())
     handoff = json.loads(handoff_path.read_text())
-    handoff['resume']['session_history'] = ['retained ' * POST_COMPACT_CONTEXT_BYTES]
+    handoff['fixture_padding'] = ['retained ' * POST_COMPACT_CONTEXT_BYTES]
     if branch == 'oversized':
         handoff['resume']['next_action'] = 'unresolved decision ' * POST_COMPACT_CONTEXT_BYTES
     elif branch == 'missing':
         handoff['resume'] = None
     elif branch == 'unknown':
         handoff['schema_version'] = 'unknown' * POST_COMPACT_CONTEXT_BYTES
-    handoff_path.write_text('{bad json' if branch == 'malformed' else json.dumps(handoff))
+    serialized = json.dumps(handoff)
+    assert len(serialized.encode()) > POST_COMPACT_CONTEXT_BYTES
+    handoff_path.write_text('{bad json' if branch == 'malformed' else serialized)
     before = handoff_path.read_bytes()
     ledger = {p: p.read_bytes() for p in Path(env['HANDOFF_LEDGER_DIR']).glob('*')}
     claude, codex = restore_through_adapters(runtime, event(runtime, source='compact'))
