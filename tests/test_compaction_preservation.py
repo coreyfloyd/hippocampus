@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import runpy
+import shlex
 import subprocess
 import sys
 import time
@@ -223,3 +224,105 @@ def test_pre_compaction_has_bounded_hook_runtime(runtime):
     assert time.monotonic() - started < 9
     assert result.returncode == 0
     assert '8-second budget' in result.stderr
+
+
+@pytest.mark.parametrize('filename', ['session.json', "'" * 250, '界 space \" name.json'])
+@pytest.mark.parametrize('branch', ['continuation', 'oversized', 'missing', 'unknown'])
+@pytest.mark.parametrize('override', [False, True], ids=['state-dir', 'override'])
+def test_long_canonical_path_fallback_is_bounded_and_recoverable(monkeypatch, branch, override, filename):
+    # Valid Linux components and total path length; no host PATH_MAX dependency.
+    directory = '/' + '/'.join(['segment' * 25] * 13)
+    path = directory + '/' + filename
+    monkeypatch.setenv('HANDOFF_STATE_DIR', directory)
+    monkeypatch.delenv('HANDOFF_PATH', raising=False)
+    if override:
+        monkeypatch.setenv('HANDOFF_PATH', path)
+    engine = runpy.run_path(str(ENGINE))
+    data = {'resume': {'headline': 'Continue', 'next_action': 'Verify', 'open_loops': []}}
+    if branch == 'oversized':
+        data['resume']['next_action'] = 'unresolved decision ' * POST_COMPACT_CONTEXT_BYTES
+    elif branch == 'missing':
+        data['resume'] = None
+    if branch == 'unknown':
+        output = engine['_targeted_restore_context'](path, 'The handoff has an unrecognized schema.')
+    else:
+        output = engine['_bounded_restore_context'](data, path)
+    assert len(output.encode()) <= POST_COMPACT_CONTEXT_BYTES
+    assert 'before acting' in output
+    assert 'Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.' in output
+    assert 'targeted read required' in output
+    assert path not in output
+    if override:
+        assert 'HANDOFF_PATH' in output
+        recovered = os.environ['HANDOFF_PATH']
+    else:
+        assert 'handoff.py state-dir' in output
+        assert shlex.quote(Path(path).name) in output
+        quoted = output.split('with shell-quoted filename ', 1)[1].split(' in the directory returned', 1)[0]
+        recovered = os.path.join(engine['state_dir'](), shlex.split(quoted)[0])
+    assert recovered == path
+
+
+@pytest.mark.parametrize('branch', ['continuation', 'oversized', 'missing', 'unknown', 'malformed'])
+@pytest.mark.parametrize('override', [False, True], ids=['state-dir', 'override'])
+def test_adapters_recover_long_handoff_paths_without_mutation(runtime, branch, override):
+    directory, env, _ = runtime
+    long_dir = directory
+    while len(str(long_dir).encode()) <= POST_COMPACT_CONTEXT_BYTES:
+        long_dir /= 'segment' * 25
+    # macOS cannot open these Linux-valid absolute paths; renderer cases above
+    # still run everywhere. CI on Linux exercises both actual hook transports.
+    if len(str(long_dir).encode()) + 255 >= os.pathconf(directory, 'PC_PATH_MAX'):
+        pytest.skip('host PATH_MAX cannot represent this Linux long-path fixture')
+    env['HANDOFF_STATE_DIR'] = str(long_dir)
+    env.pop('HANDOFF_PATH', None)
+    if override:
+        env['HANDOFF_PATH'] = str(long_dir / 'override.json')
+    assert checkpoint(runtime).returncode == 0
+    resolved = run(runtime, 'resolve', str(directory), '--session-id', 'test')
+    assert resolved.returncode == 0, resolved.stderr
+    handoff_path = Path(resolved.stdout.strip())
+    handoff = json.loads(handoff_path.read_text())
+    handoff['resume']['session_history'] = ['retained ' * POST_COMPACT_CONTEXT_BYTES]
+    if branch == 'oversized':
+        handoff['resume']['next_action'] = 'unresolved decision ' * POST_COMPACT_CONTEXT_BYTES
+    elif branch == 'missing':
+        handoff['resume'] = None
+    elif branch == 'unknown':
+        handoff['schema_version'] = 'unknown' * POST_COMPACT_CONTEXT_BYTES
+    handoff_path.write_text('{bad json' if branch == 'malformed' else json.dumps(handoff))
+    before = handoff_path.read_bytes()
+    ledger = {p: p.read_bytes() for p in Path(env['HANDOFF_LEDGER_DIR']).glob('*')}
+    claude, codex = restore_through_adapters(runtime, event(runtime, source='compact'))
+    assert claude == codex
+    assert len(claude.encode()) <= POST_COMPACT_CONTEXT_BYTES
+    assert 'before acting' in claude
+    assert 'Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.' in claude
+    if branch == 'malformed':
+        assert 'did not parse as JSON' in claude
+        assert 'Do NOT trust it.' in claude
+    if override:
+        assert 'HANDOFF_PATH' in claude
+        recovered = Path(env['HANDOFF_PATH'])
+    else:
+        assert 'handoff.py state-dir' in claude
+        assert shlex.quote(handoff_path.name) in claude
+        state = run(runtime, 'state-dir')
+        assert state.returncode == 0, state.stderr
+        recovered = Path(state.stdout.strip()) / handoff_path.name
+    assert recovered == handoff_path
+    assert recovered.read_bytes() == before
+    assert {p: p.read_bytes() for p in Path(env['HANDOFF_LEDGER_DIR']).glob('*')} == ledger
+
+
+def test_long_symlink_target_keeps_original_resolvable_filename(monkeypatch):
+    engine = runpy.run_path(str(ENGINE))
+    monkeypatch.delenv('HANDOFF_PATH', raising=False)
+    monkeypatch.setenv('HANDOFF_STATE_DIR', '/configured')
+    target = '/' + '/'.join(['segment' * 25] * 13) + '/different-target.json'
+    monkeypatch.setattr(os.path, 'realpath', lambda path: target)
+    output = engine['_targeted_restore_context']('/configured/original.json', 'Read required.')
+    assert len(output.encode()) <= POST_COMPACT_CONTEXT_BYTES
+    assert 'original.json' in output
+    assert 'different-target.json' not in output
+    assert 'handoff.py state-dir' in output

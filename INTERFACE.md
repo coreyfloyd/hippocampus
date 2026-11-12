@@ -291,7 +291,12 @@ requirement to read relevant omitted fields before acting. If the current
 continuation cannot fit whole, it emits no partial continuation; it requires a
 targeted read of `resume.headline`, `resume.next_action`, and
 `resume.open_loops`. The canonical handoff and ledger are never changed by
-rendering.
+rendering. If the full path itself makes the targeted message too large, the
+reference uses the complete `HANDOFF_PATH` environment value when overridden,
+or the complete shell-quoted filename in the directory returned by
+`handoff.py state-dir`. Resolve these using the same working directory and
+handoff configuration/environment. Filenames are never truncated, and the
+read-before-act and unresolved-gate warnings remain in the bounded message.
 
 An automatic stop handoff is marked `skeleton: true`, carries earlier history
 entries from the ledger, and adds no entry. Every handoff, including a skeleton,
