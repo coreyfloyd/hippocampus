@@ -103,8 +103,6 @@ def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_u
         for group in groups:
             for hook in group['hooks']:
                 if 'codex-hook.py' in hook['command']:
-                    if hook['command'].endswith(' post-compact'):
-                        assert hook['additionalContextLimit'] == 2_000
                     moment='Stop' if ' guard-decide' in hook['command'] else 'SessionStart'
                     p=payload(moment,sandbox)
                     run=subprocess.run(hook['command'],shell=True,input=json.dumps(p),text=True,capture_output=True)
@@ -115,6 +113,30 @@ def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_u
     assert [line for line in (codex/'config.toml').read_text().splitlines() if line.strip()] == ['model = "custom"']
     assert handoff.exists()
     assert not [p for p in (codex/'skills').iterdir() if p.name != '.system']
+
+
+def test_installed_post_compact_hook_projects_an_oversized_handoff(sandbox, requires_codex_cli):
+    home, work = sandbox
+    codex = home / '.codex'
+    handoff = checkpoint(work)
+    data = json.loads(handoff.read_text())
+    data['resume']['session_history'] = ['retained history ' + 'x' * 8_000]
+    handoff.write_text(json.dumps(data, separators=(',', ':')))
+    assert cli(INSTALL, '--codex-home', codex).returncode == 0
+    hooks = json.loads((codex / 'hooks.json').read_text())['hooks']['SessionStart']
+    handler = next(hook for group in hooks for hook in group['hooks']
+                   if hook['command'].endswith(' post-compact'))
+
+    event = payload('SessionStart', sandbox)
+    event['source'] = 'compact'
+    restored = subprocess.run(handler['command'], shell=True, input=json.dumps(event), text=True, capture_output=True)
+
+    assert restored.returncode == 0, restored.stderr
+    context = json.loads(restored.stdout)['hookSpecificOutput']['additionalContext']
+    assert 'Continue here' in context
+    assert 'retained history ' not in context
+    assert str(handoff.resolve()) in context
+    assert 'read the relevant fields' in context
 
 
 @pytest.fixture
