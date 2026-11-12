@@ -15,6 +15,7 @@ import sys
 from lib import codex_trust as trust
 from lib import install_recovery as recovery
 from lib.install_conflicts import refuse_standalone
+from lib.restore_projection import POST_COMPACT_CONTEXT_BYTES
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = tuple(sorted(p.name for p in (ROOT / 'skills').iterdir() if (p / 'SKILL.md').is_file()))
@@ -28,6 +29,8 @@ def registrations(package):
     hooks = {}
     for event, operation, matcher in REGISTRATIONS:
         group = {'hooks':[{'type':'command', 'command':'python3 '+shlex.quote(str(package/'scripts/codex-hook.py'))+' '+operation,'timeout':10}]}
+        if operation == 'post-compact':
+            group['hooks'][0]['additionalContextLimit'] = POST_COMPACT_CONTEXT_BYTES
         if matcher is not None:
             group['matcher'] = matcher
         hooks.setdefault(event,[]).append(group)

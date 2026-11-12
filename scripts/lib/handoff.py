@@ -30,6 +30,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from restore_projection import POST_COMPACT_CONTEXT_BYTES
+
 
 DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
 # Raw pre-compaction hook input is kept beside the handoffs, outside either tool's own data area.
@@ -1695,6 +1697,36 @@ def _emit_hook_context(text: str) -> None:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
 
 
+def _context_fits(text: str) -> bool:
+    return len(text.encode()) <= POST_COMPACT_CONTEXT_BYTES
+
+
+def _targeted_restore_context(path: str, reason: str, fields: Sequence[str] = ()) -> str:
+    target = ", ".join(f"`{field}`" for field in fields)
+    read = f" Read {target} from" if target else " Read the relevant fields from"
+    return ("Session handoff — targeted read required:\n\n"
+            f"{reason}{read} the canonical handoff at {path} before acting.\n\n"
+            "This bounded restore omits content. Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.")
+
+
+def _bounded_restore_context(data: Mapping[str, Any], path: str) -> str:
+    resume = data.get("resume")
+    if not isinstance(resume, Mapping):
+        return _targeted_restore_context(path, "The handoff has no readable active continuation.")
+    fields = ("headline", "next_action", "open_loops")
+    continuation = {field: resume[field] for field in fields if field in resume}
+    context = ("Session handoff — bounded restore:\n\n"
+               "Current continuation:\n"
+               + json.dumps(continuation, separators=(",", ":"))
+               + f"\n\nFull canonical handoff: {path}\n\n"
+               "Before acting beyond this continuation, read the relevant fields from the canonical handoff. "
+               "Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.")
+    if _context_fits(context):
+        return context
+    return _targeted_restore_context(path, "The active continuation exceeds the bounded restore projection.",
+                                    tuple("resume." + field for field in fields))
+
+
 def post_compact(payload: Mapping[str, Any]) -> None:
     if not is_interactive(payload):
         return
@@ -1718,9 +1750,14 @@ def post_compact(payload: Mapping[str, Any]) -> None:
     version = data.get("schema_version") if isinstance(data, dict) else None
     if version in (1, 2):
         context = "Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down."
-        _emit_hook_context(context)
+        _emit_hook_context(context if _context_fits(context) else _bounded_restore_context(data, os.path.realpath(path)))
     else:
-        _emit_hook_context(f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting.")
+        context = f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting."
+        if _context_fits(context):
+            _emit_hook_context(context)
+        else:
+            _emit_hook_context(_targeted_restore_context(
+                os.path.realpath(path), f"The handoff has an unrecognized schema (unknown {version})."))
 
 
 def transcript_usage(transcript: str, codex: bool) -> tuple[int, int] | None:

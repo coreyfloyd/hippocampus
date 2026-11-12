@@ -103,6 +103,8 @@ def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_u
         for group in groups:
             for hook in group['hooks']:
                 if 'codex-hook.py' in hook['command']:
+                    if hook['command'].endswith(' post-compact'):
+                        assert hook['additionalContextLimit'] == 2_000
                     moment='Stop' if ' guard-decide' in hook['command'] else 'SessionStart'
                     p=payload(moment,sandbox)
                     run=subprocess.run(hook['command'],shell=True,input=json.dumps(p),text=True,capture_output=True)
