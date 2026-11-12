@@ -23,7 +23,7 @@ STATE_HEADER = re.compile(
     r'^\[hooks\.state\.(?P<key>"(?:[^"\\]|\\.)*")\]\s*$'
 )
 AGENT_BLOCK_START = "# >>> hippocampus codex agents >>>"
-SUPPORTED_HANDLER_FIELDS = {"type", "command", "timeout", "async"}
+SUPPORTED_HANDLER_FIELDS = {"type", "command", "timeout", "async", "additionalContextLimit"}
 
 
 def atomic_write(path: Path, content: str) -> bool:
@@ -89,6 +89,11 @@ def validate_source(source: Any) -> dict[str, list[dict[str, Any]]]:
                     )
                 if "async" in handler and not isinstance(handler["async"], bool):
                     raise ValueError(f"tracked {event} async must be boolean")
+                if ("additionalContextLimit" in handler
+                        and (not isinstance(handler["additionalContextLimit"], int)
+                             or isinstance(handler["additionalContextLimit"], bool)
+                             or handler["additionalContextLimit"] < 0)):
+                    raise ValueError(f"tracked {event} additionalContextLimit must be a non-negative integer")
     return hooks
 
 
@@ -156,12 +161,15 @@ def normalized_timeout(event: str, timeout: int) -> int:
 
 
 def normalized_handler(event: str, handler: dict[str, Any]) -> dict[str, Any]:
-    return {
+    result = {
         "type": "command",
         "command": handler["command"],
         "async": handler.get("async", False),
         "timeout": normalized_timeout(event, handler["timeout"]),
     }
+    if "additionalContextLimit" in handler:
+        result["additionalContextLimit"] = handler["additionalContextLimit"]
+    return result
 
 
 def hook_hash(event: str, group: dict[str, Any], handler: dict[str, Any]) -> str:

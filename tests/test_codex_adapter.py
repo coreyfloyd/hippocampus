@@ -115,6 +115,30 @@ def test_one_install_registers_six_hooks_and_guard_preserves_other_entries_and_u
     assert not [p for p in (codex/'skills').iterdir() if p.name != '.system']
 
 
+def test_installed_post_compact_hook_projects_an_oversized_handoff(sandbox, requires_codex_cli):
+    home, work = sandbox
+    codex = home / '.codex'
+    handoff = checkpoint(work)
+    data = json.loads(handoff.read_text())
+    data['resume']['session_history'] = ['retained history ' + 'x' * 8_000]
+    handoff.write_text(json.dumps(data, separators=(',', ':')))
+    assert cli(INSTALL, '--codex-home', codex).returncode == 0
+    hooks = json.loads((codex / 'hooks.json').read_text())['hooks']['SessionStart']
+    handler = next(hook for group in hooks for hook in group['hooks']
+                   if hook['command'].endswith(' post-compact'))
+
+    event = payload('SessionStart', sandbox)
+    event['source'] = 'compact'
+    restored = subprocess.run(handler['command'], shell=True, input=json.dumps(event), text=True, capture_output=True)
+
+    assert restored.returncode == 0, restored.stderr
+    context = json.loads(restored.stdout)['hookSpecificOutput']['additionalContext']
+    assert 'Continue here' in context
+    assert 'retained history ' not in context
+    assert str(handoff.resolve()) in context
+    assert 'read the relevant fields' in context
+
+
 @pytest.fixture
 def trust_then_foreign_block():
     # Derived from a trust table immediately preceding another tool's markers.

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -29,6 +30,14 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+
+# Load beside this file even when callers use a file spec or isolated Python.
+_projection_spec = importlib.util.spec_from_file_location(
+    "restore_projection", Path(__file__).with_name("restore_projection.py")
+)
+_projection = importlib.util.module_from_spec(_projection_spec)
+_projection_spec.loader.exec_module(_projection)
+POST_COMPACT_CONTEXT_BYTES = _projection.POST_COMPACT_CONTEXT_BYTES
 
 
 DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
@@ -1695,6 +1704,50 @@ def _emit_hook_context(text: str) -> None:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text}}))
 
 
+def _context_fits(text: str) -> bool:
+    return len(text.encode()) <= POST_COMPACT_CONTEXT_BYTES
+
+
+def _targeted_restore_context(path: str, reason: str, fields: Sequence[str] = ()) -> str:
+    target = ", ".join(f"`{field}`" for field in fields)
+    read = f" Read {target} from" if target else " Read the relevant fields from"
+    prefix = f"Session handoff — targeted read required:\n\n{reason}{read} the canonical handoff "
+    suffix = (" before acting.\n\nThis bounded restore omits content. "
+              "Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.")
+    context = prefix + f"at {os.path.realpath(path)}" + suffix
+    if _context_fits(context):
+        return context
+    # Keep the original resolver path: a canonicalized symlink target's basename
+    # need not be the name stored in state-dir. Never shorten a filename.
+    if os.environ.get("HANDOFF_PATH"):
+        reference = "at the complete HANDOFF_PATH environment-variable value"
+    else:
+        reference = (f"with shell-quoted filename {shlex.quote(os.path.basename(path))} "
+                     "in the directory returned by hippocampus's `handoff.py state-dir`")
+    context = prefix + reference + " (use the same working directory and handoff configuration/environment)" + suffix
+    if not _context_fits(context):
+        raise ValueError("canonical handoff reference cannot fit the bounded restore")
+    return context
+
+
+def _bounded_restore_context(data: Mapping[str, Any], path: str) -> str:
+    resume = data.get("resume")
+    if not isinstance(resume, Mapping):
+        return _targeted_restore_context(path, "The handoff has no readable active continuation.")
+    fields = ("headline", "next_action", "open_loops")
+    continuation = {field: resume[field] for field in fields if field in resume}
+    context = ("Session handoff — bounded restore:\n\n"
+               "Current continuation:\n"
+               + json.dumps(continuation, separators=(",", ":"))
+               + f"\n\nFull canonical handoff: {os.path.realpath(path)}\n\n"
+               "Before acting beyond this continuation, read the relevant fields from the canonical handoff. "
+               "Do NOT infer that omitted decisions, actions, or gates are absent, settled, or cleared.")
+    if _context_fits(context):
+        return context
+    return _targeted_restore_context(path, "The active continuation exceeds the bounded restore projection.",
+                                    tuple("resume." + field for field in fields))
+
+
 def post_compact(payload: Mapping[str, Any]) -> None:
     if not is_interactive(payload):
         return
@@ -1712,15 +1765,22 @@ def post_compact(payload: Mapping[str, Any]) -> None:
     try:
         data = read_json(path)
     except (OSError, ValueError, TypeError):
-        _emit_hook_context(f"A handoff exists at {path} but did not parse as JSON. Do NOT trust it. Proceed on your charter and ground truth, and rewrite a clean handoff at your next checkpoint.")
+        context = f"A handoff exists at {path} but did not parse as JSON. Do NOT trust it. Proceed on your charter and ground truth, and rewrite a clean handoff at your next checkpoint."
+        _emit_hook_context(context if _context_fits(context) else _targeted_restore_context(
+            path, "The handoff did not parse as JSON. Do NOT trust it. Re-validate against ground truth."))
         return
     raw = json.dumps(data, separators=(",", ":"))
     version = data.get("schema_version") if isinstance(data, dict) else None
     if version in (1, 2):
         context = "Session handoff — your last checkpoint:\n\n" + raw + "\n\nRe-validate before acting: this is a point-in-time pass-forward, not ground truth. Read any referenced ticket before executing it; query briefs scoped to what you're resuming; reconcile spawned_processes by identity (pid + started_at) before adopting or tearing down."
-        _emit_hook_context(context)
+        _emit_hook_context(context if _context_fits(context) else _bounded_restore_context(data, path))
     else:
-        _emit_hook_context(f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting.")
+        context = f"Session handoff at {path} has an unrecognized schema (unknown {version}); treat unfamiliar fields with caution:\n\n{raw}\n\nRe-validate against ground truth before acting."
+        if _context_fits(context):
+            _emit_hook_context(context)
+        else:
+            _emit_hook_context(_targeted_restore_context(
+                path, "The handoff has an unrecognized schema."))
 
 
 def transcript_usage(transcript: str, codex: bool) -> tuple[int, int] | None:

@@ -284,6 +284,20 @@ five raw-input backups as well. The command has an eight-second budget inside
 the hook's ten-second timeout. Post-compaction restore and pickup read the
 updated handoff without scheduling another wake.
 
+Post-compaction restore leaves a small handoff context unchanged. A larger
+handoff emits a shared, 2,000-byte bounded projection through both adapters:
+the complete current continuation, the canonical handoff path, and a
+requirement to read relevant omitted fields before acting. If the current
+continuation cannot fit whole, it emits no partial continuation; it requires a
+targeted read of `resume.headline`, `resume.next_action`, and
+`resume.open_loops`. The canonical handoff and ledger are never changed by
+rendering. If the full path itself makes the targeted message too large, the
+reference uses the complete `HANDOFF_PATH` environment value when overridden,
+or the complete shell-quoted filename in the directory returned by
+`handoff.py state-dir`. Resolve these using the same working directory and
+handoff configuration/environment. Filenames are never truncated, and the
+read-before-act and unresolved-gate warnings remain in the bounded message.
+
 An automatic stop handoff is marked `skeleton: true`, carries earlier history
 entries from the ledger, and adds no entry. Every handoff, including a skeleton,
 requires a timezone-qualified ISO `written_at`; a schema-v2 subject requires a non-empty `session_id`. The stop

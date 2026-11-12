@@ -53,7 +53,7 @@ build_engine() {
     mkdir -p "$TREE/scripts/lib" "$TREE/skills/pickup/scripts"
     cp "$REAL" "$TREE/scripts/pickup.sh"
     # The wrapper asks the handoff module where handoffs are stored (#1572).
-    cp "$ROOT/scripts/lib/handoff.py" "$TREE/scripts/lib/handoff.py"
+    cp "$ROOT/scripts/lib/handoff.py" "$ROOT/scripts/lib/restore_projection.py" "$TREE/scripts/lib/"
     printf '%s\n' "$1" > "$TREE/skills/pickup/scripts/pickup.py"
 }
 
