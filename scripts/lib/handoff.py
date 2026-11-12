@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -30,7 +31,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from restore_projection import POST_COMPACT_CONTEXT_BYTES
+# Load beside this file even when callers use a file spec or isolated Python.
+_projection_spec = importlib.util.spec_from_file_location(
+    "restore_projection", Path(__file__).with_name("restore_projection.py")
+)
+_projection = importlib.util.module_from_spec(_projection_spec)
+_projection_spec.loader.exec_module(_projection)
+POST_COMPACT_CONTEXT_BYTES = _projection.POST_COMPACT_CONTEXT_BYTES
 
 
 DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
