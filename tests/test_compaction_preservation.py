@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import runpy
 import subprocess
 import sys
 import time
@@ -12,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINE = ROOT / 'scripts/lib/handoff.py'
 CLAUDE_RESTORE = ROOT / 'scripts/post-compact-restore.sh'
 CODEX_RESTORE = ROOT / 'scripts/codex-hook.py'
-POST_COMPACT_CONTEXT_BYTES = 2_000
+POST_COMPACT_CONTEXT_BYTES = runpy.run_path(
+    str(ROOT / 'scripts/lib/restore_projection.py'))['POST_COMPACT_CONTEXT_BYTES']
 
 
 @pytest.fixture
