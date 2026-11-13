@@ -165,3 +165,11 @@ _Avoid_: digest, summary
 ## Touched repository
 
 A checkout in the current session's ledger, recorded from a tool call's working directory or an edit tool's changed file, plus checkouts the agent names during checklist. The shared checked-checkout list is additive: the agent can add, never remove. Each checkout is checked for uncommitted changes and current-HEAD commits absent from every remote-tracking branch. The saved line names each checkout and branch; its claim covers only that list. Shell-only targets not named by the agent, other local branches, other worktrees, and predecessor-only checkouts are accepted limits.
+
+## Harness placement
+
+**Implementation ladder**:
+The ordered choices for where knowledge, a rule, or a solution should live. Improve-harness owns the ladder; a user routing file maps its rungs to local surfaces.
+
+**Decision service**:
+A service an agent sends facts to and receives a decision from before acting, for an important rule that instructions alone have not made reliable.
