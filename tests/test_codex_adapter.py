@@ -437,10 +437,52 @@ def test_install_collision_and_verification_failure_do_not_change_user_files(san
     assert not [p for p in (codex/'skills').iterdir() if p.name != '.system']
 
 
+@pytest.mark.parametrize('trigger', ['manual', 'auto'])
+@pytest.mark.parametrize('provider', ['codex', 'claude'])
+def test_precompact_output_contract_and_preservation(sandbox, trigger, provider):
+    _, work = sandbox
+    path = checkpoint(work)
+    retained = json.loads(path.read_text())['resume']
+    p = payload('PreCompact', sandbox, trigger=trigger)
+    if provider == 'codex':
+        result = cli(ADAPTER, 'pre-compact', data=p)
+    else:
+        env = dict(os.environ, HIPPOCAMPUS_HARNESS='claude', CLAUDE_CODE_ENTRYPOINT='cli')
+        result = subprocess.run(['bash', str(ROOT/'scripts/pre-compact.sh')],
+                                input=json.dumps(p), text=True, capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    saved = json.loads(path.read_text())
+    assert cli(ROOT/'scripts/lib/handoff.py', 'lint', path).returncode == 0
+    assert saved['trigger'] == 'pre-compact'
+    assert not saved.get('skeleton')
+    for field in ('headline', 'session_summary', 'next_action', 'open_loops'):
+        assert saved['resume'][field] == retained[field]
+    backups = list(Path(os.environ['HANDOFF_COMPACT_STATE_DIR']).glob('*.json'))
+    assert len(backups) == 1
+    assert json.loads(backups[0].read_text()) == p
+    if provider == 'claude':
+        assert result.stdout.startswith('COMPACTION IMMINENT')
+        return
+    output = json.loads(result.stdout)
+    schema = json.loads((FIX/'pre-compact-output-0.167.0.schema.json').read_text())
+    # This pinned schema is a flat object of optional string/boolean fields.
+    # Evaluate all its constraints without adding a runtime test dependency.
+    assert schema['type'] == 'object' and isinstance(output, dict)
+    assert schema['additionalProperties'] is False
+    assert output.keys() <= schema['properties'].keys()
+    for field, value in output.items():
+        assert type(value) is {'string': str, 'boolean': bool}[schema['properties'][field]['type']]
+    assert 'COMPACTION IMMINENT' in output['systemMessage']
+    assert output.get('continue', True) is True
+    assert not output.get('stopReason')
+
+
 def test_restore_precompact_and_context_half_window(sandbox):
     _,work=sandbox;checkpoint(work)
     start=payload('SessionStart',sandbox)
-    assert 'handoff exists' in cli(ADAPTER,'post-compact',data=start).stdout
+    restored = json.loads(cli(ADAPTER,'post-compact',data=start).stdout)
+    assert restored['hookSpecificOutput']['hookEventName'] == 'SessionStart'
+    assert 'handoff exists' in restored['hookSpecificOutput']['additionalContext']
     start['source']='compact'
     assert 'Continue here' in cli(ADAPTER,'post-compact',data=start).stdout
     p=payload('PreCompact',sandbox)
@@ -450,7 +492,9 @@ def test_restore_precompact_and_context_half_window(sandbox):
     row=json.loads((FIX/'usage.jsonl').read_text());info=row['payload']['info']
     info['last_token_usage']['input_tokens']=info['model_context_window']//2
     transcript.write_text(transcript.read_text()+json.dumps(row)+'\n')
-    warned=cli(ADAPTER,'context-guard',data=p).stdout
+    context = json.loads(cli(ADAPTER,'context-guard',data=p).stdout)
+    assert context['hookSpecificOutput']['hookEventName'] == 'UserPromptSubmit'
+    warned = context['hookSpecificOutput']['additionalContext']
     assert '50%' in warned
     assert 'session_items' in warned and 'new lesson, decision and knowledge' in warned
     assert 'target file and section, the proposed text, and the evidence' in warned
@@ -487,7 +531,9 @@ def test_nudge_once_and_no_failed_tests(sandbox,command,output):
     if 'failed' in output:
         assert first.stdout==''
     else:
-        assert '$checklist' in first.stdout
+        output = json.loads(first.stdout)['hookSpecificOutput']
+        assert output['hookEventName'] == 'PostToolUse'
+        assert '$checklist' in output['additionalContext']
         assert cli(ADAPTER,'checklist-nudge',data=p).stdout==''
 
 

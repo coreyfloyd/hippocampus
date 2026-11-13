@@ -21,7 +21,10 @@ def command(engine, operation, payload):
 
 
 def emit(event, text):
-    print(json.dumps({'hookSpecificOutput': {'hookEventName':event, 'additionalContext':text}}))
+    if event == 'PreCompact':
+        print(json.dumps({'systemMessage': text}))
+    else:
+        print(json.dumps({'hookSpecificOutput': {'hookEventName':event, 'additionalContext':text}}))
 
 
 def completion_exit_code(payload):
