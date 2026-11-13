@@ -9,17 +9,43 @@ The **inward-writing** wrap-up pass. The record holds what this session *did*; t
 
 Rules, skills and agent definitions, and memory are covered in one pass, because the interesting decision is shared: **where does this lesson belong?** Answering that separately per surface means several scans of the same transcript and constant hand-offs.
 
+## Implementation: where a solution should live
+
+Start on the lowest rung. Climb only when the rung below is no longer enough,
+and never block work while a higher rung is being built. On every rung, build
+it yourself or use a third-party tool, whichever costs less. For example,
+structured project records can start as notes before an application exists.
+
+For low-consequence, reversible errors, improve construction at the point of use
+first. Do not commission a generator or blocking validator solely because an
+error recurred; justify it against the expected cost of correction, false
+positives, maintenance and extra model calls. Failures invalidating the task
+justify stronger verification.
+
+1. **Wiki:** knowledge.
+2. **Context:** the more important knowledge, which agents read.
+3. **Rules:** stronger than context, because they are composed into agents' instruction files instead of being linked. They overlap a little with context.
+4. **System prompt and output style:** stronger than rules because they are repeated every turn. Use them for the shortest actionable form of an important rule that is still being missed; the full rule stays at its canonical home, with a pointer for detail.
+5. **Skills:** for something that has outgrown a rule, or needs to be a repeatable process for an agent.
+6. **A decision service:** for an important rule that agents still do not follow reliably. The agent sends the facts and gets a decision back before anyone writes a hook or script.
+7. **Hooks and scripts:** deterministic systems.
+8. **Plugins:** they package the lower rungs together with skills.
+9. **Applications:** an application is the best place for anything that needs no tokens or agent judgment.
+
+Choose the rung here, then use the routing file or default table below to choose
+its exact surface. User-specific names and paths belong in the routing file.
+
 ## Routing: the user's file, or the default
 
 Look for a **routing file**: `$HIPPOCAMPUS_ROUTING` when set, otherwise `hippocampus/routing.md` under `$XDG_CONFIG_HOME` (default `~/.config`). When it exists, read the whole file: it **replaces** the default routing table below, and it may also name where the sources live, where unattended proposals are filed, recording conventions, and extra steps for this procedure. Follow it wherever it differs from this skill. When it does not exist, use the default routing; it needs no configuration.
 
 ### Default routing
 
-Make the placement call **once per lesson**, then write to whichever surface won. Prefer the narrowest surface that still loads when the lesson is needed: always-loaded files cost every future session context.
+Make the placement call **once per lesson**, using the implementation ladder above, then write to whichever surface won. Prefer the narrowest surface that still loads when the lesson is needed: always-loaded files cost every future session context.
 
 | A lesson is… | It goes to |
 |---|---|
-| A deterministic "always / whenever / before X" the harness can enforce | A **hook** in the tool's settings. Text is a request; a hook fires |
+| A deterministic "always / whenever / before X" whose placement has reached rung 7 | A **hook** in the tool's settings |
 | Something that matters only while running one skill | **That skill** (its steps or gotchas) |
 | Behavior of one agent type | **That agent's definition** |
 | A constraint of one repository | **That repository's instruction file**: `AGENTS.md` when present (both tools read it), else `CLAUDE.md` |
