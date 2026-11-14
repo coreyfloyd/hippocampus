@@ -18,7 +18,9 @@ they have already approved.  For example:
 }
 
 Relative source paths are relative to ``knowledge_root``. Target paths are
-explicit absolute paths. ``compose`` and ``refresh`` deliberately perform the
+explicit absolute paths. Each target may set ``render`` to ``literal`` to
+embed complete source bodies; omitted or ``default`` keeps tool-native rendering.
+``compose`` and ``refresh`` deliberately perform the
 same operation: refresh is the stable entry point for synchronizers.
 """
 
@@ -48,6 +50,7 @@ class Target:
     scope: str
     path: pathlib.Path
     sources: list[pathlib.Path]
+    render: str = "default"
 
 
 @dataclass
@@ -92,6 +95,9 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
         tool = value.get("tool")
         if tool not in {"claude", "codex", "openclaw"}:
             fail(f"configuration: {label} has unsupported tool {tool!r}")
+        render = value.get("render", "default")
+        if render not in ("default", "literal"):
+            fail(f"configuration: {label} render must be default or literal")
         scope = value.get("scope", "user")
         if not isinstance(scope, str) or not scope:
             fail(f"configuration: {label} scope must be a nonempty string")
@@ -120,7 +126,7 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
             if not source.is_absolute():
                 source = root / source
             sources.append(source.absolute())
-        targets.append(Target(tool=tool, scope=scope, path=destination, sources=sources))
+        targets.append(Target(tool=tool, scope=scope, path=destination, sources=sources, render=render))
     for target in targets:
         for source in target.sources:
             resolved_source = source.resolve(strict=False)
@@ -334,7 +340,7 @@ def with_final_newline(content: bytes) -> bytes:
 
 
 def target_content(target: Target, source_bytes: list[bytes]) -> bytes:
-    if target.tool == "claude":
+    if target.tool == "claude" and target.render == "default":
         imports = b"".join(f"@{source}\n".encode() for source in target.sources)
         return ownership_header(target.sources, generated=False) + imports
     body = b"".join(with_final_newline(content) for content in source_bytes)

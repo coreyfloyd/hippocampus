@@ -275,6 +275,39 @@ Every target is checked before any is written, so a failed check leaves all of
 them untouched. After editing either document, run set-up again: the new plan
 lists each target whose composed content changed.
 
+The explicit composer JSON accepts an optional `render` field on each target:
+
+```json
+{
+  "knowledge_root": "/path/to/knowledge",
+  "targets": [
+    {
+      "tool": "claude",
+      "file": "/path/to/tool/CLAUDE.md",
+      "sources": ["context/rules.md", "context/development-rules.md"],
+      "extras": ["/path/to/tool-mechanics.md"],
+      "render": "literal"
+    }
+  ]
+}
+```
+
+`render` accepts `"default"` or `"literal"`. Omission means `"default"` and
+preserves the existing output bytes: Claude Code uses imports, while Codex and
+OpenClaw receive source bodies. `"literal"` writes complete source bodies for
+any supported tool, including Claude Code. It applies only to that target;
+other targets keep their selected rendering. Invalid values fail preflight
+before any target is written.
+
+Literal output begins with a generated ownership header listing the source
+paths, followed by each complete body in `sources` order, then `extras` order.
+Headings and source-authored content (including any imports) are preserved;
+the composer adds a final newline to any nonempty body that lacks one. It adds
+no import directives, so the generated target contains the rules without
+requiring the consuming tool to open the original sources. The composer still
+needs those sources for compose, refresh and check. Literal targets use the
+same managed blocks, user-content protection and atomic writes as defaults.
+
 The existing composer also supports read-only drift checks:
 
 ```sh

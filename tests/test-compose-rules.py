@@ -229,6 +229,91 @@ Produced surfaces:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_unchanged(before)
 
+    def test_literal_render_is_per_target_and_preserves_complete_ordered_bodies(self):
+        bodies = [b"# First\r\n\r\n@authored-reference\r\n", "# Second\nUnicode: café".encode(), b"# Mechanics\n"]
+        sources = [self.cross, self.development, self.extra]
+        for source, body in zip(sources, bodies):
+            source.write_bytes(body)
+        imported = self.targets / "claude-imports.md"
+        literal_targets = [self.target(tool, path) | {"render": "literal"}
+                           for tool, path in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw))]
+        self.write_config([self.target("claude", imported), *literal_targets])
+        result = self.compose()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = self.generated_header(sources).encode() + bodies[0] + bodies[1] + b"\n" + bodies[2]
+        for path in (self.claude, self.codex, self.openclaw):
+            self.assertEqual(path.read_bytes(), expected)
+        self.assertEqual(imported.read_bytes(),
+                         b"<!-- hippocampus-rules: generated; do not hand-edit -->\n"
+                         + b"".join(f"@{source}\n".encode() for source in sources))
+        before = self.snapshot()
+        mtimes = {path: path.stat().st_mtime_ns for path in before}
+        for command in ("check", "compose", "refresh"):
+            result = self.compose(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assert_unchanged(before)
+            self.assertEqual(mtimes, {path: path.stat().st_mtime_ns for path in before})
+
+    def test_literal_refresh_preserves_user_content_and_reports_drift(self):
+        self.claude.write_bytes(b"user prefix\r\n")
+        self.write_config([self.target("claude", self.claude) | {"render": "literal"}])
+        self.assertEqual(self.compose().returncode, 0)
+        start, end = self.block_markers(self.claude)
+        suffix = b"user suffix\r\n"
+        self.claude.write_bytes(self.claude.read_bytes() + suffix)
+        self.cross.write_bytes(b"# Revised\ncomplete body\n")
+        before = self.claude.read_bytes()
+        self.assertEqual(self.compose("check").returncode, 1)
+        self.assertEqual(self.claude.read_bytes(), before)
+        result = self.compose("refresh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected = (b"user prefix\r\n" + start.encode() + b"\n"
+                    + self.generated_header([self.cross, self.development, self.extra]).encode()
+                    + b"# Revised\ncomplete body\ndevelopment rule\ntool mechanic\n"
+                    + end.encode() + b"\n" + suffix)
+        self.assertEqual(self.claude.read_bytes(), expected)
+        self.assertEqual(self.compose("check").returncode, 0)
+
+    def test_invalid_render_fails_before_any_write(self):
+        for invalid in (None, "", "imports", "Literal", False, [], {}):
+            for command in ("compose", "refresh", "check"):
+                with self.subTest(render=invalid, command=command):
+                    self.write_config([self.target("codex", self.codex),
+                                       self.target("claude", self.claude) | {"render": invalid}])
+                    result = self.compose(command)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("render", result.stderr)
+                    self.assertFalse(self.codex.exists())
+                    self.assertFalse(self.claude.exists())
+
+    def test_literal_missing_source_and_overlap_leave_all_targets_untouched(self):
+        self.write_config([self.target("claude", self.claude) | {"render": "literal"},
+                           self.target("codex", self.codex)])
+        self.assertEqual(self.compose().returncode, 0)
+        before = {path: path.read_bytes() for path in (self.claude, self.codex)}
+        self.cross.write_text("changed source\n")
+        for source, error in ((self.root / "missing.md", "missing"), (self.codex, "overlaps")):
+            for command in ("compose", "refresh", "check"):
+                with self.subTest(source=source, command=command):
+                    self.write_config([self.target("codex", self.codex),
+                                       self.target("claude", self.claude, [source]) | {"render": "literal"}])
+                    result = self.compose(command)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(error, result.stderr)
+                    self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_switching_default_and_literal_keeps_composer_ownership(self):
+        for render in ("default", "literal", "default"):
+            self.write_config([self.target("claude", self.claude) | {"render": render}])
+            result = self.compose()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("composer-owned:", result.stdout)
+            expected = (self.generated_header([self.cross, self.development, self.extra])
+                        + "cross-tool rule\ndevelopment rule\ntool mechanic\n") if render == "literal" else (
+                            "<!-- hippocampus-rules: generated; do not hand-edit -->\n"
+                            f"@{self.cross}\n@{self.development}\n@{self.extra}\n")
+            self.assertEqual(self.claude.read_text(), expected)
+
     def test_target_aliases_are_rejected_before_any_write(self):
         target = self.targets / "shared.md"
         alias = self.targets / ".." / "targets" / "shared.md"
