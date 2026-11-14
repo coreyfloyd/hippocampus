@@ -1,51 +1,59 @@
-# Release candidate: 0.15.3
+# Release candidate: 0.15.4
 
 ## Scope
 
-This patch moves the canonical implementation ladder into improve-harness
-([hippocampus224](https://github.com/coreyfloyd/hippocampus/issues/224)). It adds
-system prompt and output style at rung 4 and a decision service at rung 6, before
-hooks and scripts. The ladder preserves proportionality, lower-rung assessment,
-and the full rule at its canonical home. User routing maps rungs to local services
-and paths. This is not the public launch of session features.
+This patch adds opt-in literal rendering to the rule composer, tracked by
+[hippocampus229](https://github.com/coreyfloyd/hippocampus/issues/229) and merged
+through [PR230](https://github.com/coreyfloyd/hippocampus/pull/230).
+An explicit target can select `render: "literal"` to embed the complete ordered
+source bodies in its generated instruction file. Omitting `render`, or choosing
+`"default"`, retains the existing provider-specific rendering.
 
-It also includes the Codex PreCompact output-contract correction from
-[hippocampus227](https://github.com/coreyfloyd/hippocampus/pull/227): persist the
-canonical handoff while returning empty hook output for supported compaction.
-Malformed input continues to fail closed.
+## Included
+
+- Per-target `render` selection and validation through the existing composer
+  configuration interface.
+- Literal source bodies, ownership and provenance using the existing rendering,
+  source preflight, managed-block, staging and rollback mechanisms.
+- Fixture coverage for provider parity, ordering, authored content, invalid
+  selections, source failures, overlap, preservation, drift and idempotence.
+- Configuration examples in [the knowledge guide](docs/knowledge-guide.md).
 
 ## Compatibility
 
-Claude Code and Codex receive the same improve-harness skill through their
-existing package installers. Knowledge profiles, package paths and signing key remain unchanged. Codex
-PreCompact now returns the supported empty output while preserving the
-canonical handoff; Claude Code keeps its existing hook output. Default routing now chooses a
-rung before choosing a hook; a deterministic trigger alone does not skip the
-lower-rung assessment.
+Default Claude targets still generate source imports. Default Codex and OpenClaw
+targets still generate source bodies. Consumers explicitly select literal targets
+in their install or refresh declarations; this release changes no installed
+user target by itself. Knowledge profiles, package paths, signing keys, skills,
+hooks and session contracts are unchanged. This is not the public launch of
+session features.
 
 ## Verification and publication state
 
-Source preparation only. This candidate has not been signed, tagged, published
-or activated. Candidate checks and isolated both-tool readback are recorded on
-[hippocampus224](https://github.com/coreyfloyd/hippocampus/issues/224). Merging this
-source does not change an installed signed release. The Codex correction is
-merged from PR 227; both operating-system jobs passed on its exact source head. The next maintainer-signed
-v0.15.3 release will carry the ladder; publication and installation require their
-separate authorized release workflow.
+Source candidate `b3397bc` completed independent evaluation with PASS, scores
+8–9 and no findings or follow-ups. All 18 documented local checks passed,
+including 2,561 passing pytest tests, 15 skips and 71 passing subtests.
+[Source PR CI43640008060](https://github.com/coreyfloyd/hippocampus/actions/runs/43640008060)
+completed successfully on Ubuntu and macOS on its first run.
 
-Previous publication: [v0.15.2](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.2).
-The previous candidate record remains in repository history at
-[the preparation record](https://github.com/coreyfloyd/hippocampus/blob/575edf0/RELEASE_CANDIDATE.md).
+This version preparation is unsigned, untagged, unpublished and unactivated.
+The versioned release head needs its own documented candidate verification and
+documentation sweep before the signing handoff. Exact commit identities and
+actual command logs belong to release-session evidence; the final release commit
+is recorded here in the post-publication follow-up, as the runbook requires.
+Agents build unsigned candidates only. The maintainer signs the release.
+
+Previous publication: [v0.15.3](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.3).
+The preceding candidate record remains in
+[repository history](https://github.com/coreyfloyd/hippocampus/blob/8239444/RELEASE_CANDIDATE.md).
 
 ## Release-note draft
 
-Hippocampus v0.15.3 makes improve-harness the canonical home of the implementation
-ladder for choosing where knowledge, rules and solutions belong. System prompt
-and output style hold a short form of an important rule still being missed; the
-full rule stays canonical. A decision service receives facts and returns a
-decision before an unreliable important rule advances to hooks or scripts.
-Both Claude Code and Codex use this same guidance. Local names stay in user routing.
+Hippocampus v0.15.4 adds opt-in literal rule-target rendering. Set
+`render: "literal"` on an explicit composer target to generate complete source
+text instead of composer-generated imports. Sources and extras retain their
+order, and the generated file carries ownership and source attribution.
 
-The Codex PreCompact hook now saves its canonical handoff and returns empty
-output on supported compaction, matching the client contract. Malformed input
-continues to fail closed. Claude Code retains its existing hook output.
+Existing defaults remain unchanged for Claude Code, Codex and OpenClaw.
+Invalid render selections fail during preflight before any target is written.
+The feature reuses the existing composition and refresh entry points.
