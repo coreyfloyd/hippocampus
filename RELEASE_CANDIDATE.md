@@ -36,12 +36,20 @@ including 2,561 passing pytest tests, 15 skips and 71 passing subtests.
 [Source PR CI43640008060](https://github.com/coreyfloyd/hippocampus/actions/runs/43640008060)
 completed successfully on Ubuntu and macOS on its first run.
 
-This version preparation is unsigned, untagged, unpublished and unactivated.
-The versioned release head needs its own documented candidate verification and
-documentation sweep before the signing handoff. Exact commit identities and
-actual command logs belong to release-session evidence; the final release commit
-is recorded here in the post-publication follow-up, as the runbook requires.
-Agents build unsigned candidates only. The maintainer signs the release.
+Released as [v0.15.4](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.4)
+from commit `d2d1b069d9466107139737c5bc5d66dc832dff75`.
+The annotated remote tag resolves to that commit. The maintainer signed the
+checksum; fresh public downloads verified with the pinned signing fingerprint.
+All six release assets are present: archive, checksum, checksum signature,
+public key, install helper and verify helper. The helper/key assets match source.
+Archive SHA256: `23fdd017d52bf2b0124663db816c862fe5e55f206feb66995fbdec6a6ff09ef3`.
+
+Exact release-head local verification passed all documented checks and the
+documentation sweep. [Release-head CI attempt 2](https://github.com/coreyfloyd/hippocampus/actions/runs/43643451245/attempts/2)
+passed Ubuntu and macOS. Attempt 1 encountered the existing intermittent
+`hooks/list` no-response timeout tracked in [issue90](https://github.com/coreyfloyd/hippocampus/issues/90);
+its failure evidence is retained. No timeout-policy change is part of this release.
+This publication does not activate any live installation.
 
 Previous publication: [v0.15.3](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.3).
 The preceding candidate record remains in
