@@ -29,25 +29,25 @@ fingerprint is stored in `RELEASE_SIGNING_FINGERPRINT`; the matching public key
 is `keys/hippocampus-release.asc`. Never replace that public key as part of a
 routine release. Key rotation requires a separately reviewed transition.
 
-## Signing is a manual maintainer step
+## Maintainer signing or exact-release approval
 
-**The maintainer signs. An agent must never attempt it.** Signing is the one
-step in this runbook that is not delegable: it is what binds a human decision to
-the published artifact, and an agent that could sign unattended would remove that
-binding.
+The maintainer may sign interactively using the manual commands below, or approve
+an immutable release candidate with an exact **SIGN** reply in its approval
+thread. The maintainer's signing operation then signs the approved checksum with
+the dedicated expiring signing subkey and publishes only the approved files plus
+the signature. A changed candidate needs a new summary and a new SIGN.
 
-An agent running this runbook stops at the build-and-sign step, hands the exact
-command to the maintainer, and resumes at verification once the signed assets
-exist. This is a deliberate gate, not an environment limitation to work around.
-Do not attempt `gpg --pinentry-mode loopback`, do not pipe a passphrase from a
-file or environment variable, and do not propose installing a GUI pinentry so the
-prompt can be answered from an agent session. Every one of those defeats the
-gate.
+Operators prepare unsigned candidates and invoke that signing operation; they
+never read or relay private-key bytes or the passphrase. No agent interpretation,
+standing permission, ticket state or unrelated reply substitutes for the
+maintainer's exact-release approval. When the operation is unavailable, use the
+manual maintainer-signing path; an operator must not bypass its interactive
+pinentry gate.
 
-Mechanically, the signing key's passphrase is held by a TTY-bound pinentry, so an
-agent session has no path to it and the attempt fails with
-`gpg: signing failed: Inappropriate ioctl for device`. Treat that message as the
-gate working, not as a problem to solve.
+The public key now includes the dedicated signing subkey. The pinned primary
+fingerprint and verification script are unchanged. Consumers with an older copy
+of the public key must update it before verifying new subkey-signed releases.
+Existing published releases and tags remain unchanged.
 
 ## Live activation boundary
 
