@@ -25,7 +25,7 @@ justify stronger verification.
 1. **Wiki:** knowledge.
 2. **Context:** the more important knowledge, which agents read.
 3. **Rules:** stronger than context, because they are composed into agents' instruction files instead of being linked. They overlap a little with context.
-4. **System prompt and output style:** stronger than rules because they are repeated every turn. Use them for the shortest actionable form of an important rule that is still being missed; the full rule stays at its canonical home, with a pointer for detail.
+4. **System prompt and output style:** stronger than rules because they are repeated every turn. Use them for an important rule that is still being missed. A rule placed here lives only here; remove its copies from lower rungs so the highest, most effective placement is its only home.
 5. **Skills:** for something that has outgrown a rule, or needs to be a repeatable process for an agent.
 6. **A decision service:** for an important rule that agents still do not follow reliably. The agent sends the facts and gets a decision back before anyone writes a hook or script.
 7. **Hooks and scripts:** deterministic systems.
