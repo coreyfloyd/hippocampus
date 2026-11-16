@@ -1,59 +1,58 @@
-# Release candidate: 0.15.5
+# Release candidate: 0.15.6
 
 ## Scope
 
-This patch updates the improve-harness implementation ladder to keep a rule
-only at its highest, most effective placement, tracked by
-[hippocampus234](https://github.com/coreyfloyd/hippocampus/issues/234).
+Fix a response-reading defect in the Codex installation trust verifier,
+tracked by [hippocampus90](https://github.com/coreyfloyd/hippocampus/issues/90).
+A complete `hooks/list` response arriving beside a notification can remain
+in a text buffer while the helper waits on an empty OS pipe, incorrectly
+reporting no response after 15 seconds. (validated: isolated real-pipe test
+against the unchanged production helper)
 
 ## Included
 
-- Rung 4 makes the system prompt or output style the only home of a rule placed
-  there and requires removing copies from lower rungs.
-- The requirement to keep a full rule at a lower home is removed. The existing
-  one-home recording guidance continues to apply.
+- Read newline-delimited protocol frames from one explicit byte buffer and
+  drain complete frames before waiting for more pipe input.
+- Cover a notification and response in one write, partial frames, multiple
+  notifications, EOF, and rejection of an untrusted hook with controlled
+  subprocess fixtures.
+- Update the package version to 0.15.6 and regenerate Claude plugin metadata.
 
 ## Compatibility
 
-The shared skill text applies to Claude Code and Codex. Package paths, knowledge
-profiles, hooks and session contracts are unchanged. This is not the public
-launch of session features. No installed user rules are moved by this release;
-the skill guides future placement and deduplication work.
+The Codex installer's response reader changes. The request deadline remains
+15 seconds, and trust hashing, rollback behavior, hook registrations and
+session contracts retain their existing behavior. Claude Code uses the same
+package version and retains its existing installation and hook contracts.
+This is not the public launch of session features. (validated: candidate diff;
+affected test evidence recorded below)
+
+The controlled reproduction establishes a reader defect. It does not prove
+that this defect caused every historical timeout reported on the issue.
+(inferred: historical failures lack the matching protocol transcript)
 
 ## Verification and publication state
 
-Released as [v0.15.5](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.5)
-from commit `b1e2fe22baef54ee9c0e497270fa3d075de72f1b` on 2026-11-16.
-The annotated remote tag resolves to that commit. Manual exact-head review and
-independent evaluation passed with no findings. Both the
-[PR-head CI](https://github.com/coreyfloyd/hippocampus/actions/runs/43943322476)
-and [release-head CI](https://github.com/coreyfloyd/hippocampus/actions/runs/43943612178)
-passed on Ubuntu and macOS on their first attempts. Targeted independent
-verification recorded 140 passing tests and one optional skip.
+Candidate preparation only. The real-pipe regression failed before the fix
+with `app-server returned no response for request 2` after 15.45 seconds.
+Final affected-test and quick-check results are recorded in
+[the investigation report](docs/reports/90-codex-reader.md).
 
-The maintainer approved this exact release before its checksum was signed with
-the dedicated signing subkey. The temporary signing home was removed. Exactly
-six public assets were downloaded fresh, matched the approved originals
-byte-for-byte, and passed the downloaded signature/checksum verifier.
-Archive SHA256: `8384ee68a511c11fde53bb1538dd902b6393b8ed9b83f97bbd78ff91175247d4`.
-Checksum-file SHA256: `c3cfb019cdcc95686b0b480aedd72f860beb04c2fc1c6721e9b599b0295b33b3`.
+Full-suite validation belongs to pull-request CI; it has not run locally.
+Independent review, CI, exact-release approval, signing and publication are
+pending. No release tag, signed artifact, publication or live activation was
+performed during this preparation. (validated: bounded preparation scope)
 
-The first deployment node installed from those verified public assets. Its
-Claude registration was updated through the documented helper after backup,
-and native installation verification passed. Its generated decision-policy
-source now contains the one-home guidance. Other nodes use the separate
-normal release-propagation change. Publication and deployment evidence is
-recorded on [hippocampus234](https://github.com/coreyfloyd/hippocampus/issues/234).
-
-Previous publication: [v0.15.4](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.4).
-The preceding candidate record remains in
-[repository history](https://github.com/coreyfloyd/hippocampus/blob/v0.15.4/RELEASE_CANDIDATE.md).
+Previous publication: [v0.15.5](https://github.com/coreyfloyd/hippocampus/releases/tag/v0.15.5).
+The preceding publication record remains in
+[repository history](https://github.com/coreyfloyd/hippocampus/blob/v0.15.5/RELEASE_CANDIDATE.md).
 
 ## Release-note draft
 
-Hippocampus v0.15.5 updates improve-harness rule placement: a rule placed in
-the system prompt or output style lives only there. Remove copies from lower
-rungs so the highest, most effective placement is the rule's only home.
+Hippocampus v0.15.6 fixes a Codex installation trust-verification error that
+could report a missing response when a notification and the complete response
+arrived together. The verifier now reads complete protocol frames from an
+explicit byte buffer. The 15-second deadline and hook trust policy are unchanged.
 
-The shared guidance applies to Claude Code and Codex. This release does not
-move installed rules or change package paths, hooks or knowledge profiles.
+Claude Code's installation and hook contracts are unchanged. This patch does
+not introduce the public launch of session features.

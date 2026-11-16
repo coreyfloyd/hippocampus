@@ -377,27 +377,38 @@ def verify_with_hooks_list(
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
         env=environment,
     )
     assert process.stdin is not None and process.stdout is not None
 
+    pending = bytearray()
+
     def request(payload: dict[str, Any], response_id: int) -> dict[str, Any]:
-        process.stdin.write(json.dumps(payload) + "\n")
+        process.stdin.write((json.dumps(payload) + "\n").encode())
         process.stdin.flush()
         deadline = time.monotonic() + 15
-        while time.monotonic() < deadline:
-            ready, _, _ = select.select(
-                [process.stdout], [], [], max(0, deadline - time.monotonic())
-            )
+        while True:
+            # A text readline can prefetch the response after a notification.
+            # select() then sees an empty OS pipe while that response remains
+            # unread in TextIO's buffer. Drain our own complete frames first.
+            if b"\n" in pending:
+                end = pending.index(b"\n")
+                line = bytes(pending[:end])
+                del pending[:end + 1]
+                response = json.loads(line)
+                if response.get("id") == response_id:
+                    return response
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            ready, _, _ = select.select([process.stdout], [], [], remaining)
             if not ready:
                 break
-            line = process.stdout.readline()
-            if not line:
+            chunk = os.read(process.stdout.fileno(), 65536)
+            if not chunk:
                 break
-            response = json.loads(line)
-            if response.get("id") == response_id:
-                return response
+            pending.extend(chunk)
         raise RuntimeError(f"app-server returned no response for request {response_id}")
 
     try:
