@@ -41,8 +41,9 @@ Operators prepare unsigned candidates and invoke that signing operation; they
 never read or relay private-key bytes or the passphrase. No agent interpretation,
 standing permission, ticket state or unrelated reply substitutes for the
 maintainer's exact-release approval. When the operation is unavailable, report
-that limitation to the maintainer's release coordinator. The maintainer may explicitly direct signing through an
-already provisioned signing-subkey custody path for the approved exact release.
+that limitation to the maintainer or their designated release contact. The
+maintainer may explicitly direct signing through an already provisioned
+signing-subkey custody path for the approved exact release.
 That direction authorizes the agent signing action; it does not authorize key
 export, new provisioning or disclosure of secret material. Use the manual
 interactive path only when the maintainer chooses it. Never replace missing
@@ -263,7 +264,8 @@ HIPPOCAMPUS_GPG_KEY="$FINGERPRINT" bash scripts/build-release.sh dist
 ```
 
 When using the manual path, the release agent hands the command above to the
-release coordinator and waits for the three `dist/` files before continuing.
+maintainer or their designated release contact, then waits for the three
+`dist/` files before continuing.
 When the maintainer has directed agent signing through approved custody, the
 agent completes that action instead of requesting a human terminal command.
 Both paths require the same signature, fingerprint and checksum verification:

@@ -38,7 +38,7 @@ on 2026-11-17 at 07:00:28Z from annotated tag `v0.15.6`, commit
 `277ddcc7e711ca2a5b4878b55a76007af4fcdbd4`. The merged tree matches reviewed
 candidate `6b2b4e1309b4a0cd512da8225cd5dc10bae3227f`. Independent review and
 runtime acceptance passed without findings; first-attempt full CI
-`43981105569` passed on Ubuntu and macOS. Full suites were not run locally.
+`43981105569` passed on that candidate head on Ubuntu and macOS. Full suites were not run locally.
 (validated: merge/tree comparison, independent receipts and CI results)
 
 The maintainer approved this exact candidate with SIGN, relayed by the release
