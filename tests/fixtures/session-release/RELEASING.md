@@ -1,3 +1,8 @@
+> Historical test fixture, not current release instructions. Preserve the data
+> below for tests. Operators and agents must follow the repository-root
+> [release runbook](../../../RELEASING.md), including exact SIGN approval and
+> managed-subkey signing; never follow this fixture to perform a release.
+
 # Releasing continuity
 
 The maintainer runbook for a `continuity` GitHub release.

@@ -29,30 +29,56 @@ fingerprint is stored in `RELEASE_SIGNING_FINGERPRINT`; the matching public key
 is `keys/hippocampus-release.asc`. Never replace that public key as part of a
 routine release. Key rotation requires a separately reviewed transition.
 
-## Maintainer signing or exact-release approval
+## Exact-release approval and operator signing
 
-The maintainer may sign interactively using the manual commands below, or approve
-an immutable release candidate with an exact **SIGN** reply in its approval
-thread. The maintainer's signing operation then signs the approved checksum with
-the dedicated expiring signing subkey and publishes only the approved files plus
-the signature. A changed candidate needs a new summary and a new SIGN.
+The maintainer must reply with exact **SIGN** in the candidate's approval thread.
+The approval summary freezes the version, commit, tag, archive and checksum
+hashes, public key, installer, verifier, and exact upload inventory. A changed
+candidate needs a new summary and a new SIGN. No agent interpretation, standing
+permission, ticket state or unrelated reply substitutes for that approval.
+The maintainer is never asked to run signing commands.
 
-Operators prepare unsigned candidates and invoke that signing operation; they
-never read or relay private-key bytes or the passphrase. No agent interpretation,
-standing permission, ticket state or unrelated reply substitutes for the
-maintainer's exact-release approval. When the operation is unavailable, report
-that limitation to the maintainer or their designated release contact. The
-maintainer may explicitly direct signing through an already provisioned
-signing-subkey custody path for the approved exact release.
-That direction authorizes the agent signing action; it does not authorize key
-export, new provisioning or disclosure of secret material. Use the manual
-interactive path only when the maintainer chooses it. Never replace missing
-approval with an operator's own decision.
+After approval, the operator signs only the frozen checksum using a dedicated,
+expiring, signing-only subkey supplied by the managed-secret service on the
+configured signing node. The primary secret key stays off that node. Operators
+must never read or relay private-key bytes or the passphrase through the model.
+The pinned primary fingerprint and verifier remain unchanged; the public key
+must include the authorized signing subkey. Consumers holding an older public
+key must update it before verifying new subkey-signed releases.
 
-The public key now includes the dedicated signing subkey. The pinned primary
-fingerprint and verification script are unchanged. Consumers with an older copy
-of the public key must update it before verifying new subkey-signed releases.
-Existing published releases and tags remain unchanged.
+### Preferred signing operation
+
+Use the managed signing operation once its owner has delivered and documented
+it. It must bind the exact SIGN approval to the frozen inputs, sign only the
+checksum, verify the pinned primary and authorized subkey, and return a safe
+receipt with public identities, hashes, verification and cleanup results.
+This runbook does not assert that a preferred command is installed or define
+an invocation. Obtain its documented interface and availability receipt from
+the operation owner; do not invent a CLI or treat a missing command as absence
+of managed credentials.
+
+### Temporary approved fallback
+
+If the normal operation is unavailable, the operator uses the already approved
+managed-subkey path on the configured signing node. Obtain the approved procedure
+and safe receipt reference from the operation owner before executing it; this
+runbook describes its security contract, not replacement command mechanics.
+
+The deterministic process retrieves the signing-only subkey and passphrase
+inside the managed-secret boundary, uses a temporary GnuPG home with mode 0700,
+and supplies the passphrase through a file descriptor. Key and passphrase bytes
+must never enter model output, command arguments, logs or shell tracing. Sign
+only the frozen checksum; do not invoke a builder after approval. Verify the
+signature against the unchanged pinned primary fingerprint and the authorized,
+unexpired signing subkey, and verify that every frozen input is unchanged.
+Remove the temporary GnuPG home and terminate its temporary agents on success
+and failure; retain only the safe receipt, never credentials.
+
+An unavailable or failing approved path is operator-owned repair. Stop signing
+and publication and report the blocked step to the operation owner. Never export
+the primary secret, bypass SIGN, rebuild approved bytes, publish extra files,
+weaken verifiers, or ask the maintainer to sign. Existing releases and tags stay
+unchanged.
 
 ## Live activation boundary
 
@@ -60,14 +86,14 @@ While preparing a release, validate candidate installations in temporary test ho
 
 ## Prerequisites
 
-- Run from the repository root on a trusted machine with the release secret key
-  available through GnuPG and an interactive pinentry path.
+- Prepare from the repository root; signing uses the configured signing node
+  and managed-secret service under the approval and credential boundaries above.
 - Authenticate the intended GitHub account with `gh`.
 - Install Bash, GnuPG, GitHub CLI, Python 3, Swift, and the standard macOS
   `shasum` utility.
 - Review `RELEASE_CANDIDATE.md` and prepare its release-note draft.
 - Ensure every intended change is committed. `scripts/build-release.sh` (see
-  "Build, sign, and verify" below) refuses to run against a dirty tracked
+  "Sign the frozen checksum and verify" below) refuses to run against a dirty tracked
   tree and packages only the git tree at `HEAD`, so an uncommitted tracked
   change blocks the build outright, and an uncommitted untracked file is
   simply never packaged rather than shipped by accident.
@@ -92,7 +118,6 @@ if git rev-parse --verify --quiet "refs/tags/$TAG"; then
   exit 1
 fi
 test -z "$(git ls-remote --tags origin "refs/tags/$TAG" "refs/tags/$TAG^{}")"
-gpg --list-secret-keys "$FINGERPRINT"
 gh auth status
 printf 'VERSION=%s\nTAG=%s\nCOMMIT=%s\n' "$VERSION_VALUE" "$TAG" "$COMMIT"
 ```
@@ -111,16 +136,16 @@ installation receipt reads its version directly from `VERSION`; schema versions
 and client protocol versions are independent of the package release version.
 The release suite and builder reject Claude metadata drift.
 
-For preparation before the maintainer signs, build from a clean committed tree:
+Before requesting SIGN, build from a clean committed tree:
 
 ```bash
 bash scripts/build-release.sh dist --unsigned
 ```
 
-This uses the same archive and checksum steps as the signing command below,
-without invoking GnuPG. It removes any stale archive signature. These two files
-are unsigned candidates and must not be published. The maintainer's normal
-build-and-sign command rebuilds them and adds the signature.
+This builds the archive and checksum without invoking GnuPG and removes any
+stale archive signature. These unsigned candidates must not be published. Freeze
+them and the remaining upload inputs before requesting SIGN. After approval,
+signing adds only the detached checksum signature; never rebuild the candidate.
 
 ## Verify the candidate
 
@@ -166,7 +191,7 @@ to a prose sentence, and a release-note draft contradicting the compatibility
 section beside it.
 
 Only the first was caught before tagging. The structural-parity defect cost a
-tag deletion and a second signing round from the maintainer; the other two were
+tag deletion and a second approval and signing round; the other two were
 caught late enough to be luck rather than process. Each was findable by reading
 the documentation against the diff, which is what this step is.
 
@@ -218,7 +243,7 @@ the source of truth.
 Fix anything the sweep finds, commit, push, and rerun both the suites and this
 sweep against the new commit. The sweep is cheap before the tag exists and
 expensive afterward: a tag that has been published cannot move, and one that
-has not still costs a deletion and another signing round from the maintainer.
+has not still costs a deletion and another approval and signing round.
 
 ## Push and tag the exact commit
 
@@ -248,27 +273,17 @@ test "$REMOTE_TAG_COMMIT" = "$COMMIT"
 Do not move or force-push a published release tag. A wrong tag is a
 release-integrity incident requiring an explicit maintainer decision.
 
-## Build, sign, and verify
+## Sign the frozen checksum and verify
 
-Build only after the clean checkout, pushed commit, and remote tag agree.
+Before signing, confirm that the clean checkout, pushed commit, remote tag and
+frozen candidate agree with the exact SIGN approval. Use the preferred operation
+or temporary approved fallback above. Do not run `scripts/build-release.sh` in
+signing mode: it rebuilds the archive and checksum. No build may replace approved
+bytes, even if a replacement appears equivalent.
 
-**Manual interactive signing path.** When the maintainer chooses this path,
-the maintainer runs the following command from an interactive terminal so
-pinentry can prompt. Agents use the approved signing operation or the exact
-custody path explicitly directed under the signing gate above:
-
-```bash
-export GPG_TTY="$(tty)"
-FINGERPRINT="$(tr -d '[:space:]' < RELEASE_SIGNING_FINGERPRINT)"
-HIPPOCAMPUS_GPG_KEY="$FINGERPRINT" bash scripts/build-release.sh dist
-```
-
-When using the manual path, the release agent hands the command above to the
-maintainer or their designated release contact, then waits for the three
-`dist/` files before continuing.
-When the maintainer has directed agent signing through approved custody, the
-agent completes that action instead of requesting a human terminal command.
-Both paths require the same signature, fingerprint and checksum verification:
+Require the safe signing receipt and all three candidate files before proceeding.
+Recheck frozen input hashes, the authorized subkey and unchanged pinned primary,
+then run the normal verifier:
 
 ```bash
 VERSION_VALUE="$(tr -d '[:space:]' < VERSION)"
