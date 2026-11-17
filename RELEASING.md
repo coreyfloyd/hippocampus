@@ -40,9 +40,13 @@ the signature. A changed candidate needs a new summary and a new SIGN.
 Operators prepare unsigned candidates and invoke that signing operation; they
 never read or relay private-key bytes or the passphrase. No agent interpretation,
 standing permission, ticket state or unrelated reply substitutes for the
-maintainer's exact-release approval. When the operation is unavailable, use the
-manual maintainer-signing path; an operator must not bypass its interactive
-pinentry gate.
+maintainer's exact-release approval. When the operation is unavailable, report
+that limitation to the maintainer's release coordinator. The maintainer may explicitly direct signing through an
+already provisioned signing-subkey custody path for the approved exact release.
+That direction authorizes the agent signing action; it does not authorize key
+export, new provisioning or disclosure of secret material. Use the manual
+interactive path only when the maintainer chooses it. Never replace missing
+approval with an operator's own decision.
 
 The public key now includes the dedicated signing subkey. The pinned primary
 fingerprint and verification script are unchanged. Consumers with an older copy
@@ -247,8 +251,10 @@ release-integrity incident requiring an explicit maintainer decision.
 
 Build only after the clean checkout, pushed commit, and remote tag agree.
 
-**Maintainer runs this step** — it signs, and per the signing gate above an agent
-must not run it. Run it from an interactive terminal so pinentry can prompt:
+**Manual interactive signing path.** When the maintainer chooses this path,
+the maintainer runs the following command from an interactive terminal so
+pinentry can prompt. Agents use the approved signing operation or the exact
+custody path explicitly directed under the signing gate above:
 
 ```bash
 export GPG_TTY="$(tty)"
@@ -256,9 +262,11 @@ FINGERPRINT="$(tr -d '[:space:]' < RELEASE_SIGNING_FINGERPRINT)"
 HIPPOCAMPUS_GPG_KEY="$FINGERPRINT" bash scripts/build-release.sh dist
 ```
 
-An agent driving the release stops here, hands the maintainer the command above,
-and waits for the three `dist/` files to exist before continuing. Everything from
-verification onward is agent-safe:
+When using the manual path, the release agent hands the command above to the
+release coordinator and waits for the three `dist/` files before continuing.
+When the maintainer has directed agent signing through approved custody, the
+agent completes that action instead of requesting a human terminal command.
+Both paths require the same signature, fingerprint and checksum verification:
 
 ```bash
 VERSION_VALUE="$(tr -d '[:space:]' < VERSION)"
