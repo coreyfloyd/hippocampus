@@ -71,3 +71,12 @@ fallback; do not supply duplicate exports under different paths in that case.
 situational extraction candidates for human review, not authorization to split.
 Prose-only sections never produce a split suggestion. This heuristic measures
 observed coverage, not frequency or importance of safety instructions.
+
+
+Whole start-up reviews pass an explicit `config` path with `startup_budget` as
+documented in the skill. `usage_sessions` sets their minimum distinct sessions.
+Each section also carries `tokens` (the shared UTF-8 estimate) and `body_sha256`;
+extraction compares the latter to the current section before moving anything.
+The existing `split_candidates` remain review suggestions; branch extraction
+instead selects every section with zero evidence and enough loaded sessions,
+including prose-only sections, and retains one ask for each removal.

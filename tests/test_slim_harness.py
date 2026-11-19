@@ -278,3 +278,102 @@ def test_listed_and_full_skill_merge_retains_all_sizes_and_limits(tool,loads,tmp
         'body bytes':len(body.encode('utf-8'))}
     assert {item['unit']:item['limit'] for item in row['limits']}=={
         'description characters':1024, 'body lines':500, 'body bytes':20000}
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_startup_budget_totals_loaded_inputs_and_folder_override(tool, tmp_path):
+    m = helper()
+    paths = [tmp_path / 'rules.md', tmp_path / 'role.md']
+    for path in paths:
+        path.write_text('x' * 120)
+    listed = tmp_path / 'SKILL.md'
+    listed.write_text('---\ndescription: abcd\n---\n' + 'ignored ' * 5000)
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'startup_budget': {'default_tokens': 100,
+        'directories': {str(tmp_path): 50}, 'usage_sessions': 4}}))
+    manifest = dict(tool=tool, directory=str(tmp_path), config=str(config),
+        files=[entry(p) for p in paths] + [entry(paths[0]), entry(listed, 'skill', 'listed')],
+        inputs=[{'name': 'system prompt', 'text': 'abcd'}])
+    result = m.measure(manifest)
+    assert result['over_limit'] == []  # Each file still fits its individual limit.
+    startup = result['startup']
+    assert startup['budget_tokens'] == 50
+    assert startup['tokens'] == 62 and startup['overage_tokens'] == 12
+    assert sorted(row['tokens'] for row in startup['files']) == [1, 30, 30]
+    assert startup['complete'] is True
+    manifest['directory'] = str(tmp_path / 'other')
+    assert m.measure(manifest)['startup']['budget_tokens'] == 100
+    manifest['files'].append(entry(tmp_path / 'missing.md'))
+    assert m.measure(manifest)['startup']['complete'] is False
+
+
+@pytest.mark.parametrize('bad', [0, -1, True, '100'])
+def test_startup_rejects_invalid_budget(bad, tmp_path):
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'startup_budget': {'default_tokens': bad}}))
+    with pytest.raises(ValueError, match='positive integer'):
+        helper().measure(dict(tool='codex', files=[], config=str(config)))
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_unused_section_moves_on_slim_branch_and_retains_chief_ask(tool, tmp_path):
+    import hashlib
+    m = helper()
+    repo = tmp_path / 'repo'
+    repo.mkdir()
+    subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+    subprocess.run(['git', '-C', str(repo), 'checkout', '-qb', 'slim/fixture'], check=True)
+    target = repo / 'rules.md'
+    section = '## Deploy\nRun `deploy --dry-run` when deploying.\n'
+    original = '# Rules\nKeep this boundary.\n\n' + section
+    target.write_text(original)
+    row = dict(path=str(target), section='Deploy', body_start_line=4,
+        body_sha256=hashlib.sha256(section.encode()).hexdigest(), sessions_loaded=4,
+        sessions_with_evidence=0, status='no evidence of use')
+    report = dict(sections=[row], unresolved=[])
+    journal = tmp_path / 'journal.json'
+    request = tmp_path / 'extract.json'
+    request.write_text(json.dumps(dict(tool=tool, directory=str(repo), usage=report)))
+    completed = subprocess.run([sys.executable, str(SKILL / 'scripts/harness.py'),
+        'extract', str(request), str(journal)], capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert section not in target.read_text()
+    reference = Path(result['extractions'][0]['destination'])
+    assert reference.read_text() == section
+    assert reference.relative_to(repo).as_posix() in target.read_text()
+    assert len(result['asks']) == 1
+    ask = result['asks'][0]
+    assert ask['owner'] == 'chief' and ask['escalate_to'] == 'user'
+    assert ask['section'] == 'Deploy' and ask['tokens'] == m.token_estimate(section)
+    assert ask['usage']['sessions_loaded'] == 4 and ask['usage']['sessions_with_evidence'] == 0
+    assert result['merge_allowed'] is False
+    assert json.loads(journal.read_text())[0]['ask'] == ask
+    assert '# Rules\nKeep this boundary.' in target.read_text()
+
+
+def test_extraction_refuses_wrong_branch_stale_or_used_evidence(tmp_path):
+    import hashlib
+    m = helper()
+    subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), 'checkout', '-qb', 'work'], check=True)
+    target = tmp_path / 'rules.md'
+    body = '## Rare\nUse --rare carefully.\n'
+    target.write_text(body)
+    row = dict(path=str(target), section='Rare', body_start_line=1,
+        body_sha256=hashlib.sha256(body.encode()).hexdigest(),
+        sessions_loaded=3, sessions_with_evidence=0)
+    request = dict(tool='codex', directory=str(tmp_path), usage={'sections': [row], 'unresolved': []})
+    with pytest.raises(ValueError, match='slim branch'):
+        m.extract(request, tmp_path / 'journal.json')
+    subprocess.run(['git', '-C', str(tmp_path), 'checkout', '-qb', 'slim/fixture'], check=True)
+    row['sessions_with_evidence'] = 1
+    assert m.extract(request, tmp_path / 'journal.json')['extractions'] == []
+    row['sessions_with_evidence'] = 0
+    row['sessions_loaded'] = 2
+    assert m.extract(request, tmp_path / 'journal.json')['extractions'] == []
+    row['sessions_loaded'] = 3
+    target.write_text(body + 'Changed.\n')
+    with pytest.raises(ValueError, match='stale'):
+        m.extract(request, tmp_path / 'journal.json')
+    assert target.read_text() == body + 'Changed.\n'

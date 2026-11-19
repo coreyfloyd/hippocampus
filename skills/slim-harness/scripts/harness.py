@@ -6,6 +6,7 @@ No semantic review, file discovery, generator execution, or git mutation occurs 
 from __future__ import annotations
 
 import argparse
+import hashlib
 from difflib import SequenceMatcher
 import unicodedata
 import json
@@ -70,6 +71,27 @@ Reject unsupported discovery-field syntax rather than silently undercount it.
     return fields, ''.join(lines[end+1:])
 
 
+def token_estimate(text):
+    """Shared review estimate, rounded up: four UTF-8 bytes per token."""
+    return (len(text.encode('utf-8')) + 3) // 4
+
+
+def startup_policy(manifest):
+    # Only the explicitly supplied configuration is read, never an implicit home.
+    config=json.loads(Path(manifest['config']).expanduser().read_text()) if manifest.get('config') else {}
+    policy=config.get('startup_budget', {})
+    default=policy.get('default_tokens', 8000)
+    sessions=policy.get('usage_sessions', 3)
+    overrides=policy.get('directories', {})
+    if not isinstance(overrides, dict):raise ValueError('startup_budget directories must be an object')
+    for value in [default, sessions, *overrides.values()]:
+        if type(value) is not int or value<=0:
+            raise ValueError('startup_budget values must be positive integers')
+    directory=str(Path(manifest.get('directory', '.')).expanduser().resolve())
+    budgets={str(Path(path).expanduser().resolve()):value for path,value in overrides.items()}
+    return directory, budgets.get(directory, default), sessions
+
+
 def measure(manifest):
     """Only measure caller-attested loaded files; listed skills expose metadata only.
 
@@ -79,6 +101,8 @@ role_paths from the actual definition and chain from root to session start.
     tool=manifest['tool']
     if tool not in ('claude','codex'):
         raise ValueError('tool must be claude or codex')
+    directory,budget,_=startup_policy(manifest)
+    startup_files={}
     result=dict(over_limit=[], measured=[], unresolved=[])
     queue=list(manifest.get('files',[])); seen=set(); descriptions=[]; loaded_sizes={}
     while queue:
@@ -121,6 +145,12 @@ role_paths from the actual definition and chain from root to session start.
         # Listed-only bodies are not reported or used for size triggers.
         if loaded=='listed':
             row['size']=dict(description_characters=len(fields.get('description','')))
+        startup_text=(fields.get('description','') +
+                      (fields.get('when_to_use','') if tool=='claude' else '')) if loaded=='listed' else text
+        source=str(path.resolve())
+        # Full content supersedes a discovery listing; aliases/roles count once.
+        if source not in startup_files or loaded!='listed':
+            startup_files[source]=dict(path=str(path),tokens=token_estimate(startup_text))
         result['measured'].append(row)
         if limits:
             # One row per file, even if two limits are exceeded or the manifest repeats it.
@@ -151,6 +181,11 @@ role_paths from the actual definition and chain from root to session start.
             window=manifest.get('context_window')
             result['listing']=dict(budget=int(window*.02) if window else 8000,
                 largest=sorted(descriptions,key=lambda d:d['characters'],reverse=True),trigger=False)
+    inputs=[dict(name=item['name'],tokens=token_estimate(item['text'])) for item in manifest.get('inputs',[])]
+    total=sum(row['tokens'] for row in startup_files.values())+sum(row['tokens'] for row in inputs)
+    result['startup']=dict(directory=directory,budget_tokens=budget,tokens=total,
+        overage_tokens=max(0,total-budget),files=list(startup_files.values()),inputs=inputs,
+        complete=not result['unresolved'],method='estimate: ceil(UTF-8 bytes / 4) per input')
     return result
 
 
@@ -379,6 +414,7 @@ def usage_transcript(path,tool):
 def usage(manifest):
     """Aggregate literal section evidence from explicit transcripts and skill snapshots."""
     rows={};seen=set();unresolved=[]
+    _,_,minimum=startup_policy(manifest)
     for session in manifest.get('sessions',[]):
         tool=session['tool']
         if tool not in ('claude','codex'):raise ValueError('tool must be claude or codex')
@@ -409,7 +445,9 @@ def usage(manifest):
                 rowkey=(source,start)
                 if rowkey not in rows:
                     rows[rowkey]=dict(path=str(path),section=title,body_start_line=start,size=size(body),
-                        sessions_loaded=0,sessions_with_evidence=0,markers=usage_markers(body),matched_markers=[])
+                        body_sha256=hashlib.sha256(body.encode()).hexdigest(),
+                        tokens=token_estimate(body),sessions_loaded=0,sessions_with_evidence=0,
+                        markers=usage_markers(body),matched_markers=[])
                 row=rows[rowkey];row['sessions_loaded']+=1
                 matched=[marker for marker in row['markers'] if any(re.search(
                     r'(?<![\w./-])'+re.escape(marker)+r'(?![\w./-])',value) for value in evidence)]
@@ -419,11 +457,57 @@ def usage(manifest):
     for row in rows.values():
         row['status']='evidence of use' if row['sessions_with_evidence'] else 'no evidence of use'
         sections.append(row)
-        if row['markers'] and row['sessions_loaded']>=3 and row['sessions_with_evidence']<row['sessions_loaded']:
+        if row['markers'] and row['sessions_loaded']>=minimum and row['sessions_with_evidence']<row['sessions_loaded']:
             candidates.append(dict(path=row['path'],section=row['section'],body_start_line=row['body_start_line'],
-                sessions_loaded=row['sessions_loaded'],reason='evidence in fewer sessions than loaded (at least 3); review for a possible split'))
+                sessions_loaded=row['sessions_loaded'],reason=f'evidence in fewer sessions than loaded (at least {minimum}); review for a possible split'))
     return dict(sections=sections,split_candidates=candidates,unresolved=sorted(set(unresolved)),
-                minimum_sessions=3)
+                minimum_sessions=minimum)
+
+
+def extract(request, journal):
+    """Default eligible demotions on an existing slim branch; no merge or transport."""
+    if request['tool'] not in ('claude','codex'):raise ValueError('tool must be claude or codex')
+    directory,_,minimum=startup_policy(request)
+    root=Path(subprocess.check_output(['git','-C',directory,'rev-parse','--show-toplevel'],text=True).strip()).resolve()
+    branch=subprocess.check_output(['git','-C',directory,'branch','--show-current'],text=True).strip()
+    if not branch.startswith('slim/'):raise ValueError('extraction requires a slim branch')
+    report=request['usage']
+    if report.get('unresolved'):raise ValueError('usage report has unresolved inputs')
+    plans=[]
+    for row in report['sections']:
+        if row['sessions_loaded']<minimum or row['sessions_with_evidence']!=0:continue
+        source=Path(row['path']).expanduser().resolve(strict=True)
+        source.relative_to(root)  # Reject paths outside the branch checkout.
+        text=source.read_bytes().decode('utf-8')
+        section=next((body for title,start,body in skill_sections(text)
+                      if title==row['section'] and start==row['body_start_line']),None)
+        if section is None or hashlib.sha256(section.encode()).hexdigest()!=row.get('body_sha256'):
+            raise ValueError('stale usage snapshot: '+str(source))
+        digest=hashlib.sha256((str(source.relative_to(root))+str(row['body_start_line'])+section).encode()).hexdigest()[:16]
+        destination=source.parent/'references'/('startup-'+digest+'.md')
+        destination.parent.resolve().relative_to(root)
+        if destination.exists():raise ValueError('extraction destination exists: '+str(destination))
+        pointer='Read `'+str(destination.relative_to(source.parent))+'` when '+row['section']+' applies.\n'
+        if text.count(section)!=1:raise ValueError('ambiguous section: '+row['section'])
+        tokens=token_estimate(section)
+        ask=dict(id=digest,owner='chief',escalate_to='user',section=row['section'],tokens=tokens,
+            usage={key:row[key] for key in ('sessions_loaded','sessions_with_evidence','body_sha256')},
+            text=f"Moved {source.relative_to(root)} / {row['section']} ({tokens} estimated tokens) behind a pointer on {branch}. "
+                 f"No evidence of use in {row['sessions_loaded']} loaded sessions. "
+                 "Chief: escalate to the user before merge; retain the branch until the user approves. "
+                 "Undo by restoring the section from its reference.",
+            approval_required=True,applied=True,choices=[])
+        plans.append((source,section,destination,pointer,ask))
+    # Preflight all rows before writing. Every removal has a durable ask before editing.
+    results=[]
+    for source,section,destination,pointer,ask in plans:
+        destination.parent.mkdir(parents=True,exist_ok=True)
+        destination.write_bytes(section.encode('utf-8'))
+        outcome=edit(source,section,pointer,journal,extraction=dict(ask=ask,destination=str(destination),branch=branch))
+        results.append(dict(source=str(source),destination=str(destination),number=outcome['number']))
+    records=json.loads(Path(journal).read_text()) if Path(journal).exists() else []
+    return dict(branch=branch,extractions=results,asks=[row['ask'] for row in records if 'ask' in row],
+                merge_allowed=False)
 
 
 def dirty_repositories(paths):
@@ -437,7 +521,7 @@ def dirty_repositories(paths):
     return sorted(repos)
 
 
-def edit(path,before,after,journal,mode='interactive'):
+def edit(path,before,after,journal,mode='interactive',extraction=None):
     if mode!='interactive':
         return dict(changed=False,needs_user=True,message='slim-harness needs the user present; edited nothing')
     source=Path(path).expanduser().resolve(strict=True);current=source.read_bytes().decode('utf-8')
@@ -453,6 +537,7 @@ def edit(path,before,after,journal,mode='interactive'):
     journal=Path(journal)
     records=json.loads(journal.read_text()) if journal.exists() else []
     record=dict(number=len(records)+1,source=str(source),before=before,after=after,reverted=False)
+    if extraction:record.update(extraction)
     # Persist recovery information before changing the source; no full-file rollback.
     journal.write_text(json.dumps(records+[record],indent=2)+'\n')
     source.write_bytes(updated.encode('utf-8'))
@@ -477,6 +562,7 @@ def main():
     p=sub.add_parser('measure');p.add_argument('manifest',type=Path)
     p=sub.add_parser('duplicates');p.add_argument('manifest',type=Path)
     p=sub.add_parser('usage');p.add_argument('manifest',type=Path)
+    p=sub.add_parser('extract');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('edit');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('revert');p.add_argument('journal',type=Path);p.add_argument('number',type=int)
     args=parser.parse_args()
@@ -484,6 +570,7 @@ def main():
         if args.operation=='measure':result=measure(json.loads(args.manifest.read_text()))
         elif args.operation=='duplicates':result=duplicates(json.loads(args.manifest.read_text()))
         elif args.operation=='usage':result=usage(json.loads(args.manifest.read_text()))
+        elif args.operation=='extract':result=extract(json.loads(args.request.read_text()),args.journal)
         elif args.operation=='edit':result=edit(journal=args.journal,**json.loads(args.request.read_text()))
         else:result=revert(args.journal,args.number)
         print(json.dumps(result,indent=2));return 0
