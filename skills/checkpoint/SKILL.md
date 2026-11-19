@@ -14,18 +14,43 @@ or monitor doctrine.
 
 ## Checkpoint with `durable`
 
-When the user requests checkpoint with `durable`, also find the user's decisions
-in the conversation and carried items, and suggest one decision record for each.
-Use the decision-record contract in [record](../record/SKILL.md): show the full
-proposal and configured folder, obtain explicit user approval, and run the shared
-record module with only those approved decision items and R7 rows. Use its actual
-receipts to mark only saved items recorded before writing the handoff. Preserve
-failed, uncertain, or unbound items unchanged. Do not reconcile unrelated items or
-run the wrap. Without the user, deliver an R3 approval ask to the configured durable
-agent through the ask binding; never write the document on their behalf. Preserve
-the complete proposal, source identity, choices, and ask receipt. Agent operational
-choices remain separate audit material. An ordinary checkpoint only carries items.
-This behavior is shared by Claude Code and Codex.
+When explicitly requested with `durable`, or when this session's configured
+FILE-4H job requests it, run the checklist's record, knowledge, lessons, and
+persist steps and applicable profile steps, preserving normal approval requirements.
+Use [checklist](../checklist/SKILL.md) for profiles, planning, native receipts and
+filing judgments. Do not remove worktrees, finish the session, cancel its work,
+or release its processes. Preserve its next action. Ordinary checkpoint stays carry-only.
+
+Restore retained items before choosing filing rows. Supply exactly one indexed
+filing row for every item, including those restored from earlier checkpoints.
+Use the [record](../record/SKILL.md) decision-document contract: only user decisions,
+explicitly approved, may reach the configured document folder. Without the user,
+deliver the full proposal as an R3 ask to the configured durable agent. Promises
+become asks. Agent operational choices remain separate audit material.
+Run knowledge-capture and improve-harness through their usual approval routes;
+keep native items until actual capture/application receipts arrive. An ask receipt
+proves delivery, not native capture. Run the persist binding under its existing
+authorization; durable mode does not itself authorize git actions. Do not invoke
+the wrap's finalization or cleanup.
+
+After those steps, submit the continuation JSON with the shared writer:
+
+```bash
+bash <checkpoint.sh> --durable --user-profile <user-profile> \
+  --filing <filing-rows.json> --report <pass-report.json> \
+  --scheduled-report '<configured-report-adapter-command>' <<'JSON'
+<judgment-bearing handoff JSON>
+JSON
+```
+
+Repeat `--repository-profile` for additive profiles. The command writes and
+validates a checkpoint before filing, settles successful items in the ledger,
+keeps failed/unbound items, preserves the continuation, and reports actual receipts.
+A nonzero exit reports incomplete filing or reporting; retry by original identity.
+The report adapter publishes each pass to Scheduled. Without it, the local report
+remains and Scheduled visibility is unproven. See the
+[scheduler contract](../../INTERFACE.md#durable-checkpoint-and-file-4h).
+Claude Code and Codex use this same command and skill; neither creates a timer.
 
 Supply the handoff's judgment-bearing fields: a one-line `resume.headline`, concrete
 `resume.next_action`, a real one-line `resume.session_summary` describing the work since this session's

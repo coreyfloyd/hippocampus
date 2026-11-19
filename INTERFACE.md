@@ -3,6 +3,60 @@
 What an adapter, a profile author, or another tool may rely on. Anything not listed here is
 internal and may change. The vocabulary is defined in `docs/glossary.md`.
 
+### Durable checkpoint and FILE-4H
+
+Both tools share `handoff.py checkpoint --durable`. Ordinary checkpoint remains
+carry-only. Durable mode takes explicit `--user-profile`, repeatable
+`--repository-profile`, `--filing` (checklist indexed rows), and `--report` paths.
+The running interactive agent executes normal checklist steps and native approval
+routes, then submits continuation JSON on stdin. The writer restores retained
+items, validates before external writes, looks up record and ask identities,
+and settles acknowledged items. Decision documents require user authorship,
+explicit approval and its source, and the configured folder. A lesson/knowledge
+ask stays carried until native capture/application succeeds. Exit 1 means unfiled
+items or errors; the report and handoff retain them for retry. No session is ended,
+worktree removed or timer armed by checkpoint.
+
+Reports contain `session_id`, `started_at`, `ended_at`, `filed`, `unfiled`, `items`
+(when filing ran) and `errors`, preserving identities, destinations and receipts.
+`--scheduled-report COMMAND` invokes the configured adapter using argv parsing
+(no shell), JSON stdin and JSON stdout. The request is
+`{"operation":"report","kind":"durable_checkpoint","report":{...}}`.
+Success requires `{"status":"saved","receipt":{"destination":"..."}}`.
+The adapter publishes filed and unfiled items on Scheduled, including failed
+passes. Refused/malformed responses are errors and exit 1; the local report remains.
+Without an adapter, local filing can succeed but Scheduled delivery is unproven.
+
+Explicit periodic enablement uses:
+
+```bash
+python3 scripts/lib/durable_checkpoint.py --session-id <running-session> \
+  --cwd <subject> --required-node <node> --catchup-report <node-report.json> \
+  --adapter '<configured-scheduler-adapter-command>'
+```
+
+Repeat required-node and catchup-report for all participating nodes. Enablement
+refuses missing nodes, different cutoffs, inventory errors, non-run reports or
+remaining old items. Supply current per-node recount reports; an older successful
+report is not evidence of a current recount. Enablement is never an install,
+test or checkpoint side effect.
+
+The scheduler adapter receives `operation: ensure_job`, `kind: durable_checkpoint`,
+`job_key: FILE-4H:<session>`, `target_session`, `working_directory`,
+`interval_seconds: 14400`, `checkpoint_option: durable`, `report_surface: Scheduled`
+and catch-up reports. It idempotently registers one job per session and returns
+`status: saved` with a receipt naming the exact `job_key` and Scheduled
+`destination`. It dispatches to the existing running interactive session, which
+runs the skill with durable selected at every checkpoint and every four hours.
+It serializes passes per session; a scheduler worker never writes a handoff as
+if it were that session. The scheduler owns dispatch, failure visibility and job
+lifetime. The package installs no launchd job or background timer.
+
+A configured external adapter and real running session must separately prove
+Scheduled visibility, four-hour dispatch, catch-up readiness and continued session
+operation before live enablement. Fixtures do not establish these live proofs.
+Keep the previous filing path until the real durable checkpoint proof passes.
+
 Paths below are relative to the repository root. An adapter locates the package by the
 directory it installs it into, never by importing it: every entry point is a command.
 
