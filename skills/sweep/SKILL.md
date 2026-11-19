@@ -319,3 +319,17 @@ without applying anything again.
 Undo leaves this run's applied lessons and captures in place: it prints them as
 `applied_left_in_place`, with no reversal work, and never lists `already_settled` items. Present them with each commit;
 a lesson commit is reverted through the repository's normal delivery, never by the sweep.
+
+## One-time catch-up
+
+Before enabling periodic durable filing, use the shared per-node
+[catch-up command](../../docs/filing-catchup.md)
+for both Claude Code and Codex. Inspect the explicitly supplied store first,
+supply identity-bound filing judgments, then run and retain each dated report.
+Do not use ordinary sweep abandonment or worktree removal for this pass.
+Items needing approval go to the configured durable ask owner with complete
+proposals. A writer must return a real identity/destination receipt; asks also
+confirm the saved owner. Keep source handoffs and the old filing path until every
+expected node has a successful recount for the same cutoff. The command never
+enables a job. Real cross-node filing and schedule enablement require their
+separate coordinated proof; fixture verification does not satisfy that proof.
