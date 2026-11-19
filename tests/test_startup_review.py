@@ -278,3 +278,68 @@ def test_conflicting_duplicate_section_evidence_is_refused_before_any_edit(tmp_p
     assert source.read_text() == '## Deploy\nUse --deploy.\n'
     assert not (tmp_path / 'journal.json').exists()
     assert not (tmp_path / 'references').exists()
+
+
+@pytest.mark.parametrize('tool', ['claude', 'codex'])
+def test_extraction_writer_uses_configured_owner_and_requires_saved_owner_receipt(tool, tmp_path, monkeypatch):
+    m, source, req = setup_request(tmp_path, ['## Deploy\nUse --deploy.\n'])
+    profile = tmp_path / 'checklist.json'
+    profile.write_text(json.dumps({'name': 'fixture', 'ask': {'command': '/fixture-writer', 'owner_agent': 'fixture-agent'}}))
+    monkeypatch.setenv('CHECKLIST_USER_PROFILE', str(profile))
+    req.update(tool=tool, session_id='original-producer')
+    journal = tmp_path / 'journal.json'
+    output = m.extract(req, journal)
+    ask = output['asks'][0]
+    assert ask['owner_agent'] == 'fixture-agent'
+    assert ask['session_id'] == 'original-producer'
+    assert ask['provider'] == tool
+    assert ask['owner'] == 'chief' and ask['escalate_to'] == 'user'
+    assert json.loads(journal.read_text())[0]['ask'] == ask
+    original_id = ask['id']
+    before = journal.read_bytes()
+    for receipt in ['opaque', {'owner_agent': 'user'}]:
+        with pytest.raises(ValueError, match='owner_agent'):
+            m.ask_delivered(journal, 1, receipt)
+        assert journal.read_bytes() == before
+    # The fixture writer saves the payload and returns ownership read back from it.
+    store = tmp_path / 'writer.json'
+    store.write_text(json.dumps(ask))
+    receipt = {'owner_agent': json.loads(store.read_text())['owner_agent'], 'destination': str(store)}
+    receipt_path = tmp_path / 'receipt.json'
+    receipt_path.write_text(json.dumps(receipt))
+    delivered = subprocess.run([sys.executable, str(SKILL / 'scripts/harness.py'), 'ask-delivered',
+                                str(journal), '1', str(receipt_path)], capture_output=True, text=True)
+    assert delivered.returncode == 0, delivered.stderr
+    assert json.loads(delivered.stdout)['receipt'] == receipt
+    record = json.loads(journal.read_text())[0]
+    assert record['ask']['id'] == original_id
+    assert record['ask']['session_id'] == 'original-producer'
+    assert record['ask_receipt'] == receipt
+    assert output['merge_allowed'] is False
+
+
+def test_extraction_receipt_retry_rebinds_owner_without_changing_producer(tmp_path, monkeypatch):
+    m, source, req = setup_request(tmp_path, ['## Deploy\nUse --deploy.\n'])
+    profile = tmp_path / 'checklist.json'
+    profile.write_text(json.dumps({'name': 'fixture', 'ask': {'command': '/writer', 'owner_agent': 'first-agent'}}))
+    monkeypatch.setenv('CHECKLIST_USER_PROFILE', str(profile))
+    req['session_id'] = 'original-producer'
+    journal = tmp_path / 'journal.json'
+    original = m.extract(req, journal)['asks'][0]
+    profile.write_text(json.dumps({'name': 'fixture', 'ask': {'command': '/writer', 'owner_agent': 'next-agent'}}))
+    before = journal.read_bytes()
+    pending = m.pending_asks(journal)['asks'][0]
+    assert pending['number'] == 1
+    assert pending['ask']['owner_agent'] == 'next-agent'
+    assert pending['ask']['id'] == original['id']
+    assert pending['ask']['session_id'] == 'original-producer'
+    assert journal.read_bytes() == before
+    with pytest.raises(ValueError, match='owner_agent'):
+        m.ask_delivered(journal, 1, {'owner_agent': 'first-agent'})
+    assert journal.read_bytes() == before
+    m.ask_delivered(journal, 1, {'owner_agent': 'next-agent'})
+    saved = json.loads(journal.read_text())[0]['ask']
+    assert saved['owner_agent'] == 'next-agent'
+    assert saved['id'] == original['id']
+    assert saved['session_id'] == original['session_id']
+    assert m.pending_asks(journal)['asks'] == []

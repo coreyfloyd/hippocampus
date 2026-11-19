@@ -552,6 +552,49 @@ def publish(writes):
         raise
 
 
+def _ask_contract():
+    # Lazy: the unattended slim also imports this helper for measurements.
+    spec=importlib.util.spec_from_file_location('extraction_checklist',
+        Path(__file__).resolve().parents[3]/'scripts/lib/checklist.py')
+    module=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def pending_asks(journal):
+    """Prepare undelivered journal asks for the current writer without changing identity."""
+    records=json.loads(Path(journal).expanduser().resolve().read_text())
+    contract=_ask_contract();binding=contract.load_ask_binding();asks=[]
+    for record in records:
+        if 'ask' not in record:continue
+        ask=contract.owned_ask(record['ask'],binding)
+        receipt=record.get('ask_receipt')
+        if binding and receipt:
+            try:
+                contract.require_ask_receipt(binding,receipt,ask)
+            except ValueError:
+                pass  # A stale owner receipt cannot settle this configured delivery.
+            else:
+                continue
+        asks.append(dict(number=record['number'],ask=ask))
+    return dict(asks=asks,binding=binding,merge_allowed=False)
+
+
+def ask_delivered(journal,number,receipt):
+    """Record delivery only after the writer confirms the configured saved owner."""
+    journal=Path(journal).expanduser().resolve()
+    old=journal.read_bytes().decode('utf-8');records=json.loads(old)
+    record=next(r for r in records if r['number']==number)
+    contract=_ask_contract();binding=contract.load_ask_binding()
+    if not binding:raise ValueError('ask binding missing; extraction ask remains undelivered')
+    ask=contract.owned_ask(record['ask'],binding)
+    contract.require_ask_receipt(binding,receipt,ask)
+    if not receipt:raise ValueError('a saved ask receipt is required')
+    record.update(ask=ask,ask_receipt=receipt)
+    publish({journal:(old,json.dumps(records,indent=2)+'\n')})
+    return dict(id=ask['id'],number=number,receipt=receipt,merge_allowed=False)
+
+
 def extract(request, journal):
     """Default observable demotions on a slim branch; no merge or transport."""
     if request['tool'] not in ('claude','codex'):raise ValueError('tool must be claude or codex')
@@ -641,6 +684,13 @@ def extract(request, journal):
                     reverted=False,ask=ask,destination=str(destination),branch=branch)
         plans.append(record)
     if plans:
+        contract=_ask_contract();binding=contract.load_ask_binding()
+        if 'session_id' in request and (not isinstance(request['session_id'],str) or not request['session_id'].strip()):
+            raise ValueError('session_id must name the producing session')
+        for record in plans:
+            record['ask']=contract.owned_ask(record['ask'],binding)
+            record['ask']['provider']=request['tool']
+            if 'session_id' in request:record['ask']['session_id']=request['session_id']
         if set(sources)&destinations:raise ValueError('extraction source overlaps destination')
         writes={journal:(old_journal,json.dumps(records+plans,indent=2)+'\n')}
         writes.update({Path(row['destination']):(None,row['before']) for row in plans})
@@ -706,6 +756,8 @@ def main():
     p=sub.add_parser('extract');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('edit');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('revert');p.add_argument('journal',type=Path);p.add_argument('number',type=int)
+    p=sub.add_parser('asks');p.add_argument('journal',type=Path)
+    p=sub.add_parser('ask-delivered');p.add_argument('journal',type=Path);p.add_argument('number',type=int);p.add_argument('receipt',type=Path)
     args=parser.parse_args()
     try:
         if args.operation=='measure':result=measure(json.loads(args.manifest.read_text()))
@@ -713,6 +765,8 @@ def main():
         elif args.operation=='usage':result=usage(json.loads(args.manifest.read_text()))
         elif args.operation=='extract':result=extract(json.loads(args.request.read_text()),args.journal)
         elif args.operation=='edit':result=edit(journal=args.journal,**json.loads(args.request.read_text()))
+        elif args.operation=='asks':result=pending_asks(args.journal)
+        elif args.operation=='ask-delivered':result=ask_delivered(args.journal,args.number,json.loads(args.receipt.read_text()))
         else:result=revert(args.journal,args.number)
         print(json.dumps(result,indent=2));return 0
     except (OSError,ValueError,KeyError,StopIteration) as error:

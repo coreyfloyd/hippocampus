@@ -196,13 +196,17 @@ def test_legacy_native_bindings_name_blocks_to_delete_and_preserve_profile(tmp_p
         assert profile.read_text() == text
 
 
-def test_setup_can_configure_and_unbind_ask_separately_from_slots(tmp_path):
+@pytest.mark.parametrize("owner", [None, "fixture-agent"])
+def test_setup_can_configure_and_unbind_ask_separately_from_slots(tmp_path, owner):
     profile = tmp_path / 'profile.json'
+    binding = {'command': '/ask-step'}
+    if owner is not None:
+        binding['owner_agent'] = owner
     result = write(tmp_path, {'persist': None}, '--profile', str(profile),
-                   '--ask', '{"command":"/ask-step"}')
+                   '--ask', json.dumps(binding))
     assert result.returncode == 0, result.stderr
     output = json.loads(plan(profile).stdout)
-    assert output['ask'] == {'command': '/ask-step'}
+    assert output['ask'] == binding
     before = profile.read_bytes()
     for ask in ['{}', '{"command":""}', '{"command":"/ask","consumes":[]}']:
         result = write(tmp_path, {}, '--profile', str(profile), '--ask', ask)

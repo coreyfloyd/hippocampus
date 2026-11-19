@@ -120,6 +120,9 @@ _Avoid_: question, needs-you item
 The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends and captures the knowledge it recommends for the wiki or for retention under the knowledge root, instead of waiting for approval, in every interactive session, attended or unattended, and in a sweep's act mode. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it for lessons only.
 _Avoid_: auto mode, autopilot
 
+**Ask owner**:
+The durable agent named by `owner_agent` in the user's ask binding. The ask writer stores that agent as owner, while the source session and item identity remain unchanged. The user still answers decisions and approvals. A command-only binding keeps its existing delivery until ownership is configured and proven.
+
 **Applied lesson**:
 A lesson a wrap or a sweep wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git, an existing untracked file, or an ignored path in its repository, is written with no commit; a new file the repository would track gets its own commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
 
