@@ -95,16 +95,25 @@ def run(module, supplied, args):
 
 def schedule_request(session_id, cwd, required_nodes, reports):
     """Require successful per-node catch-up before asking a scheduler to enable."""
-    if not session_id or not required_nodes or len(set(required_nodes)) != len(required_nodes):
+    if (not isinstance(session_id, str) or not session_id.strip()
+            or not isinstance(required_nodes, list) or not required_nodes
+            or not all(isinstance(node, str) and node.strip() for node in required_nodes)
+            or len(set(required_nodes)) != len(required_nodes)):
         raise ValueError('schedule requires a session and distinct required nodes')
+    if not isinstance(reports, list) or not all(isinstance(report, dict) for report in reports):
+        raise ValueError('catch-up reports must be an array of objects')
+    for report in reports:
+        if not isinstance(report.get('node'), str) or not report['node'].strip():
+            raise ValueError('catch-up report requires a node identifier')
+        filing_catchup.sweep.timestamp(report.get('cutoff'))
     if (len(reports) != len(required_nodes)
             or {r.get('node') for r in reports} != set(required_nodes)
             or len({r.get('cutoff') for r in reports}) != 1):
         raise ValueError('each required node needs its own catch-up report for the same cutoff')
     for report in reports:
-        filing_catchup.sweep.timestamp(report.get('cutoff'))
         if (report.get('mode') != 'run' or report.get('ready_for_durable_filing') is not True
-                or report.get('unfiled_before_cutoff') != 0 or report.get('errors') != []):
+                or type(report.get('unfiled_before_cutoff')) is not int
+                or report['unfiled_before_cutoff'] != 0 or report.get('errors') != []):
             raise ValueError('catch-up is not ready; periodic filing remains disabled')
     return dict(operation='ensure_job', kind='durable_checkpoint',
                 job_key='FILE-4H:' + session_id, target_session=session_id,

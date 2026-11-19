@@ -107,7 +107,7 @@ def file_item(source, decision, plan, ask):
     # outcomes retain their meaning, including when consumed by durable checkpoint.
     status = row.get('status', 'filed')
     requested = status == 'pending' and row.get('ask_delivery') == 'requested'
-    validation = ({**row, 'status': 'filed', 'destination': 'planned'}
+    validation = ({**row, 'status': 'filed', 'destination': row.get('destination') or 'planned'}
                   if status == 'filed' or requested else row)
     if row.get('rule') in ('R1', 'R6'):
         # Catch-up requires an actual home; a judgment to drop is not proof of filing.
@@ -128,6 +128,11 @@ def file_item(source, decision, plan, ask):
         result = record_write.execute(ask, 'asks', payload, checked)
         if result['status'] == 'filed':
             checklist.require_ask_receipt(ask, result.get('receipt'), payload)
+            if approval_pending:
+                result.update(status='pending', ask_status='filed',
+                              reason=checked['reason'])
+        else:
+            result.pop('ask_status', None)
         return result
     if kind not in record_write.KINDS:
         raise ValueError('native item needs its capture receipt or an approval ask')

@@ -400,3 +400,48 @@ def test_deferred_new_ticket_and_approved_document_do_not_write(tmp_path, provid
     assert not (tmp_path / 'store.json').exists()
     report = json.loads((tmp_path / 'report.json').read_text())
     assert report['unfiled'] == [source] and report['items'][0]['status'] == status
+
+
+@pytest.mark.parametrize('bad', [[], 'ok', None, 12, {},
+    {'node': []}, {'node': 'fixture', 'cutoff': []},
+    {'node': 'fixture', 'cutoff': None}])
+def test_malformed_catchup_report_refuses_before_scheduler(tmp_path, bad):
+    path = tmp_path / 'catchup.json'
+    path.write_text(json.dumps(bad))
+    adapter = tmp_path / 'scheduler.py'
+    adapter.write_text("from pathlib import Path; Path(__file__).with_suffix('.called').touch()")
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/durable_checkpoint.py'),
+        '--session-id', 'fixture', '--cwd', str(tmp_path), '--required-node', 'fixture',
+        '--catchup-report', str(path), '--adapter', f'{sys.executable} {adapter}'],
+        capture_output=True, text=True)
+    assert result.returncode == 1
+    assert result.stderr.strip() and 'Traceback' not in result.stderr
+    assert not adapter.with_suffix('.called').exists()
+
+
+@pytest.mark.parametrize('change', [dict(node='other'), dict(cutoff='bad'), dict(mode='inspect'),
+    dict(ready_for_durable_filing=False), dict(unfiled_before_cutoff=1), dict(errors=['failed']),
+    dict(unfiled_before_cutoff=False), dict(unfiled_before_cutoff=0.0)])
+def test_schedule_requires_valid_matching_proof(change):
+    import durable_checkpoint
+    proof = dict(node='fixture', cutoff='2026-11-19T12:00:00Z', mode='run',
+                 ready_for_durable_filing=True, unfiled_before_cutoff=0, errors=[])
+    proof.update(change)
+    with pytest.raises(ValueError):
+        durable_checkpoint.schedule_request('fixture', '/fixture', ['fixture'], [proof])
+
+
+@pytest.mark.parametrize('nodes', [None, [], '', [''], [None], [[]], ['fixture', 'fixture']])
+def test_schedule_refuses_malformed_required_nodes(nodes):
+    import durable_checkpoint
+    with pytest.raises(ValueError):
+        durable_checkpoint.schedule_request('fixture', '/fixture', nodes, [])
+
+
+def test_schedule_requires_same_cutoff_for_all_nodes():
+    import durable_checkpoint
+    reports = [dict(node=node, cutoff=cutoff, mode='run', ready_for_durable_filing=True,
+                    unfiled_before_cutoff=0, errors=[])
+               for node, cutoff in [('one', '2026-11-19T12:00:00Z'), ('two', '2026-11-19T13:00:00Z')]]
+    with pytest.raises(ValueError):
+        durable_checkpoint.schedule_request('fixture', '/fixture', ['one', 'two'], reports)
