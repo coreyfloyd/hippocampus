@@ -12,7 +12,7 @@ FIX = Path(__file__).parent / 'fixtures/usage'
 
 
 def manifest(*tools):
-    return {'sessions': [{'tool': tool, 'transcript': str(FIX / (tool + '.jsonl')),
+    return {'config': str(FIX / 'config.json'), 'sessions': [{'tool': tool, 'transcript': str(FIX / (tool + '.jsonl')),
                           'skills': [{'path': str(FIX / 'SKILL.md'),
                                       'recorded_path': '/redacted/skills/workflow/SKILL.md'}]}
                          for tool in tools]}
