@@ -539,7 +539,11 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
             raise ValueError(f"filing: unknown rule {rule!r}")
         if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
-        if item.get("type") == "decision" and rule not in ("R1", "R3", "R6"):
+        binding = filing_binding(rule, item, row)
+        if binding == "record":
+            binding = record_write.kind_for(rule, item, row, writes)
+            bindings.setdefault(binding, None)
+        if record_write.decision_document(item, row, binding):
             try:
                 routes = next(step for step in plan if step["id"] == "record").get("decision_records")
                 row = record_write.decision_filing(item, row, routes)
@@ -549,7 +553,6 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 report["failures"].append(f"{item.get('context', str(item))}: {error}")
                 kept.append(copy.deepcopy(item))
                 continue
-        binding = filing_binding(rule, item, row)
         if item.get("user_fact") and binding != "ask" and status in ("filed", "dropped"):
             try:
                 knowledge.user_answer(item, row, saving=status == "filed")
@@ -560,9 +563,6 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 report["failures"].append(f"{item.get('context', str(item))}: {error}")
                 kept.append(copy.deepcopy(item))
                 continue
-        if binding == "record":
-            binding = record_write.kind_for(rule, item, row, writes)
-            bindings.setdefault(binding, None)
         if not item.get("applied") and (binding == "ask" or (binding in NATIVE and "choices" in row)):
             item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
@@ -700,7 +700,7 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         if row.get("binding") in record_write.KINDS and row.get("status") == "filed":
             try:
                 folder = None
-                if item.get("type") == "decision":
+                if record_write.decision_document(item, row, row.get("binding")):
                     routes = next(step for step in plan if step["id"] == "record").get("decision_records")
                     approved = record_write.decision_filing(item, row, routes)
                     if row.get("binding") != "documents":

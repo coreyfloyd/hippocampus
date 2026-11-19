@@ -186,3 +186,9 @@ write through R7. A decline drops the proposal under R6 with a reason and writes
 nothing. An unbound or failed ask keeps the whole proposal carried. This contract
 is identical in Claude Code and Codex and preserves the existing ask path pending
 real cutover proofs.
+
+Decision-document safeguards follow the filing route: R7 decision documents and
+any decision routed to the documents writer require the approval contract above.
+R4 with `destination: "ask"` retains its ask route and owner proof; R2/R5 ticket
+rows retain their ticket route, successful-read requirements, and identity receipts.
+A decision proposal on an ask or ticket never authorizes document creation.

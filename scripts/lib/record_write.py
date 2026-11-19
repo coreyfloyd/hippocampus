@@ -47,6 +47,11 @@ def decision_routes(profile: Mapping[str, Any]) -> dict[str, Any] | None:
     return copy.deepcopy(dict(value))
 
 
+def decision_document(item: Mapping[str, Any], row: Mapping[str, Any], kind: str | None) -> bool:
+    """Document safeguards follow the filing route, not every decision item."""
+    return item.get('type') == 'decision' and (row.get('rule') == 'R7' or kind == 'documents')
+
+
 def decision_filing(item: Mapping[str, Any], row: Mapping[str, Any],
                     routes: Mapping[str, Any] | None) -> dict[str, Any]:
     """Only a user's approved proposal may reach the documents writer."""
@@ -128,7 +133,7 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
         request = {'operation': 'lookup', 'kind': kind, 'identity': key, 'item': item, 'filing': row}
         if context is not None:
             request.update(context)
-        folder = row.get('folder') if item.get('type') == 'decision' else None
+        folder = row.get('folder') if decision_document(item, row, kind) else None
         found = invoke(binding, request)
         if kind == 'tickets' and 'tickets' in found:
             output['tickets'] = found['tickets']
