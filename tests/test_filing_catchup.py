@@ -296,3 +296,16 @@ def test_invalid_duplicate_anchor_cannot_leave_first_copy_fileable(tmp_path, bad
         assert report(tmp_path)['unfiled_before_cutoff'] == 1
         assert len(report(tmp_path)['items'][0]['copies']) == 2
     assert all(p.read_bytes() == content for p, content in before.items())
+
+
+@pytest.mark.parametrize('status', ['pending', 'dropped', 'failed', 'uncertain', 'read failed'])
+def test_explicit_deferred_judgment_never_writes(tmp_path, status):
+    setup(tmp_path, [item()])
+    path = tmp_path / 'decisions.json'
+    rows = json.loads(path.read_text())
+    rows[0].update(status=status, reason='Deferred', error='Not ready')
+    path.write_text(json.dumps(rows))
+    assert run(tmp_path).returncode == 1
+    assert report(tmp_path)['items'][0]['status'] == status
+    assert report(tmp_path)['unfiled_before_cutoff'] == 1
+    assert not (tmp_path / 'store.json').exists()

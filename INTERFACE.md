@@ -17,6 +17,14 @@ ask stays carried until native capture/application succeeds. Exit 1 means unfile
 items or errors; the report and handoff retain them for retry. No session is ended,
 worktree removed or timer armed by checkpoint.
 
+For ask-bound rows only, `status: pending` plus `ask_delivery: requested`
+explicitly authorizes lookup and delivery while the user's approval is pending.
+The request itself is never a receipt. Plain pending, dropped, failed, uncertain
+or read-failed judgments do not dispatch an ask. Already-filed asks require an
+actual identity-matching receipt and configured owner acknowledgement. Delivered
+native asks still retain their item pending capture/application. A deferred ask
+stays carried with its original identity and judgment.
+
 Reports contain `session_id`, `started_at`, `ended_at`, `filed`, `unfiled`, `items`
 (when filing ran) and `errors`, preserving identities, destinations and receipts.
 `--scheduled-report COMMAND` invokes the configured adapter using argv parsing
@@ -26,6 +34,10 @@ Success requires `{"status":"saved","receipt":{"destination":"..."}}`.
 The adapter publishes filed and unfiled items on Scheduled, including failed
 passes. Refused/malformed responses are errors and exit 1; the local report remains.
 Without an adapter, local filing can succeed but Scheduled delivery is unproven.
+Checkpoint exceptions, lint failures and no-write keep-warm results also produce
+a failed report at the explicit writable report path without filing from a stale
+handoff. The report preserves supplied and retained unfiled items and `next_action`.
+Adapter failures are retained locally; no successful Scheduled write is inferred.
 
 Explicit periodic enablement uses:
 

@@ -10,32 +10,54 @@ import filing_catchup
 
 
 def run(module, supplied, args):
-    if not args.user_profile or not args.filing or not args.report:
-        raise ValueError('durable requires --user-profile, --filing and --report')
+    if not args.report:
+        raise ValueError('durable requires --report')
     path = module.resolve_path(args.cwd, args.session_id)
     if Path(args.report).resolve() == Path(path).resolve():
         raise ValueError('durable report must differ from the handoff')
-    profiles = checklist.load_profiles(Path(args.user_profile), [Path(p) for p in args.repository_profile])
-    plan, ask = checklist.compose(profiles), checklist.ask_binding(profiles[0])
-    rows = json.loads(Path(args.filing).read_text())
-    # Retain and validate all input before any external write. A crash leaves a
-    # complete handoff; retry uses each destination's identity lookup.
-    initial = module.checkpoint(supplied, args.cwd, args.session_id, args.trigger)
-    data = module.read_json(path)
-    continuation = data['resume']['next_action']
     report = dict(session_id=args.session_id, started_at=module.utc_now(),
-                  filed=[], unfiled=copy.deepcopy(data['resume']['open_loops']), errors=[])
-    module.atomic_write(args.report, report)
+                  filed=[], unfiled=copy.deepcopy(module.supplied_session_items(supplied)), errors=[])
+    resume = supplied.get('resume') if isinstance(supplied, dict) else None
+    continuation = resume.get('next_action') if isinstance(resume, dict) else None
+    report['next_action'] = continuation
+    output = ''
     try:
+        report['unfiled'] = module.merge_session_items(report['unfiled'], args.session_id)
+        module.atomic_write(args.report, report)
+        if not args.user_profile or not args.filing:
+            raise ValueError('durable requires --user-profile and --filing')
+        profiles = checklist.load_profiles(Path(args.user_profile), [Path(p) for p in args.repository_profile])
+        plan, ask = checklist.compose(profiles), checklist.ask_binding(profiles[0])
+        rows = json.loads(Path(args.filing).read_text())
+        # Retain and validate before writes. Never read an earlier handoff when
+        # checkpoint deliberately skipped writing this pass (e.g. keep-warm).
+        initial = module.checkpoint(supplied, args.cwd, args.session_id, args.trigger)
+        output = initial.output
         if initial.exit_code:
-            raise ValueError('; '.join(initial.errors))
+            raise ValueError('; '.join(initial.errors) or 'checkpoint failed')
+        if not initial.path or not Path(initial.path).is_file():
+            raise ValueError('checkpoint wrote no handoff; filing skipped')
+        data = module.read_json(initial.path)
+        loops = data.get('resume', {}).get('open_loops')
+        if not isinstance(loops, list):
+            raise ValueError('checkpoint has no open_loops array; filing skipped')
+        continuation = data['resume'].get('next_action', continuation)
+        report.update(unfiled=copy.deepcopy(loops), next_action=continuation)
         # Validate the entire set before dispatching asks. Their writer shares
         # the record lookup protocol; file_items validates the returned owner.
         checklist.file_items(plan, data, rows, ask, execute_writes=False)
         rows = copy.deepcopy(rows)
         for row in rows:
             item = data['resume']['open_loops'][row['index']]
-            if checklist.filing_binding(row['rule'], item, row) == 'ask' and row.get('status') != 'filed':
+            if checklist.filing_binding(row['rule'], item, row) != 'ask':
+                continue
+            if row.get('status') == 'filed':
+                try:
+                    checklist.record_write.receipt(row, checklist.record_write.identity(item))
+                except ValueError as error:
+                    row.update(status='failed', error=str(error))
+                    row.pop('ask_status', None)
+            if row.get('status') == 'pending' and row.get('ask_delivery') == 'requested':
                 try:
                     outcome = filing_catchup.file_item(dict(item=item, subject=data['subject']), row, plan, ask)
                     row.update({k: v for k, v in outcome.items() if k != 'index'})
@@ -47,11 +69,11 @@ def run(module, supplied, args):
         code, lint = module.lint_output(path)
         if code:
             report['errors'].append(lint)
-        report['filed'] = [r for r in filed['filing']['items'] if r['status'] in ('filed', 'dropped')]
+        report['filed'] = [r for r in filed['filing']['items'] if r['status'] == 'filed']
         report['unfiled'] = filed['resume']['open_loops']
         report['items'] = filed['filing']['items']
         report['errors'].extend(filed['filing']['failures'])
-    except (OSError, ValueError, TypeError, KeyError) as error:
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         report['errors'].append(str(error))
     report['ended_at'] = module.utc_now()
     module.atomic_write(args.report, report)
@@ -67,7 +89,7 @@ def run(module, supplied, args):
             report['errors'].append('Scheduled report: ' + str(error))
         module.atomic_write(args.report, report)
     code = int(bool(report['unfiled'] or report['errors']))
-    return module.CheckpointResult(path, code, initial.output + f'Durable filing report: {args.report}\n', report['errors'])
+    return module.CheckpointResult(path, code, output + f'Durable filing report: {args.report}\n', report['errors'])
 
 
 def schedule_request(session_id, cwd, required_nodes, reports):

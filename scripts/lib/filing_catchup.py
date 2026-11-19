@@ -102,13 +102,21 @@ def save(path, report):
 def file_item(source, decision, plan, ask):
     """Use wrap's filing safeguards, but never read or settle a session ledger."""
     item = source['item']
-    row = {**decision, 'index': 0, 'status': 'filed', 'destination': 'planned'}
+    row = {**decision, 'index': 0}
+    # A run judgment without status requests catch-up filing. Explicit deferred
+    # outcomes retain their meaning, including when consumed by durable checkpoint.
+    status = row.get('status', 'filed')
+    requested = status == 'pending' and row.get('ask_delivery') == 'requested'
+    validation = ({**row, 'status': 'filed', 'destination': 'planned'}
+                  if status == 'filed' or requested else row)
     if row.get('rule') in ('R1', 'R6'):
         # Catch-up requires an actual home; a judgment to drop is not proof of filing.
         raise ValueError('catch-up requires a destination receipt, not a drop')
     single = {'subject': source['subject'], 'resume': {'open_loops': [item]}}
-    checked = checklist.file_items(plan, single, [row], ask, execute_writes=False)['filing']['items'][0]
+    checked = checklist.file_items(plan, single, [validation], ask, execute_writes=False)['filing']['items'][0]
     kind = checked.get('binding')
+    if status != 'filed' and not (requested and kind == 'ask'):
+        return {**checked, 'status': status}
     approval_pending = kind == 'ask' and checked.get('ask_status') == 'filed'
     if checked['status'] != 'filed' and not approval_pending:
         return {**checked, 'status': 'pending'}

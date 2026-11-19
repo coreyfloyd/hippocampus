@@ -26,6 +26,12 @@ Keep each dated report; give retries a new report path and the same cutoff.
 The inspect report lists unique items with immutable `identity`, original item,
 and every source path. A decisions file is an array with one object per identity:
 
+In `run`, an omitted status requests filing, as in the example below. An explicit
+pending, dropped, failed, uncertain or read-failed judgment remains unfiled and
+never authorizes a write. Only an ask-bound pending row with the explicit
+`ask_delivery: "requested"` request may deliver its approval ask; its actual
+receipt still governs completion. Native ask delivery is not a capture receipt.
+
 ```json
 [
   {

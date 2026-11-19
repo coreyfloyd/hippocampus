@@ -23,6 +23,12 @@ or release its processes. Preserve its next action. Ordinary checkpoint stays ca
 
 Restore retained items before choosing filing rows. Supply exactly one indexed
 filing row for every item, including those restored from earlier checkpoints.
+For an ask awaiting the user's answer that must be delivered now, use
+`status: "pending"` with `ask_delivery: "requested"`. This explicitly requests
+lookup and delivery; it is not a receipt. Plain pending, dropped, failed,
+uncertain, and read-failed ask judgments never authorize delivery. A row marked
+filed must already have an actual receipt for the item's producing identity and
+configured owner. Do not mark a deferred item filed to make a writer run.
 Use the [record](../record/SKILL.md) decision-document contract: only user decisions,
 explicitly approved, may reach the configured document folder. Without the user,
 deliver the full proposal as an R3 ask to the configured durable agent. Promises
@@ -46,6 +52,10 @@ JSON
 Repeat `--repository-profile` for additive profiles. The command writes and
 validates a checkpoint before filing, settles successful items in the ledger,
 keeps failed/unbound items, preserves the continuation, and reports actual receipts.
+Checkpoint errors, invalid handoffs and no-write keep-warm results still produce
+a failed pass report at the supplied writable report path. They never file from
+an older handoff. The report retains supplied and ledger-carried unfiled items
+and the continuation; a reporting adapter failure also remains explicit locally.
 A nonzero exit reports incomplete filing or reporting; retry by original identity.
 The report adapter publishes each pass to Scheduled. Without it, the local report
 remains and Scheduled visibility is unproven. See the
