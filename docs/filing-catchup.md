@@ -53,9 +53,23 @@ confirm the exact identity, destination and saved `owner_agent`. A failed lookup
 never writes; an uncertain write retries by lookup, including after interruption.
 No supplied receipt alone bypasses the writer. Drops do not count as filing.
 
-Exit 0 requires `ready_for_durable_filing: true`: the final inventory is unchanged,
-all older identities have confirmed destinations, and there are no inventory
-errors. Missing stores, malformed handoffs, conflicting copies, absent provenance,
+Copies of one producing identity may differ in `status` and `recorded` hints,
+which never prove settlement. Nonconflicting `anchor` fields are combined so a
+later ticket or project reference reaches the writer. All original copies and
+source paths remain in the report. Other item content must agree exactly,
+including proposal text, choices, author, type and record kind; conflicting
+anchor destinations also block that identity before any write. Missing versus
+present proposal fields are ambiguous. Retry preserves the same refusal until
+the substantive conflict is resolved; it never selects the first proposal.
+
+Exit 0 requires `ready_for_durable_filing: true`: every older identity has a
+confirmed destination for its eligible content and there are no inventory errors.
+The final recount scans the entire store again. Checkpoint timestamps, new or
+rewritten newer-only handoffs, and changes to newer items do not block readiness.
+Changed older proposals or destinations invalidate readiness; newly discovered
+older identities remain pending for retry. Failed initial items remain counted
+even if a concurrent checkpoint omits them. Source snapshots remain in the
+report for audit, rather than requiring whole-file equality. Missing stores, malformed handoffs, conflicting copies, absent provenance,
 unbound destinations and failed writes block readiness. Newer items remain for
 periodic filing. The report is saved before effects and after each result. Source
 handoffs and dated history remain untouched, including on failure.

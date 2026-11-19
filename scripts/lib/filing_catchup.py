@@ -18,12 +18,38 @@ checklist = sweep.checklist
 record_write = checklist.record_write
 
 
-def inventory(store, cutoff):
+def merge_copies(first, second):
+    """Only settlement hints and nonconflicting anchors may enrich a copy.
+
+    Record stores key on session, time and text. The ledger deliberately retains
+    distinct proposals/choices under one identity; those cannot share a receipt.
+    A recorded flag in a handoff is never a substitute for writer lookup.
+    """
+    ignored = {'status', 'recorded', 'anchor'}
+    left = {key: value for key, value in first.items() if key not in ignored}
+    right = {key: value for key, value in second.items() if key not in ignored}
+    if left != right:
+        raise ValueError('proposal or item content differs')
+    anchors = {}
+    for item in (first, second):
+        anchor = item.get('anchor', {})
+        if not isinstance(anchor, dict):
+            raise ValueError('anchor must be an object')
+        for key, value in anchor.items():
+            if key in anchors and anchors[key] != value:
+                raise ValueError('anchor destinations differ')
+            anchors[key] = value
+    if anchors:
+        left['anchor'] = anchors
+    return left
+
+
+def inventory(store, cutoff, paths=None):
     """Read both providers' handoffs without consulting sessions or knowledge."""
     items, sources, errors = {}, {}, []
     if store.is_symlink() or not store.is_dir():
         return items, sources, ['handoff store must be an existing regular directory']
-    for path in sorted(store.glob('*.json')):
+    for path in sorted(store.glob('*.json') if paths is None else map(Path, paths)):
         try:
             raw, snapshot = sweep.read_handoff_source(path)
             data = json.loads(raw)
@@ -45,11 +71,15 @@ def inventory(store, cutoff):
                 if sweep.timestamp(identity['produced_at']) >= sweep.timestamp(cutoff):
                     continue
                 key = sweep.identity_key(identity)
-                if key in items and items[key]['item'] != item:
-                    raise ValueError('conflicting carried copies of identity ' + key)
-                row = items.setdefault(key, dict(identity=identity, item=item, sources=[],
-                                                subject=data.get('subject', {})))
+                row = items.setdefault(key, dict(identity=identity, item=item,
+                    sources=[], copies=[], subject=data.get('subject', {})))
                 row['sources'].append(str(path))
+                row['copies'].append(dict(source=str(path), item=item))
+                try:
+                    row['item'] = merge_copies(row['item'], item)
+                except ValueError as error:
+                    row.setdefault('conflicts', []).append(str(error))
+                    errors.append('conflicting carried copies of identity ' + key + ': ' + str(error))
         except (OSError, ValueError, TypeError, AttributeError) as error:
             errors.append(str(path) + ': ' + str(error))
     return items, sources, errors
@@ -131,13 +161,16 @@ def run(args):
     for key, source in items.items():
         outcome = dict(source, status='pending', error='no filing judgment supplied')
         report['items'].append(outcome)
-        if args.command == 'run' and key in by_identity:
+        if source.get('conflicts'):
+            outcome['error'] = 'conflicting carried copies; no write attempted'
+        elif args.command == 'run' and key in by_identity:
             try:
-                # A concurrent handoff write blocks this item before any effect.
-                for path in source['sources']:
-                    _, snapshot = sweep.read_handoff_source(Path(path))
-                    if snapshot != sources[path]:
-                        raise ValueError('source handoff changed before filing')
+                # Check the eligible content, not checkpoint timestamps/newer work.
+                refreshed, _, problems = inventory(store, args.cutoff, source['sources'])
+                actual = refreshed.get(key)
+                if (problems or actual is None or actual.get('conflicts')
+                        or actual['item'] != source['item']):
+                    raise ValueError('eligible source item changed before filing; retry')
                 outcome.update(status='uncertain', error='write pending')
                 save(report_path, report)
                 result = file_item(source, by_identity[key], plan, ask)
@@ -148,10 +181,21 @@ def run(args):
         save(report_path, report)
     current, snapshots, errors = inventory(store, args.cutoff)
     report['errors'].extend(errors)
-    if snapshots != sources:
-        report['errors'].append('handoff inventory changed during pass; retry before cutover')
-    filed = {sweep.identity_key(row['identity']) for row in report['items'] if row['status'] == 'filed'}
-    report['unfiled_before_cutoff'] = len(set(current) - filed)
+    report['recount_sources'] = snapshots
+    confirmed = set()
+    for row in report['items']:
+        key = sweep.identity_key(row['identity'])
+        actual = current.get(key)
+        if row['status'] == 'filed':
+            if actual is None or (not actual.get('conflicts') and actual['item'] == items[key]['item']):
+                confirmed.add(key)
+            else:
+                row['recount_error'] = 'eligible content changed; receipt does not settle current copies'
+    for key in set(current) - set(items):
+        report['items'].append(dict(current[key], status='pending',
+                                    error='old eligible item discovered at recount; retry'))
+    # Keep failed initial work counted even if a concurrent checkpoint omits it.
+    report['unfiled_before_cutoff'] = len((set(items) | set(current)) - confirmed)
     report['ready_for_durable_filing'] = (args.command == 'run' and not report['errors']
         and report['unfiled_before_cutoff'] == 0)
     report['ended_at'] = datetime.now(timezone.utc).isoformat()
