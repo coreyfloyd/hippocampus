@@ -40,7 +40,7 @@ all remote-tracking branches.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
-optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>", "owner_agent": "<agent identifier>"}`. The ask
+optional per-kind `record_writes` and `decision_records` folder routing (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>", "owner_agent": "<agent identifier>"}`. The ask
 binding is one user command, not a slot or a spine step. Repository profiles
 cannot bind it. A binding has a `command` and a list of item types it
 `consumes`; a step has a unique `id`, an `after` anchor, and `instructions` (or
@@ -237,6 +237,17 @@ the first match decides. Rule numbers are names, not evaluation order.
 | R2 | Names an open ticket | Comment through the tickets record write. |
 | R5 | Work with a stated outcome and no matching open ticket | New ticket through the tickets record write, with recommended priority and a one-line reason. |
 | R6 | Otherwise: optional suggestion, observation, idea with no outcome | Drop with the reason. |
+
+Find every user decision in the current conversation and carried items. Suggest one
+decision record per decision, showing its title, scope, full text, author, source,
+and configured folder. Only user decisions qualify; keep agent operational choices
+as separate audit material. Follow the record skill's decision-record contract.
+With the user present, ask for explicit approval of each proposed document. Without
+them, give each proposal an R3 ask with approve/decline choices through the configured
+ask binding and its owner. Do not infer approval from the decision itself or from
+auto-apply settings. Only an approved proposal uses R7 and the documents writer.
+Keep the existing decision ask path until the real attended and unattended proofs
+pass; fixture tests alone do not establish cutover.
 
 The agent makes the judgment, including R5 versus R6 and whether R7 needs
 approval. R1's already-recorded check, R2's open-ticket check and R5's matching

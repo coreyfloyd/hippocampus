@@ -12,6 +12,21 @@ require reconciliation or persistence before checkpointing. Never commit, merge,
 as part of a checkpoint. Do not carry a live ticket list, project status, runtime posture,
 or monitor doctrine.
 
+## Checkpoint with `durable`
+
+When the user requests checkpoint with `durable`, also find the user's decisions
+in the conversation and carried items, and suggest one decision record for each.
+Use the decision-record contract in [record](../record/SKILL.md): show the full
+proposal and configured folder, obtain explicit user approval, and run the shared
+record module with only those approved decision items and R7 rows. Use its actual
+receipts to mark only saved items recorded before writing the handoff. Preserve
+failed, uncertain, or unbound items unchanged. Do not reconcile unrelated items or
+run the wrap. Without the user, deliver an R3 approval ask to the configured durable
+agent through the ask binding; never write the document on their behalf. Preserve
+the complete proposal, source identity, choices, and ask receipt. Agent operational
+choices remain separate audit material. An ordinary checkpoint only carries items.
+This behavior is shared by Claude Code and Codex.
+
 Supply the handoff's judgment-bearing fields: a one-line `resume.headline`, concrete
 `resume.next_action`, a real one-line `resume.session_summary` describing the work since this session's
 previous history entry,

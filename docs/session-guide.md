@@ -763,3 +763,18 @@ time discovery. Existing hook commit observations and ownership remain unchanged
 `git -C` candidates populate repository-root observations, not checkout fields,
 so they do not widen this list. The stop guard still checks owned commits since
 the handoff and recorded file edits newer than it.
+
+## User decision records
+
+Checklist suggests a document for each user decision. Request checkpoint with
+`durable` to do the same without wrapping. Approval of the proposed document is
+separate from making the decision. Without you present, the complete proposal
+becomes an ask for your configured durable agent; no document is written.
+Agent operational choices stay separate audit material.
+
+Configure `decision_records.default_folder` in your user checklist profile, with
+optional `decision_records.scope_folders` mapping scopes to folders. Approved
+records use your `record_writes.documents` command and its identity lookup;
+missing routes, approvals, bindings, or receipts keep the item carried. The writer
+must return a receipt confirming the configured folder and actual destination.
+See the [record contract](../skills/record/SKILL.md#decision-records) for fields.

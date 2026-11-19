@@ -38,6 +38,7 @@ else:
     if MODE == 'failed':
         print(json.dumps({'status': 'failed', 'error': 'store refused'})); sys.exit(1)
     receipt = {'identity': r['identity'], 'destination': r['kind'] + ':' + str(len(data))}
+    if 'folder' in r['filing']: receipt['folder'] = r['filing']['folder']
     data.append(receipt); p.write_text(json.dumps(data))
     if MODE == 'lost': sys.exit()
     print(json.dumps({'status': 'saved', 'receipt': receipt}))
