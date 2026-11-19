@@ -4,6 +4,6 @@
   "startup_budget": {
     "default_tokens": 8000,
     "directories": {},
-    "usage_sessions": 3
+    "usage_sessions": 10
   }
 }

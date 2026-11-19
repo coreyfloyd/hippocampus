@@ -1,5 +1,10 @@
 # Section usage evidence
 
+- [Capture and marker limitations](#capture-and-marker-limitations)
+- [Consecutive session evidence](#consecutive-session-evidence)
+
+## Capture and marker limitations
+
 Run `python3 <skill-dir>/scripts/harness.py usage <manifest.json>` to emit a JSON
 report. This is deterministic lexical evidence, not a judgment that an instruction
 was followed. It executes no transcript commands and edits no source files.
@@ -67,16 +72,40 @@ fallback; do not supply duplicate exports under different paths in that case.
 `unresolved` lists missing snapshots for recognized loads.
 
 `split_candidates` contains only sections with lexical markers, loaded in at least
-3 distinct sessions, with evidence in fewer sessions than loaded. These are
+the configured number of distinct sessions (default ten), with evidence in fewer sessions than loaded. These are
 situational extraction candidates for human review, not authorization to split.
 Prose-only sections never produce a split suggestion. This heuristic measures
 observed coverage, not frequency or importance of safety instructions.
 
 
+## Consecutive session evidence
+
 Whole start-up reviews pass an explicit `config` path with `startup_budget` as
-documented in the skill. `usage_sessions` sets their minimum distinct sessions.
-Each section also carries `tokens` (the shared UTF-8 estimate) and `body_sha256`;
-extraction compares the latter to the current section before moving anything.
-The existing `split_candidates` remain review suggestions; branch extraction
-instead selects every section with zero evidence and enough loaded sessions,
-including prose-only sections, and retains one ask for each removal.
+documented in the skill. `usage_sessions` defaults to ten and is configurable.
+Supply every consecutive session in the directory's relevant window, oldest first,
+and attest `session_window_complete: true` only when none is omitted and the
+captures are complete. Without that attestation `window_complete` is false and
+extraction refuses the report. No captured sequence is reconstructed from live state.
+
+The report has `minimum_sessions`, `session_order` (distinct `tool` / `session_id`
+pairs), `window_complete`, and `coverage_gaps`. Duplicate exports never add a
+session; conflicting exports of one identity mark the window incomplete. A section
+has `body_sha256`, estimated `tokens`, and `observations`, one per ordered session:
+`tool`, `session_id`, boolean `loaded`, and `matched_markers`. Unrecognized, partial,
+failed, or missing loads produce `loaded: false`, breaking the consecutive count.
+These observations retain older matches; `consecutive_sessions_without_evidence`
+is the current suffix of loaded sessions without marker matches, not a lifetime
+aggregate. Aggregate counts must agree with the observations.
+
+Extraction requires the report's policy and complete window, and uses the larger
+of its minimum and the request's configured minimum. It verifies snapshot hashes,
+marker identity, unique ordered observations, and aggregate counts before editing.
+It computes the suffix itself; it never trusts a supplied consecutive count. A
+missing or malformed evidence field is a refusal, not permission to fill it in.
+
+The existing `split_candidates` remain review suggestions. Automatic extraction
+selects only observable sections with a long enough current zero-evidence suffix.
+Preambles and prose-only sections remain loaded. A marker match is still only
+lexical evidence, not causation or a guarantee of importance. Each actual removal
+gets its own chief-owned ask containing the window and snapshot evidence; the
+branch remains awaiting the user's answer before merge.

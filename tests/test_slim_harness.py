@@ -287,19 +287,19 @@ def test_startup_budget_totals_loaded_inputs_and_folder_override(tool, tmp_path)
     for path in paths:
         path.write_text('x' * 120)
     listed = tmp_path / 'SKILL.md'
-    listed.write_text('---\ndescription: abcd\n---\n' + 'ignored ' * 5000)
+    listed.write_text('---\nname: listed\ndescription: abcd\n---\n' + 'ignored ' * 5000)
     config = tmp_path / 'config.json'
     config.write_text(json.dumps({'startup_budget': {'default_tokens': 100,
         'directories': {str(tmp_path): 50}, 'usage_sessions': 4}}))
     manifest = dict(tool=tool, directory=str(tmp_path), config=str(config),
-        files=[entry(p) for p in paths] + [entry(paths[0]), entry(listed, 'skill', 'listed')],
+        files=[entry(p) for p in paths] + [entry(paths[0]), dict(entry(listed, 'skill', 'listed'), listing_path='/fixture/listed')],
         inputs=[{'name': 'system prompt', 'text': 'abcd'}])
     result = m.measure(manifest)
     assert result['over_limit'] == []  # Each file still fits its individual limit.
     startup = result['startup']
     assert startup['budget_tokens'] == 50
-    assert startup['tokens'] == 62 and startup['overage_tokens'] == 12
-    assert sorted(row['tokens'] for row in startup['files']) == [1, 30, 30]
+    assert startup['tokens'] == 68 and startup['overage_tokens'] == 18
+    assert sorted(row['tokens'] for row in startup['files']) == [7, 30, 30]
     assert startup['complete'] is True
     manifest['directory'] = str(tmp_path / 'other')
     assert m.measure(manifest)['startup']['budget_tokens'] == 100
@@ -328,12 +328,16 @@ def test_unused_section_moves_on_slim_branch_and_retains_chief_ask(tool, tmp_pat
     original = '# Rules\nKeep this boundary.\n\n' + section
     target.write_text(original)
     row = dict(path=str(target), section='Deploy', body_start_line=4,
-        body_sha256=hashlib.sha256(section.encode()).hexdigest(), sessions_loaded=4,
-        sessions_with_evidence=0, status='no evidence of use')
-    report = dict(sections=[row], unresolved=[])
+        body_sha256=hashlib.sha256(section.encode()).hexdigest(), sessions_loaded=10,
+        sessions_with_evidence=0, status='no evidence of use', markers=m.usage_markers(section))
+    order = [dict(tool=tool, session_id=f'fixture-{i}') for i in range(10)]
+    row['observations'] = [dict(**item, loaded=True, matched_markers=[]) for item in order]
+    report = dict(sections=[row], unresolved=[], minimum_sessions=10, window_complete=True, session_order=order)
     journal = tmp_path / 'journal.json'
     request = tmp_path / 'extract.json'
-    request.write_text(json.dumps(dict(tool=tool, directory=str(repo), usage=report)))
+    policy = tmp_path / 'policy.json'
+    policy.write_text(json.dumps({'startup_budget': {'usage_sessions': 10}}))
+    request.write_text(json.dumps(dict(tool=tool, directory=str(repo), config=str(policy), usage=report)))
     completed = subprocess.run([sys.executable, str(SKILL / 'scripts/harness.py'),
         'extract', str(request), str(journal)], capture_output=True, text=True)
     assert completed.returncode == 0, completed.stderr
@@ -346,7 +350,7 @@ def test_unused_section_moves_on_slim_branch_and_retains_chief_ask(tool, tmp_pat
     ask = result['asks'][0]
     assert ask['owner'] == 'chief' and ask['escalate_to'] == 'user'
     assert ask['section'] == 'Deploy' and ask['tokens'] == m.token_estimate(section)
-    assert ask['usage']['sessions_loaded'] == 4 and ask['usage']['sessions_with_evidence'] == 0
+    assert ask['usage']['sessions_loaded'] == 10 and ask['usage']['sessions_with_evidence'] == 0
     assert result['merge_allowed'] is False
     assert json.loads(journal.read_text())[0]['ask'] == ask
     assert '# Rules\nKeep this boundary.' in target.read_text()
@@ -362,17 +366,26 @@ def test_extraction_refuses_wrong_branch_stale_or_used_evidence(tmp_path):
     target.write_text(body)
     row = dict(path=str(target), section='Rare', body_start_line=1,
         body_sha256=hashlib.sha256(body.encode()).hexdigest(),
-        sessions_loaded=3, sessions_with_evidence=0)
-    request = dict(tool='codex', directory=str(tmp_path), usage={'sections': [row], 'unresolved': []})
+        sessions_loaded=10, sessions_with_evidence=0, markers=m.usage_markers(body))
+    order = [dict(tool='codex', session_id=f'fixture-{i}') for i in range(10)]
+    row['observations'] = [dict(**item, loaded=True, matched_markers=[]) for item in order]
+    policy = tmp_path / 'policy.json'
+    policy.write_text(json.dumps({'startup_budget': {'usage_sessions': 10}}))
+    request = dict(tool='codex', directory=str(tmp_path), config=str(policy), usage=dict(sections=[row], unresolved=[],
+        minimum_sessions=10, window_complete=True, session_order=order))
     with pytest.raises(ValueError, match='slim branch'):
         m.extract(request, tmp_path / 'journal.json')
     subprocess.run(['git', '-C', str(tmp_path), 'checkout', '-qb', 'slim/fixture'], check=True)
     row['sessions_with_evidence'] = 1
+    row['observations'][-1]['matched_markers'] = ['--rare']
     assert m.extract(request, tmp_path / 'journal.json')['extractions'] == []
     row['sessions_with_evidence'] = 0
-    row['sessions_loaded'] = 2
+    row['observations'][-1]['matched_markers'] = []
+    row['observations'][-1]['loaded'] = False
+    row['sessions_loaded'] = 9
     assert m.extract(request, tmp_path / 'journal.json')['extractions'] == []
-    row['sessions_loaded'] = 3
+    row['sessions_loaded'] = 10
+    row['observations'][-1]['loaded'] = True
     target.write_text(body + 'Changed.\n')
     with pytest.raises(ValueError, match='stale'):
         m.extract(request, tmp_path / 'journal.json')

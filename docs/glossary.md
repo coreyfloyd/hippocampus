@@ -181,3 +181,8 @@ in one launch directory: loaded files, role files, skill discovery fields, and
 injected non-file inputs. A default applies to every directory without an exact
 resolved-directory override. Slim-harness reports the estimate and every file's
 contribution using the same four UTF-8 bytes per token policy in both tools.
+
+Start-up demotion uses a complete, ordered window of consecutive sessions, ten by
+default and configurable. A section needs observable markers and no match in the
+latest required loaded sessions. Preambles and prose-only sections stay loaded;
+each removal awaits its own chief-owned ask and the user's answer before merge.

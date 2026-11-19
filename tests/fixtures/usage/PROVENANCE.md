@@ -24,3 +24,5 @@ session identity to exercise aggregation; it is not a third measured session.
 The external record command name in the captured command and skill excerpt is
 additionally neutralized to `record-cli`, preserving command structure and the
 live-read boundary.
+
+`config.json` is synthetic, test-controlled session policy. It is not captured user configuration.
