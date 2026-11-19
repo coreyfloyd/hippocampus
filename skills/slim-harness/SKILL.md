@@ -261,7 +261,9 @@ home or replace its loaded path during this proof.
 
 Run `python3 <skill-dir>/scripts/harness.py extract <request.json> <journal.json>`.
 The request contains `tool`, `directory` (the isolated slim checkout), optional
-`config`, and `usage` (the report object). Capture snapshots from that checkout so
+`config`, and `usage` (the report object). Include `session_id` naming the original
+producing session for writer delivery; never substitute the configured agent or
+a session from the usage evidence. Capture snapshots from that checkout so
 report paths name its sources. The helper refuses a different branch, unresolved
 inputs, stale section text, ambiguous matches, and existing destinations. It preflights
 every replacement, then writes the recovery journal before publishing changes. An IO
@@ -275,10 +277,24 @@ For a reference longer than 100 lines, add its table of contents before delivery
 Remeasure the start-up using the changed loaded set and report tokens before/after.
 
 Deliver **each** returned ask through the user profile's ask binding, as the
-unattended slim does. The chief owns escalation to the user; include the section,
+unattended slim does. The helper reads the checklist profile from
+`CHECKLIST_USER_PROFILE` or its default config location and stamps configured
+`owner_agent` on each new ask and its journal entry. The `owner: chief` field
+retains the escalation role; the writer must save the configured `owner_agent`
+as actual owner. For retries, run
+`python3 <skill-dir>/scripts/harness.py asks <journal.json>` and deliver each
+returned row's `ask` using its `number`. This read-only command applies the
+current configured agent while preserving the original `id`, `provider` and
+`session_id`, and retains asks with missing or stale saved-owner receipts. The chief owns escalation to the user; include the section,
 estimated tokens, sessions loaded, and zero-evidence finding verbatim. Retain the
 journal and delivery receipts beside the branch's report. Without a binding or a
 confirmed receipt, report the undelivered ask in full and keep the branch waiting.
+Save the writer acknowledgement to a JSON file and run
+`python3 <skill-dir>/scripts/harness.py ask-delivered <journal.json> <number> <receipt.json>`.
+For agent ownership, `receipt.owner_agent` must match the configured agent and
+come from reading the saved ask, never a request echo. The command validates
+that proof before recording `ask_receipt`; failure leaves the journal unchanged.
+This applies to both providers. A delivery receipt never grants merge approval.
 `merge_allowed: false` is deliberate: this helper never merges. Neither delivery
 nor an automatic slim grants merge approval. The driving session must retain each
 user answer before any merge; a missing answer blocks it. Rejection through `revert` restores the
