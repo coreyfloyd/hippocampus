@@ -31,7 +31,7 @@ Malformed config or an unreadable configured path is a coverage error to report,
 not an absent key or evidence of enforcement.
 
 Add the configured document to the comparison set. It lists hooks, gates, and
-label families for Claude Code, Codex, and OpenClaw: what each enforces or
+label families for Claude Code and Codex: what each enforces or
 injects, which rules it makes redundant, and a superseded list. Check each
 claim against the applicable tool and current mechanism; enforcement in one
 tool alone does not justify deleting a cross-tool boundary. A finding names

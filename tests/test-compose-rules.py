@@ -34,7 +34,7 @@ class ComposerTests(unittest.TestCase):
         self.targets.mkdir()
         self.claude = self.targets / "claude.md"
         self.codex = self.targets / "codex.md"
-        self.openclaw = self.targets / "openclaw.md"
+        self.second_codex = self.targets / "second-codex.md"
         self.config = self.base / "targets.json"
 
     def write_config(self, targets, root=None):
@@ -57,7 +57,7 @@ class ComposerTests(unittest.TestCase):
         )
 
     def snapshot(self):
-        return {path: path.read_bytes() for path in (self.claude, self.codex, self.openclaw)}
+        return {path: path.read_bytes() for path in (self.claude, self.codex, self.second_codex)}
 
     def block_markers(self, path):
         digest = hashlib.sha256(os.fsencode(str(path.resolve()))).hexdigest()
@@ -206,11 +206,11 @@ Produced surfaces:
         self.write_config([
             self.target("claude", self.claude),
             self.target("codex", self.codex),
-            self.target("openclaw", self.openclaw),
+            self.target("codex", self.second_codex),
         ])
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
-        for target in (self.claude, self.codex, self.openclaw):
+        for target in (self.claude, self.codex, self.second_codex):
             self.assertIn(f"composer-owned: {target.resolve()}", result.stdout)
 
         imports = (
@@ -223,7 +223,7 @@ Produced surfaces:
         )
         self.assertEqual(self.claude.read_text(), imports)
         self.assertEqual(self.codex.read_text(), generated)
-        self.assertEqual(self.openclaw.read_text(), generated)
+        self.assertEqual(self.second_codex.read_text(), generated)
         before = self.snapshot()
         result = self.compose("refresh")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -236,12 +236,12 @@ Produced surfaces:
             source.write_bytes(body)
         imported = self.targets / "claude-imports.md"
         literal_targets = [self.target(tool, path) | {"render": "literal"}
-                           for tool, path in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw))]
+                           for tool, path in (("claude", self.claude), ("codex", self.codex), ("codex", self.second_codex))]
         self.write_config([self.target("claude", imported), *literal_targets])
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
         expected = self.generated_header(sources).encode() + bodies[0] + bodies[1] + b"\n" + bodies[2]
-        for path in (self.claude, self.codex, self.openclaw):
+        for path in (self.claude, self.codex, self.second_codex):
             self.assertEqual(path.read_bytes(), expected)
         self.assertEqual(imported.read_bytes(),
                          b"<!-- hippocampus-rules: generated; do not hand-edit -->\n"
@@ -330,12 +330,12 @@ Produced surfaces:
         before = self.seed_targets()
         self.cross.write_text("revised rule requiring target updates\n")
         alias = self.base / "source-alias.md"
-        alias.symlink_to(self.openclaw)
+        alias.symlink_to(self.second_codex)
         sources = [
-            self.openclaw,
-            self.targets / ".." / "targets" / "openclaw.md",
+            self.second_codex,
+            self.targets / ".." / "targets" / "second-codex.md",
             alias,
-            pathlib.Path("..") / "targets" / "openclaw.md",
+            pathlib.Path("..") / "targets" / "second-codex.md",
         ]
         for source in sources:
             for field in ("sources", "extras"):
@@ -347,7 +347,7 @@ Produced surfaces:
                             targets = [
                                 self.target("claude", self.claude),
                                 self.target("codex", self.codex),
-                                self.target("openclaw", self.openclaw),
+                                self.target("codex", self.second_codex),
                             ]
                             targets[source_owner][field] = [str(source)]
                             self.write_config(targets)
@@ -355,7 +355,7 @@ Produced surfaces:
                             self.assert_unchanged(before)
                             self.assertNotEqual(result.returncode, 0)
                             self.assertIn("configuration:", result.stderr)
-                            self.assertIn(f"target {self.openclaw.resolve()}", result.stderr)
+                            self.assertIn(f"target {self.second_codex.resolve()}", result.stderr)
                             absolute_source = source if source.is_absolute() else self.root / source
                             self.assertIn(f"source {absolute_source}", result.stderr)
                             self.assertIn("overlaps", result.stderr)
@@ -397,24 +397,24 @@ Produced surfaces:
         extras = [extra]
         self.write_config([
             self.target("codex", self.codex, sources, extras),
-            self.target("openclaw", self.openclaw, sources, extras),
+            self.target("codex", self.second_codex, sources, extras),
         ])
 
         result = self.compose()
         self.assertEqual(result.returncode, 0, result.stderr)
         expected_header = self.generated_header([*sources, *extras])
         self.assertTrue(self.codex.read_text().startswith(expected_header))
-        self.assertTrue(self.openclaw.read_text().startswith(expected_header))
+        self.assertTrue(self.second_codex.read_text().startswith(expected_header))
 
-        before = {target: target.read_bytes() for target in (self.codex, self.openclaw)}
+        before = {target: target.read_bytes() for target in (self.codex, self.second_codex)}
         result = self.compose("refresh")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(before, {target: target.read_bytes() for target in (self.codex, self.openclaw)})
+        self.assertEqual(before, {target: target.read_bytes() for target in (self.codex, self.second_codex)})
 
         cross.write_text("new cross rule\n")
         result = self.compose("refresh")
         self.assertEqual(result.returncode, 0, result.stderr)
-        for target in (self.codex, self.openclaw):
+        for target in (self.codex, self.second_codex):
             content = target.read_text()
             self.assertIn("new cross rule", content)
             self.assertNotIn("old cross rule", content)
@@ -444,7 +444,7 @@ Produced surfaces:
     def test_malformed_delimiters_prevent_every_write_for_each_tool(self):
         before = self.seed_targets()
         self.cross.write_text("revised rule requiring every target to change\n")
-        for tool, target in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw)):
+        for tool, target in (("claude", self.claude), ("codex", self.codex), ("codex", self.second_codex)):
             start, end = self.block_markers(target)
             variant_start = start.replace(" -->", "-1 -->")
             variant_end = end.replace(" -->", "-1 -->")
@@ -482,7 +482,7 @@ Produced surfaces:
 
     def test_source_delimiters_prevent_every_write_for_rules_and_extras(self):
         before = self.seed_targets()
-        for tool, target in (("claude", self.claude), ("codex", self.codex), ("openclaw", self.openclaw)):
+        for tool, target in (("claude", self.claude), ("codex", self.codex), ("codex", self.second_codex)):
             for marker_target in before:
                 for delimiter in self.block_markers(marker_target):
                     for source in (self.cross, self.extra):
@@ -524,7 +524,7 @@ Produced surfaces:
         self.assertEqual(self.codex.stat().st_mode & 0o777, 0o640)
 
     def seed_targets(self):
-        self.write_config([self.target("claude", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
+        self.write_config([self.target("claude", self.claude), self.target("codex", self.codex), self.target("codex", self.second_codex)])
         self.assertEqual(self.compose().returncode, 0)
         return self.snapshot()
 
@@ -591,7 +591,7 @@ Produced surfaces:
 
     def test_read_only_existing_target_prevents_every_write(self):
         before = self.seed_targets()
-        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
+        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("codex", self.second_codex)])
         self.cross.write_text("revised rules requiring every target to change\n")
         self.codex.chmod(0o444)
         self.addCleanup(self.codex.chmod, 0o600)
@@ -604,7 +604,7 @@ Produced surfaces:
 
     def test_later_replacement_failure_rolls_back_and_names_failed_target(self):
         before = self.seed_targets()
-        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("openclaw", self.openclaw)])
+        self.write_config([self.target("codex", self.claude), self.target("codex", self.codex), self.target("codex", self.second_codex)])
         self.cross.write_text("revised rules requiring every target to change\n")
         composer = runpy.run_path(str(COMPOSER))
         replace = os.replace

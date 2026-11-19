@@ -217,7 +217,7 @@ it. A fact about you always waits for your answer, and a routing file line
 Your rules can live in your knowledge root as plain Markdown, one document for
 every tool and an optional one for development work. The rule composer writes
 them into each tool's own instruction file (`CLAUDE.md` for Claude Code,
-`AGENTS.md` for Codex and OpenClaw) and checks for drift. Set-up shows each
+`AGENTS.md` for Codex) and checks for drift. Set-up shows each
 tool's current instruction file and memory setting, offers a preset, and lists
 every file it will change before it writes. It never deletes a memory store.
 Details are in the

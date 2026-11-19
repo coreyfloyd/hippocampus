@@ -117,9 +117,6 @@ class MeetingProfiles(unittest.TestCase):
     - tool: codex
       rules_target: /tool-home/codex/AGENTS.md
       memory: native
-    - tool: openclaw
-      rules_target: none
-      memory: off
 '''
 
     def test_rules_section_is_accepted(self):

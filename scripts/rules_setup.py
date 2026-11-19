@@ -23,7 +23,6 @@ import tempfile
 TOOLS = {
     "claude-code": {"binary": "claude", "target": "CLAUDE.md"},
     "codex": {"binary": "codex", "target": "AGENTS.md"},
-    "openclaw": {"binary": "openclaw", "target": "AGENTS.md"},
 }
 
 
@@ -32,7 +31,6 @@ def default_homes():
     return {
         "claude-code": home / ".claude",
         "codex": pathlib.Path(os.environ.get("CODEX_HOME") or home / ".codex").expanduser(),
-        "openclaw": home / ".openclaw",
     }
 
 
@@ -163,26 +161,6 @@ def codex_memory(home):
     return state, config_path, store, mutations
 
 
-def openclaw_memory(home):
-    config_path = home / "openclaw.json"
-    config = json_file(config_path)
-    workspace = nested(config, "agents", "defaults", "workspace") or home / "workspace"
-    workspace = pathlib.Path(workspace).expanduser()
-    if not workspace.is_absolute():
-        workspace = home / workspace
-    default_workspace = home / "workspace"
-    if workspace != default_workspace:
-        return "customized", config_path, workspace, []
-    flush = nested(config, "agents", "defaults", "compaction", "memoryFlush", "enabled")
-    dreaming = nested(config, "plugins", "entries", "memory-core", "config", "dreaming", "enabled")
-    state = "off" if flush is False and dreaming is False else "on"
-    mutations = [] if state == "off" else [
-        {"file": str(config_path), "setting": "agents.defaults.compaction.memoryFlush.enabled", "current": flush, "proposed": False},
-        {"file": str(config_path), "setting": "plugins.entries.memory-core.config.dreaming.enabled", "current": dreaming, "proposed": False},
-    ]
-    return state, config_path, workspace, [m for m in mutations if m["current"] is not False]
-
-
 def inspect_tools(homes=None):
     homes = {key: pathlib.Path(value) for key, value in (homes or default_homes()).items()}
     rows = []
@@ -192,22 +170,13 @@ def inspect_tools(homes=None):
             rows.append({"tool": tool, "home": str(home), "installed": False})
             continue
         target = home / TOOLS[tool]["target"]
-        if tool == "openclaw":
-            config = json_file(home / "openclaw.json")
-            workspace = nested(config, "agents", "defaults", "workspace") or home / "workspace"
-            workspace = pathlib.Path(workspace).expanduser()
-            target = (workspace if workspace.is_absolute() else home / workspace) / "AGENTS.md"
-            state, settings, store, mutations = openclaw_memory(home)
-        elif tool == "claude-code":
+        if tool == "claude-code":
             state, settings, store, mutations = claude_memory(home)
         else:
             state, settings, store, mutations = codex_memory(home)
         if tool == "claude-code" and state != "customized":
             locations = sorted((home / "projects").glob("*/memory"))
             file_count = sum(count_files(location) for location in locations)
-        elif tool == "openclaw":
-            locations = [store / "MEMORY.md", store / "memory"]
-            file_count = int(locations[0].is_file()) + count_files(locations[1])
         else:
             locations = [store]
             file_count = count_files(store)
@@ -330,12 +299,6 @@ def write_memory_state(home, tool, state):
     elif tool == "codex":
         value = {"on": "true", "off": "false", "customized": '"external"'}[state]
         (home / "config.toml").write_text(f"[features]\nmemories = {value}\n", encoding="utf-8")
-    else:
-        config = {} if state != "customized" else {"agents": {"defaults": {"workspace": str(home / "other-workspace")}}}
-        if state != "customized":
-            set_nested(config, ("agents", "defaults", "compaction", "memoryFlush", "enabled"), state == "on")
-            set_nested(config, ("plugins", "entries", "memory-core", "config", "dreaming", "enabled"), state == "on")
-        dump_json(home / "openclaw.json", config)
 
 
 def profile_reader():
@@ -397,7 +360,7 @@ def target_plan(plan_value, knowledge_root):
     sys.modules[spec.name] = composer
     spec.loader.exec_module(composer)
     targets = []
-    tool_names = {"claude-code": "claude", "codex": "codex", "openclaw": "openclaw"}
+    tool_names = {"claude-code": "claude", "codex": "codex"}
     for row in plan_value["tools"]:
         if row["rules_target"] != "none":
             targets.append({"tool": tool_names[row["tool"]], "scope": "user",

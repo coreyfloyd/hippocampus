@@ -27,10 +27,10 @@ class RulesSetupTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = pathlib.Path(self.temp.name).resolve()
-        self.homes = {name: self.base / name for name in ("claude-code", "codex", "openclaw")}
+        self.homes = {name: self.base / name for name in ("claude-code", "codex")}
         for name, home in self.homes.items():
             (home / "bin").mkdir(parents=True)
-            executable = {"claude-code": "claude", "codex": "codex", "openclaw": "openclaw"}[name]
+            executable = {"claude-code": "claude", "codex": "codex"}[name]
             binary = home / "bin" / executable
             binary.write_text("#!/bin/sh\nexit 0\n")
             binary.chmod(0o755)
@@ -153,40 +153,24 @@ class RulesSetupTests(unittest.TestCase):
         project = self.homes["claude-code"] / "projects" / "sample"
         project.mkdir(parents=True)
         (project / "session.jsonl").write_text("transcript\n")
-        workspace = self.homes["openclaw"] / "workspace"
-        workspace.mkdir()
-        (workspace / "MEMORY.md").write_text("durable fact\n")
         rows = {r["tool"]: r for r in self.describe()}
         self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 0)
-        self.assertEqual(rows["openclaw"]["memory"]["store"]["file_count"], 1)
         (project / "memory").mkdir()
         (project / "memory" / "fact.md").write_text("fact\n")
-        (workspace / "memory").mkdir()
-        (workspace / "memory" / "daily.md").write_text("daily\n")
         rows = {r["tool"]: r for r in self.describe()}
         self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 1)
-        self.assertEqual(rows["openclaw"]["memory"]["store"]["file_count"], 2)
 
-    def test_fresh_workspace_is_an_explicit_approved_directory(self):
+    def test_new_target_parent_is_an_explicit_approved_directory(self):
         helper = load_helper()
         _, profile = self.configured_profile()
-        workspace = self.homes["openclaw"] / "workspace"
-        value = helper.plan(self.describe(), "thin", profile=profile)
-        self.assertIn({"kind": "directory", "file": str(workspace), "current": "absent", "proposed": "create directory"}, value["mutation_list"])
-        self.assertFalse(workspace.exists())
+        directory = self.base / "new-targets"
+        target = directory / "AGENTS.md"
+        value = helper.plan(self.describe(), "thin", profile=profile,
+                            overrides={"codex": {"rules_target": str(target)}})
+        self.assertIn({"kind": "directory", "file": str(directory), "current": "absent", "proposed": "create directory"}, value["mutation_list"])
+        self.assertFalse(directory.exists())
         helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
-        self.assertTrue((workspace / "AGENTS.md").is_file())
-
-    def test_mixed_openclaw_settings_propose_only_changed_values(self):
-        helper = load_helper()
-        for flush, dreaming in ((False, True), (True, False)):
-            config = {}
-            helper.set_nested(config, ("agents", "defaults", "compaction", "memoryFlush", "enabled"), flush)
-            helper.set_nested(config, ("plugins", "entries", "memory-core", "config", "dreaming", "enabled"), dreaming)
-            helper.dump_json(self.homes["openclaw"] / "openclaw.json", config)
-            row = next(r for r in self.describe() if r["tool"] == "openclaw")
-            self.assertEqual(len(row["off_mutations"]), 1)
-            self.assertIs(row["off_mutations"][0]["current"], True)
+        self.assertTrue(target.is_file())
 
     def describe(self):
         helper = load_helper()
@@ -205,17 +189,12 @@ class RulesSetupTests(unittest.TestCase):
         self.assertEqual(claude["memory"]["state"], "on")
         self.assertEqual(claude["memory"]["store"]["file_count"], 1)
         self.assertEqual(rows["codex"]["memory"]["state"], "off")
-        self.assertEqual(rows["openclaw"]["target"]["ownership"], "composer-owned")
 
     def test_memory_matrix_proposes_only_non_off_non_customized_states(self):
         helper = load_helper()
         settings = {
             "claude-code": ("settings.json", {"autoMemoryEnabled": True}),
             "codex": ("config.toml", {"features.memories": True}),
-            "openclaw": ("openclaw.json", {
-                "agents.defaults.compaction.memoryFlush.enabled": True,
-                "plugins.entries.memory-core.config.dreaming.enabled": True,
-            }),
         }
         for tool in self.homes:
             for state in ("off", "on", "customized"):
@@ -245,16 +224,14 @@ class RulesSetupTests(unittest.TestCase):
         self.assertEqual({row["rules_target"] for row in plan["tools"]}, {
             str(self.homes["claude-code"] / "CLAUDE.md"),
             str(self.homes["codex"] / "AGENTS.md"),
-            str(self.homes["openclaw"] / "workspace" / "AGENTS.md"),
         })
         delivery = {row["tool"]: row["development_delivery"] for row in plan["tools"]}
         self.assertEqual(delivery["claude-code"], "directory walk from the development root")
         self.assertEqual(delivery["codex"], "repository block")
-        self.assertEqual(delivery["openclaw"], "repository block")
 
     def test_apply_requires_approval_and_never_deletes_memory(self):
         helper = load_helper()
-        memory = self.homes["openclaw"] / "workspace" / "memory"
+        memory = self.homes["codex"] / "memories"
         memory.mkdir(parents=True)
         record = memory / "keep.md"
         record.write_text("keep\n")
@@ -287,7 +264,7 @@ class RulesSetupTests(unittest.TestCase):
         )
         self.assertIn("shared rule", (self.homes["codex"] / "AGENTS.md").read_text())
         self.assertIn("rules:\n  preset: thin", profile.read_text())
-        self.assertIn("tool: openclaw", profile.read_text())
+        self.assertIn("tool: claude-code", profile.read_text())
         self.assertEqual(helper.plan(self.describe(), "thin", profile=profile)["mutation_list"], [])
 
     def test_apply_refuses_a_stale_approved_plan_before_writing(self):
