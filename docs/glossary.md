@@ -197,3 +197,10 @@ Start-up demotion uses a complete, ordered window of consecutive sessions, ten b
 default and configurable. A section needs observable markers and no match in the
 latest required loaded sessions. Preambles and prose-only sections stay loaded;
 each removal awaits its own chief-owned ask and the user's answer before merge.
+
+**Catch-up pass**:
+A one-time per-node filing of carried handoff items strictly older than a fixed
+cutoff, before periodic durable filing starts. It preserves source handoffs,
+deduplicates by producing session, time and text, and reports each destination
+with its receipt. A recount with any unfiled item or inventory error blocks
+cutover. Every node must provide its own successful report for the same cutoff.
