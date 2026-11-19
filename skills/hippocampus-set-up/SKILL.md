@@ -62,7 +62,7 @@ it.
 
 If the profile's optional `rules.development_root` is present, include one
 delivery column in the state table: Claude Code receives development rules by
-directory walk from that root; Codex and OpenClaw receive them through a
+directory walk from that root; Codex receives them through a
 repository block. The profile may record the absolute development root; it is
 not a rules document location.
 
@@ -77,8 +77,7 @@ The user may change either value in any row before approval. `native` records
 the choice while retaining the detected state and proposes no memory setting
 change. `off` proposes only an already-documented off setting that differs
 from the detected value. Claude Code uses `autoMemoryEnabled: false`; Codex
-uses `features.memories = false`; OpenClaw disables both pre-compaction memory flush and
-memory-core dreaming. If a memory directory or workspace is customized,
+uses `features.memories = false`. If a memory directory is customized,
 describe it, flag an `off` selection for the user, and propose no change.
 
 Use `scripts/rules_setup.py plan --profile <profile>` to prepare the complete proposed mutation
@@ -244,7 +243,12 @@ improve-harness. Configure their destinations through the knowledge profile and
 the improve-harness routing file; never offer replacement slot commands.
 
 Offer the separate ask binding for decisions and approvals. It is one discovered
-command, `{"command": "<actual skill invocation>"}`, with no `consumes` field.
+command, `{"command": "<actual skill invocation>", "owner_agent": "<agent identifier>"}`,
+with no `consumes` field. Discover the configured durable agent identifier from
+the user's chosen writer; never invent an agent or use the user as owner. Verify
+that the command supports saving this owner before binding it. Keep an existing
+command-only path until one real writer ask from each provider has proved the
+configured agent owner; setup itself never sends those proof asks.
 Explain that it receives `text`, source `session_id`, `directory`, `ticket`
 (or null), and `choices`, and returns a write acknowledgement. Ask delivery never
 files a ticket and never consumes an unsaved knowledge or lesson item. Preserve

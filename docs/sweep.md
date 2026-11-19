@@ -425,3 +425,8 @@ symbolic-link archive is rejected. Each retention command writes one
 `<id>.retention.md` report listing kept/deleted/failed files and reasons, with
 intent saved before deletion. Retention removes the ability to restore deleted
 handoffs; it never deletes reports or changes record destinations.
+
+
+## One-time catch-up before periodic filing
+
+Use the separate [catch-up pass](filing-catchup.md) before enabling periodic filing.

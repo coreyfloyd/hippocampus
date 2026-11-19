@@ -36,9 +36,6 @@ artifact_followup_destination: "Describe the task system and routing rules for s
 #     - tool: codex
 #       rules_target: none
 #       memory: native
-#     - tool: openclaw
-#       rules_target: none
-#       memory: native
 ---
 
 Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.

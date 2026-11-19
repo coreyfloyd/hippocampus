@@ -248,12 +248,11 @@ Your agent rules can live in the knowledge root beside the rest of your
 knowledge, as plain Markdown, and be composed into each tool's own instruction
 file. Set-up uses two documents: `context/rules.md` holds rules for every tool,
 and `context/development-rules.md` holds rules for development work under an
-optional development root. Claude Code, Codex and OpenClaw are the supported
+optional development root. Claude Code and Codex are the supported
 tools; a tool that is not installed gets no row in the plan.
 
 Set-up first reports each tool's state: its default user instruction file
-(`CLAUDE.md` in the Claude Code home, `AGENTS.md` in the Codex home or the
-OpenClaw workspace), whether that
+(`CLAUDE.md` in the Claude Code home, `AGENTS.md` in the Codex home), whether that
 file exists and who owns it, the native memory setting, and the memory store's
 location and file count. It then offers two editable starting points:
 
@@ -269,7 +268,7 @@ nothing outside that list is written. A decline writes nothing.
 A target that carries the composer's generated header is rewritten in full.
 In a file you wrote yourself, composition changes only one marked block and
 leaves the rest of the file as it was. Claude Code targets import the documents
-by path; Codex and OpenClaw targets receive their content. With a development
+by path; Codex targets receive their content. With a development
 root, `CLAUDE.md` and `AGENTS.md` at that root carry the development rules.
 Every target is checked before any is written, so a failed check leaves all of
 them untouched. After editing either document, run set-up again: the new plan
@@ -293,9 +292,9 @@ The explicit composer JSON accepts an optional `render` field on each target:
 ```
 
 `render` accepts `"default"` or `"literal"`. Omission means `"default"` and
-preserves the existing output bytes: Claude Code uses imports, while Codex and
-OpenClaw receive source bodies. `"literal"` writes complete source bodies for
-any supported tool, including Claude Code. It applies only to that target;
+preserves the existing output bytes: Claude Code uses imports, while Codex
+receives source bodies. `"literal"` writes complete source bodies for any
+supported tool, including Claude Code. It applies only to that target;
 other targets keep their selected rendering. Invalid values fail preflight
 before any target is written.
 

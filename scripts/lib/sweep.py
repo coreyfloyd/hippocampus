@@ -486,11 +486,12 @@ def add_ask(section, candidate, text, choices, reason, ask):
     section['asks_raised'].append({'rule': 'R3', 'outcome': 'dry run' if ask else 'unbound', 'reason': reason,
         'source_handoff': candidate['path'], 'identity': identity, 'ask': {'text': text, 'identity': identity, 'session_id': candidate['session_id'],
         'directory': candidate['directory'], 'ticket': None, 'choices': choices}})
+    section['asks_raised'][-1]['ask'] = checklist.owned_ask(section['asks_raised'][-1]['ask'], ask)
 
 
 def build_report(discovery, decisions, plan, ask, checks, interactive, started, history=None, auto_apply=None):
     report = {'run_id': uuid.uuid4().hex, 'host': socket.gethostname(), 'started_at': started.isoformat(),
-              'scope': discovery['scope'], 'mode': 'watch-only', 'interactive': interactive,
+              'scope': discovery['scope'], 'mode': 'watch-only', 'interactive': interactive, 'ask_binding': ask,
               'open_session_checks': [checks], 'errors': discovery['errors'], 'directories': {}}
     if auto_apply:
         report['auto_apply'] = auto_apply
@@ -610,6 +611,8 @@ def save_act(path, report):
 
 
 def add_intent(report, row, directory, operation):
+    if operation == 'ask' and 'ask_binding' not in report:
+        raise ValueError('act report missing ask_binding; replan delivery with the user profile; pending work retained')
     row.update(directory=directory, operation=operation, outcome='intent',
                run_id=report['run_id'], session_id=row['identity']['session_id'],
                text=row['identity']['text'])
@@ -617,6 +620,7 @@ def add_intent(report, row, directory, operation):
                                      identity_key(row['identity'])).encode()).hexdigest()
     if operation == 'ask':
         row.update(destination='ask', binding='ask')
+        row['ask'] = checklist.owned_ask(row['ask'], report.get('ask_binding'))
         row.update({key: row['ask'].get(key) for key in ('choices', 'ticket')})
     elif operation == 'native_step':
         row.update(native_step=row['binding'], unattended=True,
@@ -626,14 +630,14 @@ def add_intent(report, row, directory, operation):
     report['work'].append(row)
 
 
-def slot_ask(row, directory, bound):
+def slot_ask(row, directory, binding):
     slot = row.get('slot') or row['binding']
     return dict(row, binding='ask', destination='ask',
-                outcome='dry run' if bound else 'unbound',
-                ask=dict(text=row['identity']['text'], identity=row['identity'],
+                outcome='dry run' if binding else 'unbound',
+                ask=checklist.owned_ask(dict(text=row['identity']['text'], identity=row['identity'],
                          session_id=row['identity']['session_id'], directory=directory,
                          ticket=(row['item'].get('anchor') or {}).get('ticket'),
-                         choices=['save through ' + slot, 'leave it']))
+                         choices=['save through ' + slot, 'leave it']), binding))
 
 
 def ledger_item(row):
@@ -789,7 +793,7 @@ def plan_act(report, discovery, ask, config, path, persist=None):
     for candidate in discovery['candidates']:
         candidate['planned_source'] = True
     report.update(mode='act', phase='planned', work=[], undo_items=[],
-                  discovery=discovery, ask_bound=ask is not None)
+                  discovery=discovery, ask_bound=ask is not None, ask_binding=ask)
     if report.get('auto_apply'):
         report['persist_binding'] = persist
     created = 0
@@ -809,7 +813,7 @@ def plan_act(report, discovery, ask, config, path, persist=None):
         for index, row in enumerate(section['filing_outcomes']):
             row['directory'] = directory
             if row['rule'] == 'R4' and row['outcome'] == 'unbound' and row.get('binding') != 'ask':
-                row = slot_ask(row, directory, ask is not None)
+                row = slot_ask(row, directory, ask)
                 section['filing_outcomes'][index] = row
                 section['asks_raised'].append(row)
             if row['outcome'] == 'would apply':
@@ -887,6 +891,10 @@ def load_results(path, work, statuses):
                 receipt = checklist.record_write.receipt(row, original['identity'])
                 if row.get('destination') != receipt['destination']:
                     raise ValueError('confirmed write destination must match its receipt')
+            elif original.get('operation') == 'ask' and original.get('ask', {}).get('owner_agent'):
+                checklist.require_ask_receipt(None, row.get('receipt'), original['ask'])
+                if not isinstance(row.get('destination'), str) or not row['destination'].strip():
+                    raise ValueError('confirmed asks require destination')
             elif not all(isinstance(row.get(k), str) and row[k].strip()
                          for k in ('receipt', 'destination')):
                 raise ValueError('confirmed writes require receipt and destination')
@@ -970,7 +978,7 @@ def settle_shared_asks(report, first):
 def raise_fact_ask(report, row, item):
     """A fact about the user is an ordinary ask; delivering it is what settles the item here."""
     section = report['directories'][row['directory']]
-    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']})
+    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']}, report['ask_binding'])
     followup = {key: value for key, value in row.items()
                 if key not in ('write_id', 'native_step', 'command', 'operation')}
     followup.update(binding='ask', destination='ask', outcome='dry run' if report['ask_bound'] else 'unbound',
@@ -1066,7 +1074,7 @@ def raise_lesson_ask(report, row):
     outcome = required_outcome(ledger_item(row), ledger_outcomes('lesson', row['ledger_session']))
     item = {key: value for key, value in row['item'].items() if key != 'choices'}
     item.update(applied=True, commit=outcome.get('commit'), ask_text=checklist.lessons.ask_text(outcome))
-    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']})
+    ask = checklist.ask_payload(item, {'session_id': row['ledger_session'], 'working_directory': row['directory']}, report['ask_binding'])
     followup = dict(rule='R3', outcome='dry run' if report['ask_bound'] else 'unbound', binding='ask',
                     destination='ask', reason='Applied lesson for an always-loaded rules file',
                     source_handoff=row['source_handoff'], identity=row['identity'], directory=row['directory'],
@@ -1124,6 +1132,13 @@ def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=
     if report['phase'] == 'completed':
         pending_path().unlink()
         return path, report
+    if 'ask_binding' not in report:
+        raise ValueError('act report missing ask_binding; replan delivery with the user profile; pending work retained')
+    for row in report['work']:
+        if row.get('operation') == 'ask':
+            row['ask'] = checklist.owned_ask(row['ask'], report['ask_binding'])
+            if row.get('outcome') in ('written', 'already_written') or row.get('ask_status') == 'filed':
+                checklist.require_ask_receipt(report['ask_binding'], row.get('receipt'), row['ask'])
     rehydrate(report)
     # Before any early return: a later call may omit it, and a live session must stay protected.
     discovery = report['discovery']
@@ -1186,7 +1201,7 @@ def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=
             record_delivered_ask(row)
         if row['operation'] == 'file_slot' and row['outcome'] == 'failed' and result.get('pending') is True:
             section = report['directories'][row['directory']]
-            followup = slot_ask(row, row['directory'], report['ask_bound'])
+            followup = slot_ask(row, row['directory'], report['ask_binding'])
             followup.pop('write_id', None)
             section['filing_outcomes'] = [followup if old is row else old for old in section['filing_outcomes']]
             section['asks_raised'].append(followup)
@@ -1232,7 +1247,7 @@ def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=
     for check in checks['results']:
         if check['outcome'] == 'failed' and check not in report['errors']:
             report['errors'].append(dict(check, reason='open-session check failed; no session counts as abandoned'))
-    ask = True if report['ask_bound'] else None
+    ask = report['ask_binding']
 
     def save():
         save_act(path, report)

@@ -3,6 +3,72 @@
 What an adapter, a profile author, or another tool may rely on. Anything not listed here is
 internal and may change. The vocabulary is defined in `docs/glossary.md`.
 
+### Durable checkpoint and FILE-4H
+
+Both tools share `handoff.py checkpoint --durable`. Ordinary checkpoint remains
+carry-only. Durable mode takes explicit `--user-profile`, repeatable
+`--repository-profile`, `--filing` (checklist indexed rows), and `--report` paths.
+The running interactive agent executes normal checklist steps and native approval
+routes, then submits continuation JSON on stdin. The writer restores retained
+items, validates before external writes, looks up record and ask identities,
+and settles acknowledged items. Decision documents require user authorship,
+explicit approval and its source, and the configured folder. A lesson/knowledge
+ask stays carried until native capture/application succeeds. Exit 1 means unfiled
+items or errors; the report and handoff retain them for retry. No session is ended,
+worktree removed or timer armed by checkpoint.
+
+For ask-bound rows only, `status: pending` plus `ask_delivery: requested`
+explicitly authorizes lookup and delivery while the user's approval is pending.
+The request itself is never a receipt. Plain pending, dropped, failed, uncertain
+or read-failed judgments do not dispatch an ask. Already-filed asks require an
+actual identity-matching receipt and configured owner acknowledgement. Delivered
+native asks still retain their item pending capture/application. A deferred ask
+stays carried with its original identity and judgment.
+
+Reports contain `session_id`, `started_at`, `ended_at`, `filed`, `unfiled`, `items`
+(when filing ran) and `errors`, preserving identities, destinations and receipts.
+`--scheduled-report COMMAND` invokes the configured adapter using argv parsing
+(no shell), JSON stdin and JSON stdout. The request is
+`{"operation":"report","kind":"durable_checkpoint","report":{...}}`.
+Success requires `{"status":"saved","receipt":{"destination":"..."}}`.
+The adapter publishes filed and unfiled items on Scheduled, including failed
+passes. Refused/malformed responses are errors and exit 1; the local report remains.
+Without an adapter, local filing can succeed but Scheduled delivery is unproven.
+Checkpoint exceptions, lint failures and no-write keep-warm results also produce
+a failed report at the explicit writable report path without filing from a stale
+handoff. The report preserves supplied and retained unfiled items and `next_action`.
+Adapter failures are retained locally; no successful Scheduled write is inferred.
+
+Explicit periodic enablement uses:
+
+```bash
+python3 scripts/lib/durable_checkpoint.py --session-id <running-session> \
+  --cwd <subject> --required-node <node> --catchup-report <node-report.json> \
+  --adapter '<configured-scheduler-adapter-command>'
+```
+
+Repeat required-node and catchup-report for all participating nodes. Enablement
+refuses missing nodes, different cutoffs, inventory errors, non-run reports or
+remaining old items. Supply current per-node recount reports; an older successful
+report is not evidence of a current recount. Enablement is never an install,
+test or checkpoint side effect.
+
+The scheduler adapter receives `operation: ensure_job`, `kind: durable_checkpoint`,
+`job_key: FILE-4H:<session>`, `target_session`, `working_directory`,
+`interval_seconds: 14400`, `checkpoint_option: durable`, `report_surface: Scheduled`
+and catch-up reports. It idempotently registers one job per session and returns
+`status: saved` with a receipt naming the exact `job_key` and Scheduled
+`destination`. It dispatches to the existing running interactive session, which
+runs the skill with durable selected at every checkpoint and every four hours.
+It serializes passes per session; a scheduler worker never writes a handoff as
+if it were that session. The scheduler owns dispatch, failure visibility and job
+lifetime. The package installs no launchd job or background timer.
+
+A configured external adapter and real running session must separately prove
+Scheduled visibility, four-hour dispatch, catch-up readiness and continued session
+operation before live enablement. Fixtures do not establish these live proofs.
+Keep the previous filing path until the real durable checkpoint proof passes.
+
 Paths below are relative to the repository root. An adapter locates the package by the
 directory it installs it into, never by importing it: every entry point is a command.
 
@@ -419,7 +485,7 @@ the destination changed and must be preserved. A store rejection returns
 new receipt: they use the receipt from the confirmed write being reversed.
 
 **Ask binding and filing outcomes.** A user profile may declare
-`"ask": {"command": "/ask-step"}`: exactly one non-empty command, separate
+`"ask": {"command": "/ask-step", "owner_agent": "example-agent"}`: one non-empty command and an optional non-empty agent identifier, separate
 from slots and steps. Repository profiles cannot bind it. `plan` returns `ask`
 (or null) and `rerun_all_steps: true`; an attended run after an unattended run
 executes every step again and asks the user, without reusing pending results.
@@ -443,7 +509,20 @@ ask acknowledgement its row keeps `binding: "ask"`, `ask_status: "filed"`,
 delivery does not substitute for a capture receipt.
 
 The ask command receives `text`, source `session_id`, `directory`, linked
-`ticket` or null, and `choices`. Asks never become tickets. `file` returns the
+`ticket` or null, and `choices`. With `owner_agent` configured in the binding,
+its value overrides any carried owner in every writer invocation. The writer
+must store this durable agent as owner, never substitute the user or source
+session, and acknowledge only after ownership is saved. For configured ownership the
+acknowledgement is a JSON object in `receipt` with `owner_agent` equal to the
+configured identifier, read back from the saved ask. A request echo before
+saving is not a receipt. Missing or mismatched proof fails delivery and keeps
+the item pending; checklist filing/reporting, sweep completion and slim
+`ask-delivered` all enforce this check. Command-only bindings keep their
+existing receipt format. This contract applies
+to Claude Code and Codex, including native asks, deferred sweep asks and slim
+asks. Command-only bindings retain their existing path until the configured
+writer has been proven with one real ask from each provider; do not cut over
+or declare migration complete from fixture tests alone. Asks never become tickets. `file` returns the
 payload with a `filing` object holding `items`, `warnings`, `failures`, and
 `asks` grouped by directory. Each item includes the original item, its rule,
 its binding and outcome; asks include their command payload. Keep this report
@@ -480,7 +559,15 @@ Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit
 | `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): reduce each path to its one spelling, drop edits to a frozen file with their `group` and move the contradiction, duplicate and rule rows naming that file to "not done", commit one branch per repository (`slim/<run>-<path>-<digest>`), record the branches, then push them; a push that errors after the remote took the branch counts as pushed. Returns `status`: `slimmed`, `pending-unverified` (publication unconfirmed after a push error; its ask says so and its files stay frozen until a later plan reconciles the push), `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that is malformed, names a path inside `.git`, a directory or a path through a link, has an `old` that does not appear exactly once, has an edit that leaves its file as it is, or leaves the file over a limit with no `left`, is refused, exit 1, before any push: it changes nothing and the slim stays open. While a stopped push is unsettled, `begin` and `finish` refuse until `plan`. |
 | `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. A settled branch refuses, exit 1. |
 | `retry --repository owner/name --path P` | Let a stalled file back into later runs. |
-| `ask-delivered --ask ID --receipt T` | Settle a delivered ask, which `plan` otherwise lists again. |
+| `ask-delivered --ask ID --receipt T` | Settle a delivered ask (`T` is a JSON receipt with matching `owner_agent` when configured), which `plan` otherwise lists again. |
+
+Slim reads the ask binding from `CHECKLIST_USER_PROFILE`, or the default user
+checklist profile under `XDG_CONFIG_HOME` (otherwise `~/.config`). An explicit
+missing or invalid profile fails without settling pending asks. New, retained
+and repeated closed-run asks all receive the configured owner; their producing
+identity remains unchanged. Sweep act plans pin the actual ask binding; a
+reserved plan missing that field fails before delivery or settlement, preserving
+its pending work rather than inferring an ownerless binding.
 
 A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its text lists, in order: contradictions, duplicates, rules removed or rewritten, sizes, branches, then branches not pushed, choices not done because their file is deferred, what was deferred, what is left, surfaces to regenerate, and how to undo or stop it. The package never merges a slim branch and schedules nothing.
 
@@ -882,3 +969,19 @@ Retired legacy record profiles are refused with the `record_writes` shape. `--as
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.
+
+### Decision document routing
+
+The user checklist profile's optional `decision_records` object requires a
+nonempty `default_folder` and optionally maps exact scopes to folder references
+in `scope_folders`. Repository profiles cannot supply it. No live knowledge
+source is read to discover routes.
+
+A decision document request uses the existing documents record-write protocol.
+The item has `author_role: "user"`, nonempty `author` and `location`, and
+`decision_record: {"title": "...", "scope": "...", "text": "..."}`. The R7 filing
+row requires `answer: "approve"` and nonempty `approval_source`; the module supplies
+its configured `folder`. The lookup and write receive the same immutable item
+identity, proposal, approval, and folder. Their receipt additionally confirms that
+exact `folder`. Missing proof retains the original item, including after an
+uncertain write. Unapproved proposals use the existing owned ask contract.

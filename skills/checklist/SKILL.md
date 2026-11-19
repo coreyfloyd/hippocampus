@@ -40,7 +40,7 @@ all remote-tracking branches.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
-optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>"}`. The ask
+optional per-kind `record_writes` and `decision_records` folder routing (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>", "owner_agent": "<agent identifier>"}`. The ask
 binding is one user command, not a slot or a spine step. Repository profiles
 cannot bind it. A binding has a `command` and a list of item types it
 `consumes`; a step has a unique `id`, an `after` anchor, and `instructions` (or
@@ -238,6 +238,17 @@ the first match decides. Rule numbers are names, not evaluation order.
 | R5 | Work with a stated outcome and no matching open ticket | New ticket through the tickets record write, with recommended priority and a one-line reason. |
 | R6 | Otherwise: optional suggestion, observation, idea with no outcome | Drop with the reason. |
 
+Find every user decision in the current conversation and carried items. Suggest one
+decision record per decision, showing its title, scope, full text, author, source,
+and configured folder. Only user decisions qualify; keep agent operational choices
+as separate audit material. Follow the record skill's decision-record contract.
+With the user present, ask for explicit approval of each proposed document. Without
+them, give each proposal an R3 ask with approve/decline choices through the configured
+ask binding and its owner. Do not infer approval from the decision itself or from
+auto-apply settings. Only an approved proposal uses R7 and the documents writer.
+Keep the existing decision ask path until the real attended and unattended proofs
+pass; fixture tests alone do not establish cutover.
+
 The agent makes the judgment, including R5 versus R6 and whether R7 needs
 approval. R1's already-recorded check, R2's open-ticket check and R5's matching
 search require a successful, supported, valid record read. Use `record_read`
@@ -257,6 +268,14 @@ The module runs record writes and collects matching receipts; do not execute the
 For each ask, pass the ask command a JSON object containing `text` (the item),
 `session_id` (its source session), `directory`, `ticket` (linked ticket or null),
 and `choices` (the user's complete options, with no length limit). An ask is **never filed as a ticket**.
+When the ask binding declares `owner_agent`, pass that configured identifier
+on every invocation (including `lesson_asks` and `knowledge_asks`); it overrides
+any carried owner. The writer must save that durable agent as the owner, never
+the user or source session. Preserve the source identity and require a receipt
+confirming the saved owner: `receipt` must be a JSON object with `owner_agent`
+equal to the binding, obtained by reading the written ask. A request echo is
+not proof of saving. Missing or mismatched ownership proof is a failed delivery
+and keeps the ask carried; do not mark it filed. This applies equally in Claude Code and Codex.
 These fields also appear in the filing report's `ask` payload. For R4 native items, preserve the native outcome and carry unsaved items;
 an ask acknowledgement does not replace a capture or lesson receipt. Always run
 the bound ask command for R4 `destination: "ask"`, using the complete payload in

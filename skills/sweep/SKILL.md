@@ -130,7 +130,17 @@ before deciding: one match is R2 and several are an R3 ask. Never skip it.
 For absent identities, use the record-write command carried in the intent:
 `record_writes.tickets` for new tickets and comments,
 `record_writes.documents` for document changes. Deliver asks through the profile's
-ask binding. Invoke skill commands as skills; follow inline
+ask binding. When it declares `owner_agent`, pass that configured identifier
+with every ask, including deferred asks, overriding any carried owner. The
+writer must store the durable agent as owner, never the user, in both Claude
+Code and Codex. If the writer cannot save agent ownership, report a failed
+write and retain the ask. For configured ownership, `receipt` must be a JSON
+object with matching `owner_agent`, obtained by reading the saved ask; never
+substitute a request echo or an opaque acknowledgement. Even a direct
+presentation needs this saved-owner proof when the ask binding configures it.
+An act report missing `ask_binding` fails before settlement and keeps pending
+work; never treat that missing field as permission for ownerless delivery.
+Invoke skill commands as skills; follow inline
 instructions where supplied. No executable adapter is needed. Preserve the
 item identity, linked ticket, choices, priority and reason. A comment inherits
 the destination ticket's priority. An ask is never a ticket. For an interactive
@@ -147,7 +157,7 @@ Write a caller-owned results JSON array, one result per write id:
 For per-kind record writes, copy the entire receipt object returned by the
 command, including any extra fields. Its identity must match the work item and
 its destination must match the result. Keep it unchanged through undo. Ask and
-persist receipts are nonempty strings.
+persist receipts are nonempty strings. Configured agent-owned ask receipts are JSON objects with matching `owner_agent`.
 
 Use `written` only for confirmed writes, `already_written` for identities found
 before writing, `failed` with `error` only when no write occurred, or `uncertain`
@@ -309,3 +319,17 @@ without applying anything again.
 Undo leaves this run's applied lessons and captures in place: it prints them as
 `applied_left_in_place`, with no reversal work, and never lists `already_settled` items. Present them with each commit;
 a lesson commit is reverted through the repository's normal delivery, never by the sweep.
+
+## One-time catch-up
+
+Before enabling periodic durable filing, use the shared per-node
+[catch-up command](../../docs/filing-catchup.md)
+for both Claude Code and Codex. Inspect the explicitly supplied store first,
+supply identity-bound filing judgments, then run and retain each dated report.
+Do not use ordinary sweep abandonment or worktree removal for this pass.
+Items needing approval go to the configured durable ask owner with complete
+proposals. A writer must return a real identity/destination receipt; asks also
+confirm the saved owner. Keep source handoffs and the old filing path until every
+expected node has a successful recount for the same cutoff. The command never
+enables a job. Real cross-node filing and schedule enablement require their
+separate coordinated proof; fixture verification does not satisfy that proof.

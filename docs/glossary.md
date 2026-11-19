@@ -19,6 +19,14 @@ A user-bound command that writes one kind of record change: tickets, projects, d
 A read of the existing record through a user-bound skill. It is read-only: it reports ticket status and work carried by a resumed session without writing to the record. The user checklist profile binds the skill; a repository checklist profile cannot. The package record step calls record writes to save changes.
 _Avoid_: tracker
 
+**Decision record**:
+A document preserving a user's decision, its author and source, scope, and the
+approved proposal. Agent operational choices are audit material, not decision
+records. Checklist and checkpoint with `durable` suggest these documents; only
+explicit user approval permits a documents record write. Without the user, the
+proposal becomes an ask owned by the configured durable agent. The user profile's
+`decision_records` routes scopes to folders, falling back to its default folder.
+
 **Handoff**:
 The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds the session's dated history entries and session summary, close outcomes, touched tickets, and touched projects. Checkpoint and wrap both end by writing it.
 _Avoid_: record
@@ -57,7 +65,7 @@ A handoff whose subject is a different worktree of the same repository as the cu
 _Avoid_: duplicate, related session
 
 **Checkpoint**:
-Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
+Writing the handoff now, without finishing the session's work. An ordinary checkpoint never commits, merges, or pushes. With explicit `durable`, it runs checklist filing and persistence under their existing authorization, reports filed and unfiled items, and preserves the running session and continuation. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
 **Keep-warm**:
@@ -120,6 +128,9 @@ _Avoid_: question, needs-you item
 The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends and captures the knowledge it recommends for the wiki or for retention under the knowledge root, instead of waiting for approval, in every interactive session, attended or unattended, and in a sweep's act mode. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it for lessons only.
 _Avoid_: auto mode, autopilot
 
+**Ask owner**:
+The durable agent named by `owner_agent` in the user's ask binding. The ask writer stores that agent as owner, while the source session and item identity remain unchanged. The user still answers decisions and approvals. A command-only binding keeps its existing delivery until ownership is configured and proven.
+
 **Applied lesson**:
 A lesson a wrap or a sweep wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git, an existing untracked file, or an ignored path in its repository, is written with no commit; a new file the repository would track gets its own commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
 
@@ -173,3 +184,23 @@ The ordered choices for where knowledge, a rule, or a solution should live. Impr
 
 **Decision service**:
 A service an agent sends facts to and receives a decision from before acting, for an important rule that instructions alone have not made reliable.
+
+
+**Start-up budget**:
+The maximum estimated tokens for the explicit whole start-up loaded by an agent
+in one launch directory: loaded files, role files, skill discovery fields, and
+injected non-file inputs. A default applies to every directory without an exact
+resolved-directory override. Slim-harness reports the estimate and every file's
+contribution using the same four UTF-8 bytes per token policy in both tools.
+
+Start-up demotion uses a complete, ordered window of consecutive sessions, ten by
+default and configurable. A section needs observable markers and no match in the
+latest required loaded sessions. Preambles and prose-only sections stay loaded;
+each removal awaits its own chief-owned ask and the user's answer before merge.
+
+**Catch-up pass**:
+A one-time per-node filing of carried handoff items strictly older than a fixed
+cutoff, before periodic durable filing starts. It preserves source handoffs,
+deduplicates by producing session, time and text, and reports each destination
+with its receipt. A recount with any unfiled item or inventory error blocks
+cutover. Every node must provide its own successful report for the same cutoff.

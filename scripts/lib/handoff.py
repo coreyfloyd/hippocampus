@@ -1908,6 +1908,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     lint.add_argument("--session-id", default=ambient_session_id())
     check = sub.add_parser("checkpoint"); check.add_argument("--cwd", default=os.getcwd())
     check.add_argument("--session-id", default=ambient_session_id()); check.add_argument("--trigger", default=os.environ.get("HANDOFF_TRIGGER", "checkpoint"))
+    check.add_argument("--durable", action="store_true")
+    check.add_argument("--user-profile")
+    check.add_argument("--repository-profile", action="append", default=[])
+    check.add_argument("--filing")
+    check.add_argument("--report")
+    check.add_argument("--scheduled-report", help="Configured Scheduled report adapter command")
     interactive = sub.add_parser("is-interactive"); interactive.add_argument("payload", nargs="?")
     sub.add_parser("ledger-record")
     touched = sub.add_parser("touched-checkouts")
@@ -2018,7 +2024,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("lint: a session id is required when no path is supplied (--session-id or CLAUDE_SESSION_ID)")
             code, output = lint_output(path); sys.stdout.write(output); return code
         elif args.command == "checkpoint":
-            supplied = _read_stdin_json(); result = checkpoint(supplied, args.cwd, args.session_id, args.trigger)
+            supplied = _read_stdin_json()
+            if args.durable:
+                import durable_checkpoint
+                result = durable_checkpoint.run(sys.modules[__name__], supplied, args)
+            else:
+                result = checkpoint(supplied, args.cwd, args.session_id, args.trigger)
             sys.stdout.write(result.output)
             if result.errors: sys.stderr.write("\n".join(result.errors) + "\n")
             return result.exit_code

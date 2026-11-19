@@ -135,6 +135,8 @@ def load_profiles(user_profile: Path | None, repository_profiles: Sequence[Path]
     paths = ([user_profile] if user_profile else []) + list(repository_profiles)
     profiles = [load_profile(path) for path in paths]
     for path, profile in zip(repository_profiles, profiles[1:] if user_profile else profiles):
+        if "decision_records" in profile:
+            raise ValueError(f"{path}: repository profiles cannot bind decision_records")
         if "record_writes" in profile:
             raise ValueError(f"{path}: repository profiles cannot bind record_writes")
         if "ask" in profile:
@@ -162,10 +164,40 @@ def ask_binding(profile: Mapping[str, Any]) -> dict[str, str] | None:
     if "ask" not in profile:
         return None
     binding = profile["ask"]
-    if (not isinstance(binding, Mapping) or set(binding) != {"command"}
-            or not isinstance(binding["command"], str) or not binding["command"].strip()):
-        raise ValueError(f"{profile.get('name', 'profile')}: ask requires only a non-empty command")
+    if (not isinstance(binding, Mapping) or set(binding) - {"command", "owner_agent"}
+            or not isinstance(binding.get("command"), str) or not binding["command"].strip()):
+        raise ValueError(f"{profile.get('name', 'profile')}: ask requires a non-empty command and optional owner_agent")
+    if "owner_agent" in binding and (not isinstance(binding["owner_agent"], str)
+                                      or not binding["owner_agent"].strip()):
+        raise ValueError(f"{profile.get('name', 'profile')}: ask.owner_agent requires a non-empty agent identifier")
     return dict(binding)
+
+
+def load_ask_binding() -> dict[str, str] | None:
+    """Read only the checklist profile, never the knowledge root or provider state."""
+    explicit = os.environ.get("CHECKLIST_USER_PROFILE")
+    path = Path(explicit) if explicit else Path(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))) / "hippocampus/checklist-profile.md"
+    if not explicit and not path.exists():
+        return None
+    return ask_binding(load_profile(path))
+
+
+def require_ask_receipt(binding: Mapping[str, str] | None, receipt: Any,
+                        payload: Mapping[str, Any] | None = None, *, required_owner: bool = False) -> None:
+    """An agent-owned ask settles only with the writer's saved-owner acknowledgement."""
+    owner = (binding or {}).get("owner_agent") or (payload or {}).get("owner_agent")
+    if required_owner and not owner:
+        raise ValueError("durable asks require a configured or carried owner_agent")
+    if owner and (not isinstance(receipt, Mapping) or receipt.get("owner_agent") != owner):
+        raise ValueError(f"ask receipt.owner_agent must confirm saved owner_agent {owner!r}")
+
+
+def owned_ask(payload: Mapping[str, Any], binding: Mapping[str, str] | None) -> dict[str, Any]:
+    """Use the configured agent owner without changing the producing session or item."""
+    result = copy.deepcopy(dict(payload))
+    if binding and "owner_agent" in binding:
+        result["owner_agent"] = binding["owner_agent"]
+    return result
 
 
 def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -175,13 +207,14 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     seen = set(SPINE)
     bound: set[str] = set()
     writes = {}
+    decision_routes = None
     for profile in profiles:
         if not isinstance(profile, Mapping):
             raise ValueError("profile must be an object")
         name = profile.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("profile requires a name")
-        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "record_writes", "ask"})
+        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "record_writes", "ask", "decision_records"})
         if unknown:
             steps = _removed_spine_steps(profile, unknown)
             if steps:
@@ -193,6 +226,10 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             if writes:
                 raise ValueError(f"{name}: cannot replace record_writes")
             writes = declared_writes
+        if "decision_records" in profile:
+            if decision_routes is not None:
+                raise ValueError(f"{name}: cannot replace decision_records")
+            decision_routes = record_write.decision_routes(profile)
         record_read_binding(profile)
         ask_binding(profile)
         declared = profile.get("bindings", {})
@@ -240,7 +277,7 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     for slot, title in zip(SPINE[:-1], TITLES):
         step = {"id": slot, "title": title, "binding": bindings[slot]}
         if slot == "record":
-            step.update(package=True, record_writes=writes)
+            step.update(package=True, record_writes=writes, decision_records=decision_routes)
         elif slot in NATIVE:
             step["native"] = True
         else:
@@ -331,7 +368,8 @@ def validate_ask_payload(ask: Mapping[str, Any]) -> None:
         raise ValueError(f"{ask['text']}: a fact about the user has no default")
 
 
-def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
+def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any],
+                binding: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
     text = item["ask_text"] if item.get("applied") or item.get("user_fact") else item.get("context", str(item))
     ask = {**copy.deepcopy(dict(item)), "text": text,
@@ -340,10 +378,11 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str
            "ticket": (item.get("anchor") or {}).get("ticket"),
            "choices": [] if item.get("applied") else copy.deepcopy(item.get("choices", []))}
     validate_ask_payload(ask)
-    return ask
+    return owned_ask(ask, binding)
 
 
-def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
+def report_asks(handoff: Mapping[str, Any], problems: list[str],
+                binding: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     """List every recoverable ask, even when another item is malformed or missing."""
     asks = []
     seen = set()
@@ -352,7 +391,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
     for index, row in enumerate(handoff.get("filing", {}).get("items", [])):
         if "ask" in row:
             candidates.append((f"filing.items[{index}].ask", row["ask"], True))
-        elif (row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES)
+        elif ((row.get("binding") == "ask" or row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES))
               and isinstance(row.get("item"), Mapping)
               and (row["item"].get("choices") or row["item"].get("applied"))):
             candidates.append((f"filing.items[{index}].item", row["item"], False))
@@ -376,6 +415,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
             ask = item if is_payload else ask_payload(item, subject)
             if is_payload:
                 validate_ask_payload(ask)
+            ask = owned_ask(ask, binding)
         except (ValueError, TypeError, AttributeError) as error:
             problems.append(f"{label}: {error}")
             continue
@@ -502,6 +542,19 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if status not in ("filed", "dropped", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES):
             raise ValueError(f"filing: unknown status {status!r}")
         binding = filing_binding(rule, item, row)
+        if binding == "record":
+            binding = record_write.kind_for(rule, item, row, writes)
+            bindings.setdefault(binding, None)
+        if record_write.decision_document(item, row, binding):
+            try:
+                routes = next(step for step in plan if step["id"] == "record").get("decision_records")
+                row = record_write.decision_filing(item, row, routes)
+            except ValueError as error:
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item),
+                                        "binding": "documents", "status": "failed", "error": str(error)})
+                report["failures"].append(f"{item.get('context', str(item))}: {error}")
+                kept.append(copy.deepcopy(item))
+                continue
         if item.get("user_fact") and binding != "ask" and status in ("filed", "dropped"):
             try:
                 knowledge.user_answer(item, row, saving=status == "filed")
@@ -512,13 +565,17 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 report["failures"].append(f"{item.get('context', str(item))}: {error}")
                 kept.append(copy.deepcopy(item))
                 continue
-        if binding == "record":
-            binding = record_write.kind_for(rule, item, row, writes)
-            bindings.setdefault(binding, None)
         if not item.get("applied") and (binding == "ask" or (binding in NATIVE and "choices" in row)):
             item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
+        if binding == "ask" and status == "filed" and execute_writes:
+            try:
+                require_ask_receipt(ask, row.get("receipt"), item)
+            except ValueError as error:
+                row = {**row, "status": "failed", "error": str(error)}
+                row.pop("ask_status", None)
+                status = "failed"
         entry = {**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding}
         if lesson_outcome and lesson_outcome["status"] == "failed":
             entry["apply_failed"] = True
@@ -536,7 +593,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: {rule} requires dropped with a reason")
         else:
             if binding == "ask":
-                entry["ask"] = ask_payload(item, handoff.get("subject", {}))
+                entry["ask"] = ask_payload(item, handoff.get("subject", {}), ask)
                 report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
             if bindings[binding] is None:
                 entry["status"] = "unbound"
@@ -546,6 +603,10 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 reason = row.get("error") or row.get("reason")
                 if status in ("failed", "declined", "pending", "not configured") and not reason:
                     raise ValueError(f"{binding}: {status} requires a reason or error")
+                kept.append(copy.deepcopy(item))
+            elif binding in record_write.KINDS and status not in ("pending", "filed"):
+                entry["error"] = row.get("error") or row.get("reason") or "filing deferred"
+                report["failures"].append(f"{label}: {binding} {status}: {entry['error']}")
                 kept.append(copy.deepcopy(item))
             elif binding in record_write.KINDS and execute_writes:
                 if rule == "R5" and (not row.get("priority") or not row.get("priority_reason")):
@@ -637,9 +698,21 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     loops = data.get("resume", {}).get("open_loops", [])
     for row in report.get("items", []):
         item = row.get("item")
+        if row.get("binding") == "ask" and (row.get("status") == "filed" or row.get("ask_status") == "filed"):
+            try:
+                require_ask_receipt(ask, row.get("receipt"), row.get("ask") or item)
+            except ValueError as error:
+                failures.append(str(error))
         if row.get("binding") in record_write.KINDS and row.get("status") == "filed":
             try:
-                record_write.receipt(row, record_write.identity(item))
+                folder = None
+                if record_write.decision_document(item, row, row.get("binding")):
+                    routes = next(step for step in plan if step["id"] == "record").get("decision_records")
+                    approved = record_write.decision_filing(item, row, routes)
+                    if row.get("binding") != "documents":
+                        raise ValueError("decision records must use documents")
+                    folder = approved["folder"]
+                record_write.receipt(row, record_write.identity(item), folder=folder)
             except (ValueError, AttributeError) as error:
                 failures.append(f"record write receipt invalid: {error}")
         if row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES) and item not in loops:
@@ -1062,7 +1135,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     subject = handoff.get("subject", {})
     asks = report_asks({"subject": subject if isinstance(subject, Mapping) else {},
                         "filing": {"items": filing_rows, "asks": filing.get("asks", {})},
-                        "resume": {"open_loops": loops}}, problems)
+                        "resume": {"open_loops": loops}}, problems, ask)
     incomplete = [{"id": r["id"], "status": r["status"], "reason": r.get("error") or r.get("reason")}
                   for r in results if isinstance(r.get("id"), str) and r["id"] in NATIVE
                   and r.get("status") in ("failed", "declined", "pending")]
@@ -1313,7 +1386,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                          *(item for item in handoff.get("session_items", []) if item.get("recorded") is not True)]
                 output = {**handoff, "lesson_outcomes": rows,
                           "lesson_asks": [ask_payload({**item, "ask_text": lessons.ask_text(row)},
-                                                      handoff.get("subject", {}))
+                                                      handoff.get("subject", {}), ask)
                                           for item in items for row in rows if item.get("applied")
                                           and tuple(row["identity"]) == module.session_item_identity(item)]}
         elif args.operation == "apply-knowledge":
@@ -1327,7 +1400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             # A fact about the user, carried or found this wrap, goes to the ask binding.
             items = [*output.get("resume", {}).get("open_loops", []),
                      *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
-            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}))
+            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}), ask)
                                         for item in items if item.get("user_fact")]
         elif args.operation == "record-over-limit":
             state = auto_apply_state()
@@ -1375,7 +1448,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
         return 1 if args.operation in ("file", "record") and (output.get("filing", {}).get("ticket_read", {}).get("status") == "failed" or any(
-            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain", "pending")
+            (row.get("binding") in record_write.KINDS or (row.get("binding") == "ask" and (ask or {}).get("owner_agent")))
+            and row.get("status") in ("failed", "uncertain", "pending") and row.get("ask_status") != "filed"
             for row in output.get("filing", {}).get("items", []))) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)
