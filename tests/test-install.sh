@@ -99,7 +99,7 @@ test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/validate_
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/compose_rules.py"
 test -f "$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_setup.py"
 INSTALLED_RULES_SETUP="$TEST_HOME/.local/share/hippocampus/releases/$VERSION/scripts/rules_setup.py"
-INSTALLED_HOMES="{\"claude-code\": \"$TEST_HOME/installed-claude\", \"codex\": \"$TEST_HOME/installed-codex\", \"openclaw\": \"$TEST_HOME/installed-openclaw\"}"
+INSTALLED_HOMES="{\"claude-code\": \"$TEST_HOME/installed-claude\", \"codex\": \"$TEST_HOME/installed-codex\"}"
 PYTHONDONTWRITEBYTECODE=1 python3 "$INSTALLED_RULES_SETUP" inspect --homes "$INSTALLED_HOMES" > "$TEST_HOME/installed-rules-inspect.json"
 PYTHONDONTWRITEBYTECODE=1 python3 "$INSTALLED_RULES_SETUP" plan --homes "$INSTALLED_HOMES" > "$TEST_HOME/installed-rules-plan.json"
 mkdir -p "$TEST_HOME/.config/hippocampus" "$TEST_HOME/knowledge/raw" "$TEST_HOME/knowledge/wiki" "$TEST_HOME/knowledge/output" "$TEST_HOME/knowledge/docs"

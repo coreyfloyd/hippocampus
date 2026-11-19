@@ -17,7 +17,7 @@ TOP_LEVEL_FIELDS = {
 RULE_FIELDS = {"preset", "cross_tool_document", "development_document", "tools"}
 OPTIONAL_RULE_FIELDS = {"development_root"}
 RULE_TOOL_FIELDS = {"tool", "rules_target", "memory"}
-RULE_TOOLS = {"claude-code", "codex", "openclaw"}
+RULE_TOOLS = {"claude-code", "codex"}
 
 
 def fail(message):
