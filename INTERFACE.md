@@ -419,7 +419,7 @@ the destination changed and must be preserved. A store rejection returns
 new receipt: they use the receipt from the confirmed write being reversed.
 
 **Ask binding and filing outcomes.** A user profile may declare
-`"ask": {"command": "/ask-step"}`: exactly one non-empty command, separate
+`"ask": {"command": "/ask-step", "owner_agent": "example-agent"}`: one non-empty command and an optional non-empty agent identifier, separate
 from slots and steps. Repository profiles cannot bind it. `plan` returns `ask`
 (or null) and `rerun_all_steps: true`; an attended run after an unattended run
 executes every step again and asks the user, without reusing pending results.
@@ -443,7 +443,14 @@ ask acknowledgement its row keeps `binding: "ask"`, `ask_status: "filed"`,
 delivery does not substitute for a capture receipt.
 
 The ask command receives `text`, source `session_id`, `directory`, linked
-`ticket` or null, and `choices`. Asks never become tickets. `file` returns the
+`ticket` or null, and `choices`. With `owner_agent` configured in the binding,
+its value overrides any carried owner in every writer invocation. The writer
+must store this durable agent as owner, never substitute the user or source
+session, and acknowledge only after ownership is saved. This contract applies
+to Claude Code and Codex, including native asks, deferred sweep asks and slim
+asks. Command-only bindings retain their existing path until the configured
+writer has been proven with one real ask from each provider; do not cut over
+or declare migration complete from fixture tests alone. Asks never become tickets. `file` returns the
 payload with a `filing` object holding `items`, `warnings`, `failures`, and
 `asks` grouped by directory. Each item includes the original item, its rule,
 its binding and outcome; asks include their command payload. Keep this report

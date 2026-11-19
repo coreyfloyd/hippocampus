@@ -400,6 +400,36 @@ class ChecklistTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("cannot bind", result.stderr)
 
+    def test_configured_agent_owns_ask_without_changing_source_identity(self):
+        profile = self.filing_profile()
+        profile['ask']['owner_agent'] = 'fixture-agent'
+        binding = self.engine.ask_binding(profile)
+        plan = self.engine.compose([profile])
+        source = self.handoff()
+        item = dict(self.item('decision'), owner_agent='stale-user')
+        source['resume']['open_loops'] = [item]
+        result = self.engine.file_items(plan, source,
+            [dict(index=0, rule='R3', status='failed', error='writer unavailable', choices=['approve', 'decline'])], binding)
+        payload = result['filing']['items'][0]['ask']
+        self.assertEqual(payload['owner_agent'], 'fixture-agent')
+        self.assertEqual(payload['session_id'], item['session_id'])
+        self.assertEqual(result['resume']['open_loops'], [dict(item, choices=['approve', 'decline'])])
+        self.assertEqual(profile['ask'], binding)
+
+    def test_agent_owner_applies_to_deferred_ask_and_preserves_payload(self):
+        payload = {'text': 'Deferred session', 'owner_agent': 'old-owner',
+                   'identity': {'session_id': 'producer', 'text': 'Deferred session'},
+                   'choices': ['keep', 'close'], 'ticket': None}
+        bound = self.engine.owned_ask(payload, {'command': '/ask', 'owner_agent': 'fixture-agent'})
+        self.assertEqual(bound, dict(payload, owner_agent='fixture-agent'))
+        self.assertEqual(payload['owner_agent'], 'old-owner')
+        self.assertEqual(self.engine.owned_ask(payload, {'command': '/ask'}), payload)
+
+    def test_ask_binding_refuses_invalid_agent_owners(self):
+        for owner in ['', '  ', None, 42, {'user': 'fixture-user'}]:
+            with self.subTest(owner=owner), self.assertRaisesRegex(ValueError, 'owner_agent'):
+                self.engine.ask_binding({'ask': {'command': '/ask', 'owner_agent': owner}})
+
     def test_filing_outcomes_remove_only_successes_and_report_every_item(self):
         profile = self.filing_profile()
         plan = self.engine.compose([profile])

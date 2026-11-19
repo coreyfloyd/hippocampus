@@ -130,7 +130,11 @@ before deciding: one match is R2 and several are an R3 ask. Never skip it.
 For absent identities, use the record-write command carried in the intent:
 `record_writes.tickets` for new tickets and comments,
 `record_writes.documents` for document changes. Deliver asks through the profile's
-ask binding. Invoke skill commands as skills; follow inline
+ask binding. When it declares `owner_agent`, pass that configured identifier
+with every ask, including deferred asks, overriding any carried owner. The
+writer must store the durable agent as owner, never the user, in both Claude
+Code and Codex. If the writer cannot save agent ownership, report a failed
+write and retain the ask. Invoke skill commands as skills; follow inline
 instructions where supplied. No executable adapter is needed. Preserve the
 item identity, linked ticket, choices, priority and reason. A comment inherits
 the destination ticket's priority. An ask is never a ticket. For an interactive

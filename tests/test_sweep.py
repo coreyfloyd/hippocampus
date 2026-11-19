@@ -1366,3 +1366,18 @@ def test_reports_have_readable_entries_and_unchanged_json(sandbox, mode):
     assert "'session_ids':" not in body
     assert 'Destination: new ticket' in body
     assert 'Rule: R5' in body
+
+
+def test_deferred_ask_intent_uses_configured_agent_owner():
+    spec = importlib.util.spec_from_file_location('owned_sweep', ENGINE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    report = {'run_id': 'fixture-run', 'work': [],
+              'ask_binding': {'command': '/fixture-writer', 'owner_agent': 'fixture-agent'}}
+    row = {'identity': {'session_id': 'producer', 'text': 'Keep session?'},
+           'ask': {'text': 'Keep session?', 'owner_agent': 'old-user',
+                   'choices': ['keep', 'close'], 'ticket': None}}
+    module.add_intent(report, row, '/fixture/work', 'ask')
+    assert report['work'][0]['ask']['owner_agent'] == 'fixture-agent'
+    assert report['work'][0]['identity']['session_id'] == 'producer'
+    assert report['work'][0]['choices'] == ['keep', 'close']

@@ -617,6 +617,7 @@ def add_intent(report, row, directory, operation):
                                      identity_key(row['identity'])).encode()).hexdigest()
     if operation == 'ask':
         row.update(destination='ask', binding='ask')
+        row['ask'] = checklist.owned_ask(row['ask'], report.get('ask_binding'))
         row.update({key: row['ask'].get(key) for key in ('choices', 'ticket')})
     elif operation == 'native_step':
         row.update(native_step=row['binding'], unattended=True,
@@ -789,7 +790,7 @@ def plan_act(report, discovery, ask, config, path, persist=None):
     for candidate in discovery['candidates']:
         candidate['planned_source'] = True
     report.update(mode='act', phase='planned', work=[], undo_items=[],
-                  discovery=discovery, ask_bound=ask is not None)
+                  discovery=discovery, ask_bound=ask is not None, ask_binding=ask)
     if report.get('auto_apply'):
         report['persist_binding'] = persist
     created = 0

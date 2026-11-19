@@ -162,10 +162,21 @@ def ask_binding(profile: Mapping[str, Any]) -> dict[str, str] | None:
     if "ask" not in profile:
         return None
     binding = profile["ask"]
-    if (not isinstance(binding, Mapping) or set(binding) != {"command"}
-            or not isinstance(binding["command"], str) or not binding["command"].strip()):
-        raise ValueError(f"{profile.get('name', 'profile')}: ask requires only a non-empty command")
+    if (not isinstance(binding, Mapping) or set(binding) - {"command", "owner_agent"}
+            or not isinstance(binding.get("command"), str) or not binding["command"].strip()):
+        raise ValueError(f"{profile.get('name', 'profile')}: ask requires a non-empty command and optional owner_agent")
+    if "owner_agent" in binding and (not isinstance(binding["owner_agent"], str)
+                                      or not binding["owner_agent"].strip()):
+        raise ValueError(f"{profile.get('name', 'profile')}: ask.owner_agent requires a non-empty agent identifier")
     return dict(binding)
+
+
+def owned_ask(payload: Mapping[str, Any], binding: Mapping[str, str] | None) -> dict[str, Any]:
+    """Use the configured agent owner without changing the producing session or item."""
+    result = copy.deepcopy(dict(payload))
+    if binding and "owner_agent" in binding:
+        result["owner_agent"] = binding["owner_agent"]
+    return result
 
 
 def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -331,7 +342,8 @@ def validate_ask_payload(ask: Mapping[str, Any]) -> None:
         raise ValueError(f"{ask['text']}: a fact about the user has no default")
 
 
-def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str, Any]:
+def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any],
+                binding: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Keep the complete proposal and provenance alongside the ask's text and choices."""
     text = item["ask_text"] if item.get("applied") or item.get("user_fact") else item.get("context", str(item))
     ask = {**copy.deepcopy(dict(item)), "text": text,
@@ -340,7 +352,7 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any]) -> dict[str
            "ticket": (item.get("anchor") or {}).get("ticket"),
            "choices": [] if item.get("applied") else copy.deepcopy(item.get("choices", []))}
     validate_ask_payload(ask)
-    return ask
+    return owned_ask(ask, binding)
 
 
 def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
@@ -536,7 +548,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 raise ValueError(f"{label}: {rule} requires dropped with a reason")
         else:
             if binding == "ask":
-                entry["ask"] = ask_payload(item, handoff.get("subject", {}))
+                entry["ask"] = ask_payload(item, handoff.get("subject", {}), ask)
                 report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
             if bindings[binding] is None:
                 entry["status"] = "unbound"
@@ -1313,7 +1325,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                          *(item for item in handoff.get("session_items", []) if item.get("recorded") is not True)]
                 output = {**handoff, "lesson_outcomes": rows,
                           "lesson_asks": [ask_payload({**item, "ask_text": lessons.ask_text(row)},
-                                                      handoff.get("subject", {}))
+                                                      handoff.get("subject", {}), ask)
                                           for item in items for row in rows if item.get("applied")
                                           and tuple(row["identity"]) == module.session_item_identity(item)]}
         elif args.operation == "apply-knowledge":
@@ -1327,7 +1339,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             # A fact about the user, carried or found this wrap, goes to the ask binding.
             items = [*output.get("resume", {}).get("open_loops", []),
                      *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
-            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}))
+            output["knowledge_asks"] = [ask_payload(item, output.get("subject", {}), ask)
                                         for item in items if item.get("user_fact")]
         elif args.operation == "record-over-limit":
             state = auto_apply_state()

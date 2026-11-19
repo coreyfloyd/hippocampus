@@ -243,7 +243,12 @@ improve-harness. Configure their destinations through the knowledge profile and
 the improve-harness routing file; never offer replacement slot commands.
 
 Offer the separate ask binding for decisions and approvals. It is one discovered
-command, `{"command": "<actual skill invocation>"}`, with no `consumes` field.
+command, `{"command": "<actual skill invocation>", "owner_agent": "<agent identifier>"}`,
+with no `consumes` field. Discover the configured durable agent identifier from
+the user's chosen writer; never invent an agent or use the user as owner. Verify
+that the command supports saving this owner before binding it. Keep an existing
+command-only path until one real writer ask from each provider has proved the
+configured agent owner; setup itself never sends those proof asks.
 Explain that it receives `text`, source `session_id`, `directory`, `ticket`
 (or null), and `choices`, and returns a write acknowledgement. Ask delivery never
 files a ticket and never consumes an unsaved knowledge or lesson item. Preserve

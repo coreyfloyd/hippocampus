@@ -39,7 +39,10 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    after the remote took the branch counts as pushed. Remote commands wait 120 seconds (clones
    600); `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` in the environment sets another number of seconds.
 5. With `done: true`, hand each row of `asks` to the profile's ask binding, the same way the
-   sweep does, whose profile this step shares. After a confirmed delivery run
+   sweep does, whose profile this step shares. Pass its configured `owner_agent`
+   on every new or retried ask, overriding any carried owner; the writer must
+   save the durable agent as owner, never the user, in Claude Code and Codex.
+   Unsupported ownership leaves the ask undelivered. After a confirmed delivery run
    `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt <receipt>`. With nothing
    bound, an ask stays undelivered and the next `plan` lists it again. Report `results`,
    `waiting`, `skipped`, `deferred`, `unreachable` and `failed`. Write no handoff for this step.
