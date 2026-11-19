@@ -202,6 +202,17 @@ Produced surfaces:
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("routing", result.stderr)
 
+    def test_unknown_tool_prevents_every_write(self):
+        self.write_config([
+            self.target("codex", self.codex),
+            self.target("unknown-tool", self.second_codex),
+        ])
+        result = self.compose()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported tool", result.stderr)
+        self.assertFalse(self.codex.exists())
+        self.assertFalse(self.second_codex.exists())
+
     def test_exact_forms_and_no_byte_change_rerun(self):
         self.write_config([
             self.target("claude", self.claude),

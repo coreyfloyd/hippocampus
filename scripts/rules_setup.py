@@ -389,7 +389,6 @@ def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fin
         raise ValueError("approved mutation list changed; rerun plan and approve the new fingerprint")
     profile = pathlib.Path(profile)
     reader = profile_reader()
-    reader.validate(profile)
     values = reader.parse(profile)
     root = pathlib.Path(knowledge_root or values["knowledge_root"]).resolve()
     if root != pathlib.Path(values["knowledge_root"]).resolve():
@@ -436,6 +435,8 @@ def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fin
             target = composer.Target("codex", "profile", profile, [])
             original, mode = composer.preflight_target(target)
             writes.append(composer.PlannedWrite(target, original, mode, candidate.read_bytes(), "profile"))
+        else:
+            reader.validate(profile)
     paths = [item.target.path for item in writes]
     if len(set(paths)) != len(paths):
         raise ValueError("target overlaps profile or memory settings")

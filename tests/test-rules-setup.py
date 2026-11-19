@@ -153,11 +153,19 @@ class RulesSetupTests(unittest.TestCase):
         project = self.homes["claude-code"] / "projects" / "sample"
         project.mkdir(parents=True)
         (project / "session.jsonl").write_text("transcript\n")
+        store = self.homes["codex"] / "memories"
         rows = {r["tool"]: r for r in self.describe()}
+        self.assertEqual(rows["codex"]["memory"]["store"]["file_count"], 0)
+        self.assertTrue(rows["codex"]["memory"]["store"]["empty"])
         self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 0)
         (project / "memory").mkdir()
         (project / "memory" / "fact.md").write_text("fact\n")
+        (store / "nested").mkdir(parents=True)
+        (store / "keep.md").write_text("keep\n")
+        (store / "nested" / "fact.md").write_text("fact\n")
         rows = {r["tool"]: r for r in self.describe()}
+        self.assertEqual(rows["codex"]["memory"]["store"]["file_count"], 2)
+        self.assertFalse(rows["codex"]["memory"]["store"]["empty"])
         self.assertEqual(rows["claude-code"]["memory"]["store"]["file_count"], 1)
 
     def test_new_target_parent_is_an_explicit_approved_directory(self):
@@ -231,16 +239,60 @@ class RulesSetupTests(unittest.TestCase):
 
     def test_apply_requires_approval_and_never_deletes_memory(self):
         helper = load_helper()
-        memory = self.homes["codex"] / "memories"
-        memory.mkdir(parents=True)
-        record = memory / "keep.md"
-        record.write_text("keep\n")
-        plan = helper.plan(self.describe(), "thin")
-        profile = self.base / "profile.md"
+        _, profile = self.configured_profile()
+        records = []
+        for tool, store in (("claude-code", "projects/sample/memory"), ("codex", "memories")):
+            helper.write_memory_state(self.homes[tool], tool, "on")
+            memory = self.homes[tool] / store
+            memory.mkdir(parents=True)
+            record = memory / "keep.md"
+            record.write_bytes(b"keep\n")
+            records.append(record)
+        before_profile = profile.read_bytes()
+        plan = helper.plan(self.describe(), "thin", profile=profile)
         with self.assertRaisesRegex(ValueError, "approval"):
             helper.apply(plan, profile, approved=False)
-        self.assertTrue(record.exists())
-        self.assertFalse(profile.exists())
+        self.assertEqual(profile.read_bytes(), before_profile)
+        self.assertEqual([p.read_bytes() for p in records], [b"keep\n", b"keep\n"])
+        helper.apply(plan, profile, approved=True,
+                     approval_fingerprint=plan["approval_fingerprint"])
+        self.assertEqual([p.read_bytes() for p in records], [b"keep\n", b"keep\n"])
+        for row in self.describe():
+            self.assertEqual(row["memory"]["state"], "off")
+
+    def test_setup_replaces_unsupported_profile_row_with_detected_tools(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        previous = profile.read_text().replace("---\npolicy", "rules:\n  preset: standard\n"
+            "  cross_tool_document: context/rules.md\n"
+            "  development_document: context/development-rules.md\n"
+            "  tools:\n    - tool: unknown-tool\n      rules_target: none\n"
+            "      memory: native\n---\npolicy")
+        profile.write_text(previous)
+        value = helper.plan(self.describe(), "standard", profile=profile)
+        self.assertEqual(profile.read_text(), previous)
+        self.assertTrue(any(m["kind"] == "profile" for m in value["mutation_list"]))
+        helper.apply(value, profile, approved=True,
+                     approval_fingerprint=value["approval_fingerprint"])
+        helper.profile_reader().validate(profile)
+        parsed = helper.profile_reader().parse(profile)
+        self.assertEqual(parsed["rules"]["tools"], [
+            {"tool": tool, "rules_target": "none", "memory": "native"}
+            for tool in self.homes])
+
+    def test_replacing_rules_does_not_bypass_other_profile_validation(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        profile.write_text(profile.read_text().replace("profile_version: 4", "profile_version: invalid"))
+        before = profile.read_bytes()
+        value = helper.plan(self.describe(), "thin", profile=profile)
+        with self.assertRaises(SystemExit):
+            helper.apply(value, profile, approved=True,
+                         approval_fingerprint=value["approval_fingerprint"])
+        self.assertEqual(profile.read_bytes(), before)
+        self.assertFalse((self.homes["claude-code"] / "CLAUDE.md").exists())
+        self.assertFalse((self.homes["codex"] / "AGENTS.md").exists())
+        self.assertFalse((self.homes["claude-code"] / "settings.json").exists())
 
     def test_approved_apply_composes_selected_targets_and_records_profile_choices(self):
         helper = load_helper()
