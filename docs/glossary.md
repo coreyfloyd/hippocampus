@@ -65,7 +65,7 @@ A handoff whose subject is a different worktree of the same repository as the cu
 _Avoid_: duplicate, related session
 
 **Checkpoint**:
-Writing the handoff now, without finishing the session's work. A checkpoint never commits, merges, or pushes. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
+Writing the handoff now, without finishing the session's work. An ordinary checkpoint never commits, merges, or pushes. With explicit `durable`, it runs checklist filing and persistence under their existing authorization, reports filed and unfiled items, and preserves the running session and continuation. It carries every session item the record does not yet hold as an open loop, and restores the session's retained session items it was not given again. When the handoff fails its validity check, a checkpoint still writes it and reports the failure.
 _Avoid_: wrap, save
 
 **Keep-warm**:

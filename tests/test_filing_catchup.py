@@ -81,10 +81,12 @@ def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
 
 
 @pytest.mark.parametrize('item_type', ['decision', 'lesson', 'knowledge'])
-def test_approval_is_owned_ask_with_identity_receipt(tmp_path, item_type):
+@pytest.mark.parametrize('judgment', ['omitted', 'filed', 'requested'])
+def test_approval_is_owned_ask_with_identity_receipt(tmp_path, item_type, judgment):
     decision = item('Approve the decision document')
     decision['type'] = item_type
-    setup(tmp_path, [decision])
+    sources = setup(tmp_path, [decision])
+    before = {p: p.read_bytes() for p in sources.iterdir()}
     script = tmp_path / 'ask.py'
     script.write_text('''import json, sys
 from pathlib import Path
@@ -101,8 +103,28 @@ else:
     (tmp_path / 'decisions.json').write_text(json.dumps([{'identity': {'session_id': decision['session_id'],
         'produced_at': decision['produced_at'], 'text': decision['context']}, 'rule': 'R3',
         'choices': ['approve', 'defer']}]))
-    assert run(tmp_path).returncode == 0
+    rows = json.loads((tmp_path / 'decisions.json').read_text())
+    if judgment != 'omitted':
+        rows[0]['status'] = 'filed' if judgment == 'filed' else 'pending'
+        rows[0]['ask_delivery'] = 'requested'
+    (tmp_path / 'decisions.json').write_text(json.dumps(rows))
+    native = item_type in ('lesson', 'knowledge')
+    import durable_checkpoint
+    for _ in range(2):
+        assert run(tmp_path).returncode == int(native)
+        out = report(tmp_path)
+        assert out['unfiled_before_cutoff'] == int(native)
+        assert out['ready_for_durable_filing'] is (not native)
+        if native:
+            assert out['items'][0]['status'] == 'pending'
+            assert out['items'][0]['ask_status'] == 'filed'
+            with pytest.raises(ValueError):
+                durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [out])
+        else:
+            assert durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [out])
+    assert all(p.read_bytes() == raw for p, raw in before.items())
     saved = report(tmp_path)['items'][0]
+    assert saved['receipt'] == json.loads(script.with_suffix('.json').read_text())
     assert saved['destination'] == 'asks:1'
     assert saved['receipt']['owner_agent'] == 'filing-agent'
     assert not (tmp_path / 'store.json').exists()
@@ -296,3 +318,79 @@ def test_invalid_duplicate_anchor_cannot_leave_first_copy_fileable(tmp_path, bad
         assert report(tmp_path)['unfiled_before_cutoff'] == 1
         assert len(report(tmp_path)['items'][0]['copies']) == 2
     assert all(p.read_bytes() == content for p, content in before.items())
+
+
+@pytest.mark.parametrize('status', ['pending', 'dropped', 'failed', 'uncertain', 'read failed'])
+def test_explicit_deferred_judgment_never_writes(tmp_path, status):
+    setup(tmp_path, [item()])
+    path = tmp_path / 'decisions.json'
+    rows = json.loads(path.read_text())
+    rows[0].update(status=status, reason='Deferred', error='Not ready')
+    path.write_text(json.dumps(rows))
+    assert run(tmp_path).returncode == 1
+    assert report(tmp_path)['items'][0]['status'] == status
+    assert report(tmp_path)['unfiled_before_cutoff'] == 1
+    assert not (tmp_path / 'store.json').exists()
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+@pytest.mark.parametrize('kind', ['lesson', 'knowledge'])
+@pytest.mark.parametrize('rule', ['R3', 'R4'])
+@pytest.mark.parametrize('mode', ['ok', 'lost'])
+def test_native_approval_retry_cannot_enable_until_capture(tmp_path, provider, kind, rule, mode):
+    import record_write
+    import durable_checkpoint
+    from test_durable_checkpoint import invoke, owned_ask_profile
+    original = {**item('Capture this proposal'), 'type': kind, 'session_id': 'fixture',
+                'disposition': 'Await native capture', 'choices': ['approve', 'defer']}
+    sources = setup(tmp_path, [original], mode)
+    binding = {'command': [sys.executable, str(tmp_path / 'store.py')]}
+    script = tmp_path / 'store.py'
+    script.write_text(script.read_text().replace('data.append(receipt);',
+        "receipt['owner_agent'] = r['item']['owner_agent']; data.append(receipt);"))
+    (tmp_path / 'profile.json').write_text(json.dumps(owned_ask_profile(binding)))
+    judgment = dict(identity=record_write.identity(original), rule=rule, status='pending',
+                    ask_delivery='requested', destination='ask')
+    (tmp_path / 'decisions.json').write_text(json.dumps([judgment]))
+    before = {p: p.read_bytes() for p in sources.iterdir()}
+    for attempt in range(2):
+        assert run(tmp_path).returncode == 1
+        out = report(tmp_path)
+        assert out['unfiled_before_cutoff'] == 1 and not out['ready_for_durable_filing']
+        if mode == 'ok' or attempt:
+            assert out['items'][0]['status'] == 'pending'
+            assert out['items'][0]['ask_status'] == 'filed'
+            assert out['items'][0]['receipt'] == json.loads((tmp_path / 'store.json').read_text())[0]
+        else:
+            assert out['items'][0]['status'] == 'uncertain'
+            assert 'ask_status' not in out['items'][0]
+        with pytest.raises(ValueError):
+            durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [out])
+    assert len(json.loads((tmp_path / 'store.json').read_text())) == 1
+    assert all(p.read_bytes() == raw for p, raw in before.items())
+    live = tmp_path / 'durable'
+    live.mkdir()
+    row = {k: v for k, v in judgment.items() if k != 'identity'}
+    row['index'] = 0
+    assert invoke(live, provider, items=[original], rows=[row], profile=owned_ask_profile).returncode == 1
+    assert json.loads((live / 'report.json').read_text())['unfiled'] == [original]
+    # Execute a fixture native capture, then pass its actual saved readback through
+    # the existing native receipt route. Approval delivery alone never did this.
+    capture = tmp_path / 'capture'
+    capture.mkdir()
+    capture_binding = store(capture)
+    saved = record_write.execute(capture_binding, 'native_capture', original, {'status': 'pending'})
+    assert saved['receipt'] == json.loads((capture / 'store.json').read_text())[0]
+    native_row = dict(index=0, rule='R4', status='filed',
+                      destination=saved['destination'], receipt=saved['receipt'])
+    assert invoke(live, provider, items=[original], rows=[native_row], profile=owned_ask_profile).returncode == 0
+    checkpoint = json.loads((live / 'handoff.json').read_text())
+    assert checkpoint['resume']['open_loops'] == []
+    assert checkpoint['resume']['next_action'] == 'Continue fixture work'
+    # Model both source providers receiving the settled checkpoint; catch-up
+    # itself never rewrites either source and re-inventories the current store.
+    for path in sources.iterdir():
+        path.write_text(json.dumps(checkpoint))
+    assert run(tmp_path).returncode == 0
+    assert report(tmp_path)['unfiled_before_cutoff'] == 0
+    assert durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [report(tmp_path)])
