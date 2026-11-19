@@ -53,6 +53,7 @@ def run(module, supplied, args):
                 continue
             if row.get('status') == 'filed':
                 try:
+                    checklist.require_ask_receipt(ask, row.get('receipt'), item, required_owner=True)
                     checklist.record_write.receipt(row, checklist.record_write.identity(item))
                 except ValueError as error:
                     row.update(status='failed', error=str(error))

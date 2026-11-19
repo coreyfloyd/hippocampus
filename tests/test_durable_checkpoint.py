@@ -296,3 +296,107 @@ def test_claimed_filed_ask_requires_matching_identity_receipt(tmp_path):
     assert result.returncode == 1
     assert json.loads((tmp_path / 'report.json').read_text())['unfiled'] == [source]
     assert not (tmp_path / 'store.json').exists()
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+@pytest.mark.parametrize('kind', ['tickets', 'projects', 'documents', 'scheduled_jobs'])
+@pytest.mark.parametrize('status', ['dropped', 'failed', 'uncertain', 'read failed', 'pending', 'filed'])
+@pytest.mark.parametrize('read_status', ['ok', 'failed'])
+def test_record_judgment_controls_effects_and_retention(tmp_path, provider, kind, status, read_status):
+    source = {**item('Record judgment', record_kind=kind), 'session_id': 'fixture',
+              'disposition': 'Retain until filing is authorized'}
+    row = dict(index=0, rule='R2', status=status, read_status=read_status,
+               reason='Deferred judgment', destination='planned')
+    profile = lambda binding: {'name': 'fixture', 'record_writes': {kind: binding}}
+    result = invoke(tmp_path, provider, items=[source], rows=[row], profile=profile)
+    permitted = status in ('pending', 'filed') and read_status == 'ok'
+    assert result.returncode == (0 if permitted else 1), result.stderr
+    report = json.loads((tmp_path / 'report.json').read_text())
+    assert report['next_action'] == 'Continue fixture work'
+    if permitted:
+        assert report['filed'][0]['receipt']['identity']['text'] == source['context']
+        assert report['unfiled'] == []
+        assert invoke(tmp_path, provider, items=[source], rows=[row], profile=profile).returncode == 0
+        assert len(json.loads((tmp_path / 'store.json').read_text())) == 1
+    else:
+        assert not (tmp_path / 'store.json').exists()
+        assert report['filed'] == [] and report['unfiled'] == [source]
+        assert invoke(tmp_path, provider, durable=False, items=[]).returncode == 0
+        assert json.loads((tmp_path / 'handoff.json').read_text())['resume']['open_loops'] == [source]
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+@pytest.mark.parametrize('authority', ['configured', 'carried', 'absent'])
+@pytest.mark.parametrize('receipt_owner', ['fixture-owner', 'unrelated', None])
+def test_existing_ask_receipt_requires_authoritative_owner(tmp_path, provider, authority, receipt_owner):
+    import record_write
+    source = {**item('Saved promise'), 'type': 'commitment', 'session_id': 'fixture',
+              'disposition': 'Await receipt', 'choices': ['approve', 'defer']}
+    if authority == 'carried':
+        source['owner_agent'] = 'fixture-owner'
+    # Obtain the receipt from the actual fixture store, including ownerless saves.
+    binding = store(tmp_path)
+    script = tmp_path / 'store.py'
+    script.write_text(script.read_text().replace('data.append(receipt);',
+        f"receipt['owner_agent'] = {receipt_owner!r}; data.append(receipt);"))
+    saved = record_write.execute(binding, 'asks', source, {'status': 'pending'})
+    receipt = saved['receipt']
+    row = dict(index=0, rule='R3', status='filed', receipt=receipt, destination=receipt['destination'])
+    def profile(binding):
+        result = owned_ask_profile(binding)
+        if authority != 'configured':
+            result['ask'].pop('owner_agent')
+        return result
+    result = invoke(tmp_path, provider, items=[source], rows=[row], profile=profile)
+    permitted = authority != 'absent' and receipt_owner == 'fixture-owner'
+    assert result.returncode == (0 if permitted else 1), result.stderr
+    report = json.loads((tmp_path / 'report.json').read_text())
+    assert report['unfiled'] == ([] if permitted else [source])
+    assert len(json.loads((tmp_path / 'store.json').read_text())) == 1
+    assert invoke(tmp_path, provider, durable=False, items=[]).returncode == 0
+    assert json.loads((tmp_path / 'handoff.json').read_text())['resume']['open_loops'] == ([] if permitted else [source])
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+def test_requested_ask_uses_carried_owner(tmp_path, provider):
+    source = {**item('Owned promise'), 'type': 'commitment', 'session_id': 'fixture',
+              'owner_agent': 'fixture-owner', 'disposition': 'Deliver promise', 'choices': ['approve', 'defer']}
+    def profile(binding):
+        result = owned_ask_profile(binding)
+        result['ask'].pop('owner_agent')
+        return result
+    row = dict(index=0, rule='R3', status='pending', ask_delivery='requested')
+    result = invoke(tmp_path, provider, items=[source], rows=[row], profile=profile)
+    assert result.returncode == 0, result.stderr
+    report = json.loads((tmp_path / 'report.json').read_text())
+    assert report['filed'][0]['receipt']['owner_agent'] == 'fixture-owner'
+    assert report['unfiled'] == []
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+def test_omitted_judgment_retains_original_without_effects(tmp_path, provider):
+    source = {**item('Omitted judgment'), 'session_id': 'fixture', 'disposition': 'File later'}
+    assert invoke(tmp_path, provider, items=[source], rows=[]).returncode == 1
+    assert not (tmp_path / 'store.json').exists()
+    assert json.loads((tmp_path / 'report.json').read_text())['unfiled'] == [source]
+    assert invoke(tmp_path, provider, durable=False, items=[]).returncode == 0
+    assert json.loads((tmp_path / 'handoff.json').read_text())['resume']['open_loops'] == [source]
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+@pytest.mark.parametrize('rule', ['R5', 'R7'])
+@pytest.mark.parametrize('status', ['dropped', 'failed', 'uncertain'])
+def test_deferred_new_ticket_and_approved_document_do_not_write(tmp_path, provider, rule, status):
+    source = {**item('Deferred approved work'), 'session_id': 'fixture', 'disposition': 'Wait'}
+    row = dict(index=0, rule=rule, status=status, read_status='ok', reason='Deferred',
+               priority='p2', priority_reason='Fixture priority', answer='approve', approval_source='User reply')
+    if rule == 'R7':
+        source.update(type='decision', author='Fixture user', author_role='user', location='Fixture chat',
+                      decision_record=dict(title='Approved', scope='fixture', text='Approved text'))
+    def profile(binding):
+        return dict(name='fixture', record_writes={k: binding for k in ('tickets', 'documents')},
+                    decision_records={'default_folder': 'decisions'})
+    assert invoke(tmp_path, provider, items=[source], rows=[row], profile=profile).returncode == 1
+    assert not (tmp_path / 'store.json').exists()
+    report = json.loads((tmp_path / 'report.json').read_text())
+    assert report['unfiled'] == [source] and report['items'][0]['status'] == status

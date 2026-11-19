@@ -183,9 +183,11 @@ def load_ask_binding() -> dict[str, str] | None:
 
 
 def require_ask_receipt(binding: Mapping[str, str] | None, receipt: Any,
-                        payload: Mapping[str, Any] | None = None) -> None:
+                        payload: Mapping[str, Any] | None = None, *, required_owner: bool = False) -> None:
     """An agent-owned ask settles only with the writer's saved-owner acknowledgement."""
     owner = (binding or {}).get("owner_agent") or (payload or {}).get("owner_agent")
+    if required_owner and not owner:
+        raise ValueError("durable asks require a configured or carried owner_agent")
     if owner and (not isinstance(receipt, Mapping) or receipt.get("owner_agent") != owner):
         raise ValueError(f"ask receipt.owner_agent must confirm saved owner_agent {owner!r}")
 
@@ -601,6 +603,10 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 reason = row.get("error") or row.get("reason")
                 if status in ("failed", "declined", "pending", "not configured") and not reason:
                     raise ValueError(f"{binding}: {status} requires a reason or error")
+                kept.append(copy.deepcopy(item))
+            elif binding in record_write.KINDS and status not in ("pending", "filed"):
+                entry["error"] = row.get("error") or row.get("reason") or "filing deferred"
+                report["failures"].append(f"{label}: {binding} {status}: {entry['error']}")
                 kept.append(copy.deepcopy(item))
             elif binding in record_write.KINDS and execute_writes:
                 if rule == "R5" and (not row.get("priority") or not row.get("priority_reason")):

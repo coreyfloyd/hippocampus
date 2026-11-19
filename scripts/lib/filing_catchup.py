@@ -121,9 +121,9 @@ def file_item(source, decision, plan, ask):
     if checked['status'] != 'filed' and not approval_pending:
         return {**checked, 'status': 'pending'}
     if kind == 'ask':
-        if not ask or not ask.get('owner_agent'):
-            raise ValueError('catch-up asks require a configured durable agent owner')
         payload = checked['ask']
+        if not payload.get('owner_agent'):
+            raise ValueError('catch-up asks require a configured or carried durable agent owner')
         # The ask writer uses the same lookup/write identity and receipt protocol.
         result = record_write.execute(ask, 'asks', payload, checked)
         if result['status'] == 'filed':
