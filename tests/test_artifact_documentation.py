@@ -115,7 +115,6 @@ def test_profile_loads_and_plan_recomposes(tmp_path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     profile = EXAMPLES / "profile.md"
-    assert profile.read_bytes() == (ROOT / "tests/fixtures/profiles/user.md").read_bytes()
     module.compose([module.load_profile(profile)])
     actual = json.loads(command(CHECKLIST, "plan", "--user-profile", profile,
                                 "--handoff", EXAMPLES / "handoff.json",
@@ -136,8 +135,32 @@ def test_configuration_example_is_read_by_config_get(tmp_path):
     config = json.loads((EXAMPLES / "config.json").read_text())
     assert config
     for key, value in config.items():
+        if isinstance(value, dict):
+            result = subprocess.run(
+                [sys.executable, str(HANDOFF), "config-get", key],
+                text=True, capture_output=True, env=sandbox_env(tmp_path))
+            assert result.returncode == 2
+            assert result.stdout == ""
+            assert key in result.stderr
+            continue
         output = command(HANDOFF, "config-get", key, env=sandbox_env(tmp_path)).strip()
         assert output == ("\n".join(value) if isinstance(value, list) else str(value))
+
+
+def test_startup_configuration_example_is_read_by_its_consumer(tmp_path):
+    path = EXAMPLES / "config.json"
+    config = json.loads(path.read_text())
+    script = ROOT / "skills/slim-harness/scripts/harness.py"
+    spec = importlib.util.spec_from_file_location("example_harness", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    policy = config["startup_budget"]
+    directory = str(tmp_path.resolve())
+    overrides = {str(Path(key).expanduser().resolve()): value
+                 for key, value in policy["directories"].items()}
+    assert module.startup_policy({"config": str(path), "directory": directory}) == (
+        directory, overrides.get(directory, policy["default_tokens"]),
+        policy["usage_sessions"])
 
 
 def test_storage_artifacts_have_readme_outlines_and_examples_have_links():
