@@ -22,8 +22,8 @@ The optional `rules` frontmatter section records the choices approved through
 composer read. Its `preset` is `standard` or `thin`. `cross_tool_document` and
 `development_document` name the two rules documents relative to the knowledge
 root. An optional absolute `development_root` lets set-up describe the delivery
-of development rules. Each `tools` row names one supported tool (`claude-code`, `codex`, or
-`openclaw`), its `rules_target` (a file location or `none`), and its `memory`
+of development rules. Each `tools` row names one supported tool (`claude-code`
+or `codex`), its `rules_target` (a file location or `none`), and its `memory`
 value (`native` or `off`). A profile without this section remains valid and
 uses the standard preset.
 

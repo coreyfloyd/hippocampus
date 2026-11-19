@@ -62,7 +62,7 @@ it.
 
 If the profile's optional `rules.development_root` is present, include one
 delivery column in the state table: Claude Code receives development rules by
-directory walk from that root; Codex and OpenClaw receive them through a
+directory walk from that root; Codex receives them through a
 repository block. The profile may record the absolute development root; it is
 not a rules document location.
 
@@ -77,8 +77,7 @@ The user may change either value in any row before approval. `native` records
 the choice while retaining the detected state and proposes no memory setting
 change. `off` proposes only an already-documented off setting that differs
 from the detected value. Claude Code uses `autoMemoryEnabled: false`; Codex
-uses `features.memories = false`; OpenClaw disables both pre-compaction memory flush and
-memory-core dreaming. If a memory directory or workspace is customized,
+uses `features.memories = false`. If a memory directory is customized,
 describe it, flag an `off` selection for the user, and propose no change.
 
 Use `scripts/rules_setup.py plan --profile <profile>` to prepare the complete proposed mutation

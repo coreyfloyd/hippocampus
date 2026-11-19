@@ -286,7 +286,7 @@ def test_flow_8_extend_existing_knowledge_profile_preserves_other_choices(user):
     assert plan['steps'][3]['binding']['command'] == '/save-work'
     checklist_before = profile.read_bytes()
     homes = json.dumps({tool: str(user[1] / ('settings-' + tool))
-                        for tool in ('claude-code', 'codex', 'openclaw')})
+                        for tool in ('claude-code', 'codex')})
     args = ['--profile', knowledge, '--homes', homes, '--preset', 'standard']
     proposal = json.loads(run(user[2], sys.executable, root / 'scripts/rules_setup.py', 'plan', *args).stdout)
     assert knowledge.read_bytes() == before  # preparing the exact review writes nothing

@@ -93,7 +93,7 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
         if not isinstance(value, dict):
             fail(f"configuration: {label} must be an object")
         tool = value.get("tool")
-        if tool not in {"claude", "codex", "openclaw"}:
+        if tool not in {"claude", "codex"}:
             fail(f"configuration: {label} has unsupported tool {tool!r}")
         render = value.get("render", "default")
         if render not in ("default", "literal"):
