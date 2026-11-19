@@ -1,6 +1,6 @@
 ---
 name: slim-harness
-description: Review and slim one rules file, skill, agent definition, or output style, preserving intent and resolving conflicts with the user. Use /hippocampus:slim-harness on one file manually or from improve-harness over-limit rows. Requires the user present; leaves edits uncommitted.
+description: Review and slim one rules file, skill, agent definition, or output style, and measure whole start-up token budgets. Use /hippocampus:slim-harness on one file manually or from improve-harness over-limit rows. For ordinary reviews, requires the user present and leaves edits uncommitted. Evidence-backed start-up extraction leaves a slim branch with one user ask per removal.
 ---
 
 # Slim Harness
@@ -9,11 +9,15 @@ Review one handed or loaded instruction file. This skill adds source edits and
 cross-file conflict checks to Claude Code's `/doctor prompt-audit`, and works in
 both tools. Review the target; read the comparison files below for cross-file
 checks. Never scan a catalog or independently review unrelated files.
-Size is one trigger: a user or scheduled review may request an under-limit file. User presence is still required; no schedule is installed.
+Whole start-up budget overage is also a trigger; measure the explicit loaded set
+using the budget workflow below in both tools. Size is one trigger: a user or
+scheduled review may request an under-limit file. Ordinary file reviews require
+user presence; no schedule is installed.
 
 ## Start and measure
 
-1. Decide mode first. In an unattended run, stop before any edit: “slim-harness
+1. Decide mode first. For start-up budget extraction use the branch workflow below.
+   For an ordinary unattended file review, stop before any edit: “slim-harness
    needs the user present; edited nothing.” Do not self-approve or enqueue a review.
 2. Read only the running tool's reference: `references/claude.md` for Claude Code,
    `references/codex.md` for Codex. These define limits and loading scope. A manually
@@ -126,9 +130,11 @@ skill path, section, size, sessions loaded, and sessions with evidence in each
 report-supported finding. Read `references/usage.md` for the report schema and
 coverage limits; generate it with `scripts/harness.py usage <manifest.json>` when
 transcripts and snapshots are supplied. Treat prose-only rules as “no evidence of
-use”, never “unused”. Suggest a split from usage evidence only after at least
-3 distinct sessions loaded that skill. The report is evidence for the existing
-review and user decisions, not permission to remove instructions.
+use”, never “unused”. Suggest a split from usage evidence only after the configured
+number of distinct loaded sessions (default ten). For whole start-up reviews, the branch
+workflow below moves sections with zero evidence by default after the configured
+session minimum. Other extraction findings
+remain evidence for the existing review and user decisions.
 
 Sort remaining instructions into always-on (stays), situational, or tool-specific.
 Situational material moves behind a pointer; tool-specific material goes in a file
@@ -204,3 +210,79 @@ For cross-file detection without a review, `scripts/harness.py duplicates
 <manifest.json>` accepts the same manifest. Read `references/duplicates.md` for
 its matching rules and result schema. It reports candidates and unresolved paths;
 it edits nothing and grants no permission to trim.
+
+
+## Whole start-up budget and branch extraction
+
+Use the same helper in Claude Code and Codex. In the measurement manifest set
+`directory` to the agent's launch directory and `config` to an explicit hippocampus
+configuration JSON path. With no config supplied, built-in defaults apply; the
+helper never searches a home directory or knowledge root. Configuration holds:
+
+```json
+{"startup_budget": {"default_tokens": 8000, "directories": {"/workspace/project": 6000}, "usage_sessions": 10}}
+```
+
+Directory overrides must be absolute or `~/` paths and match the resolved launch
+directory exactly; every directory without an override uses the default. Both
+configuration objects must be JSON objects; all policy values are positive integers.
+Budgets use **estimated tokens**, `ceil(UTF-8 bytes / 4)` per input, the existing
+review conversion shared by both tools, not an exact provider tokenizer.
+`startup` reports total, budget, overage, and every file's contribution, even when
+all individual files fit. Existing per-file limits remain additional checks.
+Full files and agent role paths count once by resolved source; a full load replaces
+a listing contribution. Listed skills contribute their name, listed path, description
+and Claude `when_to_use`. Supply `listing_path` when its displayed path differs from
+the snapshot path, or `listing_text` with the exact rendered discovery entry, including
+formatting. Otherwise the estimate joins those fields with newlines. Supply
+non-file start-up material as `inputs: [{"name": "system prompt", "text": "..."}]`.
+Attest the whole start-up, including injected text and listings; do not discover it
+by scanning files. Missing files make `startup.complete` false: report the gap,
+never describe a partial total as within budget. Comparison reads are excluded.
+
+For an over-budget start-up, use `usage` with the same explicit config and captured
+session inputs. Attest a complete consecutive window in oldest-to-newest order with
+`session_window_complete: true`; do not set this when captures or sessions are missing.
+The report retains session identities, per-section loading and matched markers, and
+snapshot hashes. Extraction refuses a report missing that window, its policy minimum,
+or consistent observations. It uses the larger of the report and request minimums;
+omitting the config cannot weaken the report policy. The default is **ten consecutive
+sessions**; set a different minimum in the explicit config supplied to both commands.
+
+Move observable sections with no evidence in the latest required consecutive loaded
+sessions behind pointers by default on an isolated `slim/…` branch. An unloaded,
+partial, or failed read breaks the count; a recent marker match also breaks it. Older
+matches remain in the ask's evidence. Preambles and prose-only sections stay loaded:
+without observable markers the detector cannot demonstrate non-use. Zero lexical
+evidence is not proof of irrelevance, so every removal still awaits the user.
+Resolve generated surfaces to their source and preview their outputs as above;
+only source files belong in an extraction request. Do not edit the agent's active
+home or replace its loaded path during this proof.
+
+Run `python3 <skill-dir>/scripts/harness.py extract <request.json> <journal.json>`.
+The request contains `tool`, `directory` (the isolated slim checkout), optional
+`config`, and `usage` (the report object). Capture snapshots from that checkout so
+report paths name its sources. The helper refuses a different branch, unresolved
+inputs, stale section text, ambiguous matches, and existing destinations. It preflights
+every replacement, then writes the recovery journal before publishing changes. An IO
+failure rolls back its still-matching writes; an independent edit or rollback failure
+is preserved with the recovery journal and reported as an error. It moves
+all eligible sections, byte for byte, into directly pointed-to `references/` files,
+and journals each removal with its own chief-owned ask before changing the source.
+Pointers retain their section headings and spacing. The returned asks cover only this
+request; earlier asks remain in the journal for the driver to reconcile by receipt.
+For a reference longer than 100 lines, add its table of contents before delivery.
+Remeasure the start-up using the changed loaded set and report tokens before/after.
+
+Deliver **each** returned ask through the user profile's ask binding, as the
+unattended slim does. The chief owns escalation to the user; include the section,
+estimated tokens, sessions loaded, and zero-evidence finding verbatim. Retain the
+journal and delivery receipts beside the branch's report. Without a binding or a
+confirmed receipt, report the undelivered ask in full and keep the branch waiting.
+`merge_allowed: false` is deliberate: this helper never merges. Neither delivery
+nor an automatic slim grants merge approval. The driving session must retain each
+user answer before any merge; a missing answer blocks it. Rejection through `revert` restores the
+section using its journaled lines and deletes only a byte-for-byte unchanged extracted
+copy. An independently edited copy stays in place and is named in `preserved_reference`.
+The ordinary file review still leaves edits uncommitted; this workflow leaves its
+changes on a slim branch for the user's decision and does not schedule a job.

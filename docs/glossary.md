@@ -173,3 +173,16 @@ The ordered choices for where knowledge, a rule, or a solution should live. Impr
 
 **Decision service**:
 A service an agent sends facts to and receives a decision from before acting, for an important rule that instructions alone have not made reliable.
+
+
+**Start-up budget**:
+The maximum estimated tokens for the explicit whole start-up loaded by an agent
+in one launch directory: loaded files, role files, skill discovery fields, and
+injected non-file inputs. A default applies to every directory without an exact
+resolved-directory override. Slim-harness reports the estimate and every file's
+contribution using the same four UTF-8 bytes per token policy in both tools.
+
+Start-up demotion uses a complete, ordered window of consecutive sessions, ten by
+default and configurable. A section needs observable markers and no match in the
+latest required loaded sessions. Preambles and prose-only sections stay loaded;
+each removal awaits its own chief-owned ask and the user's answer before merge.

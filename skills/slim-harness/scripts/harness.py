@@ -6,6 +6,8 @@ No semantic review, file discovery, generator execution, or git mutation occurs 
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import hashlib
 from difflib import SequenceMatcher
 import unicodedata
 import json
@@ -14,6 +16,13 @@ import re
 import subprocess
 import shlex
 import sys
+
+
+# Reuse the package's atomic text writer; importing it reads no runtime state.
+_atomic_spec = importlib.util.spec_from_file_location('slim_atomic',
+    Path(__file__).resolve().parents[3] / 'scripts/lib/codex_trust.py')
+_atomic = importlib.util.module_from_spec(_atomic_spec)
+_atomic_spec.loader.exec_module(_atomic)
 
 
 def size(text):
@@ -33,7 +42,7 @@ Reject unsupported discovery-field syntax rather than silently undercount it.
         raise ValueError('unterminated skill frontmatter')
     fields={}; i=1
     while i < end:
-        match=re.match(r'^(description|when_to_use):\s*(.*?)\s*$',lines[i])
+        match=re.match(r'^(name|description|when_to_use):\s*(.*?)\s*$',lines[i])
         i+=1
         if not match:
             continue
@@ -70,6 +79,32 @@ Reject unsupported discovery-field syntax rather than silently undercount it.
     return fields, ''.join(lines[end+1:])
 
 
+def token_estimate(text):
+    """Shared review estimate, rounded up: four UTF-8 bytes per token."""
+    return (len(text.encode('utf-8')) + 3) // 4
+
+
+def startup_policy(manifest):
+    # Only the explicitly supplied configuration is read, never an implicit home.
+    config=json.loads(Path(manifest['config']).expanduser().read_text()) if manifest.get('config') else {}
+    if not isinstance(config,dict):raise ValueError('startup config must be an object')
+    policy=config.get('startup_budget', {})
+    if not isinstance(policy,dict):raise ValueError('startup_budget must be an object')
+    default=policy.get('default_tokens', 8000)
+    sessions=policy.get('usage_sessions', 10)
+    overrides=policy.get('directories', {})
+    if not isinstance(overrides, dict):raise ValueError('startup_budget directories must be an object')
+    for value in [default, sessions, *overrides.values()]:
+        if type(value) is not int or value<=0:
+            raise ValueError('startup_budget values must be positive integers')
+    for path in overrides:
+        if not isinstance(path,str) or not Path(path).expanduser().is_absolute():
+            raise ValueError('startup_budget directory overrides must be absolute or ~/ paths')
+    directory=str(Path(manifest.get('directory', '.')).expanduser().resolve())
+    budgets={str(Path(path).expanduser().resolve()):value for path,value in overrides.items()}
+    return directory, budgets.get(directory, default), sessions
+
+
 def measure(manifest):
     """Only measure caller-attested loaded files; listed skills expose metadata only.
 
@@ -79,6 +114,8 @@ role_paths from the actual definition and chain from root to session start.
     tool=manifest['tool']
     if tool not in ('claude','codex'):
         raise ValueError('tool must be claude or codex')
+    directory,budget,_=startup_policy(manifest)
+    startup_files={}
     result=dict(over_limit=[], measured=[], unresolved=[])
     queue=list(manifest.get('files',[])); seen=set(); descriptions=[]; loaded_sizes={}
     while queue:
@@ -121,6 +158,15 @@ role_paths from the actual definition and chain from root to session start.
         # Listed-only bodies are not reported or used for size triggers.
         if loaded=='listed':
             row['size']=dict(description_characters=len(fields.get('description','')))
+        startup_text=text
+        if loaded=='listed':
+            discovery=[fields.get('name',path.parent.name),item.get('listing_path',str(path)),fields.get('description','')]
+            if tool=='claude' and fields.get('when_to_use'):discovery.append(fields['when_to_use'])
+            startup_text=item.get('listing_text','\n'.join(discovery))
+        source=str(path.resolve())
+        # Full content supersedes a discovery listing; aliases/roles count once.
+        if source not in startup_files or loaded!='listed':
+            startup_files[source]=dict(path=str(path),tokens=token_estimate(startup_text))
         result['measured'].append(row)
         if limits:
             # One row per file, even if two limits are exceeded or the manifest repeats it.
@@ -151,6 +197,11 @@ role_paths from the actual definition and chain from root to session start.
             window=manifest.get('context_window')
             result['listing']=dict(budget=int(window*.02) if window else 8000,
                 largest=sorted(descriptions,key=lambda d:d['characters'],reverse=True),trigger=False)
+    inputs=[dict(name=item['name'],tokens=token_estimate(item['text'])) for item in manifest.get('inputs',[])]
+    total=sum(row['tokens'] for row in startup_files.values())+sum(row['tokens'] for row in inputs)
+    result['startup']=dict(directory=directory,budget_tokens=budget,tokens=total,
+        overage_tokens=max(0,total-budget),files=list(startup_files.values()),inputs=inputs,
+        complete=not result['unresolved'],method='estimate: ceil(UTF-8 bytes / 4) per input')
     return result
 
 
@@ -378,12 +429,20 @@ def usage_transcript(path,tool):
 
 def usage(manifest):
     """Aggregate literal section evidence from explicit transcripts and skill snapshots."""
-    rows={};seen=set();unresolved=[]
+    rows={};seen=set();unresolved=[];order=[];exports={};gaps=[]
+    _,_,minimum=startup_policy(manifest)
     for session in manifest.get('sessions',[]):
         tool=session['tool']
         if tool not in ('claude','codex'):raise ValueError('tool must be claude or codex')
         transcript=Path(session['transcript']).expanduser()
         calls,identity=usage_transcript(transcript,tool)
+        session_key=(tool,identity)
+        signature=json.dumps(calls,sort_keys=True)
+        if session_key in exports:
+            if exports[session_key]!=signature:gaps.append('conflicting exports: '+identity)
+            continue
+        exports[session_key]=signature
+        order.append(dict(tool=tool,session_id=identity))
         # Repeated exports or paths of the same session never inflate the minimum.
         for skill in session.get('skills',[]):
             path=Path(skill['path']).expanduser();source=str(path.resolve())
@@ -409,21 +468,186 @@ def usage(manifest):
                 rowkey=(source,start)
                 if rowkey not in rows:
                     rows[rowkey]=dict(path=str(path),section=title,body_start_line=start,size=size(body),
-                        sessions_loaded=0,sessions_with_evidence=0,markers=usage_markers(body),matched_markers=[])
+                        body_sha256=hashlib.sha256(body.encode()).hexdigest(),
+                        tokens=token_estimate(body),sessions_loaded=0,sessions_with_evidence=0,
+                        markers=usage_markers(body),matched_markers=[],observations={})
                 row=rows[rowkey];row['sessions_loaded']+=1
                 matched=[marker for marker in row['markers'] if any(re.search(
                     r'(?<![\w./-])'+re.escape(marker)+r'(?![\w./-])',value) for value in evidence)]
                 if matched:row['sessions_with_evidence']+=1
                 row['matched_markers']=sorted(set(row['matched_markers']+matched))
+                row['observations'][session_key]=dict(tool=tool,session_id=identity,loaded=True,matched_markers=matched)
     sections=[];candidates=[]
     for row in rows.values():
+        row['observations']=[row['observations'].get((item['tool'],item['session_id']),
+            dict(**item,loaded=False,matched_markers=[])) for item in order]
+        row['consecutive_sessions_without_evidence']=consecutive_without_evidence(row['observations'])
         row['status']='evidence of use' if row['sessions_with_evidence'] else 'no evidence of use'
         sections.append(row)
-        if row['markers'] and row['sessions_loaded']>=3 and row['sessions_with_evidence']<row['sessions_loaded']:
+        if row['markers'] and row['sessions_loaded']>=minimum and row['sessions_with_evidence']<row['sessions_loaded']:
             candidates.append(dict(path=row['path'],section=row['section'],body_start_line=row['body_start_line'],
-                sessions_loaded=row['sessions_loaded'],reason='evidence in fewer sessions than loaded (at least 3); review for a possible split'))
+                sessions_loaded=row['sessions_loaded'],reason=f'evidence in fewer sessions than loaded (at least {minimum}); review for a possible split'))
     return dict(sections=sections,split_candidates=candidates,unresolved=sorted(set(unresolved)),
-                minimum_sessions=3)
+                minimum_sessions=minimum,session_order=order,coverage_gaps=gaps,
+                window_complete=manifest.get('session_window_complete') is True and not gaps)
+
+
+def consecutive_without_evidence(observations):
+    count=0
+    for observation in reversed(observations):
+        if observation['loaded'] is not True or observation['matched_markers']:break
+        count+=1
+    return count
+
+
+def replacement(current,before,after):
+    """Check exact reversible spans before either ordinary edits or extraction."""
+    if not before or not after:
+        raise ValueError('include unchanged context around insertions and deletions')
+    if current.count(before)!=1:
+        raise ValueError('own lines are missing or ambiguous; use unique unchanged context')
+    updated=current.replace(before,after,1)
+    if updated.count(after)!=1:
+        raise ValueError('result would be ambiguous to revert; include more unchanged context')
+    return updated
+
+
+def publish(writes):
+    """Publish preflighted text changes; roll back only our still-matching writes.
+
+    The first write is the recovery journal. Keep it if rollback encounters a
+    foreign edit or another IO failure, so recovery never depends on CLI output.
+    """
+    def content(path):
+        return path.read_bytes().decode('utf-8') if path.exists() else None
+    directories=set()
+    for path,(before,after) in writes.items():
+        if path.is_symlink() or content(path)!=before:
+            raise ValueError('file changed before publication: '+str(path))
+        parent=path.parent
+        while not parent.exists():
+            directories.add(parent);parent=parent.parent
+    written=[]
+    try:
+        for path,(_,after) in writes.items():
+            if content(path)!=writes[path][0]:raise ValueError('file changed before publication: '+str(path))
+            written.append(path)
+            _atomic.restore_file(path,after)
+    except (OSError,ValueError) as error:
+        problems=[]
+        for path in reversed(written):
+            # Retain remaining references and the journal after a conflict.
+            if problems:continue
+            before,after=writes[path]
+            try:
+                current=content(path)
+                if current==before:continue
+                if current!=after:raise ValueError('independent edit at '+str(path))
+                _atomic.restore_file(path,before)
+            except (OSError,ValueError) as rollback_error:problems.append(str(rollback_error))
+        for directory in sorted(directories,key=lambda p:len(p.parts),reverse=True):
+            try:directory.rmdir()
+            except OSError:pass
+        if problems:raise ValueError('publication failed; recovery journal retained: '+'; '.join(problems)) from error
+        raise
+
+
+def extract(request, journal):
+    """Default observable demotions on a slim branch; no merge or transport."""
+    if request['tool'] not in ('claude','codex'):raise ValueError('tool must be claude or codex')
+    directory,_,minimum=startup_policy(request)
+    root=Path(subprocess.check_output(['git','-C',directory,'rev-parse','--show-toplevel'],text=True).strip()).resolve()
+    branch=subprocess.check_output(['git','-C',directory,'branch','--show-current'],text=True).strip()
+    if not branch.startswith('slim/'):raise ValueError('extraction requires a slim branch')
+    report=request['usage']
+    report_minimum=report.get('minimum_sessions')
+    if type(report_minimum) is not int or report_minimum<=0:
+        raise ValueError('usage report requires positive minimum_sessions')
+    minimum=max(minimum,report_minimum)
+    if report.get('window_complete') is not True or report.get('unresolved') or report.get('coverage_gaps'):
+        raise ValueError('usage report requires a complete consecutive session window')
+    order=report.get('session_order')
+    if not isinstance(order,list) or not order:raise ValueError('usage report requires session_order')
+    identities=[]
+    for item in order:
+        if (not isinstance(item,dict) or item.get('tool') not in ('claude','codex')
+                or not isinstance(item.get('session_id'),str) or not item['session_id']):
+            raise ValueError('invalid session identity')
+        identities.append((item['tool'],item['session_id']))
+    if len(set(identities))!=len(identities):raise ValueError('duplicate session identity')
+    journal=Path(journal).expanduser().resolve()
+    old_journal=journal.read_bytes().decode('utf-8') if journal.exists() else None
+    records=json.loads(old_journal) if old_journal is not None else []
+    if not isinstance(records,list):raise ValueError('edit journal must be a list')
+    plans=[];sources={};destinations=set();spans=set()
+    for row in report['sections']:
+        observations=row.get('observations')
+        if not isinstance(observations,list) or len(observations)!=len(identities):
+            raise ValueError('section requires observations for the complete session window')
+        for observation,identity in zip(observations,identities):
+            if (not isinstance(observation,dict)
+                    or (observation.get('tool'),observation.get('session_id'))!=identity
+                    or type(observation.get('loaded')) is not bool
+                    or not isinstance(observation.get('matched_markers'),list)
+                    or not all(isinstance(m,str) for m in observation['matched_markers'])
+                    or (not observation['loaded'] and observation['matched_markers'])):
+                raise ValueError('invalid section observation')
+        if (type(row.get('sessions_loaded')) is not int or type(row.get('sessions_with_evidence')) is not int
+                or row['sessions_loaded']!=sum(o['loaded'] for o in observations)
+                or row['sessions_with_evidence']!=sum(bool(o['matched_markers']) for o in observations)):
+            raise ValueError('section counts disagree with session observations')
+        source=Path(row['path']).expanduser().resolve(strict=True)
+        source.relative_to(root)
+        if source==journal:raise ValueError('journal overlaps extraction source')
+        text=source.read_bytes().decode('utf-8')
+        section=next((body for title,start,body in skill_sections(text)
+                      if title==row['section'] and start==row['body_start_line']),None)
+        if section is None or hashlib.sha256(section.encode()).hexdigest()!=row.get('body_sha256'):
+            raise ValueError('stale usage snapshot: '+str(source))
+        markers=usage_markers(section)
+        if row.get('markers')!=markers or any(m not in markers for o in observations for m in o['matched_markers']):
+            raise ValueError('section markers disagree with snapshot')
+        span=(source,row['body_start_line'])
+        if span in spans:raise ValueError('duplicate extraction section')
+        spans.add(span)
+        # Prose-only instructions and the preamble cannot demonstrate non-use.
+        if row['section']=='Preamble' or not markers:continue
+        streak=consecutive_without_evidence(observations)
+        if streak<minimum:continue
+        digest=hashlib.sha256((branch+str(source.relative_to(root))+str(row['body_start_line'])+section).encode()).hexdigest()[:16]
+        destination=source.parent/'references'/('startup-'+digest+'.md')
+        destination.parent.resolve().relative_to(root)
+        if destination.exists() or destination.is_symlink() or destination in destinations or destination==journal:
+            raise ValueError('extraction destination exists or overlaps: '+str(destination))
+        destinations.add(destination)
+        newline='\r\n' if '\r\n' in section else '\n'
+        heading=section.splitlines()[0]
+        trailing=re.search(r'(?:\r?\n)+$',section)
+        ending=trailing.group() if trailing else newline
+        if ending.count('\n')<2:ending=newline*2
+        pointer=heading+newline+'Read `'+str(destination.relative_to(source.parent))+'` when '+row['section']+' applies.'+ending
+        original,current=sources.get(source,(text,text))
+        sources[source]=(original,replacement(current,section,pointer))
+        tokens=token_estimate(section)
+        evidence={key:row[key] for key in ('sessions_loaded','sessions_with_evidence','body_sha256','observations')}
+        evidence.update(minimum_sessions=minimum,consecutive_sessions_without_evidence=streak)
+        ask=dict(id=digest,owner='chief',escalate_to='user',section=row['section'],tokens=tokens,usage=evidence,
+            text=f"Moved {source.relative_to(root)} / {row['section']} ({tokens} estimated tokens) behind a pointer on {branch}. "
+                 f"No evidence of use in the latest {streak} consecutive loaded sessions (required {minimum}). "
+                 "Chief: escalate to the user before merge; retain the branch until the user approves. "
+                 "Undo by restoring the section from its reference.",
+            approval_required=True,applied=True,choices=[])
+        record=dict(number=len(records)+len(plans)+1,source=str(source),before=section,after=pointer,
+                    reverted=False,ask=ask,destination=str(destination),branch=branch)
+        plans.append(record)
+    if plans:
+        if set(sources)&destinations:raise ValueError('extraction source overlaps destination')
+        writes={journal:(old_journal,json.dumps(records+plans,indent=2)+'\n')}
+        writes.update({Path(row['destination']):(None,row['before']) for row in plans})
+        writes.update(sources)
+        publish(writes)
+    return dict(branch=branch,extractions=[dict(source=row['source'],destination=row['destination'],number=row['number']) for row in plans],
+                asks=[row['ask'] for row in plans],merge_allowed=False)
 
 
 def dirty_repositories(paths):
@@ -441,34 +665,36 @@ def edit(path,before,after,journal,mode='interactive'):
     if mode!='interactive':
         return dict(changed=False,needs_user=True,message='slim-harness needs the user present; edited nothing')
     source=Path(path).expanduser().resolve(strict=True);current=source.read_bytes().decode('utf-8')
-    if before==after:
-        return dict(changed=False,source=str(source),dirty_repositories=[])
-    if not before or not after:
-        raise ValueError('include unchanged context around insertions and deletions')
-    if current.count(before)!=1:
-        raise ValueError('own lines are missing or ambiguous; use unique unchanged context')
-    updated=current.replace(before,after,1)
-    if updated.count(after)!=1:
-        raise ValueError('result would be ambiguous to revert; include more unchanged context')
-    journal=Path(journal)
-    records=json.loads(journal.read_text()) if journal.exists() else []
+    if before==after:return dict(changed=False,source=str(source),dirty_repositories=[])
+    updated=replacement(current,before,after)
+    journal=Path(journal).resolve()
+    if journal==source:raise ValueError('journal overlaps source')
+    old=journal.read_bytes().decode('utf-8') if journal.exists() else None
+    records=json.loads(old) if old is not None else []
     record=dict(number=len(records)+1,source=str(source),before=before,after=after,reverted=False)
-    # Persist recovery information before changing the source; no full-file rollback.
-    journal.write_text(json.dumps(records+[record],indent=2)+'\n')
-    source.write_bytes(updated.encode('utf-8'))
+    publish({journal:(old,json.dumps(records+[record],indent=2)+'\n'),source:(current,updated)})
     return dict(changed=True,source=str(source),number=record['number'],dirty_repositories=dirty_repositories([source]))
 
 
 def revert(journal,number):
-    journal=Path(journal);records=json.loads(journal.read_text());record=next(r for r in records if r['number']==number)
+    journal=Path(journal).resolve();old=journal.read_bytes().decode('utf-8');records=json.loads(old)
+    record=next(r for r in records if r['number']==number)
     source=Path(record['source']);current=source.read_bytes().decode('utf-8')
-    if record['reverted']:
-        return dict(changed=False,dirty_repositories=dirty_repositories([source]))
+    if record['reverted']:return dict(changed=False,dirty_repositories=dirty_repositories([source]))
     if current.count(record['after'])!=1:
         raise ValueError('own lines changed or ambiguous; ask user to reconcile, never restore whole file')
-    source.write_bytes(current.replace(record['after'],record['before'],1).encode('utf-8'));record['reverted']=True
-    journal.write_text(json.dumps(records,indent=2)+'\n')
-    return dict(changed=True,dirty_repositories=dirty_repositories([r['source'] for r in records]))
+    updated=current.replace(record['after'],record['before'],1);record['reverted']=True
+    writes={journal:(old,json.dumps(records,indent=2)+'\n'),source:(current,updated)}
+    preserved=None
+    if record.get('destination'):
+        destination=Path(record['destination'])
+        if destination.is_file() and not destination.is_symlink():
+            body=destination.read_bytes().decode('utf-8')
+            if body==record['before']:writes[destination]=(body,None)
+            else:preserved=str(destination)
+        elif destination.exists() or destination.is_symlink():preserved=str(destination)
+    publish(writes)
+    return dict(changed=True,preserved_reference=preserved,dirty_repositories=dirty_repositories([source]))
 
 
 def main():
@@ -477,6 +703,7 @@ def main():
     p=sub.add_parser('measure');p.add_argument('manifest',type=Path)
     p=sub.add_parser('duplicates');p.add_argument('manifest',type=Path)
     p=sub.add_parser('usage');p.add_argument('manifest',type=Path)
+    p=sub.add_parser('extract');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('edit');p.add_argument('request',type=Path);p.add_argument('journal',type=Path)
     p=sub.add_parser('revert');p.add_argument('journal',type=Path);p.add_argument('number',type=int)
     args=parser.parse_args()
@@ -484,6 +711,7 @@ def main():
         if args.operation=='measure':result=measure(json.loads(args.manifest.read_text()))
         elif args.operation=='duplicates':result=duplicates(json.loads(args.manifest.read_text()))
         elif args.operation=='usage':result=usage(json.loads(args.manifest.read_text()))
+        elif args.operation=='extract':result=extract(json.loads(args.request.read_text()),args.journal)
         elif args.operation=='edit':result=edit(journal=args.journal,**json.loads(args.request.read_text()))
         else:result=revert(args.journal,args.number)
         print(json.dumps(result,indent=2));return 0
