@@ -446,7 +446,13 @@ The ask command receives `text`, source `session_id`, `directory`, linked
 `ticket` or null, and `choices`. With `owner_agent` configured in the binding,
 its value overrides any carried owner in every writer invocation. The writer
 must store this durable agent as owner, never substitute the user or source
-session, and acknowledge only after ownership is saved. This contract applies
+session, and acknowledge only after ownership is saved. For configured ownership the
+acknowledgement is a JSON object in `receipt` with `owner_agent` equal to the
+configured identifier, read back from the saved ask. A request echo before
+saving is not a receipt. Missing or mismatched proof fails delivery and keeps
+the item pending; checklist filing/reporting, sweep completion and slim
+`ask-delivered` all enforce this check. Command-only bindings keep their
+existing receipt format. This contract applies
 to Claude Code and Codex, including native asks, deferred sweep asks and slim
 asks. Command-only bindings retain their existing path until the configured
 writer has been proven with one real ask from each provider; do not cut over
@@ -487,7 +493,15 @@ Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit
 | `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): reduce each path to its one spelling, drop edits to a frozen file with their `group` and move the contradiction, duplicate and rule rows naming that file to "not done", commit one branch per repository (`slim/<run>-<path>-<digest>`), record the branches, then push them; a push that errors after the remote took the branch counts as pushed. Returns `status`: `slimmed`, `pending-unverified` (publication unconfirmed after a push error; its ask says so and its files stay frozen until a later plan reconciles the push), `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that is malformed, names a path inside `.git`, a directory or a path through a link, has an `old` that does not appear exactly once, has an edit that leaves its file as it is, or leaves the file over a limit with no `left`, is refused, exit 1, before any push: it changes nothing and the slim stays open. While a stopped push is unsettled, `begin` and `finish` refuse until `plan`. |
 | `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. A settled branch refuses, exit 1. |
 | `retry --repository owner/name --path P` | Let a stalled file back into later runs. |
-| `ask-delivered --ask ID --receipt T` | Settle a delivered ask, which `plan` otherwise lists again. |
+| `ask-delivered --ask ID --receipt T` | Settle a delivered ask (`T` is a JSON receipt with matching `owner_agent` when configured), which `plan` otherwise lists again. |
+
+Slim reads the ask binding from `CHECKLIST_USER_PROFILE`, or the default user
+checklist profile under `XDG_CONFIG_HOME` (otherwise `~/.config`). An explicit
+missing or invalid profile fails without settling pending asks. New, retained
+and repeated closed-run asks all receive the configured owner; their producing
+identity remains unchanged. Sweep act plans pin the actual ask binding; a
+reserved plan missing that field fails before delivery or settlement, preserving
+its pending work rather than inferring an ownerless binding.
 
 A slim's ask has `choices: []`, `applied: true` and no default or deadline. Its text lists, in order: contradictions, duplicates, rules removed or rewritten, sizes, branches, then branches not pushed, choices not done because their file is deferred, what was deferred, what is left, surfaces to regenerate, and how to undo or stop it. The package never merges a slim branch and schedules nothing.
 

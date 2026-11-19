@@ -171,6 +171,23 @@ def ask_binding(profile: Mapping[str, Any]) -> dict[str, str] | None:
     return dict(binding)
 
 
+def load_ask_binding() -> dict[str, str] | None:
+    """Read only the checklist profile, never the knowledge root or provider state."""
+    explicit = os.environ.get("CHECKLIST_USER_PROFILE")
+    path = Path(explicit) if explicit else Path(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))) / "hippocampus/checklist-profile.md"
+    if not explicit and not path.exists():
+        return None
+    return ask_binding(load_profile(path))
+
+
+def require_ask_receipt(binding: Mapping[str, str] | None, receipt: Any,
+                        payload: Mapping[str, Any] | None = None) -> None:
+    """An agent-owned ask settles only with the writer's saved-owner acknowledgement."""
+    owner = (binding or {}).get("owner_agent") or (payload or {}).get("owner_agent")
+    if owner and (not isinstance(receipt, Mapping) or receipt.get("owner_agent") != owner):
+        raise ValueError(f"ask receipt.owner_agent must confirm saved owner_agent {owner!r}")
+
+
 def owned_ask(payload: Mapping[str, Any], binding: Mapping[str, str] | None) -> dict[str, Any]:
     """Use the configured agent owner without changing the producing session or item."""
     result = copy.deepcopy(dict(payload))
@@ -355,7 +372,8 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any],
     return owned_ask(ask, binding)
 
 
-def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[str, Any]]:
+def report_asks(handoff: Mapping[str, Any], problems: list[str],
+                binding: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     """List every recoverable ask, even when another item is malformed or missing."""
     asks = []
     seen = set()
@@ -364,7 +382,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
     for index, row in enumerate(handoff.get("filing", {}).get("items", [])):
         if "ask" in row:
             candidates.append((f"filing.items[{index}].ask", row["ask"], True))
-        elif (row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES)
+        elif ((row.get("binding") == "ask" or row.get("status") in ("unbound", "pending", "failed", "read failed", "uncertain", *NATIVE_STATUSES))
               and isinstance(row.get("item"), Mapping)
               and (row["item"].get("choices") or row["item"].get("applied"))):
             candidates.append((f"filing.items[{index}].item", row["item"], False))
@@ -388,6 +406,7 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str]) -> list[dict[st
             ask = item if is_payload else ask_payload(item, subject)
             if is_payload:
                 validate_ask_payload(ask)
+            ask = owned_ask(ask, binding)
         except (ValueError, TypeError, AttributeError) as error:
             problems.append(f"{label}: {error}")
             continue
@@ -531,6 +550,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
             item = {**copy.deepcopy(item), "choices": copy.deepcopy(row.get("choices", item.get("choices")))}
         if status in NATIVE_STATUSES and binding not in NATIVE:
             raise ValueError(f"{status} is only a native-step outcome")
+        if binding == "ask" and status == "filed" and execute_writes:
+            try:
+                require_ask_receipt(ask, row.get("receipt"), item)
+            except ValueError as error:
+                row = {**row, "status": "failed", "error": str(error)}
+                row.pop("ask_status", None)
+                status = "failed"
         entry = {**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding}
         if lesson_outcome and lesson_outcome["status"] == "failed":
             entry["apply_failed"] = True
@@ -649,6 +675,11 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
     loops = data.get("resume", {}).get("open_loops", [])
     for row in report.get("items", []):
         item = row.get("item")
+        if row.get("binding") == "ask" and (row.get("status") == "filed" or row.get("ask_status") == "filed"):
+            try:
+                require_ask_receipt(ask, row.get("receipt"), row.get("ask") or item)
+            except ValueError as error:
+                failures.append(str(error))
         if row.get("binding") in record_write.KINDS and row.get("status") == "filed":
             try:
                 record_write.receipt(row, record_write.identity(item))
@@ -1074,7 +1105,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     subject = handoff.get("subject", {})
     asks = report_asks({"subject": subject if isinstance(subject, Mapping) else {},
                         "filing": {"items": filing_rows, "asks": filing.get("asks", {})},
-                        "resume": {"open_loops": loops}}, problems)
+                        "resume": {"open_loops": loops}}, problems, ask)
     incomplete = [{"id": r["id"], "status": r["status"], "reason": r.get("error") or r.get("reason")}
                   for r in results if isinstance(r.get("id"), str) and r["id"] in NATIVE
                   and r.get("status") in ("failed", "declined", "pending")]
@@ -1387,7 +1418,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output = settle(plan, handoff, json.loads(args.receipts.read_text()))
         print(json.dumps(output, indent=2))
         return 1 if args.operation in ("file", "record") and (output.get("filing", {}).get("ticket_read", {}).get("status") == "failed" or any(
-            row.get("binding") in record_write.KINDS and row.get("status") in ("failed", "uncertain", "pending")
+            (row.get("binding") in record_write.KINDS or (row.get("binding") == "ask" and (ask or {}).get("owner_agent")))
+            and row.get("status") in ("failed", "uncertain", "pending") and row.get("ask_status") != "filed"
             for row in output.get("filing", {}).get("items", []))) else 0
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"checklist: {error}", file=sys.stderr)

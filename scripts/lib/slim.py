@@ -381,6 +381,15 @@ def _remove_workspaces(run: Mapping[str, Any] | None) -> None:
         shutil.rmtree(current["base"], ignore_errors=True)
 
 
+def _bind_asks(state: dict[str, Any]) -> None:
+    """Stamp new and retained asks, including repeated closed-run output."""
+    binding = checklist.load_ask_binding()
+    state["asks"] = [checklist.owned_ask(ask, binding) for ask in state["asks"]]
+    closed = (state.get("run") or {}).get("closed")
+    if closed:
+        closed["asks"] = [checklist.owned_ask(ask, binding) for ask in closed["asks"]]
+
+
 def plan(paths: Sequence[Path]) -> dict[str, Any]:
     """Start a run: sort the given records, largest overage first, and set aside what must wait."""
     _require_setting("slim plan")
@@ -440,6 +449,7 @@ def plan(paths: Sequence[Path]) -> dict[str, Any]:
                 else:
                     run["queue"].append(record)
         state["run"] = run
+        _bind_asks(state)
         return {"run_id": run["id"], "queued": len(run["queue"]), "files_per_run": FILES_PER_RUN,
                 "skipped": run["skipped"], "deferred": run["deferred"], "unreachable": run["unreachable"],
                 "warnings": warnings, "undelivered_asks": state["asks"]}
@@ -526,6 +536,7 @@ def begin(run_id: str) -> dict[str, Any]:
         with _transaction() as state:
             run = _run(state, run_id)
             if run["closed"]:
+                _bind_asks(state)
                 return run["closed"]
             _not_pushing(run)
             if not run["current"]:
@@ -1114,6 +1125,7 @@ def _close(state: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
                      "waiting": [_row(record, "waiting for a later run") for record in run["queue"]],
                      "skipped": run["skipped"], "deferred": run["deferred"], "unreachable": run["unreachable"],
                      "failed": [{key: value for key, value in row.items() if key != "measured"} for row in run["failed"]]}
+    _bind_asks(state)
     return run["closed"]
 
 
@@ -1153,10 +1165,13 @@ def retry(repository: str, path: str) -> dict[str, Any]:
         return {"repository": repository, "path": _canonical(path), "status": "will be slimmed again"}
 
 
-def ask_delivered(ask_id: str, receipt: str) -> dict[str, Any]:
+def ask_delivered(ask_id: str, receipt: Any) -> dict[str, Any]:
     """Settle an ask the binding took, so `plan` stops listing it as undelivered."""
     with _transaction() as state:
-        if any(ask["id"] == ask_id for ask in state["asks"]):
+        _bind_asks(state)
+        ask = next((ask for ask in state["asks"] if ask["id"] == ask_id), None)
+        if ask is not None:
+            checklist.require_ask_receipt(checklist.load_ask_binding(), receipt, ask)
             state["asks"] = [ask for ask in state["asks"] if ask["id"] != ask_id]
             return {"id": ask_id, "receipt": receipt}
     raise ValueError(f"slim ask-delivered: no undelivered ask {ask_id}")
@@ -1199,7 +1214,11 @@ def main() -> int:
         elif args.operation == "retry":
             output = retry(args.repository, args.path)
         else:
-            output = ask_delivered(args.ask, args.receipt)
+            try:
+                receipt = json.loads(args.receipt)
+            except ValueError:
+                receipt = args.receipt
+            output = ask_delivered(args.ask, receipt)
     except (OSError, ValueError, TypeError, KeyError, AttributeError, lessons.LessonError,
             subprocess.SubprocessError, lessons._compose_rules().ComposeError) as error:
         print(f"slim: {error}", file=sys.stderr)

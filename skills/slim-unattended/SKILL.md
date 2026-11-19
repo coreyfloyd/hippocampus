@@ -42,8 +42,12 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    sweep does, whose profile this step shares. Pass its configured `owner_agent`
    on every new or retried ask, overriding any carried owner; the writer must
    save the durable agent as owner, never the user, in Claude Code and Codex.
-   Unsupported ownership leaves the ask undelivered. After a confirmed delivery run
-   `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt <receipt>`. With nothing
+   The helper reads `CHECKLIST_USER_PROFILE` or the default user checklist profile
+   and stamps ownership on new, pending and closed-run output. An explicit
+   missing profile fails and keeps pending asks. Unsupported ownership leaves
+   the ask undelivered. Obtain `receipt` as a JSON object with matching
+   `owner_agent` read back from the saved ask, never a request echo. After a confirmed delivery run
+   `python3 <package>/scripts/lib/slim.py ask-delivered --ask <id> --receipt '<JSON receipt>'`. With nothing
    bound, an ask stays undelivered and the next `plan` lists it again. Report `results`,
    `waiting`, `skipped`, `deferred`, `unreachable` and `failed`. Write no handoff for this step.
 
