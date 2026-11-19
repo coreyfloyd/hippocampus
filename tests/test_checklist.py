@@ -435,6 +435,9 @@ class ChecklistTests(unittest.TestCase):
         plan = self.engine.compose([profile])
         source = self.handoff()
         source["subject"]["working_directory"] = "/work"
+        # This row tests generic document filing; decision documents require approval.
+        source["resume"]["open_loops"][2]["type"] = "progress"
+        original = copy.deepcopy(source)
         rows = [dict(index=i, rule=rule, status=status, reason="optional observation" if rule == "R6" else "saved",
                      destination=destination, read_status="ok", choices=["approve", "decline"])
                 for i, (rule, status, destination) in enumerate([
@@ -453,7 +456,7 @@ class ChecklistTests(unittest.TestCase):
         complete = self.engine.file_items(plan, source, [dict(r, status="filed") if r["status"] == "pending" else r for r in rows], self.engine.ask_binding(profile))
         self.assertEqual(complete["resume"]["open_loops"], [dict(source["resume"]["open_loops"][4], choices=["approve", "decline"])])
         self.assertIn("lesson text", complete["resume"]["next_action"])
-        self.assertEqual(source, self.handoff() | {"subject": source["subject"]})
+        self.assertEqual(source, original)
 
     def test_filing_preserves_failed_reads_and_never_treats_unknown_as_absence(self):
         plan = self.engine.compose([self.filing_profile()])

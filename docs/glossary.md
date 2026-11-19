@@ -19,6 +19,14 @@ A user-bound command that writes one kind of record change: tickets, projects, d
 A read of the existing record through a user-bound skill. It is read-only: it reports ticket status and work carried by a resumed session without writing to the record. The user checklist profile binds the skill; a repository checklist profile cannot. The package record step calls record writes to save changes.
 _Avoid_: tracker
 
+**Decision record**:
+A document preserving a user's decision, its author and source, scope, and the
+approved proposal. Agent operational choices are audit material, not decision
+records. Checklist and checkpoint with `durable` suggest these documents; only
+explicit user approval permits a documents record write. Without the user, the
+proposal becomes an ask owned by the configured durable agent. The user profile's
+`decision_records` routes scopes to folders, falling back to its default folder.
+
 **Handoff**:
 The thin pointer one interactive session writes for one subject, so the next session can find its way back to the record. A handoff is identified by its subject and its session together, so two sessions on the same subject never overwrite each other. It holds where to find the record, the session's open loops, and the uncommitted files the session changed. It also holds the session's dated history entries and session summary, close outcomes, touched tickets, and touched projects. Checkpoint and wrap both end by writing it.
 _Avoid_: record

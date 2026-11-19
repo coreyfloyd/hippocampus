@@ -903,3 +903,19 @@ Retired legacy record profiles are refused with the `record_writes` shape. `--as
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.
+
+### Decision document routing
+
+The user checklist profile's optional `decision_records` object requires a
+nonempty `default_folder` and optionally maps exact scopes to folder references
+in `scope_folders`. Repository profiles cannot supply it. No live knowledge
+source is read to discover routes.
+
+A decision document request uses the existing documents record-write protocol.
+The item has `author_role: "user"`, nonempty `author` and `location`, and
+`decision_record: {"title": "...", "scope": "...", "text": "..."}`. The R7 filing
+row requires `answer: "approve"` and nonempty `approval_source`; the module supplies
+its configured `folder`. The lookup and write receive the same immutable item
+identity, proposal, approval, and folder. Their receipt additionally confirms that
+exact `folder`. Missing proof retains the original item, including after an
+uncertain write. Unapproved proposals use the existing owned ask contract.
