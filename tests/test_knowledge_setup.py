@@ -214,6 +214,17 @@ def test_failed_validation_rolls_back_everything_it_created():
     assert tree(root) == before and path.exists()
 
 
+def test_a_profile_the_validator_would_refuse_is_reported_before_approval():
+    root = knowledge_root()
+    path = released_profile(root, extra='meeting_record_template: missing.md\n')
+    before = tree(root)
+    plan = planned(*ROUTES[:2])
+    assert not plan['ready'] and plan['status'] == 'incomplete'
+    assert any('meeting_record_template' in conflict for conflict in plan['conflicts'])
+    result = setup('apply', '--approval-fingerprint', plan['approval_fingerprint'], *ROUTES[:2])
+    assert result.returncode == 1 and tree(root) == before and path.exists()
+
+
 def test_a_path_of_the_wrong_kind_is_a_conflict_not_a_replacement():
     root = knowledge_root()
     (root / 'wiki').write_text('not a folder\n')

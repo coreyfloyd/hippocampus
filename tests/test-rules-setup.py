@@ -330,6 +330,46 @@ class RulesSetupTests(unittest.TestCase):
                         self.assertNotIn("AGENTS.md", kept)  # the source, not an unneeded entry
                     self.assertTrue(all(entry["discovery"] for entry in entries.values()))
 
+    def test_symlinked_entries_are_one_file_and_never_import_themselves(self):
+        helper = load_helper()
+        for link, real in (("AGENTS.md", "CLAUDE.md"), ("CLAUDE.md", "AGENTS.md")):
+            with self.subTest(link=link):
+                self.setUp()
+                repo = self.base / ("repo-link-" + link)
+                repo.mkdir()
+                (repo / real).write_text("repo rule\n")
+                (repo / link).symlink_to(real)
+                with self.only("claude-code", "codex"):
+                    value = helper.repository_entries(repo, self.describe())
+                self.assertEqual(value["source"]["files"], [str(repo / "AGENTS.md")])
+                self.assertIsNone(value["source"]["generated_entry"])
+                actions = {entry["tool"]: entry["action"] for entry in value["entries"]}
+                self.assertEqual(actions, {"codex": "keep", "claude-code": "keep: the same file as AGENTS.md"})
+                self.assertTrue(all("contents" not in entry for entry in value["entries"]))
+
+    def test_composer_import_entry_reports_its_imported_files(self):
+        helper = load_helper()
+        shared = self.base / "shared.md"
+        shared.write_text("rule\n")
+        for imports, expected in (("@" + str(shared) + "\n", [str(shared)]), ("", None)):
+            with self.subTest(imports=bool(imports)):
+                self.setUp()
+                repo = self.base / ("repo-header-" + str(bool(imports)))
+                repo.mkdir()
+                (repo / "AGENTS.md").write_text("<!-- hippocampus-rules: generated; do not hand-edit -->\n" + imports)
+                with self.only("codex"):
+                    if expected is None:
+                        with self.assertRaisesRegex(ValueError, "names no source"):
+                            helper.repository_entries(repo, self.describe())
+                    else:
+                        value = helper.repository_entries(repo, self.describe())
+                        self.assertEqual(value["source"]["files"], expected)
+
+    def test_import_inside_a_fenced_example_is_not_active(self):
+        _, _, entries = self.repository(("claude-code",), {
+            "CLAUDE.md": "Example:\n\n```markdown\n@AGENTS.md\n```\n"})
+        self.assertEqual(entries["claude-code"]["action"], "add import; existing content stays")
+
     def test_repository_custom_sources_stay_the_users(self):
         helper = load_helper()
         _, profile = self.configured_profile()

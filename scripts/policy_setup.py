@@ -175,7 +175,7 @@ def without_setting(text, config):
     return json.dumps(expected, indent=2) + "\n"
 
 
-def checked(candidate_text, profile, require_wiki=False):
+def checked(candidate_text, profile, require_wiki=False, planned=()):
     """A proposed profile's policy, its lesson routing problem kept; a profile the validator rejects is refused."""
     with tempfile.TemporaryDirectory() as temporary:
         candidate = pathlib.Path(temporary) / "profile.md"
@@ -183,7 +183,7 @@ def checked(candidate_text, profile, require_wiki=False):
         errors = io.StringIO()
         try:
             with contextlib.redirect_stderr(errors):
-                reader.validate(candidate, require_wiki)
+                reader.validate(candidate, require_wiki, planned)
         except SystemExit:
             raise ValueError(f"{profile}: {errors.getvalue().strip()}") from None
         policy = compose.load_policy(candidate)

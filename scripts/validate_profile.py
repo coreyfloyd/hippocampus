@@ -112,18 +112,18 @@ def parse(path):
     fail("unterminated YAML frontmatter")
 
 
-def contained(root, candidate, label):
+def contained(root, candidate, label, planned=frozenset()):
     resolved = candidate.resolve()
     try:
         resolved.relative_to(root)
     except ValueError:
         fail(f"{label} escapes knowledge_root")
-    if not resolved.is_dir():
+    if not resolved.is_dir() and resolved not in planned:
         fail(f"{label} is not an existing directory")
     return resolved
 
 
-def contained_file(root, value, label):
+def contained_file(root, value, label, planned=frozenset()):
     if not value:
         fail(f"missing {label}")
     candidate = pathlib.Path(value)
@@ -134,7 +134,7 @@ def contained_file(root, value, label):
         resolved.relative_to(root)
     except ValueError:
         fail(f"{label} escapes knowledge_root")
-    if not resolved.is_file():
+    if not resolved.is_file() and resolved not in planned:
         fail(f"{label} is not an existing file")
     return resolved
 
@@ -209,7 +209,9 @@ def validate_rules(root, rules):
             fail("rules memory must be native or off")
 
 
-def validate(path, require_wiki=False):
+def validate(path, require_wiki=False, planned=()):
+    """Validate a profile; ``planned`` names paths an approved set-up plan will create."""
+    planned = frozenset(pathlib.Path(item).resolve() for item in planned)
     values = parse(pathlib.Path(path))
     if values.get("profile_version") != "4":
         fail("profile_version must be 4")
@@ -217,7 +219,7 @@ def validate(path, require_wiki=False):
     if not root_value or not pathlib.Path(root_value).is_absolute():
         fail("knowledge_root must be an absolute path")
     root = pathlib.Path(root_value).resolve()
-    if not root.is_dir():
+    if not root.is_dir() and root not in planned:
         fail("knowledge_root is not an existing directory")
 
     wiki_value = values.get("wiki_enabled")
@@ -232,9 +234,9 @@ def validate(path, require_wiki=False):
     # than a pre-#12 profile would have (message ordering only; a single
     # defect still fails with the same message either way).
     for key in ("raw", "output", "docs"):
-        contained(root, root / key, key)
+        contained(root, root / key, key, planned)
     for key in ("operation_log_file", "decision_log_file"):
-        contained_file(root, values.get(key), key)
+        contained_file(root, values.get(key), key, planned)
     if not values.get("artifact_followup_destination"):
         fail("missing artifact_followup_destination")
 
@@ -269,8 +271,8 @@ def validate(path, require_wiki=False):
         fail(str(exc))
 
     if wiki_enabled:
-        contained(root, root / "wiki", "wiki")
-        contained_file(root, values.get("hot_file"), "hot_file")
+        contained(root, root / "wiki", "wiki", planned)
+        contained_file(root, values.get("hot_file"), "hot_file", planned)
         if not values.get("wiki_followup_destination"):
             fail("missing wiki_followup_destination")
     else:

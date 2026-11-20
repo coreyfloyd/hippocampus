@@ -328,18 +328,38 @@ def load_composer():
     return composer
 
 
+def active_lines(composer, text):
+    """The lines of a Markdown file outside fenced blocks, where an import is live."""
+    fence = None
+    for line in text.splitlines():
+        opened, fence = fence, composer.fence_after(line, fence)
+        if opened is None and fence is None:
+            yield line.strip()
+
+
 def generated_sources(composer, path, policy):
-    """Sources a repository entry is produced from, or None when the file is its own source."""
+    """Sources a repository entry is produced from, or None when the file is its own source.
+
+    A symlinked entry is compared by its resolved file, so a link is never mistaken for a
+    generated surface.
+    """
     mapped = composer.surfaces_for(path, policy)["sources"] if policy else []
-    if mapped and mapped != [str(path)]:
+    if mapped and mapped != [str(path.resolve())]:
         return mapped
     try:
-        first = path.read_bytes().splitlines()[0] if path.is_file() else b""
-    except (OSError, IndexError):
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    except (OSError, UnicodeError):
         return None
+    first = lines[0].encode() if lines else b""
     if first.startswith(composer.GENERATED_HEADER_PREFIX) and first.endswith(composer.OWNERSHIP_HEADER_SUFFIX):
         return json.loads(first[len(composer.GENERATED_HEADER_PREFIX):-len(composer.OWNERSHIP_HEADER_SUFFIX)])
-    return ["unrecorded composer sources"] if first == composer.CLAUDE_OWNERSHIP_HEADER else None
+    if first != composer.CLAUDE_OWNERSHIP_HEADER:
+        return None
+    # The composer's import entry records its sources as its import lines.
+    imports = [line[1:] for line in active_lines(composer, "\n".join(lines[1:])) if line.startswith("@")]
+    if not imports:
+        raise ValueError(f"{path} carries the composer's header but names no source; repair or remove the header")
+    return imports
 
 
 def repository_entries(repository, rows, profile=None):
@@ -360,6 +380,7 @@ def repository_entries(repository, rows, profile=None):
         raise ValueError(str(exc)) from exc
     source = {"files": produced or [str(agents)], "exists": agents.exists() if not produced else True,
               "generated_entry": str(agents) if produced else None}
+    same_file = agents.exists() and claude.exists() and agents.resolve() == claude.resolve()
     installed_tools = {row["tool"] for row in rows if row["installed"]}
     entries, kept = [], []
     for tool, path in (("codex", agents), ("claude-code", claude)):
@@ -372,13 +393,16 @@ def repository_entries(repository, rows, profile=None):
         if tool == "codex":
             entry["action"] = ("regenerate from its source" if produced else
                                "keep" if path.exists() else "create with the first repository rule")
+        elif same_file:
+            # One file serves both tools; an import of itself would be a loop.
+            entry["action"] = "keep: the same file as AGENTS.md"
         elif claude_produced:
             entry["action"] = "keep: produced from its own source"
         elif not path.exists():
             entry.update(action="create", contents=CLAUDE_IMPORT + "\n")
         else:
             text = path.read_text(encoding="utf-8")
-            if any(line.strip() in (CLAUDE_IMPORT, "@./AGENTS.md") for line in text.splitlines()):
+            if any(line in (CLAUDE_IMPORT, "@./AGENTS.md") for line in active_lines(composer, text)):
                 entry["action"] = "keep"
             else:
                 entry.update(action="add import; existing content stays", contents=CLAUDE_IMPORT + "\n\n" + text)

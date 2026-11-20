@@ -162,7 +162,8 @@ profile and every path it names already form the knowledge setup and pass
 `validate_profile.py --require-wiki`, otherwise `incomplete`), `ready` (no `needs` and no
 `conflicts`), `needs` (values only the user supplies: the root and each follow-up route;
 the example profile's instructional text is not a route), `conflicts` (a path of the wrong
-kind, or a root without a parent directory), `create_directories`, `create_files`,
+kind, a root without a parent directory, or a proposed profile `validate_profile.py
+--require-wiki` would refuse once the planned paths exist), `create_directories`, `create_files`,
 `preserved` (existing paths and an unchanged profile), `profile_fields` (each field's
 `current` and `proposed` value; a released `wiki_enabled: false` is proposed for removal),
 `profile_diff`, `profile_exists`, `problems` (a lesson routing problem, reported without

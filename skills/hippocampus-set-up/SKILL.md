@@ -147,7 +147,7 @@ The two follow-up routes may be different and must be concrete enough for anothe
 
 ## Present the complete change before writing
 
-Run `plan` with the user's answers: `--root <absolute path>`, `--wiki-followup <route>` and `--artifact-followup <route>`; omit any option to keep the profile's current value. Show the plan's `create_directories`, `create_files`, `profile_fields` and the exact `profile_diff`, and call out everything under `preserved`. Record the returned `approval_fingerprint` with that exact review. Report any `problems` (a lesson routing problem) as the user's to repair through policy set-up; they do not block the knowledge setup. While `needs` or `conflicts` is not empty, ask for the missing value or have the user move the conflicting path, then plan again.
+Run `plan` with the user's answers: `--root <absolute path>`, `--wiki-followup <route>` and `--artifact-followup <route>`; omit any option to keep the profile's current value. Show the plan's `create_directories`, `create_files`, `profile_fields` and the exact `profile_diff`, and call out everything under `preserved`. Record the returned `approval_fingerprint` with that exact review. Report any `problems` (a lesson routing problem) as the user's to repair through policy set-up; they do not block the knowledge setup. While `needs` or `conflicts` is not empty, ask for the missing value, have the user move the conflicting path, or propose the smallest repair for a proposed profile the validator would refuse, then plan again.
 
 Do not write or change configuration until the user approves that complete proposal. Installation and configuration are separate authorization boundaries; the fact that the package is installed is not approval to create a knowledge root.
 
