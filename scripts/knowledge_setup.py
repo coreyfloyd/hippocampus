@@ -145,12 +145,21 @@ def plan(profile, root=None, routes=None):
         (original or "").splitlines(keepends=True), proposed.splitlines(keepends=True), str(profile), str(profile)))
     if original is not None and not result["profile_diff"]:
         result["preserved"].append(str(profile))
+    current = None
+    if not result["needs"] and not result["conflicts"]:
+        # Validate the profile apply would write, counting what the plan creates, so an
+        # approved plan is known to apply; a refusal is reported here, before approval.
+        try:
+            current = policy.checked(proposed, profile, require_wiki=True,
+                                     planned=result["create_directories"] + result["create_files"])
+        except ValueError as exc:
+            result["conflicts"].append(f"the proposed profile would be refused: {exc}")
     result["ready"] = not result["needs"] and not result["conflicts"]
     changes = result["create_directories"] or result["create_files"] or result["profile_diff"]
     result["status"] = "complete" if result["ready"] and not changes else "incomplete"
+    if current is None and original is not None:
+        current = policy.compose.load_policy(profile)
     # A lesson routing problem is reported here, never hidden, and does not block the knowledge setup.
-    current = policy.checked(proposed, profile, require_wiki=True) if result["status"] == "complete" else (
-        policy.compose.load_policy(profile) if original is not None else None)
     result["problems"] = [current.routing_error] if current and current.routing_error else []
     result["file_states"] = {path: policy.state(pathlib.Path(path)) if kind(pathlib.Path(path)) != "directory"
                              else "directory" for path in sorted({str(profile), *result["preserved"],

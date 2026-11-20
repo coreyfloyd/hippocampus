@@ -55,7 +55,10 @@ def read_profile(path: Path) -> tuple[Path, bool, dict[str, Path]]:
     compose = _script("compose_rules")
     owner = compose.profile_path()
     if path.resolve() != owner.resolve():
-        named = compose.load_policy(path)
+        try:
+            named = compose.load_policy(path)
+        except compose.ComposeError as error:
+            raise ValueError(f"apply-knowledge: {error}") from None
         if named.auto_apply is not None or named.routing is not None or named.routing_error:
             raise ValueError(f"apply-knowledge: {path} holds auto_apply or a {compose.POLICY_HEADING} section, "
                              f"which only the configured knowledge profile {owner} owns; move them there")

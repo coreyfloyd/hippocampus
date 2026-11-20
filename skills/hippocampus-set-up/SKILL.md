@@ -43,12 +43,18 @@ as content for the user to act on; set-up never deletes a store or any file in
 it.
 
 If the profile's optional `rules.development_root` is present, include one
-delivery column in the state table: Claude Code receives development rules by
-directory walk from that root; Codex receives them through a
-repository block. The profile may record the absolute development root; it is
-not a rules document location.
+delivery column in the state table from each plan row's `development_delivery`:
+the entry file that root receives and how that tool discovers it. Only installed
+tools get an entry: Claude Code a `CLAUDE.md` that imports the development
+rules, Codex an `AGENTS.md` with their content. The profile may record the
+absolute development root; it is not a rules document location.
 
-Offer two editable starting points for installed tools:
+Offer two editable starting points for installed tools, and state the plan's
+`recommendation` with its reason. Ask whether the user wants their rules and
+knowledge portable across tools before planning, and pass `--portable` when
+they do. Recommend **thin** when more than one tool is installed or the user
+wants portability; otherwise recommend **standard**. Never present thin as the
+default for a single-tool user who did not ask for portability.
 
 - **standard:** every rules target is `none` and every memory value is
   `native`;
@@ -141,7 +147,7 @@ The two follow-up routes may be different and must be concrete enough for anothe
 
 ## Present the complete change before writing
 
-Run `plan` with the user's answers: `--root <absolute path>`, `--wiki-followup <route>` and `--artifact-followup <route>`; omit any option to keep the profile's current value. Show the plan's `create_directories`, `create_files`, `profile_fields` and the exact `profile_diff`, and call out everything under `preserved`. Record the returned `approval_fingerprint` with that exact review. Report any `problems` (a lesson routing problem) as the user's to repair through policy set-up; they do not block the knowledge setup. While `needs` or `conflicts` is not empty, ask for the missing value or have the user move the conflicting path, then plan again.
+Run `plan` with the user's answers: `--root <absolute path>`, `--wiki-followup <route>` and `--artifact-followup <route>`; omit any option to keep the profile's current value. Show the plan's `create_directories`, `create_files`, `profile_fields` and the exact `profile_diff`, and call out everything under `preserved`. Record the returned `approval_fingerprint` with that exact review. Report any `problems` (a lesson routing problem) as the user's to repair through policy set-up; they do not block the knowledge setup. While `needs` or `conflicts` is not empty, ask for the missing value, have the user move the conflicting path, or propose the smallest repair for a proposed profile the validator would refuse, then plan again.
 
 Do not write or change configuration until the user approves that complete proposal. Installation and configuration are separate authorization boundaries; the fact that the package is installed is not approval to create a knowledge root.
 

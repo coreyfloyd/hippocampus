@@ -162,7 +162,8 @@ profile and every path it names already form the knowledge setup and pass
 `validate_profile.py --require-wiki`, otherwise `incomplete`), `ready` (no `needs` and no
 `conflicts`), `needs` (values only the user supplies: the root and each follow-up route;
 the example profile's instructional text is not a route), `conflicts` (a path of the wrong
-kind, or a root without a parent directory), `create_directories`, `create_files`,
+kind, a root without a parent directory, or a proposed profile `validate_profile.py
+--require-wiki` would refuse once the planned paths exist), `create_directories`, `create_files`,
 `preserved` (existing paths and an unchanged profile), `profile_fields` (each field's
 `current` and `proposed` value; a released `wiki_enabled: false` is proposed for removal),
 `profile_diff`, `profile_exists`, `problems` (a lesson routing problem, reported without
@@ -462,7 +463,7 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
-An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed knowledge profile policy (a mistyped `auto_apply`, a duplicate or malformed `## Lesson routing` section) or a retired policy owner still in place (a standalone `routing.md`, `HIPPOCAMPUS_ROUTING`, or `auto_apply_lessons` in this configuration) is such an error for every operation that applies, naming `hippocampus-set-up` for the move;
+An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed knowledge profile policy (a mistyped `auto_apply`, a duplicate or malformed `## Lesson routing` section) or a retired policy owner still in place (a standalone `routing.md`, `HIPPOCAMPUS_ROUTING`, or `auto_apply_lessons` in this configuration) is such an error for every operation that applies, naming `hippocampus-set-up` for the move (and, while `HIPPOCAMPUS_ROUTING` is exported, the step of unsetting it, saying when its file does not exist);
 `plan` and `report` name it in `auto_apply_refused` instead (below).
 
 The auto-apply setting is the knowledge profile's `auto_apply` (section 2, Policy in the knowledge profile).

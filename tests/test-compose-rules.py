@@ -206,6 +206,9 @@ Produced surfaces:
             result = self.surfaces(self.cross, env=env)
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("run hippocampus-set-up", result.stderr)
+            if retired == "environment":
+                self.assertIn("unset HIPPOCAMPUS_ROUTING", result.stderr)
+                self.assertIn("does not exist", result.stderr)
 
     def test_missing_profile_section_or_other_section_produces_nothing(self):
         other = "\n## Other policy\n\nProduced surfaces:\n  rules.md:\n    - path: elsewhere.md\n"

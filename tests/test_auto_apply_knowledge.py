@@ -381,3 +381,13 @@ def test_a_capture_profile_holding_policy_is_refused_not_silently_ignored(tmp_pa
     wrap.write('raw/derived/a.md')
     result = wrap.capture([knowledge()], [{'index': 0, 'capture': 'source', 'created': ['raw/derived/a.md']}], expect=1)
     assert str(wrap.policy) in result.stderr and 'auto_apply' in result.stderr
+
+
+def test_a_tab_indented_profile_field_is_a_clean_refusal(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    text = wrap.knowledge_profile.read_text()
+    wrap.knowledge_profile.write_text(text.replace('---\n', '---\n\tauto_apply: true\n', 1))
+    wrap.plan()
+    wrap.write('raw/derived/a.md')
+    result = wrap.capture([knowledge()], [{'index': 0, 'capture': 'source', 'created': ['raw/derived/a.md']}], expect=1)
+    assert 'Traceback' not in result.stderr and 'nested profile fields' in result.stderr, result.stderr

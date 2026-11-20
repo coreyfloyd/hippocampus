@@ -21,9 +21,30 @@ import tempfile
 
 
 TOOLS = {
-    "claude-code": {"binary": "claude", "target": "CLAUDE.md"},
-    "codex": {"binary": "codex", "target": "AGENTS.md"},
+    "claude-code": {"binary": "claude", "target": "CLAUDE.md", "composer": "claude"},
+    "codex": {"binary": "codex", "target": "AGENTS.md", "composer": "codex"},
 }
+
+# How each tool finds the entries set-up writes (Claude Code and Codex documentation).
+DEVELOPMENT_DISCOVERY = {
+    "claude-code": "Claude Code loads CLAUDE.md from the working directory and every directory "
+                   "above it, so CLAUDE.md at the development root, which imports the development "
+                   "rules, applies to sessions started anywhere below that root.",
+    "codex": "Codex reads AGENTS.md from the project root (usually the Git root) down to the "
+             "working directory, so AGENTS.md at the development root applies when the "
+             "development root is the project root or Codex finds no project root.",
+}
+REPOSITORY_DISCOVERY = {
+    "claude-code": "Claude Code loads CLAUDE.md from the working directory and every directory "
+                   "above it; the entry imports the shared AGENTS.md with @AGENTS.md. Claude Code "
+                   "reads AGENTS.md on its own only when no CLAUDE.md is on that path, so an "
+                   "explicit import is required.",
+    "codex": "Codex reads AGENTS.md from the project root (usually the Git root) down to the "
+             "working directory, so AGENTS.md is both its entry and the shared source.",
+}
+CLAUDE_IMPORT = "@AGENTS.md"
+# An import of the sibling AGENTS.md anywhere in a line, outside code spans.
+IMPORT_TOKEN = re.compile(r"(?<!\S)@(?:\./)?AGENTS\.md(?!\S)")
 
 
 def default_homes():
@@ -212,6 +233,17 @@ def plan_fingerprint(plan_value):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def recommend_preset(rows, portable=False):
+    """Recommend thin for several installed tools or portable rules; standard otherwise."""
+    tools = [row["tool"] for row in rows if row["installed"]]
+    if len(tools) > 1:
+        return {"preset": "thin", "reason": "more than one tool is installed: " + ", ".join(tools)}
+    if portable:
+        return {"preset": "thin", "reason": "the user wants rules and knowledge portable across tools"}
+    return {"preset": "standard", "reason": "one tool is installed and portability was not requested"
+            if tools else "no supported tool is installed"}
+
+
 def plan(rows, preset, development_root=None, overrides=None, profile=None):
     if preset not in {"standard", "thin"}:
         raise ValueError("preset must be standard or thin")
@@ -235,7 +267,8 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
         flagged = memory == "off" and state == "customized"
         delivery = None
         if development_root:
-            delivery = "directory walk from the development root" if tool == "claude-code" else "repository block"
+            delivery = {"file": str(pathlib.Path(development_root) / TOOLS[tool]["target"]),
+                        "discovery": DEVELOPMENT_DISCOVERY[tool]}
         proposed = {"tool": tool, "rules_target": rules_target, "memory": memory, "memory_mutations": mutations, "memory_change_count": len(row["off_mutations"]), "flagged": flagged, "development_delivery": delivery}
         result["tools"].append(proposed)
         result["mutation_list"].extend({"kind": "memory setting", **mutation} for mutation in mutations)
@@ -286,6 +319,104 @@ def plan(rows, preset, development_root=None, overrides=None, profile=None):
         result["file_states"] = {str(path): digest(path.read_bytes() if path.exists() else None) for path in sorted(files)}
     result["approval_fingerprint"] = plan_fingerprint(result)
     return result
+
+
+def load_composer():
+    path = pathlib.Path(__file__).with_name("compose_rules.py")
+    spec = importlib.util.spec_from_file_location("hippocampus_composer", path)
+    composer = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = composer
+    spec.loader.exec_module(composer)
+    return composer
+
+
+def active_lines(composer, text):
+    """The lines of a Markdown file outside fenced blocks, where an import is live."""
+    fence = None
+    for line in text.splitlines():
+        opened, fence = fence, composer.fence_after(line, fence)
+        if opened is None and fence is None:
+            yield line.strip()
+
+
+def generated_sources(composer, path, policy):
+    """Sources a repository entry is produced from, or None when the file is its own source.
+
+    A symlinked entry is compared by its resolved file, so a link is never mistaken for a
+    generated surface.
+    """
+    mapped = composer.surfaces_for(path, policy)["sources"]
+    if mapped and mapped != [str(path.resolve())]:
+        return mapped
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    except (OSError, UnicodeError):
+        return None
+    first = lines[0].encode() if lines else b""
+    if first.startswith(composer.GENERATED_HEADER_PREFIX) and first.endswith(composer.OWNERSHIP_HEADER_SUFFIX):
+        return json.loads(first[len(composer.GENERATED_HEADER_PREFIX):-len(composer.OWNERSHIP_HEADER_SUFFIX)])
+    if first != composer.CLAUDE_OWNERSHIP_HEADER:
+        return None
+    # The composer's import entry records its sources as its import lines.
+    imports = [line[1:] for line in active_lines(composer, "\n".join(lines[1:])) if line.startswith("@")]
+    if not imports:
+        raise ValueError(f"{path} carries the composer's header but names no source; repair or remove the header")
+    return imports
+
+
+def repository_entries(repository, rows, profile=None):
+    """Name a repository's provider-neutral rules source and each installed tool's entry.
+
+    AGENTS.md is the shared source unless it is produced from another source; an
+    absent AGENTS.md never makes CLAUDE.md the source. Existing files stay the
+    user's: an entry the installed tools do not need is reported, never removed.
+    """
+    composer = load_composer()
+    repository = pathlib.Path(repository).resolve()
+    agents, claude = repository / "AGENTS.md", repository / "CLAUDE.md"
+    try:
+        # Without --profile, read the configured knowledge profile, as every policy reader does.
+        policy = composer.load_policy(pathlib.Path(profile) if profile else None)
+        produced = generated_sources(composer, agents, policy)
+        claude_produced = generated_sources(composer, claude, policy)
+    except composer.ComposeError as exc:
+        raise ValueError(str(exc)) from exc
+    source = {"files": produced or [str(agents)], "exists": agents.exists() if not produced else True,
+              "generated_entry": str(agents) if produced else None}
+    same_file = agents.exists() and claude.exists() and agents.resolve() == claude.resolve()
+    installed_tools = {row["tool"] for row in rows if row["installed"]}
+    entries, kept = [], []
+    for tool, path in (("codex", agents), ("claude-code", claude)):
+        if tool not in installed_tools:
+            # AGENTS.md stays the shared source even when Codex is not installed.
+            if tool == "claude-code" and path.exists():
+                kept.append({"file": str(path), "reason": "no installed tool needs it; it is kept"})
+            continue
+        present = path.exists() or path.is_symlink()
+        entry = {"tool": tool, "file": str(path), "exists": present, "discovery": REPOSITORY_DISCOVERY[tool]}
+        if tool == "codex":
+            entry["action"] = ("regenerate from its source" if produced else
+                               "keep" if path.exists() else "create with the first repository rule")
+        elif same_file:
+            # One file serves both tools; an import of itself would be a loop.
+            entry["action"] = "keep: the same file as AGENTS.md"
+        elif claude_produced:
+            entry["action"] = "keep: produced from its own source"
+        elif path.is_symlink() and not path.exists():
+            entry["action"] = "keep: a symlink to a missing file; repair it to import AGENTS.md"
+        elif not path.exists():
+            entry.update(action="create", contents=CLAUDE_IMPORT + "\n")
+        else:
+            text = path.read_text(encoding="utf-8")
+            if any(IMPORT_TOKEN.search(re.sub(r"`[^`]*`", "", line)) for line in active_lines(composer, text)):
+                entry["action"] = "keep"
+            else:
+                entry.update(action="add import; existing content stays", contents=CLAUDE_IMPORT + "\n\n" + text)
+        entries.append(entry)
+    if "claude-code" in installed_tools and claude.exists() and not agents.exists() and not produced:
+        kept.append({"file": str(claude), "reason": "existing CLAUDE.md content stays where it is; "
+                     "new repository rules go to AGENTS.md"})
+    return {"repository": str(repository), "source": source, "entries": entries, "kept": kept}
 
 
 def write_memory_state(home, tool, state):
@@ -354,21 +485,17 @@ def digest(content):
 
 
 def target_plan(plan_value, knowledge_root):
-    path = pathlib.Path(__file__).with_name("compose_rules.py")
-    spec = importlib.util.spec_from_file_location("hippocampus_composer", path)
-    composer = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = composer
-    spec.loader.exec_module(composer)
+    composer = load_composer()
     targets = []
-    tool_names = {"claude-code": "claude", "codex": "codex"}
     for row in plan_value["tools"]:
         if row["rules_target"] != "none":
-            targets.append({"tool": tool_names[row["tool"]], "scope": "user",
+            targets.append({"tool": TOOLS[row["tool"]]["composer"], "scope": "user",
                             "file": row["rules_target"], "sources": ["context/rules.md"]})
-    if plan_value["development_root"]:
-        dev = pathlib.Path(plan_value["development_root"])
-        for tool, filename in (("claude", "CLAUDE.md"), ("codex", "AGENTS.md")):
-            targets.append({"tool": tool, "scope": "development", "file": str(dev / filename),
+    # A development root receives only the entries of the installed tools in the plan.
+    for row in plan_value["tools"]:
+        if row.get("development_delivery"):
+            targets.append({"tool": TOOLS[row["tool"]]["composer"], "scope": "development",
+                            "file": row["development_delivery"]["file"],
                             "sources": ["context/development-rules.md"]})
     if not targets:
         return composer, []
@@ -461,7 +588,7 @@ def apply(plan_value, profile, knowledge_root=None, approved=False, approval_fin
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("inspect", "plan", "apply"))
+    parser.add_argument("command", choices=("inspect", "plan", "apply", "repository"))
     parser.add_argument("--homes", help="JSON object mapping tool names to homes")
     parser.add_argument("--preset", choices=("standard", "thin"), default="standard")
     parser.add_argument("--development-root")
@@ -469,11 +596,23 @@ def main():
     parser.add_argument("--profile", help="profile to update after approval")
     parser.add_argument("--approve", action="store_true", help="apply the complete displayed mutation list")
     parser.add_argument("--approval-fingerprint", help="fingerprint printed by the approved plan")
+    parser.add_argument("--portable", action="store_true", help="the user wants rules portable across tools")
+    parser.add_argument("--repository", help="repository root for the repository command")
     args = parser.parse_args()
     homes = {key: pathlib.Path(value) for key, value in json.loads(args.homes).items()} if args.homes else None
     rows = inspect_tools(homes)
     overrides = json.loads(args.overrides) if args.overrides else None
+    if args.command == "repository":
+        if not args.repository:
+            parser.error("repository requires --repository")
+        try:
+            print(json.dumps(repository_entries(args.repository, rows, args.profile), indent=2, sort_keys=True))
+        except ValueError as exc:
+            parser.error(str(exc))
+        return
     value = rows if args.command == "inspect" else plan(rows, args.preset, args.development_root, overrides, args.profile)
+    if args.command == "plan":
+        value["recommendation"] = recommend_preset(rows, args.portable)
     if args.command == "apply":
         if not args.profile:
             parser.error("apply requires --profile")
