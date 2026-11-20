@@ -180,6 +180,10 @@ then current lessons. Its lesson routing in the knowledge profile decides destin
 profiles cannot replace this step. With no lessons, report `nothing`. Failed or declined
 work reports its error or reason and keeps every unsaved lesson.
 
+When `plan` returns `auto_apply_refused`, a retired policy owner is still in place:
+run every step as with the setting off, keep every item, and report the refusal
+with its `hippocampus-set-up` instruction.
+
 With the auto-apply setting on (`plan` returns `auto_apply`), the lessons step
 applies instead of waiting, in attended and unattended runs alike: follow
 improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, the

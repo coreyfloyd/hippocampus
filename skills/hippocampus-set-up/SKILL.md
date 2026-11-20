@@ -125,9 +125,11 @@ directory.
 Run `plan` whenever a standalone `routing.md` (or `$HIPPOCAMPUS_ROUTING`) or an
 `auto_apply_lessons` value in the hippocampus configuration exists: these are
 retired owners, and lessons and auto-apply refuse to run until they move. Show
-the complete plan: `moves`, the exact `profile_diff`, `removals` (the retired file
-deleted, the retired key removed), `manual` steps such as unsetting
-`HIPPOCAMPUS_ROUTING`, and any `notes`. Planning writes nothing.
+the complete plan: `moves`, the exact `profile_diff` and `config_diff`, `removals`
+(the retired file deleted, the retired key removed), `manual` steps such as
+unsetting `HIPPOCAMPUS_ROUTING` or moving a directory named `routing.md` away, and
+any `notes`. Planning writes nothing. A symbolic link keeps pointing at its target,
+which receives the change.
 
 When `conflicts` is not empty, show both owners' values and ask which to keep.
 Rerun `plan` with the answer, `--keep-routing file|profile` or
@@ -137,7 +139,10 @@ stands. A decline writes nothing and leaves every file byte for byte.
 On approval of that exact plan, run `apply` with the same options and
 `--approval-fingerprint <approval_fingerprint>`. It recomputes the plan and refuses
 if anything changed, writes the profile, then retires the old owners. The move runs
-only here, with the user present; nothing migrates at session start.
+only here, with the user present; nothing migrates at session start. Report setup
+complete only when the result's `ready` is true. While `manual` steps remain,
+report them as the user's to do, say lesson routing and auto-apply stay refused
+until then, and do not rerun `apply` for them.
 
 ## Discuss the user-owned choices
 

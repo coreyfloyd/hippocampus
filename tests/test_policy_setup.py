@@ -217,3 +217,100 @@ def test_a_broken_link_to_a_retired_routing_file_is_removed_on_approval():
     assert approve(plan).returncode == 0
     assert not link.is_symlink() and profile.read_bytes() == before
     assert module('lessons').routing_rules()['propose'] is False
+
+
+def test_symlinked_profile_and_configuration_are_written_through_their_links(legacy):
+    profile, routing, config = legacy
+    kept = Path(os.environ['XDG_DATA_HOME']) / 'dotfiles'
+    kept.mkdir()
+    for path in (profile, config):
+        target = kept / path.name
+        target.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(target)
+    assert approve(planned()).returncode == 0
+    assert profile.is_symlink() and config.is_symlink()
+    assert '## Lesson routing' in (kept / 'profile.md').read_text()
+    assert 'auto_apply_lessons' not in (kept / config.name).read_text()
+    assert not list(kept.glob('tmp*')) and not list(profile.parent.glob('tmp*'))
+
+
+@pytest.mark.parametrize('leftover', ['environment', 'directory'])
+def test_a_retired_owner_setup_cannot_remove_is_reported_as_not_ready(legacy, leftover):
+    profile, routing, config = legacy
+    env = dict(os.environ)
+    if leftover == 'environment':
+        env['HIPPOCAMPUS_ROUTING'] = str(Path(os.environ['XDG_DATA_HOME']) / 'missing.md')
+        routing.unlink()
+    else:
+        routing.unlink()
+        routing.mkdir()
+        (routing / 'notes.md').write_text('kept\n')
+    plan = planned(env=env)
+    assert plan['ready'] is False and plan['manual']
+    result = approve(plan, env=env)
+    assert result.returncode == 0, result.stderr
+    applied = json.loads(result.stdout)
+    assert applied['ready'] is False and applied['manual'] == plan['manual']
+    if leftover == 'directory':
+        assert (routing / 'notes.md').read_text() == 'kept\n'  # Never deleted.
+    assert planned(env=env)['ready'] is False  # Still shown, not claimed done.
+
+
+def test_a_ready_move_says_so(legacy):
+    plan = planned()
+    assert plan['ready'] is True and plan['manual'] == []
+    assert json.loads(approve(plan).stdout)['ready'] is True
+
+
+def test_a_crlf_profile_keeps_its_line_endings():
+    profile = knowledge_profile()
+    profile.write_bytes(profile.read_bytes().replace(b'\n', b'\r\n'))
+    plan = planned('--auto-apply', 'true')
+    assert approve(plan, '--auto-apply', 'true').returncode == 0
+    data = profile.read_bytes()
+    assert b'auto_apply: true\r\n' in data and b'\n' not in data.replace(b'\r\n', b'')
+
+
+def test_an_existing_section_with_the_same_destinations_is_not_a_conflict(legacy):
+    profile, routing, config = legacy
+    elsewhere = Path(os.environ['XDG_DATA_HOME']) / 'elsewhere/routing.md'
+    elsewhere.parent.mkdir(parents=True)
+    routing.rename(elsewhere)
+    env = {**os.environ, 'HIPPOCAMPUS_ROUTING': str(elsewhere)}
+    absolute = CUSTOM.replace('  sources/rules.md:', f'  {elsewhere.parent}/sources/rules.md:').replace(
+        'path: built/AGENTS.md', f'path: {elsewhere.parent}/built/AGENTS.md').replace('# My routing', '### My routing')
+    profile.write_text(profile.read_text() + '\n## Lesson routing\n\n' + absolute)
+    plan = planned(env=env)
+    assert plan['conflicts'] == [] and [move['setting'] for move in plan['moves']] == ['auto-apply']
+    assert str(elsewhere) in [removal['file'] for removal in plan['removals']]
+    changed = absolute.replace('lesson-policy: propose', 'lesson-policy: apply')
+    profile.write_text(profile.read_text().replace(absolute, changed))
+    assert [row['setting'] for row in planned(env=env)['conflicts']] == ['lesson routing']
+
+
+def test_the_configuration_loses_only_the_retired_key_and_the_plan_shows_it(legacy):
+    config = legacy[2]
+    config.write_text('{"prune_days":9,  "auto_apply_lessons" : true,\n "handoff_dir": "~/h"}')
+    plan = planned()
+    assert '-{"prune_days":9,  "auto_apply_lessons" : true,' in plan['config_diff']
+    assert approve(plan).returncode == 0
+    assert config.read_text() == '{"prune_days":9,\n "handoff_dir": "~/h"}'
+
+
+def test_fences_of_another_kind_do_not_end_the_section():
+    profile = knowledge_profile(body='Local.\n\n## Lesson routing\n\n````markdown\nAn unclosed inner fence:\n```\n## Not a heading\n````\n\n'
+                                     'lesson-policy: propose\n\n## Later\n')
+    assert module('lessons').routing_rules()['propose'] is True
+    lines = profile.read_text().splitlines()
+    compose = module('lessons')._compose_rules()
+    assert len(compose.policy_sections(lines, lines.index('---', 1) + 1)) == 1
+
+
+def test_headings_too_deep_to_move_two_levels_refuse_the_move(legacy):
+    routing = legacy[1]
+    routing.write_text(CUSTOM + '\n##### Deep\n')
+    before = snapshot(*legacy)
+    plan = planned()
+    assert [row['setting'] for row in plan['conflicts']] == ['lesson routing headings']
+    assert approve(plan).returncode == 1 and snapshot(*legacy) == before

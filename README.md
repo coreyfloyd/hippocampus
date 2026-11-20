@@ -198,19 +198,20 @@ on", `improve-harness` decides where that lesson belongs: a hook, one skill, one
 agent definition, a repository's instruction file, your user-level rules, or
 memory. It prefers the narrowest place that still loads when the lesson is
 needed. Interactive runs propose and wait; unattended runs carry the proposal
-forward. A routing file can replace the default placement table.
+forward. A `## Lesson routing` section in your knowledge profile can replace the
+default placement table.
 
 `slim-harness` reviews one instruction file with you: it finds duplicates and
 conflicts with neighboring files, asks before resolving them, and leaves its
 edits uncommitted for you to check.
 
-One setting, `auto_apply_lessons` in the shared configuration (off by
+One setting, `auto_apply` in your knowledge profile (off by
 default), lets these run without waiting for you. With it on, a wrap applies
 the lessons it recommends and captures wiki and retained knowledge under your
 knowledge root. It records files over their size limits, and a sweep in act
 mode applies the same items from abandoned sessions. `slim-unattended` slims
 the recorded files on a branch per repository for your review and never merges
-it. A fact about you always waits for your answer, and a routing file line
+it. A fact about you always waits for your answer, and a lesson routing line
 `lesson-policy: propose` turns lesson applying off. The
 [session guide](docs/session-guide.md) explains each step and how to undo it.
 
@@ -242,9 +243,8 @@ conversation that made it is gone.
 └── checklist/             # wrap state
 
 ~/.config/hippocampus/
-├── profile.md             # knowledge profile
+├── profile.md             # knowledge profile, auto-apply setting and lesson routing
 ├── checklist-profile.md   # checklist bindings and added steps
-├── routing.md             # where lessons go (optional)
 └── config.json            # shared session settings (optional)
 ```
 

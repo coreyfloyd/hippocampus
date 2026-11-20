@@ -33,6 +33,7 @@ def _load(name, path):
 
 
 compose = _load("policy_compose_rules", HERE / "compose_rules.py")
+fence_after = compose.fence_after
 reader = _load("policy_validate_profile", HERE / "validate_profile.py")
 handoff = _load("policy_handoff", HERE / "lib" / "handoff.py")
 
@@ -41,12 +42,11 @@ SURFACE_PATH = re.compile(r"(    - path:)(.*)")
 HEADING = re.compile(r"(#{1,6})(\s.*)")
 
 
-def digest(content):
-    return "absent" if content is None else hashlib.sha256(content).hexdigest()
-
-
-def read_bytes(path):
-    return path.read_bytes() if path.exists() else None
+def state(path):
+    """What a plan saw at a path, so apply can refuse when it changed."""
+    if path.is_file():
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    return "not a file" if path.exists() else "absent"
 
 
 def fixed_path(raw, old):
@@ -57,19 +57,32 @@ def fixed_path(raw, old):
     return json.dumps(str(compose.resolved_routing_path(value, old)))
 
 
-def moved_routing(text, old, rebase):
-    """The routing file's lines as a profile section: headings two levels down, paths kept effective."""
-    lines, fenced, active = [], False, False
-    for line in text.splitlines():
-        if line.lstrip().startswith(("```", "~~~")):
-            fenced = not fenced
+def produced_block(lines):
+    """For each line, whether it sits in the Produced surfaces block, as ``parse_surfaces`` reads it."""
+    flags, active = [], False
+    for line in lines:
         if line.strip() == "Produced surfaces:":
             active = True
         elif active and line.strip() and not line.startswith(" ") and not line.lstrip().startswith("#"):
             active = False
-        heading = None if fenced else HEADING.fullmatch(line)
+        flags.append(active)
+    return flags
+
+
+def moved_routing(text, old, rebase):
+    """The routing file's lines as a profile section, headings two levels down, paths kept effective.
+
+    Returns the lines and any heading too deep to move two levels.
+    """
+    lines, deep, fence = [], [], None
+    source_lines = text.splitlines()
+    for line, active in zip(source_lines, produced_block(source_lines)):
+        heading = HEADING.fullmatch(line) if fence is None else None
+        fence = fence_after(line, fence)
         if heading:
-            line = "#" * min(len(heading[1]) + 2, 6) + heading[2]
+            if len(heading[1]) > 4:
+                deep.append(line)
+            line = "#" * (len(heading[1]) + 2) + heading[2]
         elif active and rebase:
             source = compose.SURFACE_SOURCE.fullmatch(line)
             surface = SURFACE_PATH.fullmatch(line)
@@ -82,7 +95,20 @@ def moved_routing(text, old, rebase):
         lines.pop()
     while lines and not lines[0].strip():
         lines.pop(0)
-    return lines
+    return lines, deep
+
+
+def without_paths(lines):
+    """The routing's text with every Produced surfaces path masked, for comparing everything else."""
+    masked = []
+    for line, active in zip(lines, produced_block(lines)):
+        if active and compose.SURFACE_SOURCE.fullmatch(line):
+            line = "  <source>:" + (" []" if compose.SURFACE_SOURCE.fullmatch(line)[2] else "")
+        elif active and SURFACE_PATH.fullmatch(line):
+            line = "    - path: <path>"
+        if line.strip():
+            masked.append(line)
+    return masked
 
 
 def effective(lines, directory, label):
@@ -97,13 +123,17 @@ def nonblank(lines):
 
 
 def frontmatter_end(lines):
-    return lines.index("---\n" if "---\n" in lines[1:] else "---", 1)
+    return next(index for index in range(1, len(lines)) if lines[index].rstrip("\r\n") == "---")
+
+
+def newline(lines):
+    return "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
 
 
 def with_setting(text, value):
     lines = text.splitlines(keepends=True)
     end = frontmatter_end(lines)
-    row = f"auto_apply: {'true' if value else 'false'}\n"
+    row = f"auto_apply: {'true' if value else 'false'}{newline(lines)}"
     for index in range(1, end):
         if lines[index].partition(":")[0] == "auto_apply" and ":" in lines[index]:
             lines[index] = row
@@ -113,14 +143,30 @@ def with_setting(text, value):
 
 def with_routing(text, routing):
     lines = text.splitlines(keepends=True)
-    block = [compose.POLICY_HEADING + "\n", "\n", *(line + "\n" for line in routing)]
+    end = newline(lines)
+    block = [compose.POLICY_HEADING + end, end, *(line + end for line in routing)]
     spans = compose.policy_sections(lines, frontmatter_end(lines) + 1)
     if spans:
         span = spans[0]
-        following = ["\n"] if span[1] < len(lines) else []
+        following = [end] if span[1] < len(lines) else []
         return "".join([*lines[:span[0]], *block, *following, *lines[span[1]:]])
-    body = "".join(lines).rstrip("\n")
-    return body + "\n\n" + "".join(block)
+    body = "".join(lines).rstrip("\r\n")
+    return body + end + end + "".join(block)
+
+
+def without_setting(text, config):
+    """The configuration's text without the retired key, every other byte kept when that parses back."""
+    expected = {key: value for key, value in config.items() if key != RETIRED_SETTING}
+    member = rf'"{RETIRED_SETTING}"\s*:\s*(?:true|false)'
+    for pattern in (rf"\s*{member}\s*,", rf",\s*{member}", rf"\s*{member}\s*"):
+        for match in re.finditer(pattern, text):
+            candidate = text[:match.start()] + text[match.end():]
+            try:
+                if json.loads(candidate) == expected:
+                    return candidate
+            except json.JSONDecodeError:
+                continue
+    return json.dumps(expected, indent=2) + "\n"
 
 
 def validated(candidate_text, profile):
@@ -142,7 +188,7 @@ def plan(profile, auto_apply=None, keep_routing=None):
     profile = pathlib.Path(profile)
     if not profile.is_file():
         raise ValueError(f"no knowledge profile at {profile}; configure the knowledge profile first")
-    original = profile.read_text(encoding="utf-8")
+    original = profile.read_bytes().decode("utf-8")
     current = validated(original, profile)
     config_file = pathlib.Path(handoff.config_path())
     config = handoff.read_config()
@@ -151,19 +197,31 @@ def plan(profile, auto_apply=None, keep_routing=None):
     result = {"profile": str(profile), "auto_apply": {"current": bool(current.auto_apply)},
               "moves": [], "conflicts": [], "removals": [], "manual": [], "notes": []}
 
+    config_text = config_file.read_bytes().decode("utf-8") if RETIRED_SETTING in config else None
     if os.environ.get("HIPPOCAMPUS_ROUTING"):
-        result["manual"].append("unset HIPPOCAMPUS_ROUTING in your shell configuration; the knowledge profile "
-                                "is the only lesson routing owner")
-    if legacy is not None and legacy.is_symlink() and not legacy.exists():
+        result["manual"].append("unset HIPPOCAMPUS_ROUTING in your shell configuration; until then lesson "
+                                "routing and auto-apply stay refused")
+    if legacy is not None and legacy.exists() and not legacy.is_file():
+        result["manual"].append(f"move {legacy} away: it is not a file, so set-up neither reads nor deletes it; "
+                                "until then lesson routing and auto-apply stay refused")
+    elif legacy is not None and legacy.is_symlink() and not legacy.exists():
         result["removals"].append({"kind": "routing", "file": str(legacy),
                                    "action": "delete the broken link to a retired routing file"})
     elif legacy is not None and legacy.is_file():
         legacy_text = legacy.read_text(encoding="utf-8")
         rebase = legacy.parent.resolve() != profile.parent.resolve()
-        routing = moved_routing(legacy_text, legacy.parent, rebase)
+        routing, deep = moved_routing(legacy_text, legacy.parent, rebase)
         before = effective(legacy_text.splitlines(), legacy.parent, str(legacy))
-        same = current.routing is not None and nonblank(current.routing) == nonblank(routing)
-        if current.routing is not None and not same and keep_routing is None:
+        same = current.routing is not None and (nonblank(current.routing) == nonblank(routing) or (
+            without_paths(current.routing) == without_paths(routing)
+            and effective(current.routing, profile.parent, str(profile)) == before))
+        if deep and keep_routing != "profile":
+            result["conflicts"].append({
+                "setting": "lesson routing headings",
+                "owners": [{"file": str(legacy), "headings": deep}],
+                "resolve": "these headings cannot move two levels down (Markdown stops at level six); raise "
+                           "them in the routing file, or keep the profile's routing with --keep-routing profile"})
+        elif current.routing is not None and not same and keep_routing is None:
             result["conflicts"].append({
                 "setting": "lesson routing",
                 "owners": [{"file": str(legacy), "text": legacy_text},
@@ -201,6 +259,10 @@ def plan(profile, auto_apply=None, keep_routing=None):
                 auto_apply = value
             result["removals"].append({"kind": "config", "file": str(config_file),
                                        "action": f"remove {RETIRED_SETTING}"})
+            result["_config"] = without_setting(config_text, config)
+            result["config_diff"] = "".join(difflib.unified_diff(
+                config_text.splitlines(keepends=True), result["_config"].splitlines(keepends=True),
+                str(config_file), str(config_file)))
             result["moves"].append({"setting": "auto-apply", "from": f"{config_file} {RETIRED_SETTING}",
                                     "to": f"{profile} auto_apply"})
     if auto_apply is not None and auto_apply != current.auto_apply:
@@ -208,20 +270,27 @@ def plan(profile, auto_apply=None, keep_routing=None):
     result["auto_apply"]["proposed"] = bool(validated(proposed, profile).auto_apply)
     result["profile_diff"] = "".join(difflib.unified_diff(
         original.splitlines(keepends=True), proposed.splitlines(keepends=True), str(profile), str(profile)))
-    result["file_states"] = {str(path): digest(read_bytes(path))
+    result["file_states"] = {str(path): state(path)
                              for path in sorted({profile, config_file, *([legacy] if legacy else [])})}
-    payload = json.dumps(result, sort_keys=True)
+    result["ready"] = not result["conflicts"] and not result["manual"]
+    payload = json.dumps({key: value for key, value in result.items() if not key.startswith("_")}, sort_keys=True)
     result["approval_fingerprint"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     result["_proposed"] = proposed
     return result
 
 
 def atomic_write(path, text):
-    mode = path.stat().st_mode & 0o7777 if path.exists() else 0o644
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+    """Replace a file's content atomically; a symbolic link keeps pointing at its updated target."""
+    target = path.resolve()
+    mode = target.stat().st_mode & 0o7777 if target.exists() else 0o644
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False, newline="") as handle:
         handle.write(text)
-    os.chmod(handle.name, mode)
-    os.replace(handle.name, path)
+    try:
+        os.chmod(handle.name, mode)
+        os.replace(handle.name, target)
+    except OSError:
+        pathlib.Path(handle.name).unlink(missing_ok=True)
+        raise
 
 
 def apply(profile, fingerprint, auto_apply=None, keep_routing=None):
@@ -236,9 +305,7 @@ def apply(profile, fingerprint, auto_apply=None, keep_routing=None):
     for removal in fresh["removals"]:
         path = pathlib.Path(removal["file"])
         if removal["kind"] == "config":
-            config = handoff.read_config()
-            config.pop(RETIRED_SETTING, None)
-            atomic_write(path, json.dumps(config, indent=2) + "\n")
+            atomic_write(path, fresh["_config"])
         else:
             path.unlink()
     return fresh
@@ -264,7 +331,8 @@ def main():
     except (OSError, ValueError, compose.ComposeError) as exc:
         print(f"policy-setup: {exc}", file=sys.stderr)
         return 1
-    result.pop("_proposed")
+    for key in [key for key in result if key.startswith("_")]:
+        result.pop(key)
     print(json.dumps(result, indent=2))
     return 0
 

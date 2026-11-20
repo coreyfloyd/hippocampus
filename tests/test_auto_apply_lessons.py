@@ -736,20 +736,24 @@ def test_a_mistyped_setting_is_an_error(tmp_path, tool):
     assert result.returncode == 1 and 'auto_apply must be true or false' in result.stderr
 
 
-@pytest.mark.parametrize('retired', ['config', 'routing file', 'environment'])
-def test_a_retired_policy_owner_is_refused_until_setup_moves_it(tmp_path, tool, retired):
+@pytest.mark.parametrize('retired', ['config on', 'config off', 'routing file', 'environment'])
+def test_a_retired_policy_owner_refuses_auto_apply_but_the_wrap_still_plans(tmp_path, tool, retired):
     wrap = Wrap(tmp_path, tool)
-    if retired == 'config':
-        (tmp_path / 'config.json').write_text('{"auto_apply_lessons": true}')
+    if retired.startswith('config'):
+        (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': retired == 'config on'}))
     elif retired == 'routing file':
         (wrap.policy.parent / 'routing.md').write_text('lesson-policy: apply\n')
     else:
         wrap.env['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'elsewhere.md')
     owners = [tmp_path / 'config.json', wrap.policy, wrap.policy.parent / 'routing.md']
     before = [path.read_bytes() if path.exists() else None for path in owners]
-    result = wrap.run('plan', '--session-id', SESSION)
-    assert result.returncode == 1 and 'Traceback' not in result.stderr
-    assert 'knowledge profile' in result.stderr and 'run hippocampus-set-up' in result.stderr
+    plan = wrap.plan()  # The wrap still plans every step, with the setting refused.
+    assert 'auto_apply' not in plan and [step['id'] for step in plan['steps']].count('lessons') == 1
+    assert 'knowledge profile' in plan['auto_apply_refused'] and 'hippocampus-set-up' in plan['auto_apply_refused']
+    item = lesson()
+    applied = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([item])),
+                       '--lessons', wrap.save('rows.json', []))
+    assert applied.returncode == 1 and 'hippocampus-set-up' in applied.stderr and 'Traceback' not in applied.stderr
     assert [path.read_bytes() if path.exists() else None for path in owners] == before  # No silent migration.
 
 

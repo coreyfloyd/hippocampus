@@ -1362,7 +1362,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                       "ask": ask, "rerun_all_steps": True, "handoff": handoff}
             if args.unattended:
                 output["when_answer_needed"] = UNATTENDED_RULE
-            auto_apply = auto_apply_state()
+            try:
+                auto_apply = auto_apply_state()
+            except lessons.UpgradeRequired as error:
+                # The wrap still plans every step, with the setting off, and names the move.
+                auto_apply, output["auto_apply_refused"] = None, f"auto-apply: {error}"
             if auto_apply:
                 output["auto_apply"] = auto_apply
         elif args.operation in ("apply-lessons", "deliver-lessons"):

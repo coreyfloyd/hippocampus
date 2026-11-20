@@ -44,6 +44,10 @@ class ComposeError(Exception):
     """A preflight failure that must leave every target untouched."""
 
 
+class RetiredOwner(ComposeError):
+    """A retired policy owner is still in place; only set-up moves it, so readers refuse it."""
+
+
 @dataclass
 class Target:
     tool: str
@@ -195,18 +199,32 @@ def load_policy(path: pathlib.Path | None = None) -> Policy:
     return Policy(path, auto_apply, routing)
 
 
+FENCE = re.compile(r"\s*(`{3,}|~{3,})(.*)")
+
+
+def fence_after(line: str, fence: str | None) -> str | None:
+    """The open fence marker after ``line``, or None outside a fenced block.
+
+    A fence closes only on the same character, at least as long, with nothing after it.
+    """
+    match = FENCE.fullmatch(line.rstrip("\r\n"))
+    if fence is None:
+        return match[1] if match and not (match[1][0] == "`" and "`" in match[2]) else None
+    closes = match and match[1][0] == fence[0] and len(match[1]) >= len(fence) and not match[2].strip()
+    return None if closes else fence
+
+
 def policy_sections(lines: list[str], start: int) -> list[tuple[int, int]]:
     """Each Lesson routing section's line range, heading included, in a profile's body."""
-    sections, fenced = [], False
+    sections, fence = [], None
     for index in range(start, len(lines)):
-        line = lines[index].rstrip("\n")
-        if not fenced and re.match(r"#{1,2}\s", line):
+        line = lines[index].rstrip("\r\n")
+        if fence is None and re.match(r"#{1,2}\s", line):
             if sections and sections[-1][1] is None:
                 sections[-1] = (sections[-1][0], index)
             if line.rstrip() == POLICY_HEADING:
                 sections.append((index, None))
-        if line.lstrip().startswith(("```", "~~~")):
-            fenced = not fenced
+        fence = fence_after(line, fence)
     return [(begin, len(lines) if stop is None else stop) for begin, stop in sections]
 
 
@@ -214,7 +232,7 @@ def lesson_routing(policy: Policy) -> list[str]:
     """The section's lines, refused while the retired routing file is still configured."""
     retired = retired_routing()
     if retired is not None:
-        fail(f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
+        raise RetiredOwner(f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
              f"run hippocampus-set-up to move {retired} into {policy.path}")
     return policy.routing or []
 
@@ -325,15 +343,13 @@ def parse_lesson_delivery(lines: list[str], label: str) -> dict:
     Produced surfaces.
     """
     rules: dict = {"policy": None, "command": None, "pull_requests": []}
-    fenced = False
+    fence = None
     listing = False
     seen: set = set()
     for line in lines:
-        if line.lstrip().startswith(("```", "~~~")):
-            fenced = not fenced
+        opened, fence = fence, fence_after(line, fence)
+        if opened is not None or fence is not None:
             listing = False
-            continue
-        if fenced:
             continue
         if not line.strip() or line.lstrip().startswith("#"):
             listing = False

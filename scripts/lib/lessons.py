@@ -32,6 +32,10 @@ REFUSED_DIRECT = re.compile(r"GH006|GH013|protected branch|pull request|merge re
 REMOTE_MOVED = re.compile(r"non-fast-forward|fetch first")
 
 
+class UpgradeRequired(ValueError):
+    """A retired policy owner is still in place: auto-apply is refused until set-up moves it."""
+
+
 class LessonError(Exception):
     """One lesson could not be applied or delivered; the wrap continues without it."""
 
@@ -39,7 +43,7 @@ class LessonError(Exception):
 def enabled(config: Mapping[str, Any]) -> bool:
     """The knowledge profile's auto-apply setting, refused while the configuration still holds it."""
     if RETIRED_SETTING in config:
-        raise ValueError(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
+        raise UpgradeRequired(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
                          "run hippocampus-set-up to move it")
     return bool(policy().auto_apply)
 
@@ -76,6 +80,8 @@ def routing_rules() -> dict[str, Any]:
     current = policy()
     try:
         parsed = compose.load_lesson_delivery(current)
+    except compose.RetiredOwner as error:
+        raise UpgradeRequired(str(error)) from None
     except compose.ComposeError as error:
         raise ValueError(str(error)) from None
     return {"path": str(current.path), "propose": parsed["policy"] == "propose",
