@@ -423,3 +423,14 @@ def test_an_indented_code_line_is_not_a_fence_that_hides_routing_keys():
 def test_a_prose_heading_that_starts_with_the_words_does_not_block_routing(heading):
     knowledge_profile(body=f'## Lesson routing\n\nlesson-policy: propose\n\n{heading}\n\nText.\n')
     assert module('lessons').routing_rules()['propose'] is True
+
+
+def test_a_routing_variable_naming_a_missing_file_tells_how_to_clear_it(legacy):
+    profile, routing, config = legacy
+    routing.unlink()
+    missing = Path(os.environ['XDG_DATA_HOME']) / 'deleted-routing.md'
+    env = {**os.environ, 'HIPPOCAMPUS_ROUTING': str(missing)}
+    plan = planned(env=env)
+    assert plan['ready'] is False and not any(row['kind'] == 'routing' for row in plan['removals'])
+    [step] = plan['manual']
+    assert str(missing) in step and 'does not exist' in step and 'unset HIPPOCAMPUS_ROUTING' in step

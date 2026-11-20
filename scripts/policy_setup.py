@@ -214,8 +214,7 @@ def plan(profile, auto_apply=None, keep_routing=None):
 
     config_text = config_file.read_bytes().decode("utf-8") if RETIRED_SETTING in config else None
     if os.environ.get("HIPPOCAMPUS_ROUTING"):
-        result["manual"].append("unset HIPPOCAMPUS_ROUTING in your shell configuration; until then lesson "
-                                "routing and auto-apply stay refused")
+        result["manual"].append(compose.routing_variable_step(legacy))
     if legacy is not None and legacy.exists() and not legacy.is_file():
         result["manual"].append(f"move {legacy} away: it is not a file, so set-up neither reads nor deletes it; "
                                 "until then lesson routing and auto-apply stay refused")

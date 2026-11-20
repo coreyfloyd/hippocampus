@@ -463,7 +463,7 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
-An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed knowledge profile policy (a mistyped `auto_apply`, a duplicate or malformed `## Lesson routing` section) or a retired policy owner still in place (a standalone `routing.md`, `HIPPOCAMPUS_ROUTING`, or `auto_apply_lessons` in this configuration) is such an error for every operation that applies, naming `hippocampus-set-up` for the move;
+An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed knowledge profile policy (a mistyped `auto_apply`, a duplicate or malformed `## Lesson routing` section) or a retired policy owner still in place (a standalone `routing.md`, `HIPPOCAMPUS_ROUTING`, or `auto_apply_lessons` in this configuration) is such an error for every operation that applies, naming `hippocampus-set-up` for the move (and, while `HIPPOCAMPUS_ROUTING` is exported, the step of unsetting it, saying when its file does not exist);
 `plan` and `report` name it in `auto_apply_refused` instead (below).
 
 The auto-apply setting is the knowledge profile's `auto_apply` (section 2, Policy in the knowledge profile).

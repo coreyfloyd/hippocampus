@@ -931,3 +931,25 @@ def test_malformed_producer_outcome_does_not_block_new_lesson(sandbox, tool, dam
     assert row['receipt'] == git(checkout, 'rev-parse', 'HEAD') == git(remote, 'rev-parse', 'main')
     assert archived(sandbox, PRODUCER)
     assert any('row 1' in error['reason'] for error in run['errors'])
+
+
+def test_a_stale_routing_variable_names_the_step_that_clears_it(sandbox, tool):
+    root, extra = knowledge_root(sandbox)
+    lesson_path = source(sandbox, PRODUCER, loops=[lesson(), knowledge()])
+    configure(sandbox)
+    missing = sandbox[0] / 'deleted-routing.md'
+    sandbox[3]['HIPPOCAMPUS_ROUTING'] = str(missing)
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons'), dict(rule='R4', destination='knowledge')])
+    payload = json.loads(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout)
+    (root / 'raw/derived/a.md').write_text('# A\n')
+
+    def answer(work):
+        if work['operation'] == 'native_step':
+            return {'write_id': work['write_id'], 'status': 'carried'}
+        return agent(knowledge_row={'capture': 'source', 'created': ['raw/derived/a.md']})(work)
+
+    run, _ = finish(sandbox, payload, answer, *extra)
+    reason = run['errors'][0]['reason']
+    assert 'unset HIPPOCAMPUS_ROUTING' in reason and str(missing) in reason and 'does not exist' in reason
+    assert run['auto_apply']['lessons'] == run['auto_apply']['knowledge'] == 'failed'
+    assert lesson_path.exists() and not missing.exists()

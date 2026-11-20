@@ -253,12 +253,22 @@ def policy_sections(lines: list[str], start: int) -> list[tuple[int, int]]:
     return [(begin, len(lines) if stop is None else stop) for begin, stop in sections]
 
 
+def routing_variable_step(path: pathlib.Path) -> str:
+    """The step that clears an exported HIPPOCAMPUS_ROUTING; set-up cannot change the user's shell."""
+    gone = "" if path.exists() or path.is_symlink() else f"it names {path}, which does not exist, so set-up has nothing to move; "
+    return (f"unset HIPPOCAMPUS_ROUTING in your shell configuration and start a new session ({gone}"
+            "run hippocampus-set-up to see every remaining step); until then lesson routing and auto-apply stay refused")
+
+
 def lesson_routing(policy: Policy) -> list[str]:
     """The section's lines, refused while the retired routing file is still configured."""
     retired = retired_routing()
     if retired is not None:
-        raise RetiredOwner(f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
-             f"run hippocampus-set-up to move {retired} into {policy.path}")
+        message = f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
+        if os.environ.get("HIPPOCAMPUS_ROUTING") and not (retired.exists() or retired.is_symlink()):
+            raise RetiredOwner(message + routing_variable_step(retired))
+        then = "; then " + routing_variable_step(retired) if os.environ.get("HIPPOCAMPUS_ROUTING") else ""
+        raise RetiredOwner(message + f"run hippocampus-set-up to move {retired} into {policy.path}{then}")
     if policy.routing_error:
         fail(policy.routing_error)
     return policy.routing or []

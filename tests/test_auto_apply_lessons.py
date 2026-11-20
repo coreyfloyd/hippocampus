@@ -1017,3 +1017,19 @@ def test_one_bad_target_fails_only_its_row_in_a_continued_pull_request_group(tmp
     assert updates[1]['delivery'] == 'committed, not pushed' and 'is not inside' in updates[1]['error']
     request = json.loads(log.read_text().strip().splitlines()[-1])
     assert [entry['path'] for entry in request['lessons']] == ['rules.md']
+
+
+@pytest.mark.parametrize('target', ['missing', 'present'])
+def test_the_routing_variable_refusal_names_the_unset_step(tmp_path, tool, target):
+    wrap = Wrap(tmp_path, tool)
+    exported = tmp_path / 'elsewhere.md'
+    if target == 'present':
+        exported.write_text('lesson-policy: apply\n')
+    wrap.env['HIPPOCAMPUS_ROUTING'] = str(exported)
+    refused = wrap.plan()['auto_apply_refused']
+    assert 'unset HIPPOCAMPUS_ROUTING' in refused and 'hippocampus-set-up' in refused
+    assert ('does not exist' in refused) == (target == 'missing')
+    applied = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson()])),
+                       '--lessons', wrap.save('rows.json', []))
+    assert applied.returncode == 1 and 'unset HIPPOCAMPUS_ROUTING' in applied.stderr
+    assert exported.exists() == (target == 'present')
