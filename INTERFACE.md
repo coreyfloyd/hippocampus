@@ -165,7 +165,8 @@ the example profile's instructional text is not a route), `conflicts` (a path of
 kind, or a root without a parent directory), `create_directories`, `create_files`,
 `preserved` (existing paths and an unchanged profile), `profile_fields` (each field's
 `current` and `proposed` value; a released `wiki_enabled: false` is proposed for removal),
-`profile_diff`, `profile_exists`, `file_states` and `approval_fingerprint`. A profile
+`profile_diff`, `profile_exists`, `problems` (a lesson routing problem, reported without
+blocking the knowledge setup), `file_states` and `approval_fingerprint`. A profile
 the reader refuses exits 1 with its message. `apply` with the same options and
 `--approval-fingerprint F` recomputes the plan and refuses (exit 1) a changed plan or one
 that is not `ready`; otherwise it creates only the missing directories and empty files,
@@ -192,7 +193,8 @@ plans for the configured knowledge profile, the one the readers read, and writes
 `removals` (the retired file to delete, the retired key to remove), `manual` steps,
 `notes`, `conflicts` (both owners' values when they disagree, or headings too deep to
 move two levels), `auto_apply` (`current` and `proposed`), `config_diff` (the exact
-configuration change: only the retired key's bytes go), `ready` (no conflict and no
+configuration change: only the retired key's bytes go; a retired value that is not
+`true` or `false` is removed, not moved, with a note), `ready` (no conflict and no
 manual step left), `file_states` and `approval_fingerprint`. A routing section counts
 as the same as the routing file when its text matches apart from Produced surfaces
 paths and those resolve to the same destinations. `apply` with the

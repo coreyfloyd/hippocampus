@@ -161,7 +161,7 @@ def with_routing(text, routing):
 def without_setting(text, config):
     """The configuration's text without the retired key, every other byte kept when that parses back."""
     expected = {key: value for key, value in config.items() if key != RETIRED_SETTING}
-    member = rf'"{RETIRED_SETTING}"\s*:\s*(?:true|false)'
+    member = rf'"{RETIRED_SETTING}"\s*:\s*(?:true|false|null|-?[0-9][0-9.eE+-]*|"(?:[^"\\]|\\.)*")'
     for pattern in (rf"\s*{member}\s*,", rf",\s*{member}", rf"\s*{member}\s*"):
         for match in re.finditer(pattern, text):
             candidate = text[:match.start()] + text[match.end():]
@@ -173,8 +173,8 @@ def without_setting(text, config):
     return json.dumps(expected, indent=2) + "\n"
 
 
-def validated(candidate_text, profile, require_wiki=False):
-    """Refuse a proposed profile the validator or the policy reader would reject."""
+def checked(candidate_text, profile, require_wiki=False):
+    """A proposed profile's policy, its lesson routing problem kept; a profile the validator rejects is refused."""
     with tempfile.TemporaryDirectory() as temporary:
         candidate = pathlib.Path(temporary) / "profile.md"
         candidate.write_text(candidate_text, encoding="utf-8")
@@ -185,9 +185,16 @@ def validated(candidate_text, profile, require_wiki=False):
         except SystemExit:
             raise ValueError(f"{profile}: {errors.getvalue().strip()}") from None
         policy = compose.load_policy(candidate)
-        if policy.routing_error:
-            raise ValueError(policy.routing_error.replace(str(candidate), str(profile)))
-        return compose.Policy(profile, policy.auto_apply, policy.routing)
+        error = policy.routing_error and policy.routing_error.replace(str(candidate), str(profile))
+        return compose.Policy(profile, policy.auto_apply, policy.routing, error)
+
+
+def validated(candidate_text, profile):
+    """Refuse a proposed profile the validator or the policy reader would reject."""
+    policy = checked(candidate_text, profile)
+    if policy.routing_error:
+        raise ValueError(policy.routing_error)
+    return policy
 
 
 def plan(profile, auto_apply=None, keep_routing=None):
@@ -257,15 +264,18 @@ def plan(profile, auto_apply=None, keep_routing=None):
     if RETIRED_SETTING in config:
         value = config[RETIRED_SETTING]
         if type(value) is not bool:
-            raise ValueError(f"hippocampus config {config_file}: {RETIRED_SETTING} must be true or false")
-        if auto_apply is None and current.auto_apply is not None and current.auto_apply != value:
+            # Not a setting to move, but still a retired owner every reader refuses: show it and remove it.
+            result["notes"].append(f"{config_file} {RETIRED_SETTING} holds {json.dumps(value)}, not true or "
+                                   f"false: it is removed and not moved; choose the setting with --auto-apply")
+        if type(value) is bool and auto_apply is None and current.auto_apply is not None \
+                and current.auto_apply != value:
             result["conflicts"].append({
                 "setting": "auto-apply",
                 "owners": [{"file": str(config_file), "value": value},
                            {"file": f"{profile} auto_apply", "value": current.auto_apply}],
                 "resolve": "choose the setting with --auto-apply true or --auto-apply false"})
         else:
-            if auto_apply is None and current.auto_apply is None:
+            if auto_apply is None and current.auto_apply is None and type(value) is bool:
                 auto_apply = value
             result["removals"].append({"kind": "config", "file": str(config_file),
                                        "action": f"remove {RETIRED_SETTING}"})
@@ -273,8 +283,9 @@ def plan(profile, auto_apply=None, keep_routing=None):
             result["config_diff"] = "".join(difflib.unified_diff(
                 config_text.splitlines(keepends=True), result["_config"].splitlines(keepends=True),
                 str(config_file), str(config_file)))
-            result["moves"].append({"setting": "auto-apply", "from": f"{config_file} {RETIRED_SETTING}",
-                                    "to": f"{profile} auto_apply"})
+            if type(value) is bool:
+                result["moves"].append({"setting": "auto-apply", "from": f"{config_file} {RETIRED_SETTING}",
+                                        "to": f"{profile} auto_apply"})
     if auto_apply is not None and auto_apply != current.auto_apply:
         proposed = with_setting(proposed, auto_apply)
     result["auto_apply"]["proposed"] = bool(validated(proposed, profile).auto_apply)
@@ -293,12 +304,15 @@ def atomic_write(path, text):
     """Replace a file's content atomically; a symbolic link keeps pointing at its updated target."""
     target = path.resolve()
     mode = target.stat().st_mode & 0o7777 if target.exists() else 0o644
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False, newline="") as handle:
-        handle.write(text)
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=target.parent, delete=False, newline="")
     try:
+        with handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.chmod(handle.name, mode)
         os.replace(handle.name, target)
-    except OSError:
+    except BaseException:
         pathlib.Path(handle.name).unlink(missing_ok=True)
         raise
 

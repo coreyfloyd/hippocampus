@@ -220,3 +220,17 @@ def test_a_path_of_the_wrong_kind_is_a_conflict_not_a_replacement():
     plan = planned('--root', str(root), *ROUTES)
     assert not plan['ready'] and plan['conflicts'] == [f'{root / "wiki"} exists and is not a directory; move it away']
     assert (root / 'wiki').read_text() == 'not a folder\n'
+
+
+@pytest.mark.parametrize('section', ['## Lesson routing\n\nlesson-policy: propose\n\n## Lesson routing\n\nx\n',
+                                     '## Lesson routing notes\n\nmine\n'])
+def test_a_lesson_routing_problem_is_reported_without_blocking_knowledge_setup(section):
+    root = knowledge_root()
+    path = released_profile(root)
+    path.write_text(path.read_text() + '\n' + section)
+    plan = planned(*ROUTES[:2])
+    assert plan['ready'] and any('Lesson routing' in problem for problem in plan['problems'])
+    applied = approve(plan, *ROUTES[:2])
+    assert applied['status'] == 'complete' and applied['problems'] == plan['problems']
+    again = planned()
+    assert again['status'] == 'complete' and again['problems'] == plan['problems']

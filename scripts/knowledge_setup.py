@@ -150,8 +150,10 @@ def plan(profile, root=None, routes=None):
     result["ready"] = not result["needs"] and not result["conflicts"]
     changes = result["create_directories"] or result["create_files"] or result["profile_diff"]
     result["status"] = "complete" if result["ready"] and not changes else "incomplete"
-    if result["status"] == "complete":
-        policy.validated(proposed, profile, require_wiki=True)
+    # A lesson routing problem is reported here, never hidden, and does not block the knowledge setup.
+    current = policy.checked(proposed, profile, require_wiki=True) if result["status"] == "complete" else (
+        policy.compose.load_policy(profile) if original is not None else None)
+    result["problems"] = [current.routing_error] if current and current.routing_error else []
     result["file_states"] = {path: policy.state(pathlib.Path(path)) if kind(pathlib.Path(path)) != "directory"
                              else "directory" for path in sorted({str(profile), *result["preserved"],
                                                                   *result["create_directories"],
@@ -180,7 +182,7 @@ def apply(profile, fingerprint, root=None, routes=None):
             with path.open("x", encoding="utf-8"):
                 pass
             created.append(path)
-        policy.validated(fresh["_proposed"], profile, require_wiki=True)
+        policy.checked(fresh["_proposed"], profile, require_wiki=True)
         missing = [parent for parent in reversed(profile.parents) if not parent.exists()]
         for parent in missing:
             parent.mkdir()
@@ -213,7 +215,7 @@ def main():
             if not args.approval_fingerprint:
                 parser.error("apply requires --approval-fingerprint from the approved plan")
             result = apply(profile, args.approval_fingerprint, args.root, routes)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, policy.compose.ComposeError) as exc:
         print(f"knowledge-setup: {exc}", file=sys.stderr)
         return 1
     result.pop("_proposed")

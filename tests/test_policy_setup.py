@@ -375,3 +375,31 @@ def test_an_exported_routing_file_moves_on_approval_and_the_unset_step_stays_rep
     # Moving while exported is the only order that reads this file: unset first and nothing points at it.
     assert '## Lesson routing' in profile.read_text() and not exported.exists()
     assert applied['ready'] is False and applied['manual'] == plan['manual']
+
+
+@pytest.mark.parametrize('value', [None, 'yes'])
+def test_a_retired_setting_that_is_not_a_boolean_is_shown_and_removed(value):
+    profile = knowledge_profile()
+    config = Path(os.environ['HIPPOCAMPUS_CONFIG'])
+    config.write_text(json.dumps({'auto_apply_lessons': value, 'prune_days': 9}))
+    with pytest.raises(ValueError, match='auto_apply_lessons'):
+        module('lessons').enabled(json.loads(config.read_text()))  # Still refused at read time.
+    plan = planned()
+    assert [removal['file'] for removal in plan['removals']] == [str(config)]
+    assert plan['moves'] == [] and plan['auto_apply'] == {'current': False, 'proposed': False}
+    assert '-' in plan['config_diff'] and 'auto_apply_lessons' in plan['notes'][0]
+    result = approve(plan)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(config.read_text()) == {'prune_days': 9}
+    assert 'auto_apply' not in profile.read_text().split('---')[1]
+
+
+def test_a_failed_write_leaves_no_temporary_file_and_the_target_unchanged(tmp_path):
+    spec = importlib.util.spec_from_file_location('policy_setup_under_test', SETUP)
+    setup_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(setup_module)
+    target = tmp_path / 'profile.md'
+    target.write_text('kept\n')
+    with pytest.raises(UnicodeEncodeError):
+        setup_module.atomic_write(target, 'unencodable \ud800\n')
+    assert target.read_text() == 'kept\n' and sorted(tmp_path.iterdir()) == [target]
