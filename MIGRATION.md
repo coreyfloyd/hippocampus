@@ -58,9 +58,11 @@ or aliases. Before changing anything, back up the files you want to keep.
    and `lessons` binding blocks; preserve `record`, `persist`, ask and your own
    added steps. The removed slots are now native steps. If both files exist,
    reconcile them yourself rather than overwriting either one.
-3. Move custom lesson routing from `~/.config/improve-harness/routing.md` to
-   `~/.config/hippocampus/routing.md`. Replace `IMPROVE_HARNESS_ROUTING` overrides
-   with `HIPPOCAMPUS_ROUTING`. Move wanted shared configuration from
+3. Copy custom lesson routing from `~/.config/improve-harness/routing.md` to
+   `~/.config/hippocampus/routing.md`, then run `hippocampus-set-up`: it shows the
+   exact move into the knowledge profile's `## Lesson routing` section and makes it
+   only after you approve. Drop `IMPROVE_HARNESS_ROUTING`; no variable overrides the
+   knowledge profile's lesson routing. Move wanted shared configuration from
    `~/.config/continuity/config.json` to `~/.config/hippocampus/config.json`,
    replacing `CONTINUITY_CONFIG` with `HIPPOCAMPUS_CONFIG`. Reconcile existing
    destination files and any old paths inside your configuration manually.

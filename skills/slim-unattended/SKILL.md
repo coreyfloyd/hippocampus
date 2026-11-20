@@ -14,7 +14,7 @@ pull request, merges or schedules. This step is separate from the sweep: never r
 through it, and never add a lesson to a slim branch.
 
 The user owns the schedule and whatever opens and merges a pull request. With the
-auto-apply setting off, or the routing file's `lesson-policy: propose`, `plan` refuses, exit 1:
+auto-apply setting off, or the lesson routing's `lesson-policy: propose`, `plan` refuses, exit 1:
 report that and stop. `slim_checkouts` in the configuration names each repository's checkout.
 
 ## Run
@@ -27,7 +27,8 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    `unreachable` and `warnings`. Deliver each `undelivered_asks` row as in step 5.
 3. Run `python3 <package>/scripts/lib/slim.py begin --run <run-id>`. With `done: false` it hands
    you one file: `file` (its text on the default branch), `workspaces`, `limits`, `duplicates`,
-   `frozen` and `surfaces`. Slims go one after another; `begin` repeats the open one until it
+   `frozen` and `surfaces`; a `surfaces_error` means the surfaces are unknown, not none,
+   and `finish` reports them as unverified. Slims go one after another; `begin` repeats the open one until it
    is finished. It stops at three files, largest overage first; the rest wait.
 4. Review the whole file (below), write the result, then run
    `python3 <package>/scripts/lib/slim.py finish --run <run-id> --result <result-file>`, and

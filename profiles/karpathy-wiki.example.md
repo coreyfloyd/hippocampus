@@ -36,9 +36,19 @@ artifact_followup_destination: "Describe the task system and routing rules for s
 #     - tool: codex
 #       rules_target: none
 #       memory: native
+# The auto-apply setting, off by default. With true, a wrap and a sweep in act mode
+# apply recommended lessons and knowledge captures without waiting; a lesson-policy of
+# propose in the lesson routing still keeps lessons as proposals, and a fact about you
+# still waits for your answer. Set up previews this change before writing it.
+# auto_apply: false
 ---
 
 Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.
+
+Custom lesson destinations go in an optional `## Lesson routing` section of
+this body (headings inside it start at level three). When present it replaces
+improve-harness's default routing table; without it the defaults apply. This
+example deliberately has none.
 
 ## Optional local policy
 

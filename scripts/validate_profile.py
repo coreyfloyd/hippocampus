@@ -11,7 +11,7 @@ TOP_LEVEL_FIELDS = {
     "wiki_enabled",
     "meeting_transcript_source", "meeting_event_source", "meeting_note_path",
     "meeting_record_folder", "meeting_record_template",
-    "rules",
+    "rules", "auto_apply",
 }
 
 RULE_FIELDS = {"preset", "cross_tool_document", "development_document", "tools"}
@@ -224,6 +224,8 @@ def validate(path, require_wiki=False):
     if wiki_value is not None and wiki_value not in ("true", "false"):
         fail("wiki_enabled must be true or false")
     wiki_enabled = wiki_value != "false"
+    if values.get("auto_apply", "false") not in ("true", "false"):
+        fail("auto_apply must be true or false")
 
     # Checks common to both wiki states run first, so a profile missing more
     # than one canonical directory or file may report a different offender

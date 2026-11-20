@@ -9,6 +9,7 @@ import sys
 
 import pytest
 
+from test_auto_apply_lessons import write_policy
 from test_over_limit_records import Session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,7 +130,7 @@ def test_sweep_preview_ask_already_has_owner():
 
 def test_slim_new_retry_and_closed_asks_are_owned_and_receipted(tmp_path, monkeypatch, profile):
     engine = load('slim')
-    Path(os.environ['HIPPOCAMPUS_CONFIG']).write_text('{"auto_apply_lessons": true}')
+    write_policy(True)
     records = tmp_path / 'records.json'
     records.write_text('{"records": []}')
     run = {'id': 'fixture-run', 'started': ITEM['produced_at'], 'results': [], 'failed': [],

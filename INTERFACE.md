@@ -114,8 +114,7 @@ an empty configuration.
 | `prune_days` | positive integer | Age in days at which a handoff becomes a `stale_transcript` prune candidate. Shared by Claude and Codex; `PICKUP_PRUNE_DAYS` overrides it. Default: 7. |
 | `cycle_sessions` | object | Maps a session name to a directory under the home directory, for a consumer that cycles sessions (section 8). |
 | `unattended` | object | Optional unattended mode, section 6. |
-| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and the wiki captures and retained sources and outputs under the knowledge root. Default false. Any other type is an error. |
-| `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the routing file's produced surfaces through it, and never changes it. |
+| `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. The step reads the checkout's remote and matches the lesson routing's produced surfaces through it, and never changes it. |
 
 `python3 scripts/lib/handoff.py config-get <key>` follows the executable contract
 below. Each row supplies a key (or keys sharing a case), a configured JSON value,
@@ -129,11 +128,6 @@ also exits 2 with a reason on stderr and no stdout.
 <!-- config-get-contract -->
 | Class | Key(s), JSON | Configured input | Stdout, JSON | Exit |
 |---|---|---|---|---|
-| Boolean | `"auto_apply_lessons"` | `true` | `"true\n"` | 0 |
-| Boolean | `"auto_apply_lessons"` | `false` | `"false\n"` | 0 |
-| Boolean default | `"auto_apply_lessons"` | `absent` | `"false\n"` | 0 |
-| Boolean null | `"auto_apply_lessons"` | `null` | `"false\n"` | 0 |
-| Mistyped boolean | `"auto_apply_lessons"` | `1` | `""` | 2 |
 | Positive integer | `"prune_days"` | `17` | `"17\n"` | 0 |
 | Non-positive integer | `"prune_days"` | `0` | `""` | 2 |
 | Mistyped integer | `"prune_days"` | `true` | `""` | 2 |
@@ -158,6 +152,38 @@ also exits 2 with a reason on stderr and no stdout.
 | Relative reference path | `"harness_enforcement_reference"` | `"relative/path"` | `""` | 2 |
 | List reference path | `"harness_enforcement_reference"` | `["/example"]` | `""` | 2 |
 <!-- /config-get-contract -->
+
+### Policy in the knowledge profile
+
+The knowledge profile (`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`) is the one
+owner of policy. The checklist profile owns record writes and workflow bindings; this
+configuration owns runtime, state and checkpoint settings.
+
+| Where | Meaning |
+|---|---|
+| `auto_apply` (frontmatter) | The auto-apply setting, `true` or `false`; absent is false, and any other value is an error. On, a wrap, and a sweep in act mode, apply the lessons they recommend and the wiki captures and retained sources and outputs under the knowledge root. `lesson-policy: propose` still carries lessons, and a fact about the user still needs the user's answer. |
+| `## Lesson routing` (body) | The lesson routing: destination table, `memory-policy`, `lesson-policy`, `lesson-pull-requests`, `lesson-pull-request-command`, the Produced surfaces block and proposal destinations, in the forms improve-harness documents. Present, it replaces the default routing table; no default route is merged into it. Absent, the defaults apply. It ends at the next level-one or level-two heading outside a fenced block; its own headings start at level three. Relative paths resolve from the profile's directory. A heading outside it that reads as Lesson routing without being exactly `## Lesson routing` (another case, spacing or suffix, another level) is an error, not an absent section. |
+
+A standalone `hippocampus/routing.md`, `HIPPOCAMPUS_ROUTING`, and `auto_apply_lessons` in
+this configuration are retired owners. No reader reads them; while one remains, what it
+governed refuses with an error naming `hippocampus-set-up`. Nothing migrates at session start.
+
+`python3 scripts/policy_setup.py plan [--auto-apply true|false] [--keep-routing file|profile]`
+plans for the configured knowledge profile, the one the readers read, and writes nothing. It prints `moves`, `profile_diff` (the exact profile change),
+`removals` (the retired file to delete, the retired key to remove), `manual` steps,
+`notes`, `conflicts` (both owners' values when they disagree, or headings too deep to
+move two levels), `auto_apply` (`current` and `proposed`), `config_diff` (the exact
+configuration change: only the retired key's bytes go), `ready` (no conflict and no
+manual step left), `file_states` and `approval_fingerprint`. A routing section counts
+as the same as the routing file when its text matches apart from Produced surfaces
+paths and those resolve to the same destinations. `apply` with the
+same options and `--approval-fingerprint F` recomputes the plan, refuses (exit 1) a
+changed plan or a standing conflict (and `--keep-routing profile` when the profile has no
+routing section to keep), writes the profile atomically (through a symbolic
+link to its target, keeping its line endings), then deletes the retired file and removes
+the retired key; its result's `ready` stays false while a manual step remains. Moved routing keeps its effective destinations:
+headings move two levels down, and relative Produced surfaces paths become absolute when
+the profile is in another directory.
 
 ## 3. Handoff engine: `scripts/lib/handoff.py`
 
@@ -404,9 +430,9 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `plan [--user-profile P] [--repository-profile P ...] [--handoff H] [--unattended] [--session-id ID]` | Compose the spine and route carried items from the session ledger snapshot. Returns its `handoff` payload. An optional handoff path must match pickup’s recorded selection; its source file is never reopened. Writes a start marker to the session’s ledger. |
 | `settle ... --handoff H --receipts R` | Remove the loops a binding acknowledged. Never rewrites the source handoff. |
 | `apply-lessons ... --handoff H --lessons L` | With the auto-apply setting on: write and commit each lesson row, one commit each; drop `skip` rows; keep each outcome in the session ledger; return the payload without settled items, plus `lesson_outcomes`. A failed lesson stays carried and exits 0. With the setting off it refuses, exit 1. |
-| `deliver-lessons ... --handoff H` | After the persist binding: push undelivered lesson commits, retrying once when the remote moved, or, when the repository refuses a direct push or the routing file requires it, undo the retry's merge when that second push is refused for a pull request, re-apply the checkout's lessons on one lesson branch (`lesson/<session id>-<digest>`, distinct per session, one commit each, cut from the remote's base branch or continuing the session's branch), push it, and run the routing file's `lesson-pull-request-command` once. That command reads one JSON object on stdin (`checkout`, `remote`, `base`, `branch`, `title`, `body`, and `lessons`: one `title`, `path` and `commit` per lesson), opens the pull request, owns how it merges, and prints the pull request's reference as its last line. The package never merges. Each delivered row names the delivered `commit`, its `local_commit`, `lesson_branch` and `pull_request`; the local commit gets a delivered mark (`refs/hippocampus/delivered/<local_commit>`) that the saved line honors in every later wrap. Adds `lesson_outcomes` and `lesson_asks`, one ask per applied lesson in `resume.open_loops` or unrecorded `session_items`, each with `choices: []`. Pushes nothing with persist unbound. |
-| `apply-knowledge ... --handoff H --knowledge K [--knowledge-profile P]` | With the auto-apply setting on: check each captured row (`wiki`, `source`, `output`) against the knowledge profile (default `~/.config/hippocampus/profile.md`): every named file written since this session's `plan` start marker, inside its kind's files (`wiki` under `wiki/` or `raw/` with at least one under `wiki/`, plus the profile's `hot_file` and `operation_log_file` that a compile writes; `source` under `raw/`; `output` under `output/`), and a `wiki` capture only with the wiki enabled. A row naming the knowledge root itself fails. A captured item is settled; a failed one stays carried with its approval and exits 0. A `user_fact` row (`text`, `destination`, `source`, `choices`, `approve` naming the choice that approves the save, never `default`) marks its item `user_fact` and keeps it carried; a later capture row for that item settles it only with `answer` equal to `approve`, recorded in the outcome. A compile file the profile places outside the root fails only a row that names a file outside the folders, naming the key. Written-during-this-wrap is measured from the wrap's first `plan` start marker. Keeps each outcome in the session ledger; returns the payload plus `knowledge_outcomes` and `knowledge_asks`, one ordinary ask per carried fact about the user. Items with no row are unchanged. With the setting off it refuses, exit 1. |
-| `record-over-limit ... --measure M --duplicates D [--session-id ID]` | With the auto-apply setting on and lessons applying: merge the slim helper's `measure` and `duplicates` output into the over-limit records. Each tracked file in a git repository with a hosted remote is one record keyed by `repository` (the `origin` remote's, else the only remote's, whole repository path, such as `owner/name` or `group/sub/name`, with no host; local-path, `file://`, scp-absolute and `~user` remotes name none) and `path` inside it, holding `size`, `limits` (each with `tool`, `unit`, `measured`, `limit`), `duplicates` (each with `match`, `similarity` and its `spans` by repository and path), `sessions`, `first_recorded` and `last_recorded`. A measurement replaces only what it measured: the running tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when every file it names was loaded in full in this call; new findings merge with kept ones. A record is removed only when nothing remains. Returns `recorded` (one `line` each), `reported` (rows outside git, not tracked by git, without a hosted remote, where git could not be read, or a Codex chain, with their attended `action` and a `reason`; never recorded) and `unresolved`. The store is `over-limit-records.json` in the session ledger directory. With the setting off, or the routing file's `lesson-policy: propose`, it refuses, exit 1. A damaged store (not valid JSON, not a records file, or a malformed row) or a malformed payload row is a clear error, exit 1, and the store is left as it is. |
+| `deliver-lessons ... --handoff H` | After the persist binding: push undelivered lesson commits, retrying once when the remote moved, or, when the repository refuses a direct push or the lesson routing requires it, undo the retry's merge when that second push is refused for a pull request, re-apply the checkout's lessons on one lesson branch (`lesson/<session id>-<digest>`, distinct per session, one commit each, cut from the remote's base branch or continuing the session's branch), push it, and run the lesson routing's `lesson-pull-request-command` once. That command reads one JSON object on stdin (`checkout`, `remote`, `base`, `branch`, `title`, `body`, and `lessons`: one `title`, `path` and `commit` per lesson), opens the pull request, owns how it merges, and prints the pull request's reference as its last line. The package never merges. Each delivered row names the delivered `commit`, its `local_commit`, `lesson_branch` and `pull_request`; the local commit gets a delivered mark (`refs/hippocampus/delivered/<local_commit>`) that the saved line honors in every later wrap. Adds `lesson_outcomes` and `lesson_asks`, one ask per applied lesson in `resume.open_loops` or unrecorded `session_items`, each with `choices: []`. Pushes nothing with persist unbound. |
+| `apply-knowledge ... --handoff H --knowledge K [--knowledge-profile P]` | With the auto-apply setting on: check each captured row (`wiki`, `source`, `output`) against the knowledge profile (default `~/.config/hippocampus/profile.md`): every named file written since this session's `plan` start marker, inside its kind's files (`wiki` under `wiki/` or `raw/` with at least one under `wiki/`, plus the profile's `hot_file` and `operation_log_file` that a compile writes; `source` under `raw/`; `output` under `output/`), and a `wiki` capture only with the wiki enabled. A row naming the knowledge root itself fails. A captured item is settled; a failed one stays carried with its approval and exits 0. A `user_fact` row (`text`, `destination`, `source`, `choices`, `approve` naming the choice that approves the save, never `default`) marks its item `user_fact` and keeps it carried; a later capture row for that item settles it only with `answer` equal to `approve`, recorded in the outcome. A compile file the profile places outside the root fails only a row that names a file outside the folders, naming the key. Written-during-this-wrap is measured from the wrap's first `plan` start marker. Keeps each outcome in the session ledger; returns the payload plus `knowledge_outcomes` and `knowledge_asks`, one ordinary ask per carried fact about the user. Items with no row are unchanged. With the setting off it refuses, exit 1. A `--knowledge-profile` other than the configured one only chooses where knowledge goes; one holding `auto_apply` or a `## Lesson routing` section is refused, exit 1. |
+| `record-over-limit ... --measure M --duplicates D [--session-id ID]` | With the auto-apply setting on and lessons applying: merge the slim helper's `measure` and `duplicates` output into the over-limit records. Each tracked file in a git repository with a hosted remote is one record keyed by `repository` (the `origin` remote's, else the only remote's, whole repository path, such as `owner/name` or `group/sub/name`, with no host; local-path, `file://`, scp-absolute and `~user` remotes name none) and `path` inside it, holding `size`, `limits` (each with `tool`, `unit`, `measured`, `limit`), `duplicates` (each with `match`, `similarity` and its `spans` by repository and path), `sessions`, `first_recorded` and `last_recorded`. A measurement replaces only what it measured: the running tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when every file it names was loaded in full in this call; new findings merge with kept ones. A record is removed only when nothing remains. Returns `recorded` (one `line` each), `reported` (rows outside git, not tracked by git, without a hosted remote, where git could not be read, or a Codex chain, with their attended `action` and a `reason`; never recorded) and `unresolved`. The store is `over-limit-records.json` in the session ledger directory. With the setting off, or the lesson routing's `lesson-policy: propose`, it refuses, exit 1. A damaged store (not valid JSON, not a records file, or a malformed row) or a malformed payload row is a clear error, exit 1, and the store is left as it is. |
 | `over-limit-records` | Print `{"records": [...]}` from the store, in any session kind; read-only. |
 | `file ... --handoff H --filing F` | Apply explicit filing outcomes to remaining loops and unrecorded session items (an applied lesson's row must be R3; a `user_fact` item is `filed` outside its ask only with `answer` equal to its `approve` choice and `dropped` only with another answer; any other row fails alone); execute per-kind record writes with lookup before write; return a handoff payload with receipts and a filing report. A failed or uncertain write returns exit 1 and retains the payload on stdout. |
 | `record ... --handoff H --filing F` | Run the same filing and record writes mid-session without the rest of checklist. |
@@ -415,21 +441,27 @@ composes and checks it and executes record-write commands. It writes no handoff 
 | `wrap-cadence` | Read a hook payload on stdin and print `none`, `checkpoint`, `unattended-checklist`, or `checklist`. |
 | `actor-guard`, `is-completion-command` | Hook helpers. The first prints a deny decision; the second exits 0 when the command completes an unattended slate. |
 
-An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed routing file is such an error for every operation that reads it;
-`report` lists it in `errors` and still ends with its asks.
+An operation that cannot run prints `checklist: <reason>` on stderr and nothing on stdout, exit 1. A malformed knowledge profile policy (a mistyped `auto_apply`, a duplicate or malformed `## Lesson routing` section) or a retired policy owner still in place (a standalone `routing.md`, `HIPPOCAMPUS_ROUTING`, or `auto_apply_lessons` in this configuration) is such an error for every operation that applies, naming `hippocampus-set-up` for the move;
+`plan` and `report` name it in `auto_apply_refused` instead (below).
 
-With the auto-apply setting on, `plan` adds `auto_apply` (`{"lessons": "apply", "knowledge": "apply"}`,
-or `{"lessons": "propose", "reason": ..., "knowledge": "apply"}` when the routing file's
+The auto-apply setting is the knowledge profile's `auto_apply` (section 2, Policy in the knowledge profile).
+With it on, `plan` adds `auto_apply` (`{"lessons": "apply", "knowledge": "apply"}`,
+or `{"lessons": "propose", "reason": ..., "knowledge": "apply"}` when the lesson routing's
 `lesson-policy: propose` forbids applying lessons), `file` adds `filing.lessons` and
 `filing.knowledge` (`captured`, `asked` and `failed` rows; a captured row lists `created` and
 `updated` paths relative to the knowledge root), and `report` adds `lessons` and `knowledge`.
-With it off, none of these appear and `record-over-limit` refuses.
+With it off, none of these appear and `record-over-limit` refuses. While a retired policy
+owner remains or the profile's policy cannot be read, `plan` still succeeds without `auto_apply` and adds `auto_apply_refused`
+(the reason, naming `hippocampus-set-up`); the operations that apply refuse, exit 1, and
+`report` adds `lessons.auto_apply_refused` without failing. A sweep reports the same refusal
+and applies neither lessons nor knowledge; for a `## Lesson routing` section it cannot read,
+only lessons.
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
 `handoff`. Only `persist` is a slot. Record is the package step calling per-kind record writes. Knowledge and lessons are native
 steps running `/hippocampus:knowledge-capture` and `/hippocampus:improve-harness`
 (plain skill names in Codex), consuming `knowledge` and `lesson` respectively.
-Their destinations follow the knowledge profile and lesson routing file.
+Their destinations follow the knowledge profile and its lesson routing.
 Profiles cannot replace or disable either native step. Unbound slots are carried: the items they would consume stay in the handoff
 until the filing pass. Missing destinations warn and retain their items;
 bound write failures fail wrap. `handoff` is not a slot and is the last spine step; only a profile step
@@ -549,12 +581,12 @@ afresh after an unfinished unattended wrap. Without the section every interactiv
 
 ### Unattended slim: `scripts/lib/slim.py`
 
-Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit 1, with the auto-apply setting off or the routing file's `lesson-policy: propose`. State is `slim-state.json` beside the over-limit records, so one machine runs the step; it is given every machine's records. Every path is keyed by its canonical spelling. Clones are shallow, run no hooks, never happen under the state lock, and a plan clones each repository at most once. Remote commands time out after 120 seconds (clones 600), or `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` seconds; a remote that cannot be read is a warning for that repository, never a failed command. All output is JSON.
+Runs in any session kind. `plan`, `begin`, `workspace` and `finish` refuse, exit 1, with the auto-apply setting off or the lesson routing's `lesson-policy: propose`. State is `slim-state.json` beside the over-limit records, so one machine runs the step; it is given every machine's records. Every path is keyed by its canonical spelling. Clones are shallow, run no hooks, never happen under the state lock, and a plan clones each repository at most once. Remote commands time out after 120 seconds (clones 600), or `HIPPOCAMPUS_SLIM_REMOTE_TIMEOUT` seconds; a remote that cannot be read is a warning for that repository, never a failed command. All output is JSON.
 
 | Command | Result |
 |---|---|
 | `plan --records F [--records F ...]` | Start a run over the given `{"records": [...]}` files, records of one file merged (the newest measurement per tool and unit; duplicate rules and sessions joined). First settles a slim whose helper stopped mid-push from its remotes (a branch found there is recorded and gets its ask; one not found is a failure), then closes a run that stopped early, composing its asks. Settles each awaiting branch gone from its remote: merged if its diff reverses cleanly on the default branch, rejected only if its diff still applies there. When neither check is conclusive, or a git error occurs, it stays awaiting its decision with a warning. The newest slim's settlement decides the recorded file's eligibility, even if an older slim has another repository's branch awaiting its decision. Returns `run_id`, `queued`, `skipped` (awaiting a decision, `over limit, slim rejected` or `over limit, slim stalled`), `deferred` (a file a waiting branch changed; one frozen by an earlier run's branch gets one ask per branch when the run closes), `unreachable` (the file's repository, or one holding a duplicate of its rule, is not in `slim_checkouts` or cannot be read), `warnings` and `undelivered_asks`. |
-| `begin --run R` | With `done: false`, the open slim: `slim_id`, `repository`, `path`, `file`, `workspaces`, `limits`, `duplicates`, `frozen` and `surfaces`. It repeats the open slim until `finish`. A file an earlier slim froze goes to `deferred` and does not count toward the three. With `done: true`, the closed run: `analyzed`, `asks`, `results`, `waiting`, `skipped`, `deferred`, `unreachable`, `failed`. |
+| `begin --run R` | With `done: false`, the open slim: `slim_id`, `repository`, `path`, `file`, `workspaces`, `limits`, `duplicates`, `frozen` and `surfaces`, plus `surfaces_error` when the lesson routing cannot be read (surfaces unknown, not none). It repeats the open slim until `finish`. A file an earlier slim froze goes to `deferred` and does not count toward the three. With `done: true`, the closed run: `analyzed`, `asks`, `results`, `waiting`, `skipped`, `deferred`, `unreachable`, `failed`. |
 | `workspace --run R --repository owner/name` | Clone another repository's default branch for the open slim. |
 | `finish --run R --result F` | Apply the result (schema in the `slim-unattended` skill): reduce each path to its one spelling, drop edits to a frozen file with their `group` and move the contradiction, duplicate and rule rows naming that file to "not done", commit one branch per repository (`slim/<run>-<path>-<digest>`), record the branches, then push them; a push that errors after the remote took the branch counts as pushed. Returns `status`: `slimmed`, `pending-unverified` (publication unconfirmed after a push error; its ask says so and its files stay frozen until a later plan reconciles the push), `unchanged`, `unverified` (no branch, an ordinary ask) or `failed`, with `sizes` and `branches`. A result that is malformed, names a path inside `.git`, a directory or a path through a link, has an `old` that does not appear exactly once, has an edit that leaves its file as it is, or leaves the file over a limit with no `left`, is refused, exit 1, before any push: it changes nothing and the slim stays open. While a stopped push is unsettled, `begin` and `finish` refuse until `plan`. |
 | `decide --repository owner/name --branch B --decision merged\|rejected` | Settle a branch. `rejected` keeps the file's size on the default branch at that moment. A settled branch refuses, exit 1. |
@@ -839,7 +871,7 @@ lesson under `lesson-policy: propose`, which stays a `native_step` whose `reason
 Each section adds `would_apply` (watch-only, outcome `would apply`), `lessons_applied`,
 `lessons_not_pushed`, `knowledge_captured` and `already_settled`. Watch-only runs the same ledger
 search as act mode, read-only: an item a ledger already settles is listed under `already_settled`,
-never under `would_apply`. With the setting off none of these appear. An unreadable routing file or a mistyped setting adds an `auto-apply` row to `errors` and sets what it governs to `failed` in `auto_apply`; those items stay `native_step` and the run continues.
+never under `would_apply`. With the setting off none of these appear. An unreadable lesson routing or a mistyped setting adds an `auto-apply` row to `errors` and sets what it governs to `failed` in `auto_apply`; those items stay `native_step` and the run continues.
 
 Those two operations also accept the `native_step` statuses except `written` and
 `already_written`, which are rejected. `complete --knowledge-profile P` (default

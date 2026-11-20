@@ -106,7 +106,8 @@ session together, so separate sessions do not overwrite each other's files.
 
 ### Let a wrap apply its lessons and knowledge
 
-Set `"auto_apply_lessons": true` in the hippocampus configuration (off by default).
+Set `auto_apply: true` in the knowledge profile's frontmatter (off by default);
+`hippocampus-set-up` explains the setting and previews the change before writing it.
 A wrap then no longer shows the lesson table and waits, attended or unattended:
 
 - Each lesson it recommends is written to its source as one commit of its own, holding only
@@ -119,7 +120,7 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
 - The persist step pushes the commits with the wrap's others, and when the remote moved
   brings in its commits and pushes once more. A repository that refuses a direct push gets
   the wrap's lessons for that checkout on one lesson branch, one commit each, with a pull
-  request opened by the routing file's `lesson-pull-request-command`, which you set up to
+  request opened by the lesson routing's `lesson-pull-request-command`, which you set up to
   merge through the repository's checks. The local commit stays on your branch with a
   delivered mark, so a later wrap in that checkout does not count it as unpushed, before or
   after the request merges. With no such command the lesson is `committed, not pushed`.
@@ -136,7 +137,7 @@ A wrap then no longer shows the lesson table and waits, attended or unattended:
   outside git, one git does not track, or one in a repository without a hosted remote, is
   reported with the slim command, as before, and never recorded.
 
-A routing file line `lesson-policy: propose` turns lesson applying off, over-limit records included, and the report says so.
+A lesson routing line `lesson-policy: propose` turns lesson applying off, over-limit records included, and the report says so.
 `lesson-pull-requests:` with `- owner/name` list lines sends a repository's lessons through a
 pull request every time. The attended slim review is unchanged.
 
@@ -146,8 +147,8 @@ With the auto-apply setting on, `slim-unattended` works through the over-limit r
 given, from one machine or several, and treats records of one file as one. Name each
 repository's checkout in the configuration, so the step can find its remote and its produced
 surfaces: `"slim_checkouts": {"owner/name": "~/code/name"}`. A repository not named waits and
-is reported, as does a file whose duplicate rule lives in a repository not named. The routing
-file's `lesson-policy: propose` stops this step too.
+is reported, as does a file whose duplicate rule lives in a repository not named. The lesson
+routing's `lesson-policy: propose` stops this step too.
 
 - One run analyzes at most three files, largest overage first, one after another. The rest
   wait for the next run.
@@ -226,7 +227,7 @@ and neighboring instructions, asks about conflicts and produced surfaces,
 then applies the agreed edits. It reports numbered changes for rejection and
 leaves them uncommitted. It does not slim every flagged file; with the auto-apply setting off,
 unattended lessons default to `lesson` items for sessions that resume the handoff.
-A routing file can override this with a durable proposal sink; headless runners
+The lesson routing can override this with a durable proposal sink; headless runners
 without one return full proposals to their parent or report a persistence blocker.
 The [routing contract](../skills/improve-harness/SKILL.md#memory-policy) accepts
 `memory-policy: native` (default, no placement changes) or `promote` (propose

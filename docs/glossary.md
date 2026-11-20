@@ -89,7 +89,11 @@ One file that extends the checklist: it binds slots, adds steps before the spine
 _Avoid_: configuration (shared settings are separate from checklist profiles)
 
 **Knowledge profile**:
-The existing `~/.config/hippocampus/profile.md` file that configures the knowledge root and knowledge workflows. Its format and free-form policy body are preserved.
+The existing `~/.config/hippocampus/profile.md` file that configures the knowledge root and knowledge workflows. Its format and free-form policy body are preserved. It is the one owner of policy: the auto-apply setting and the lesson routing. Checklist bindings stay in the checklist profile; runtime settings stay in the configuration.
+
+**Lesson routing**:
+The `## Lesson routing` section of the knowledge profile: where lessons go (it replaces the default routing table when present), memory policy, produced surfaces with their regeneration commands, `lesson-policy`, lesson pull-request repositories and command, and proposal destinations. Set-up moves a retired standalone routing file into it only with the user's approval.
+_Avoid_: routing file
 
 **Knowledge root**:
 The configured root containing retained sources in `raw/`, research artifacts in `output/`, operating records in `docs/`, and an optional compiled `wiki/`.
@@ -99,7 +103,7 @@ A named spine step that a checklist profile binds to a command. Only `persist` i
 _Avoid_: hook, plugin
 
 **Native step**:
-A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the routing file. A carried item is removed only after its step returns a receipt.
+A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the lesson routing. A carried item is removed only after its step returns a receipt.
 
 **Ledger**:
 The per-session list of what one session touched: one entry for each file it changed and each artifact it published, plus its history entries, close outcomes, touched tickets, retained session items, and resumed-chain records. Checkpoint reads the ledger to list uncommitted files and pending artifacts, so neither depends on the session remembering them. A publishing tool records an artifact through the package's one ledger command.
@@ -125,14 +129,14 @@ An item only the user can resolve: a decision, an approval, a destructive action
 _Avoid_: question, needs-you item
 
 **Auto-apply setting**:
-The `auto_apply_lessons` value in the hippocampus configuration, off by default. With it on, a wrap applies the lessons it recommends and captures the knowledge it recommends for the wiki or for retention under the knowledge root, instead of waiting for approval, in every interactive session, attended or unattended, and in a sweep's act mode. The setting decides, not whether the user is present. A routing file's `lesson-policy: propose` overrides it for lessons only.
+The `auto_apply` value in the knowledge profile, off by default. With it on, a wrap applies the lessons it recommends and captures the knowledge it recommends for the wiki or for retention under the knowledge root, instead of waiting for approval, in every interactive session, attended or unattended, and in a sweep's act mode. The setting decides, not whether the user is present. The lesson routing's `lesson-policy: propose` overrides it for lessons only.
 _Avoid_: auto mode, autopilot
 
 **Ask owner**:
 The durable agent named by `owner_agent` in the user's ask binding. The ask writer stores that agent as owner, while the source session and item identity remain unchanged. The user still answers decisions and approvals. A command-only binding keeps its existing delivery until ownership is configured and proven.
 
 **Applied lesson**:
-A lesson a wrap or a sweep wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git, an existing untracked file, or an ignored path in its repository, is written with no commit; a new file the repository would track gets its own commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the routing file names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
+A lesson a wrap or a sweep wrote to its source under the auto-apply setting, as one commit of its own in the repository holding that source, so reverting the commit removes exactly that lesson. A target outside git, an existing untracked file, or an ignored path in its repository, is written with no commit; a new file the repository would track gets its own commit. The session ledger keeps each lesson's outcome (applied, dropped or failed) and its delivery. A repository that refuses a direct push, or that the lesson routing names, gets the wrap's lessons for that checkout on one lesson branch, one commit each, with one pull request opened by the user's command; the lessons stack there, so two for one file do not conflict when they merge. An applied lesson is settled, except one for an always-loaded rules file: that one stays until its ask is delivered, and it carries no choices.
 
 **Applied capture**:
 A knowledge item a wrap or a sweep captured under the auto-apply setting without an approval: compiled into the wiki, or retained as a source under `raw/` or an output under `output/`, all inside the knowledge root. The session ledger keeps each item's outcome (captured, asked or failed) with the files created and updated, relative to the knowledge root. A captured item is settled. Every file a capture names is under its kind's folders (a wiki capture's under `wiki/` or `raw/`, with at least one article in `wiki/`, plus the profile's session cache and operation log that a compile writes) and was written after the wrap's checklist or the sweep's run started; otherwise the capture fails and the item keeps its approval. A fact about the user is never an applied capture until the user has answered its ask; the row that settles it records that answer.
@@ -147,7 +151,7 @@ A ref under `refs/hippocampus/delivered/` in a checkout, named by a local lesson
 _Avoid_: delivery note, pushed tag
 
 **Over-limit record**:
-One file a wrap found over its size limit, or named in a duplicate rule, kept under the auto-apply setting for a later unattended slim instead of being put in front of the user. It names the file by repository (the repository's path on its host, such as `owner/name`, from the checkout's `origin` remote, else its only remote) and path inside that repository, never by a local path, and holds each exceeded limit by tool and unit with its measured size, every duplicate rule naming the file, and the sessions that recorded it. A file recorded by several sessions is one record. A measurement replaces only what it measured: this tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when the wrap loaded every file it names. A file left with no finding under any key has no record. With the routing file's `lesson-policy: propose` nothing is recorded. Records live in the machine's store beside the session ledgers, so they outlive the session whether it wraps or is abandoned. A file outside git, one git does not track, or one in a repository without a hosted remote (none, two without `origin`, or a local, `file://`, absolute or `~user` path), gets no record: the wrap reports it with the attended slim command.
+One file a wrap found over its size limit, or named in a duplicate rule, kept under the auto-apply setting for a later unattended slim instead of being put in front of the user. It names the file by repository (the repository's path on its host, such as `owner/name`, from the checkout's `origin` remote, else its only remote) and path inside that repository, never by a local path, and holds each exceeded limit by tool and unit with its measured size, every duplicate rule naming the file, and the sessions that recorded it. A file recorded by several sessions is one record. A measurement replaces only what it measured: this tool's limits, every unit for a file loaded in full and the description units for a skill only listed, and a duplicate rule only when the wrap loaded every file it names. A file left with no finding under any key has no record. With the lesson routing's `lesson-policy: propose` nothing is recorded. Records live in the machine's store beside the session ledgers, so they outlive the session whether it wraps or is abandoned. A file outside git, one git does not track, or one in a repository without a hosted remote (none, two without `origin`, or a local, `file://`, absolute or `~user` path), gets no record: the wrap reports it with the attended slim command.
 _Avoid_: slim queue, backlog
 
 **Unattended slim**:
@@ -180,7 +184,7 @@ A checkout in the current session's ledger, recorded from a tool call's working 
 ## Harness placement
 
 **Implementation ladder**:
-The ordered choices for where knowledge, a rule, or a solution should live. Improve-harness owns the ladder; a user routing file maps its rungs to local surfaces.
+The ordered choices for where knowledge, a rule, or a solution should live. Improve-harness owns the ladder; a user's lesson routing maps its rungs to local surfaces.
 
 **Decision service**:
 A service an agent sends facts to and receives a decision from before acting, for an important rule that instructions alone have not made reliable.

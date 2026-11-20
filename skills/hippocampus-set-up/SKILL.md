@@ -99,6 +99,51 @@ installed tool's final rules target and memory value in the profile. The helper
 reads and validates the profile through `validate_profile.py` before replacing
 only its rules section.
 
+## Configure policy: auto-apply and lesson routing
+
+The knowledge profile is the one home for policy: its `auto_apply` field and its
+`## Lesson routing` body section. The checklist profile keeps record writes and
+bindings; the hippocampus configuration keeps runtime settings. Resolve the helper
+`scripts/policy_setup.py` relative to this skill's package root; Claude Code and
+Codex run the same commands.
+
+Explain the auto-apply setting before asking for it. It is off by default. On, a
+wrap, and a sweep in act mode, apply the lessons they recommend and capture
+recommended wiki, source and output knowledge under the knowledge root without
+waiting for approval. `lesson-policy: propose` in the lesson routing still keeps
+lessons as proposals, and a fact about the user still waits for the user's answer.
+Preview the choice with `python3 <package-root>/scripts/policy_setup.py plan
+--auto-apply <true|false>` and show its `auto_apply` (current and proposed) and
+`profile_diff`.
+
+Explain the lesson routing when the user wants custom lesson destinations: the
+section, when present, replaces the default routing table in improve-harness; no
+default route is merged into it, and without it the defaults apply. Its own
+headings start at level three. Relative paths in it resolve from the profile's
+directory.
+
+Run `plan` whenever a standalone `routing.md` (or `$HIPPOCAMPUS_ROUTING`) or an
+`auto_apply_lessons` value in the hippocampus configuration exists: these are
+retired owners, and lessons and auto-apply refuse to run until they move. Show
+the complete plan: `moves`, the exact `profile_diff` and `config_diff`, `removals`
+(the retired file deleted, the retired key removed), `manual` steps such as
+unsetting `HIPPOCAMPUS_ROUTING` or moving a directory named `routing.md` away, and
+any `notes`. Planning writes nothing. A symbolic link keeps pointing at its target,
+which receives the change.
+
+When `conflicts` is not empty, show both owners' values and ask which to keep.
+Rerun `plan` with the answer, `--keep-routing file|profile` or
+`--auto-apply true|false`, and show the new plan; `apply` refuses while a conflict
+stands. A decline writes nothing and leaves every file byte for byte.
+
+On approval of that exact plan, run `apply` with the same options and
+`--approval-fingerprint <approval_fingerprint>`. It recomputes the plan and refuses
+if anything changed, writes the profile, then retires the old owners. The move runs
+only here, with the user present; nothing migrates at session start. Report setup
+complete only when the result's `ready` is true. While `manual` steps remain,
+report them as the user's to do, say lesson routing and auto-apply stay refused
+until then, and do not rerun `apply` for them.
+
 ## Discuss the user-owned choices
 
 Ask only for choices that cannot be inferred safely, and explain each before requesting it:
@@ -240,7 +285,7 @@ approved choices under the existing approval rule.
 
 Knowledge and lessons always run the package's knowledge-capture and
 improve-harness. Configure their destinations through the knowledge profile and
-the improve-harness routing file; never offer replacement slot commands.
+its lesson routing; never offer replacement slot commands.
 
 Offer the separate ask binding for decisions and approvals. It is one discovered
 command, `{"command": "<actual skill invocation>", "owner_agent": "<agent identifier>"}`,

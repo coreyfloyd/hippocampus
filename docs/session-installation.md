@@ -174,7 +174,6 @@ These are every key in [INTERFACE.md section 2](../INTERFACE.md#2-configuration)
 | `prune_days` | positive integer | Transcript age in days for `stale_transcript` prune candidates; default 7, overridden by `PICKUP_PRUNE_DAYS`. |
 | `cycle_sessions` | object | Session names mapped to home-relative directories for an external session-cycling consumer. The package does not run that consumer. |
 | `unattended` | object | Optional unattended-mode adapter: `state_module`, `completion_command`, and `completed_by`, described in interface section 6. Absent by default. |
-| `auto_apply_lessons` | boolean | The auto-apply setting: a wrap, and a sweep in act mode, applies the lessons it recommends and captures recommended wiki, source and output knowledge under the knowledge root; default false. |
 | `slim_checkouts` | object | Maps a repository (`owner/name`) to its checkout on this machine, for the unattended slim. A repository not named is reported and waits. |
 
 Default shared storage sits outside both tools' data areas:
@@ -219,7 +218,7 @@ and [glossary](glossary.md) for the full shape and allowed anchors.
 Without a profile, no record writes are configured and `persist` is unbound; their
 items go through the filing rules before wrap; unbound destinations warn and
 retain their items. Knowledge and lessons always run the package’s
-knowledge-capture and improve-harness, using the knowledge profile and routing file. A user profile may
+knowledge-capture and improve-harness, using the knowledge profile and its lesson routing. A user profile may
 bind `"ask": {"command": "/ask-step"}` for user decisions and approvals. This
 command is separate from the persist slot and never files asks as tickets. A profile
 cannot remove a spine step. Only `own-worktree` may follow the handoff.
@@ -328,7 +327,7 @@ It creates a user profile or extends your existing one, preserving notes,
 sections, added steps and unchanged bindings. You can decline either slot or
 leave ask unbound. Unbound slots carry unsaved items into the handoff.
 Knowledge and lessons are native; their destinations follow the knowledge profile
-and lesson routing file. Legacy knowledge/lessons binding blocks are refused with
+and its lesson routing. Legacy knowledge/lessons binding blocks are refused with
 their line numbers and instructions to delete those blocks manually. Setup does
 not convert or remove them automatically.
 

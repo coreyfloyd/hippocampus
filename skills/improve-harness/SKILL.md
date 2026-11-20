@@ -32,12 +32,20 @@ justify stronger verification.
 8. **Plugins:** they package the lower rungs together with skills.
 9. **Applications:** an application is the best place for anything that needs no tokens or agent judgment.
 
-Choose the rung here, then use the routing file or default table below to choose
-its exact surface. User-specific names and paths belong in the routing file.
+Choose the rung here, then use the lesson routing or default table below to choose
+its exact surface. User-specific names and paths belong in the lesson routing.
 
-## Routing: the user's file, or the default
+## Routing: the user's lesson routing, or the default
 
-Look for a **routing file**: `$HIPPOCAMPUS_ROUTING` when set, otherwise `hippocampus/routing.md` under `$XDG_CONFIG_HOME` (default `~/.config`). When it exists, read the whole file: it **replaces** the default routing table below, and it may also name where the sources live, where unattended proposals are filed, recording conventions, and extra steps for this procedure. Follow it wherever it differs from this skill. When it does not exist, use the default routing; it needs no configuration.
+The **lesson routing** is the `## Lesson routing` section of the knowledge profile,
+`hippocampus/profile.md` under `$XDG_CONFIG_HOME` (default `~/.config`). The section runs to
+the next level-one or level-two heading; its own headings start at level three. When the
+section exists, read all of it: it **replaces** the default routing table below, and it may
+also name where the sources live, where unattended proposals are filed, recording
+conventions, and extra steps for this procedure. Follow it wherever it differs from this
+skill. Without the section, or without a profile, use the default routing; it needs no
+configuration. A standalone `hippocampus/routing.md`, or `$HIPPOCAMPUS_ROUTING`, is a retired
+owner: stop and have the user move it with `hippocampus-set-up`; never read it.
 
 ### Default routing
 
@@ -54,8 +62,8 @@ Make the placement call **once per lesson**, using the implementation ladder abo
 
 ### Memory policy
 
-The routing file accepts `memory-policy` with values `native` | `promote`;
-absent means `native` (including when there is no routing file). Example:
+The lesson routing accepts `memory-policy` with values `native` | `promote`;
+absent means `native` (including when there is no lesson routing). Example:
 
 ```yaml
 memory-policy: native
@@ -64,11 +72,11 @@ memory-policy: native
 - **`native`**: leave placement to the tool's memory system; propose no memory moves. Index hygiene and handling of verification failures still run.
 - **`promote`**: propose moving each in-scope memory with a configured home to that home, then deleting the memory. Keep only facts with no other home. Use the routing table's destinations, not an instruction-versus-fact test: a knowledge destination can take facts too. With default routing, behavior instructions move to rules, skills, agent definitions, or hooks; facts without a home stay in memory.
 
-A routing file can replace the default table with non-rule destinations, for example:
+A lesson routing can replace the default table with non-rule destinations, for example:
 
 | A lesson is… | It goes to |
 |---|---|
-| User context or reference knowledge | A note in `knowledge/context/` or `knowledge/wiki/`, relative to the routing file |
+| User context or reference knowledge | A note in `knowledge/context/` or `knowledge/wiki/`, relative to the knowledge profile |
 
 These destinations and the policy apply in both tools; a missing memory store
 skips only the memory step. Promotion makes knowledge available beyond one tool's
@@ -82,9 +90,9 @@ Fixing an *existing* rule edits it where it already lives; placement applies to 
 
 ## Produced surfaces routing contract
 
-The routing file may include a **Produced surfaces** section. Each entry names
+The lesson routing may include a **Produced surfaces** block. Each entry names
 one canonical source path and every produced surface's path and regeneration
-command. Paths resolve relative to the routing file unless absolute; expand
+command. Paths resolve relative to the knowledge profile unless absolute; expand
 home/environment references and resolve symlinks before matching a source.
 A source with no entry produces no surfaces; an explicit empty list has the same
 meaning. Edit these sources without asking about outputs. Example:
@@ -98,7 +106,7 @@ Produced surfaces:
 ```
 
 Use the package's existing `scripts/compose_rules.py surfaces --source <path>`
-entry point to read this mapping (optional `--routing <file>` overrides discovery).
+entry point to read this mapping (optional `--profile <file>` names the knowledge profile).
 It returns JSON with canonical `sources` and `surfaces`, including each regeneration
 command. If handed a produced path, trace it to its owning source; never edit a generated surface.
 The routing block uses the indentation shown above and plain, double-quoted or
@@ -235,7 +243,7 @@ and choices at any length through checkpoint, compaction, pickup, and wrap.
 A memory move includes the memory file, target, proposed text,
 grounding, and deletion of the original as one proposal.
 
-A routing file's configured durable sink overrides this default: file the full
+A lesson routing's configured durable sink overrides this default: file the full
 proposal there, including tickets when explicitly configured, and report its
 receipt. This preserves user-owned proposal routing for headless runs too.
 Without a configured sink, an unattended interactive session carries `lesson`
@@ -250,13 +258,13 @@ reaches only sessions that resume the handoff, not unrelated future sessions.
 
 ## Auto-apply
 
-The `auto_apply_lessons` setting in the hippocampus configuration is off by default. With
+The auto-apply setting, `auto_apply` in the knowledge profile, is off by default. With
 it on, a wrap does not show the lesson table and wait; `apply-lessons` writes the lessons.
 The setting decides, not whether the user is present. Over-limit and duplicate
 rows are not lessons to apply: record them as in Over-limit records.
 
-A routing file can forbid this with the line `lesson-policy: propose`; it wins, and the
-report says lessons were carried because the routing file requires it. The module reads
+The lesson routing can forbid this with the line `lesson-policy: propose`; it wins, and the
+report says lessons were carried because the knowledge profile sets it. The module reads
 only these keys, each on an unindented line outside fenced code blocks, so prose and fenced
 examples never set them; a trailing ` # comment` is allowed, and a malformed value is an
 error. `lesson-pull-requests:` followed by `- owner/name` list lines, indented or not, one per
@@ -281,7 +289,7 @@ An edit with `old` replaces text that must appear exactly once; an edit without 
 recommendation, so give it the apply fields. Set `always_loaded: true` when the target is
 always loaded and the module cannot know it, such as a source of a rules composition.
 The module detects user-level rules files, their imports, repository `CLAUDE.md` and `AGENTS.md`
-files and routing-file sources composed into either.
+files and lesson-routing sources composed into either.
 
 ```bash
 python3 <checklist-module> apply-lessons --user-profile <user-profile> \
@@ -341,7 +349,7 @@ the store, but does not broaden the memory-content review.
 
 ### 2. Place each candidate
 
-Run each through the routing (the routing file, or the default table).
+Run each through the routing (the lesson routing, or the default table).
 
 ### 3. Locate source files
 
@@ -394,7 +402,7 @@ After approval (HITL) — surgical edits only. Don't reflow unrelated content; m
 ## Output format
 
 ```
-Routing: <routing file path | default>
+Routing: <knowledge profile path | default>
 Surfaces scanned: rules · skills+agents (<list>) · memory (<n> recalled or written)
 Memory: <policy; reviewed count | skipped — reason>
 Mode: HITL | AFK
