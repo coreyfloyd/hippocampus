@@ -27,19 +27,21 @@ or `codex`), its `rules_target` (a file location or `none`), and its `memory`
 value (`native` or `off`). A profile without this section remains valid and
 uses the standard preset.
 
-## Optional wiki
+## Required wiki
 
-The wiki is optional. `hippocampus-set-up` explains both the wiki and the
-no-wiki alternative in neutral terms, with no default lean, and can enable or
-disable the wiki later without disturbing the rest of an existing
-configuration. `wiki-compile` and `wiki-audit` gate on the profile
-validator's `--require-wiki` option and relay its refusal verbatim; neither
-skill judges wiki state by reading the profile itself. A wiki-disabled profile
-has no `wiki/` directory, no `hot_file`, and no `wiki_followup_destination`,
-and no Wiki Additions class appears in any research artifact or
-knowledge-capture proposal it produces.
+The wiki is part of the required knowledge setup: `hippocampus-set-up` always
+proposes `wiki/`, `wiki/hot.md`, `hot_file` and `wiki_followup_destination`, and
+offers no wiki-disabled path. A released profile with `wiki_enabled: false`
+stays readable; set-up reports its knowledge setup incomplete and offers an
+explicit upgrade, and a decline changes nothing. While such a profile remains,
+`wiki-compile` and `wiki-audit` gate on the profile validator's
+`--require-wiki` option and relay its refusal verbatim; neither skill judges
+wiki state by reading the profile itself. That profile has no `wiki/`
+directory, no `hot_file`, and no `wiki_followup_destination`, and no Wiki
+Additions class appears in any research artifact or knowledge-capture proposal
+it produces.
 
-Disabling the wiki never deletes or modifies an existing `wiki/` directory or anything in it; only `hippocampus-set-up`'s own enable/disable conversation changes the profile fields, and only after the user approves.
+The upgrade never deletes or modifies existing content; it creates only a missing `wiki/` and `wiki/hot.md` and changes the profile only after the user approves the exact plan.
 
 ## Navigation and links
 
@@ -57,9 +59,9 @@ provide Obsidian's native link resolution or graph view.
 ## Workflow state and routing
 
 Every profile declares root-relative files for an operation log and decision
-log, plus an artifact follow-up destination. When the wiki is enabled, the
-profile also declares a session cache file (`hot_file`) and an independent
-wiki follow-up destination; a wiki-disabled profile has neither. At the start
+log, plus an artifact follow-up destination. The profile also declares a
+session cache file (`hot_file`) and an independent wiki follow-up destination;
+only a released wiki-disabled profile has neither. At the start
 of a wiki operation, read the session cache and recent operation history.
 After an approved non-exploratory compile, update the session cache and append
 an operation entry. Record an approved taxonomy or policy decision in the

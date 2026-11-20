@@ -83,7 +83,7 @@ INDENTED_COMMENT_ERR="$PROFILE_ROOT/indented-comment.err"
 if python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/indented-comment.md" 2>"$INDENTED_COMMENT_ERR"; then exit 1; fi
 grep -Fq 'nested profile fields are not supported' "$INDENTED_COMMENT_ERR"
 
-# Optional wiki: a profile may record the wiki as disabled.
+# A released profile that records the wiki as disabled still reads.
 mkdir -p "$PROFILE_ROOT/disabled-root/raw" "$PROFILE_ROOT/disabled-root/output" "$PROFILE_ROOT/disabled-root/docs"
 touch "$PROFILE_ROOT/disabled-root/docs/log.md" "$PROFILE_ROOT/disabled-root/docs/DECISIONS.md"
 sed -e "s|/absolute/path/to/knowledge|$PROFILE_ROOT/disabled-root|" \
@@ -134,25 +134,6 @@ grep -Fq 'hippocampus-set-up' "$REQUIRE_WIKI_ERR"
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/valid.md" --require-wiki >/dev/null
 python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/explicit-enabled.md" --require-wiki >/dev/null
 
-# F1 regression: the shipped example's commented wiki_enabled line, used in
-# the documented way (uncomment it exactly as written), must parse to a
-# clean boolean value with no trailing comment content attached.
-UNCOMMENTED_WIKI_LINE="$(sed -n 's/^# \(wiki_enabled:.*\)$/\1/p' "$PROFILE")"
-test -n "$UNCOMMENTED_WIKI_LINE"
-case "$UNCOMMENTED_WIKI_LINE" in
-  "wiki_enabled: true"|"wiki_enabled: false") ;;
-  *) printf 'wiki_enabled example line carries trailing content: %s\n' "$UNCOMMENTED_WIKI_LINE" >&2; exit 1 ;;
-esac
-# Full documented recipe: uncomment that line and drop the two wiki-only
-# fields, exactly as setup and INSTALLATION.md instruct, and
-# confirm the result validates against a root with no wiki/.
-sed -e "s|/absolute/path/to/knowledge|$PROFILE_ROOT/disabled-root|" \
-    -e '/^hot_file:/d' \
-    -e '/^wiki_followup_destination:/d' \
-    -e 's/^# wiki_enabled: false/wiki_enabled: false/' \
-    "$PROFILE" > "$PROFILE_ROOT/documented-disable-recipe.md"
-grep -Fxq 'wiki_enabled: false' "$PROFILE_ROOT/documented-disable-recipe.md"
-python3 "$ROOT/scripts/validate_profile.py" "$PROFILE_ROOT/documented-disable-recipe.md" >/dev/null
 
 
 # POSIX ERE has no portable \b; delimit the hostname suffix explicitly.

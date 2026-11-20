@@ -153,6 +153,26 @@ also exits 2 with a reason on stderr and no stdout.
 | List reference path | `"harness_enforcement_reference"` | `["/example"]` | `""` | 2 |
 <!-- /config-get-contract -->
 
+### Knowledge setup
+
+`python3 scripts/knowledge_setup.py plan [--root R] [--wiki-followup W] [--artifact-followup A]`
+plans the knowledge setup for the configured knowledge profile and writes nothing. An
+omitted option keeps the profile's value. It prints `status` (`complete` when the
+profile and every path it names already form the knowledge setup and pass
+`validate_profile.py --require-wiki`, otherwise `incomplete`), `ready` (no `needs` and no
+`conflicts`), `needs` (values only the user supplies: the root and each follow-up route;
+the example profile's instructional text is not a route), `conflicts` (a path of the wrong
+kind, or a root without a parent directory), `create_directories`, `create_files`,
+`preserved` (existing paths and an unchanged profile), `profile_fields` (each field's
+`current` and `proposed` value; a released `wiki_enabled: false` is proposed for removal),
+`profile_diff`, `profile_exists`, `problems` (a lesson routing problem, reported without
+blocking the knowledge setup), `file_states` and `approval_fingerprint`. A profile
+the reader refuses exits 1 with its message. `apply` with the same options and
+`--approval-fingerprint F` recomputes the plan and refuses (exit 1) a changed plan or one
+that is not `ready`; otherwise it creates only the missing directories and empty files,
+validates the candidate profile, and writes it atomically, keeping every other line and
+the body. A failed validation removes what it created and leaves the profile unchanged.
+
 ### Policy in the knowledge profile
 
 The knowledge profile (`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`) is the one
@@ -162,7 +182,7 @@ configuration owns runtime, state and checkpoint settings.
 | Where | Meaning |
 |---|---|
 | `auto_apply` (frontmatter) | The auto-apply setting, `true` or `false`; absent is false, and any other value is an error. On, a wrap, and a sweep in act mode, apply the lessons they recommend and the wiki captures and retained sources and outputs under the knowledge root. `lesson-policy: propose` still carries lessons, and a fact about the user still needs the user's answer. |
-| `## Lesson routing` (body) | The lesson routing: destination table, `memory-policy`, `lesson-policy`, `lesson-pull-requests`, `lesson-pull-request-command`, the Produced surfaces block and proposal destinations, in the forms improve-harness documents. Present, it replaces the default routing table; no default route is merged into it. Absent, the defaults apply. It ends at the next level-one or level-two heading outside a fenced block; its own headings start at level three. Relative paths resolve from the profile's directory. A heading outside it that reads as Lesson routing without being exactly `## Lesson routing` (another case, spacing or suffix, another level) is an error, not an absent section. |
+| `## Lesson routing` (body) | The lesson routing: destination table, `memory-policy`, `lesson-policy`, `lesson-pull-requests`, `lesson-pull-request-command`, the Produced surfaces block and proposal destinations, in the forms improve-harness documents. Present, it replaces the default routing table; no default route is merged into it. Absent, the defaults apply. It ends at the next level-one or level-two heading outside a fenced block; its own headings start at level three. Relative paths resolve from the profile's directory. A heading outside it that reads as Lesson routing without being exactly `## Lesson routing` (another case, spacing or level, or a punctuated suffix such as `(mine)`) is an error, not an absent section; a heading that continues with another word, such as `Lesson routing history`, is ordinary text. `auto_apply` is read only as an unindented frontmatter field; an indented one is an error. A fence opens with at most three leading spaces; four or more is indented code. |
 
 A standalone `hippocampus/routing.md`, `HIPPOCAMPUS_ROUTING`, and `auto_apply_lessons` in
 this configuration are retired owners. No reader reads them; while one remains, what it
@@ -173,7 +193,8 @@ plans for the configured knowledge profile, the one the readers read, and writes
 `removals` (the retired file to delete, the retired key to remove), `manual` steps,
 `notes`, `conflicts` (both owners' values when they disagree, or headings too deep to
 move two levels), `auto_apply` (`current` and `proposed`), `config_diff` (the exact
-configuration change: only the retired key's bytes go), `ready` (no conflict and no
+configuration change: only the retired key's bytes go; a retired value that is not
+`true` or `false` is removed, not moved, with a note), `ready` (no conflict and no
 manual step left), `file_states` and `approval_fingerprint`. A routing section counts
 as the same as the routing file when its text matches apart from Produced surfaces
 paths and those resolve to the same destinations. `apply` with the

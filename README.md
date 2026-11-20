@@ -114,9 +114,8 @@ underlying sources are. It never sweeps every uncompiled file. `wiki-audit`
 writes a ranked report on structure, source coverage, tensions and gaps
 without changing anything.
 
-The wiki is optional. `hippocampus-set-up` asks whether you want one, and you
-can turn it on or off later. Without it, research, meetings, sessions and rules
-work the same and nothing is routed to a wiki. [Obsidian][7] is the practical
+The wiki is part of the knowledge root that `hippocampus-set-up` configures.
+[Obsidian][7] is the practical
 way to browse it, since most Markdown viewers show wikilinks as plain text, but
 any wikilink-aware client works.
 
@@ -236,7 +235,7 @@ conversation that made it is gone.
 ├── output/                # research reports and audit reports
 ├── docs/                  # operation log and decision log
 ├── meetings/              # meeting records (folder is configurable)
-└── wiki/                  # compiled articles and indexes (when enabled)
+└── wiki/                  # compiled articles and indexes
 
 ~/.local/state/hippocampus/
 ├── handoffs/              # one handoff per session and subject
@@ -271,9 +270,9 @@ Then run set-up with your agent:
 | Claude Code | `/hippocampus:<skill>`, for example `/hippocampus:research-topic` | `/hippocampus:hippocampus-set-up` |
 | Codex | The skill name, for example `Use checklist` | `Use hippocampus-set-up` |
 
-Set-up explains the storage model, asks whether you want a wiki, configures
-your knowledge root, checklist bindings and rule targets, and shows every change
-before it writes. You can configure sessions alone and add knowledge later.
+Set-up explains the storage model, configures your knowledge root with its
+wiki, checklist bindings and rule targets, and shows every change before it
+writes. Set-up is complete once the knowledge root is configured.
 Both installers undo themselves with `--uninstall`; your handoffs, profiles and
 knowledge root stay.
 

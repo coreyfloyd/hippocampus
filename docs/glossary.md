@@ -96,7 +96,11 @@ The `## Lesson routing` section of the knowledge profile: where lessons go (it r
 _Avoid_: routing file
 
 **Knowledge root**:
-The configured root containing retained sources in `raw/`, research artifacts in `output/`, operating records in `docs/`, and an optional compiled `wiki/`.
+The configured root containing retained sources in `raw/`, research artifacts in `output/`, operating records in `docs/`, and a compiled `wiki/`.
+
+**Knowledge setup**:
+The required set-up of a knowledge root: `raw/`, `output/`, `docs/` and `wiki/`, the session cache `wiki/hot.md`, the operation and decision logs, and the two independent follow-up destinations (wiki maintenance and source-derived actions), recorded in a valid knowledge profile. A released profile with `wiki_enabled: false` still reads, but its knowledge setup is incomplete until the user approves the upgrade. Configuring only the checklist profile leaves it incomplete.
+_Avoid_: launch setup
 
 **Slot**:
 A named spine step that a checklist profile binds to a command. Only `persist` is a slot. Record is a package step that calls per-kind record writes. The ask binding is configurable but is not a spine step. A binding names the session-item types it consumes, including carried open loops of those types. An unbound slot carries its items forward in the handoff.
