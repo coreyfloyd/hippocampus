@@ -1529,6 +1529,11 @@ def auto_apply_for(discovery):
     """The setting's state; an unreadable input stops only what it governs, and is reported."""
     try:
         return checklist.auto_apply_state()
+    except checklist.lessons.UpgradeRequired as exc:
+        # A retired owner refuses the whole setting, as the wrap's plan does, until set-up moves it.
+        reason = 'auto-apply: ' + str(exc)
+        discovery['errors'].append({'path': 'auto-apply', 'reason': reason})
+        return {'lessons': 'failed', 'reason': reason, 'knowledge': 'failed'}
     except (OSError, ValueError) as exc:
         reason = 'auto-apply: ' + str(exc)
     discovery['errors'].append({'path': 'auto-apply', 'reason': reason})

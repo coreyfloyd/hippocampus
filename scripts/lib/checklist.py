@@ -1053,6 +1053,9 @@ def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]]
     section = copy.deepcopy(filing.get("lessons")) if isinstance(filing.get("lessons"), Mapping) else None
     try:
         state = auto_apply_state()
+    except lessons.UpgradeRequired as error:
+        # The plan ran the wrap with the setting off; the refusal is reported, not a failure.
+        return {**(section or {}), "auto_apply_refused": f"auto-apply: {error}"}
     except (OSError, ValueError) as error:
         problems.append(f"auto-apply: {error}")
         return section

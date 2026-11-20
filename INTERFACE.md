@@ -168,8 +168,8 @@ A standalone `hippocampus/routing.md`, `HIPPOCAMPUS_ROUTING`, and `auto_apply_le
 this configuration are retired owners. No reader reads them; while one remains, what it
 governed refuses with an error naming `hippocampus-set-up`. Nothing migrates at session start.
 
-`python3 scripts/policy_setup.py plan [--profile P] [--auto-apply true|false] [--keep-routing file|profile]`
-prints, and writes nothing: `moves`, `profile_diff` (the exact profile change),
+`python3 scripts/policy_setup.py plan [--auto-apply true|false] [--keep-routing file|profile]`
+plans for the configured knowledge profile, the one the readers read, and writes nothing. It prints `moves`, `profile_diff` (the exact profile change),
 `removals` (the retired file to delete, the retired key to remove), `manual` steps,
 `notes`, `conflicts` (both owners' values when they disagree, or headings too deep to
 move two levels), `auto_apply` (`current` and `proposed`), `config_diff` (the exact
@@ -178,7 +178,8 @@ manual step left), `file_states` and `approval_fingerprint`. A routing section c
 as the same as the routing file when its text matches apart from Produced surfaces
 paths and those resolve to the same destinations. `apply` with the
 same options and `--approval-fingerprint F` recomputes the plan, refuses (exit 1) a
-changed plan or a standing conflict, writes the profile atomically (through a symbolic
+changed plan or a standing conflict (and `--keep-routing profile` when the profile has no
+routing section to keep), writes the profile atomically (through a symbolic
 link to its target, keeping its line endings), then deletes the retired file and removes
 the retired key; its result's `ready` stays false while a manual step remains. Moved routing keeps its effective destinations:
 headings move two levels down, and relative Produced surfaces paths become absolute when
@@ -451,7 +452,9 @@ or `{"lessons": "propose", "reason": ..., "knowledge": "apply"}` when the lesson
 `updated` paths relative to the knowledge root), and `report` adds `lessons` and `knowledge`.
 With it off, none of these appear and `record-over-limit` refuses. While a retired policy
 owner remains, `plan` still succeeds without `auto_apply` and adds `auto_apply_refused`
-(the reason, naming `hippocampus-set-up`); the operations that apply refuse, exit 1.
+(the reason, naming `hippocampus-set-up`); the operations that apply refuse, exit 1, and
+`report` adds `lessons.auto_apply_refused` without failing. A sweep reports the same refusal
+and applies neither lessons nor knowledge.
 
 **The spine** has five steps in this order: `record`, `knowledge`, `lessons`, `persist`,
 `handoff`. Only `persist` is a slot. Record is the package step calling per-kind record writes. Knowledge and lessons are native

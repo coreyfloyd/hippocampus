@@ -314,3 +314,36 @@ def test_headings_too_deep_to_move_two_levels_refuse_the_move(legacy):
     plan = planned()
     assert [row['setting'] for row in plan['conflicts']] == ['lesson routing headings']
     assert approve(plan).returncode == 1 and snapshot(*legacy) == before
+
+
+def test_setup_moves_policy_only_into_the_profile_the_readers_read(legacy):
+    other = Path(os.environ['XDG_DATA_HOME']) / 'other/profile.md'
+    other.parent.mkdir(parents=True)
+    other.write_bytes(legacy[0].read_bytes())
+    before = snapshot(*legacy, other)
+    for command in ('plan', 'apply'):
+        result = setup(command, '--profile', str(other), '--approval-fingerprint', 'x')
+        assert result.returncode != 0 and snapshot(*legacy, other) == before
+    assert planned()['profile'] == str(legacy[0])
+
+
+def test_a_spaced_setting_key_is_read_and_replaced_in_place():
+    profile = knowledge_profile(setting='auto_apply : true\n')
+    assert module('lessons').enabled({}) is True
+    plan = planned('--auto-apply', 'false')
+    assert '-auto_apply : true' in plan['profile_diff'] and '+auto_apply: false' in plan['profile_diff']
+    assert approve(plan, '--auto-apply', 'false').returncode == 0
+    assert profile.read_text().count('auto_apply') == 1 and module('lessons').enabled({}) is False
+
+
+@pytest.mark.parametrize('deep', [False, True])
+def test_keeping_the_profile_routing_needs_a_profile_section(legacy, deep):
+    if deep:
+        legacy[1].write_text(CUSTOM + '\n##### Deep\n')
+    before = snapshot(*legacy)
+    result = setup('plan', '--keep-routing', 'profile')
+    assert result.returncode == 1 and 'Lesson routing' in result.stderr and 'Traceback' not in result.stderr
+    if deep:  # The conflict names only the resolution that exists.
+        conflict, = planned()['conflicts']
+        assert '--keep-routing profile' not in conflict['resolve']
+    assert snapshot(*legacy) == before

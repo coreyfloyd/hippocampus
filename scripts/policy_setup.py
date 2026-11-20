@@ -135,7 +135,7 @@ def with_setting(text, value):
     end = frontmatter_end(lines)
     row = f"auto_apply: {'true' if value else 'false'}{newline(lines)}"
     for index in range(1, end):
-        if lines[index].partition(":")[0] == "auto_apply" and ":" in lines[index]:
+        if lines[index].partition(":")[0].strip() == "auto_apply" and ":" in lines[index]:
             lines[index] = row
             return "".join(lines)
     return "".join([*lines[:end], row, *lines[end:]])
@@ -215,12 +215,16 @@ def plan(profile, auto_apply=None, keep_routing=None):
         same = current.routing is not None and (nonblank(current.routing) == nonblank(routing) or (
             without_paths(current.routing) == without_paths(routing)
             and effective(current.routing, profile.parent, str(profile)) == before))
+        if keep_routing == "profile" and current.routing is None:
+            raise ValueError(f"--keep-routing profile: {profile} has no {compose.POLICY_HEADING} section to keep; "
+                             "nothing written")
         if deep and keep_routing != "profile":
             result["conflicts"].append({
                 "setting": "lesson routing headings",
                 "owners": [{"file": str(legacy), "headings": deep}],
                 "resolve": "these headings cannot move two levels down (Markdown stops at level six); raise "
-                           "them in the routing file, or keep the profile's routing with --keep-routing profile"})
+                           "them in the routing file" + (", or keep the profile's routing with --keep-routing profile"
+                                                         if current.routing is not None else "")})
         elif current.routing is not None and not same and keep_routing is None:
             result["conflicts"].append({
                 "setting": "lesson routing",
@@ -314,12 +318,11 @@ def apply(profile, fingerprint, auto_apply=None, keep_routing=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "apply"))
-    parser.add_argument("--profile", type=pathlib.Path, default=None, help="knowledge profile (default: the configured one)")
     parser.add_argument("--auto-apply", choices=("true", "false"), help="the auto-apply setting to record")
     parser.add_argument("--keep-routing", choices=("file", "profile"), help="resolve a lesson routing conflict")
     parser.add_argument("--approval-fingerprint", help="fingerprint printed by the approved plan")
     args = parser.parse_args()
-    profile = args.profile or compose.profile_path()
+    profile = compose.profile_path()  # The one profile every policy reader reads.
     auto_apply = None if args.auto_apply is None else args.auto_apply == "true"
     try:
         if args.command == "plan":

@@ -754,6 +754,12 @@ def test_a_retired_policy_owner_refuses_auto_apply_but_the_wrap_still_plans(tmp_
     applied = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([item])),
                        '--lessons', wrap.save('rows.json', []))
     assert applied.returncode == 1 and 'hippocampus-set-up' in applied.stderr and 'Traceback' not in applied.stderr
+    knowledge = wrap.run('apply-knowledge', '--handoff', wrap.save('k.json', wrap.payload([])),
+                         '--knowledge', wrap.save('rows-k.json', []))
+    assert knowledge.returncode == 1 and 'hippocampus-set-up' in knowledge.stderr  # Same refusal as the plan.
+    report, check, _ = wrap.finish(wrap.file(wrap.payload([])))  # Run as the plan said, the wrap finishes.
+    assert report['report'] == 'ok' and check.returncode == 0, (report, check.stderr)
+    assert 'hippocampus-set-up' in report['lessons']['auto_apply_refused']
     assert [path.read_bytes() if path.exists() else None for path in owners] == before  # No silent migration.
 
 

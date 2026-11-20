@@ -186,7 +186,7 @@ def load_policy(path: pathlib.Path | None = None) -> Policy:
     auto_apply = None
     for line in lines[1:end]:
         key, separator, value = line.partition(":")
-        if separator and key == "auto_apply":
+        if separator and key.strip() == "auto_apply":
             if auto_apply is not None:
                 fail(f"knowledge profile {path}: duplicate auto_apply")
             if value.strip() not in ("true", "false"):
