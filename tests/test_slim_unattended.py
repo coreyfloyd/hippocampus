@@ -1309,3 +1309,21 @@ def test_a_malformed_deferred_path_is_refused_before_any_commit(tmp_path, tool, 
     assert slim.begin(run)['slim_id'] == brief['slim_id']
     assert slim.finish(run, cut_result())['status'] == 'slimmed'
     assert len(slim.begin(run)['asks']) == 1
+
+
+def test_a_retired_routing_owner_is_named_in_the_briefing_not_shown_as_no_surfaces(monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('slim_briefing', Path(__file__).resolve().parents[1] / 'scripts/lib/slim.py')
+    slim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(slim)
+    compose = slim.lessons._compose_rules()
+
+    def refused(*_):
+        raise compose.RetiredOwner('lesson routing moved to the knowledge profile; run hippocampus-set-up')
+
+    monkeypatch.setattr(slim, '_surfaces', refused)
+    monkeypatch.setattr(slim.handoff, 'read_config', lambda: {})
+    record = {'repository': 'acme/rules', 'path': 'CLAUDE.md', 'limits': [], 'duplicates': []}
+    briefing = slim._briefing({'slims': []}, {'id': 'r', 'current': {'id': 's', 'record': record,
+                                                                     'workspaces': {'acme/rules': '/w'}}})
+    assert briefing['surfaces'] == [] and 'hippocampus-set-up' in briefing['surfaces_error']

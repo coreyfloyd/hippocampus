@@ -371,3 +371,13 @@ def test_a_capture_value_that_is_not_text_is_a_clear_error(tmp_path, tool):
     for capture in (['wiki'], {}, 7):
         refused = wrap.capture([knowledge()], [{'index': 0, 'capture': capture, 'created': ['wiki/a.md']}], expect=1)
         assert 'capture must be one of' in refused.stderr and 'Traceback' not in refused.stderr, refused.stderr
+
+
+def test_a_capture_profile_holding_policy_is_refused_not_silently_ignored(tmp_path, tool):
+    wrap = KnowledgeWrap(tmp_path, tool)
+    text = wrap.knowledge_profile.read_text()
+    wrap.knowledge_profile.write_text(text.replace('---\n', '---\nauto_apply: false\n', 1))
+    wrap.plan()
+    wrap.write('raw/derived/a.md')
+    result = wrap.capture([knowledge()], [{'index': 0, 'capture': 'source', 'created': ['raw/derived/a.md']}], expect=1)
+    assert str(wrap.policy) in result.stderr and 'auto_apply' in result.stderr

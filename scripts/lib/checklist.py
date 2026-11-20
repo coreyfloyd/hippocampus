@@ -1053,12 +1053,9 @@ def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]]
     section = copy.deepcopy(filing.get("lessons")) if isinstance(filing.get("lessons"), Mapping) else None
     try:
         state = auto_apply_state()
-    except lessons.UpgradeRequired as error:
+    except (OSError, ValueError) as error:
         # The plan ran the wrap with the setting off; the refusal is reported, not a failure.
         return {**(section or {}), "auto_apply_refused": f"auto-apply: {error}"}
-    except (OSError, ValueError) as error:
-        problems.append(f"auto-apply: {error}")
-        return section
     if state and state["lessons"] == "propose":
         section = {**(section or {}), "reason": state["reason"],
                    "carried": [item.get("context") for item in loops if item.get("type") == "lesson"]}
@@ -1367,8 +1364,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output["when_answer_needed"] = UNATTENDED_RULE
             try:
                 auto_apply = auto_apply_state()
-            except lessons.UpgradeRequired as error:
-                # The wrap still plans every step, with the setting off, and names the move.
+            except (OSError, ValueError) as error:
+                # The wrap still plans every step, with the setting off, and names the problem.
                 auto_apply, output["auto_apply_refused"] = None, f"auto-apply: {error}"
             if auto_apply:
                 output["auto_apply"] = auto_apply

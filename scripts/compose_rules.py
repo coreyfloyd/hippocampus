@@ -148,6 +148,8 @@ class Policy:
     path: pathlib.Path
     auto_apply: bool | None  # None when the profile does not declare it, which means off
     routing: list[str] | None  # the Lesson routing section's lines; None uses the default table
+    # Why the routing cannot be read; only lesson routing refuses, so the setting stays readable.
+    routing_error: str | None = None
 
 
 def config_directory() -> pathlib.Path:
@@ -193,10 +195,28 @@ def load_policy(path: pathlib.Path | None = None) -> Policy:
                 fail(f"knowledge profile {path}: auto_apply must be true or false")
             auto_apply = value.strip() == "true"
     sections = policy_sections(lines, end + 1)
-    if len(sections) > 1:
-        fail(f"knowledge profile {path}: duplicate {POLICY_HEADING} section")
     routing = [lines[index] for index in range(sections[0][0] + 1, sections[0][1])] if sections else None
-    return Policy(path, auto_apply, routing)
+    error = None
+    if len(sections) > 1:
+        error = f"knowledge profile {path}: duplicate {POLICY_HEADING} section"
+    elif near_miss := near_miss_heading(lines, end + 1, sections):
+        error = (f"knowledge profile {path}: heading {near_miss!r} is not {POLICY_HEADING!r}; write the heading "
+                 "exactly, or its routing is not read")
+    return Policy(path, auto_apply, routing, error)
+
+
+def near_miss_heading(lines: list[str], start: int, sections: list[tuple[int, int]]) -> str | None:
+    """A heading outside the section that reads as Lesson routing without being its exact heading."""
+    fence = None
+    for index in range(start, len(lines)):
+        line = lines[index].rstrip("\r\n")
+        inside = any(begin <= index < stop for begin, stop in sections)
+        if fence is None and not inside and re.match(r"#{1,6}\s", line):
+            text = " ".join(line.strip("#").split()).lower()
+            if text.startswith("lesson routing"):
+                return line
+        fence = fence_after(line, fence)
+    return None
 
 
 FENCE = re.compile(r"\s*(`{3,}|~{3,})(.*)")
@@ -234,6 +254,8 @@ def lesson_routing(policy: Policy) -> list[str]:
     if retired is not None:
         raise RetiredOwner(f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
              f"run hippocampus-set-up to move {retired} into {policy.path}")
+    if policy.routing_error:
+        fail(policy.routing_error)
     return policy.routing or []
 
 

@@ -181,6 +181,8 @@ def validated(candidate_text, profile):
         except SystemExit:
             raise ValueError(f"{profile}: {errors.getvalue().strip()}") from None
         policy = compose.load_policy(candidate)
+        if policy.routing_error:
+            raise ValueError(policy.routing_error.replace(str(candidate), str(profile)))
         return compose.Policy(profile, policy.auto_apply, policy.routing)
 
 

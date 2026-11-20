@@ -729,11 +729,27 @@ def test_setting_off_changes_nothing(tmp_path, tool):
     assert [ask['text'] for ask in report['asks']] == [item['context']]
 
 
-def test_a_mistyped_setting_is_an_error(tmp_path, tool):
+@pytest.mark.parametrize('broken', ['setting', 'duplicate section'])
+def test_a_profile_problem_refuses_auto_apply_but_the_wrap_still_plans_and_finishes(tmp_path, tool, broken):
     wrap = Wrap(tmp_path, tool)
-    write_policy('yes')
-    result = wrap.run('plan', '--session-id', SESSION)
-    assert result.returncode == 1 and 'auto_apply must be true or false' in result.stderr
+    if broken == 'setting':
+        write_policy('yes')
+    else:
+        write_policy(True, 'lesson-policy: apply\n\n## Lesson routing\n\nlesson-policy: propose\n')
+    plan = wrap.plan()
+    expected = 'auto_apply must be true or false' if broken == 'setting' else 'duplicate ## Lesson routing'
+    assert 'auto_apply' not in plan and expected in plan['auto_apply_refused']
+    applied = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson()])),
+                       '--lessons', wrap.save('rows.json', []))
+    assert applied.returncode == 1 and expected in applied.stderr  # Validation is not weakened.
+    report, check, _ = wrap.finish(wrap.file(wrap.payload([])))
+    assert report['report'] == 'ok' and check.returncode == 0 and expected in report['lessons']['auto_apply_refused']
+
+
+def test_a_broken_routing_section_with_the_setting_off_plans_as_off(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool, setting=False)
+    write_policy(None, 'x\n\n## Lesson routing\n\ny\n')
+    assert 'auto_apply' not in wrap.plan()
 
 
 @pytest.mark.parametrize('retired', ['config on', 'config off', 'routing file', 'environment'])

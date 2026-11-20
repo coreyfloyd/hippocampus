@@ -347,3 +347,31 @@ def test_keeping_the_profile_routing_needs_a_profile_section(legacy, deep):
         conflict, = planned()['conflicts']
         assert '--keep-routing profile' not in conflict['resolve']
     assert snapshot(*legacy) == before
+
+
+@pytest.mark.parametrize('heading', ['## Lesson Routing', '##  Lesson routing', '## Lesson routing (mine)',
+                                     '## Lesson routing ##', '### Lesson routing'])
+def test_a_near_miss_routing_heading_is_an_error_not_the_default_table(heading):
+    knowledge_profile(body=f'Local.\n\n{heading}\n\nlesson-policy: propose\n', setting='auto_apply: true\n')
+    lessons = module('lessons')
+    assert lessons.enabled({}) is True  # The setting stays readable; only lessons refuse.
+    with pytest.raises(ValueError, match='Lesson routing'):
+        lessons.routing_rules()
+
+
+def test_the_moved_title_inside_the_section_is_not_a_near_miss():
+    knowledge_profile(body='## Lesson routing\n\n### Lesson routing\n\nlesson-policy: propose\n')
+    assert module('lessons').routing_rules()['propose'] is True
+
+
+def test_an_exported_routing_file_moves_on_approval_and_the_unset_step_stays_reported(legacy):
+    profile, routing, config = legacy
+    exported = Path(os.environ['XDG_DATA_HOME']) / 'exported.md'
+    routing.rename(exported)
+    env = {**os.environ, 'HIPPOCAMPUS_ROUTING': str(exported)}
+    plan = planned(env=env)
+    assert plan['ready'] is False and 'HIPPOCAMPUS_ROUTING' in plan['manual'][0]
+    applied = json.loads(approve(plan, env=env).stdout)
+    # Moving while exported is the only order that reads this file: unset first and nothing points at it.
+    assert '## Lesson routing' in profile.read_text() and not exported.exists()
+    assert applied['ready'] is False and applied['manual'] == plan['manual']

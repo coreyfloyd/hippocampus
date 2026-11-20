@@ -597,16 +597,21 @@ def _open(current: dict[str, Any], config: Mapping[str, Any]) -> tuple[str | Non
 def _briefing(state: Mapping[str, Any], run: Mapping[str, Any]) -> dict[str, Any]:
     current = run["current"]
     record = current["record"]
+    surfaces_error = None
     try:
         surfaces = _surfaces(record["repository"], record["path"], handoff.read_config())["surfaces"]
-    except lessons._compose_rules().ComposeError:
-        surfaces = []  # `finish` reports the malformed lesson routing as a surface it cannot verify.
-    return {"done": False, "run_id": run["id"], "slim_id": current["id"], "repository": record["repository"],
+    except lessons._compose_rules().ComposeError as error:
+        # Unknown, not none: `finish` also reports it as a surface it cannot verify.
+        surfaces, surfaces_error = [], str(error)
+    briefing = {"done": False, "run_id": run["id"], "slim_id": current["id"], "repository": record["repository"],
             "path": record["path"], "file": str(Path(current["workspaces"][record["repository"]]) / record["path"]),
             "workspaces": current["workspaces"], "limits": record["limits"], "duplicates": record["duplicates"],
             "frozen": [{"repository": repository, "path": path, "changed_by": branch}
                        for (repository, path), branch in _frozen(state).items()],
             "surfaces": surfaces}
+    if surfaces_error:
+        briefing["surfaces_error"] = surfaces_error
+    return briefing
 
 
 def workspace(run_id: str, repository: str) -> dict[str, Any]:

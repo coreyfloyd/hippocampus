@@ -612,6 +612,25 @@ def test_a_retired_routing_file_refuses_knowledge_capture_as_the_wrap_does(sandb
     assert retired.read_text() == 'lesson-policy: apply\n'  # No silent migration.
 
 
+def test_a_duplicate_routing_section_fails_only_lessons_in_act_mode(sandbox, tool):
+    root, extra = knowledge_root(sandbox)
+    lesson_path = source(sandbox, PRODUCER, loops=[lesson(), knowledge()])
+    configure(sandbox)
+    write_policy(True, 'lesson-policy: apply\n\n## Lesson routing\n\nlesson-policy: propose\n')
+    args = decisions(sandbox, [dict(rule='R4', destination='lessons'), dict(rule='R4', destination='knowledge')])
+    payload = json.loads(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout)
+    (root / 'raw/derived/a.md').write_text('# A\n')
+
+    def answer(work):
+        if work['operation'] == 'native_step':
+            return {'write_id': work['write_id'], 'status': 'carried'}
+        return agent(knowledge_row={'capture': 'source', 'created': ['raw/derived/a.md']})(work)
+
+    run, _ = finish(sandbox, payload, answer, *extra)
+    assert 'duplicate' in run['errors'][0]['reason'] and run['auto_apply']['lessons'] == 'failed'
+    assert len(section(sandbox, run)['knowledge_captured']) == 1 and lesson_path.exists()
+
+
 @pytest.mark.parametrize('break_it', ['routing', 'setting'])
 def test_unreadable_auto_apply_input_still_writes_a_watch_report(sandbox, tool, break_it):
     source(sandbox, PRODUCER, loops=[lesson()])

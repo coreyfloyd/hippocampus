@@ -27,7 +27,8 @@ report that and stop. `slim_checkouts` in the configuration names each repositor
    `unreachable` and `warnings`. Deliver each `undelivered_asks` row as in step 5.
 3. Run `python3 <package>/scripts/lib/slim.py begin --run <run-id>`. With `done: false` it hands
    you one file: `file` (its text on the default branch), `workspaces`, `limits`, `duplicates`,
-   `frozen` and `surfaces`. Slims go one after another; `begin` repeats the open one until it
+   `frozen` and `surfaces`; a `surfaces_error` means the surfaces are unknown, not none,
+   and `finish` reports them as unverified. Slims go one after another; `begin` repeats the open one until it
    is finished. It stops at three files, largest overage first; the rest wait.
 4. Review the whole file (below), write the result, then run
    `python3 <package>/scripts/lib/slim.py finish --run <run-id> --result <result-file>`, and
