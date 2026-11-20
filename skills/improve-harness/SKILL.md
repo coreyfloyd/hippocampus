@@ -63,9 +63,10 @@ Make the placement call **once per lesson**, using the implementation ladder abo
 ### Repository rules
 
 Before writing a repository lesson, run
-`python3 <package-root>/scripts/rules_setup.py repository --repository <repository-root> --profile <knowledge-profile>`,
+`python3 <package-root>/scripts/rules_setup.py repository --repository <repository-root>`,
 where the package root is two directories above this skill's real directory;
-Claude Code and Codex run the same command and it writes nothing. Write the
+Claude Code and Codex run the same command and it writes nothing. It reads the
+configured knowledge profile's Produced surfaces; `--profile` names another. Write the
 lesson to `source.files`: the repository's `AGENTS.md`, or the source it is
 produced from. An absent `AGENTS.md` never makes `CLAUDE.md` the source. Show
 each `entries` row whose action is not `keep`, with its `contents`, in the same

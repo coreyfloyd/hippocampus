@@ -43,6 +43,8 @@ REPOSITORY_DISCOVERY = {
              "working directory, so AGENTS.md is both its entry and the shared source.",
 }
 CLAUDE_IMPORT = "@AGENTS.md"
+# An import of the sibling AGENTS.md anywhere in a line, outside code spans.
+IMPORT_TOKEN = re.compile(r"(?<!\S)@(?:\./)?AGENTS\.md(?!\S)")
 
 
 def default_homes():
@@ -343,7 +345,7 @@ def generated_sources(composer, path, policy):
     A symlinked entry is compared by its resolved file, so a link is never mistaken for a
     generated surface.
     """
-    mapped = composer.surfaces_for(path, policy)["sources"] if policy else []
+    mapped = composer.surfaces_for(path, policy)["sources"]
     if mapped and mapped != [str(path.resolve())]:
         return mapped
     try:
@@ -373,7 +375,8 @@ def repository_entries(repository, rows, profile=None):
     repository = pathlib.Path(repository).resolve()
     agents, claude = repository / "AGENTS.md", repository / "CLAUDE.md"
     try:
-        policy = composer.load_policy(pathlib.Path(profile)) if profile else None
+        # Without --profile, read the configured knowledge profile, as every policy reader does.
+        policy = composer.load_policy(pathlib.Path(profile) if profile else None)
         produced = generated_sources(composer, agents, policy)
         claude_produced = generated_sources(composer, claude, policy)
     except composer.ComposeError as exc:
@@ -389,7 +392,8 @@ def repository_entries(repository, rows, profile=None):
             if tool == "claude-code" and path.exists():
                 kept.append({"file": str(path), "reason": "no installed tool needs it; it is kept"})
             continue
-        entry = {"tool": tool, "file": str(path), "exists": path.exists(), "discovery": REPOSITORY_DISCOVERY[tool]}
+        present = path.exists() or path.is_symlink()
+        entry = {"tool": tool, "file": str(path), "exists": present, "discovery": REPOSITORY_DISCOVERY[tool]}
         if tool == "codex":
             entry["action"] = ("regenerate from its source" if produced else
                                "keep" if path.exists() else "create with the first repository rule")
@@ -398,11 +402,13 @@ def repository_entries(repository, rows, profile=None):
             entry["action"] = "keep: the same file as AGENTS.md"
         elif claude_produced:
             entry["action"] = "keep: produced from its own source"
+        elif path.is_symlink() and not path.exists():
+            entry["action"] = "keep: a symlink to a missing file; repair it to import AGENTS.md"
         elif not path.exists():
             entry.update(action="create", contents=CLAUDE_IMPORT + "\n")
         else:
             text = path.read_text(encoding="utf-8")
-            if any(line in (CLAUDE_IMPORT, "@./AGENTS.md") for line in active_lines(composer, text)):
+            if any(IMPORT_TOKEN.search(re.sub(r"`[^`]*`", "", line)) for line in active_lines(composer, text)):
                 entry["action"] = "keep"
             else:
                 entry.update(action="add import; existing content stays", contents=CLAUDE_IMPORT + "\n\n" + text)

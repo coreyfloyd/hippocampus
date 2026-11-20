@@ -248,7 +248,7 @@ class RulesSetupTests(unittest.TestCase):
         helper = load_helper()
         for tool, home in self.homes.items():
             if tool not in tools:
-                (home / "bin" / helper.TOOLS[tool]["binary"]).unlink()
+                (home / "bin" / helper.TOOLS[tool]["binary"]).unlink(missing_ok=True)
         return mock.patch.dict(os.environ, {"PATH": str(self.base / "empty-path")})
 
     def test_development_root_receives_only_installed_tools_entries(self):
@@ -369,6 +369,45 @@ class RulesSetupTests(unittest.TestCase):
         _, _, entries = self.repository(("claude-code",), {
             "CLAUDE.md": "Example:\n\n```markdown\n@AGENTS.md\n```\n"})
         self.assertEqual(entries["claude-code"]["action"], "add import; existing content stays")
+
+    def test_repository_reads_the_configured_profile_by_default(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        shared = self.base / "own-rules.md"
+        shared.write_text("custom rule\n")
+        repo = self.base / "repo-default-profile"
+        configured = self.base / "config" / "hippocampus" / "profile.md"
+        configured.parent.mkdir(parents=True)
+        configured.write_text(profile.read_text() + "\n## Lesson routing\n\nProduced surfaces:\n  "
+                              + str(shared) + ":\n    - path: " + str(repo / "AGENTS.md")
+                              + "\n      regeneration command: \"make rules\"\n")
+        _, value, entries = self.repository(("codex",), {"AGENTS.md": "generated\n"}, repo=repo)
+        self.assertEqual(value["source"]["files"], [str(shared)])
+        self.assertEqual(entries["codex"]["action"], "regenerate from its source")
+        with self.only("codex"):
+            result = subprocess.run([sys.executable, str(SCRIPT), "repository", "--repository", str(repo),
+                                     "--homes", self.homes_json()], capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout)["source"]["files"], [str(shared)])
+
+    def test_an_inline_import_is_active_and_a_dangling_link_is_not_replaced(self):
+        for text, action in (("Shared rules: @AGENTS.md\n", "keep"), ("Rules @./AGENTS.md here\n", "keep"),
+                             ("Write `@AGENTS.md` to import\n", "add import; existing content stays"),
+                             ("mail me@AGENTS.md\n", "add import; existing content stays")):
+            with self.subTest(text=text):
+                self.setUp()
+                _, _, entries = self.repository(("claude-code",), {"CLAUDE.md": text})
+                self.assertEqual(entries["claude-code"]["action"], action)
+        helper = load_helper()
+        repo = self.base / "repo-dangling"
+        repo.mkdir()
+        (repo / "CLAUDE.md").symlink_to(self.base / "missing.md")
+        with self.only("claude-code"):
+            value = helper.repository_entries(repo, self.describe())
+        [entry] = value["entries"]
+        self.assertTrue(entry["exists"])
+        self.assertNotIn("contents", entry)
+        self.assertIn("missing file", entry["action"])
+        self.assertTrue((repo / "CLAUDE.md").is_symlink())
 
     def test_repository_custom_sources_stay_the_users(self):
         helper = load_helper()

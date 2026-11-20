@@ -94,7 +94,7 @@ def parse(path):
             continue
         if line.startswith("#"):
             continue
-        if line.startswith(" "):
+        if line.startswith((" ", "\t")):  # The policy reader treats a tab as indentation too.
             fail("nested profile fields are not supported")
         key, value = parse_mapping(line, "profile")
         if key == "meeting_daily_note_path":
