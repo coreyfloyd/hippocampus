@@ -816,9 +816,8 @@ def test_a_malformed_edit_is_rejected_before_anything_is_applied(tmp_path, tool)
 
 def test_a_malformed_lesson_routing_is_an_error_not_a_traceback(tmp_path, tool):
     wrap = Wrap(tmp_path, tool, routing='lesson-pull-request-command: "unterminated\n')
-    plan = wrap.run('plan', '--session-id', SESSION)
-    assert plan.returncode == 1 and 'Traceback' not in plan.stderr and plan.stdout == ''
-    assert plan.stderr.startswith('checklist: ') and 'invalid quoted string' in plan.stderr
+    plan = wrap.plan()  # The wrap still plans, with the setting off and the error named.
+    assert 'auto_apply' not in plan and 'invalid quoted string' in plan['auto_apply_refused']
     delivered = wrap.run('deliver-lessons', '--handoff', wrap.save('h.json', wrap.payload([])))
     assert delivered.returncode == 1 and 'Traceback' not in delivered.stderr
     assert 'invalid quoted string' in delivered.stderr
@@ -834,9 +833,8 @@ def test_a_malformed_lesson_routing_is_an_error_not_a_traceback(tmp_path, tool):
         result = wrap.run(*command)
         assert result.returncode == 1 and 'Traceback' not in result.stderr, (command[0], result.stderr)
         assert 'invalid quoted string' in result.stderr, (command[0], result.stderr)
-    report, _, _ = wrap.finish(wrap.payload([]))
-    assert report['report'] == 'failed'
-    assert any('invalid quoted string' in error for error in report['errors'])
+    report, _, _ = wrap.finish(wrap.payload([]))  # Reported as the plan reported it, not a failed wrap.
+    assert report['report'] == 'ok' and 'invalid quoted string' in report['lessons']['auto_apply_refused']
 
 
 def test_routing_keys_allow_comments_and_ignore_fenced_examples(tmp_path, tool):
@@ -979,9 +977,11 @@ def test_pull_request_entries_parse_however_they_are_indented(tmp_path, entries)
 @pytest.mark.parametrize('entry', ['\t-owner/one', '-owner/one', '\t- "unterminated', '  - "owner/one" trailing'])
 def test_an_unreadable_pull_request_entry_is_an_error_not_a_skip(tmp_path, tool, entry):
     wrap = Wrap(tmp_path, tool, routing=f'lesson-pull-requests:\n{entry}\n')
-    planned = wrap.run('plan', '--session-id', wrap.session)
-    assert planned.returncode == 1 and 'Traceback' not in planned.stderr, planned.stderr
-    assert 'lesson-pull-requests' in planned.stderr or 'invalid quoted string' in planned.stderr
+    refused = wrap.plan()['auto_apply_refused']
+    assert 'lesson-pull-requests' in refused or 'invalid quoted string' in refused
+    delivered = wrap.run('deliver-lessons', '--handoff', wrap.save('h.json', wrap.payload([])))
+    assert delivered.returncode == 1 and 'Traceback' not in delivered.stderr
+    assert 'lesson-pull-requests' in delivered.stderr or 'invalid quoted string' in delivered.stderr
 
 
 def test_a_comment_after_a_quoted_routing_value_is_stripped(tmp_path):
