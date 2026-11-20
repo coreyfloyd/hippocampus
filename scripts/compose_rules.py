@@ -189,6 +189,9 @@ def load_policy(path: pathlib.Path | None = None) -> Policy:
     for line in lines[1:end]:
         key, separator, value = line.partition(":")
         if separator and key.strip() == "auto_apply":
+            if key != key.lstrip():
+                # The validator rejects a nested field, so the setting never reads one.
+                fail(f"knowledge profile {path}: auto_apply must be an unindented frontmatter field")
             if auto_apply is not None:
                 fail(f"knowledge profile {path}: duplicate auto_apply")
             if value.strip() not in ("true", "false"):
@@ -213,13 +216,15 @@ def near_miss_heading(lines: list[str], start: int, sections: list[tuple[int, in
         inside = any(begin <= index < stop for begin, stop in sections)
         if fence is None and not inside and re.match(r"#{1,6}\s", line):
             text = " ".join(line.strip("#").split()).lower()
-            if text.startswith("lesson routing"):
+            # A variant of the exact heading (case, spacing, level, a punctuated suffix) is an
+            # error; a heading that continues with another word is ordinary text.
+            if re.fullmatch(r"lesson routing(?:\s*[^\w\s].*)?", text):
                 return line
         fence = fence_after(line, fence)
     return None
 
 
-FENCE = re.compile(r"\s*(`{3,}|~{3,})(.*)")
+FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})(.*)")  # Four spaces or more is indented code, not a fence.
 
 
 def fence_after(line: str, fence: str | None) -> str | None:

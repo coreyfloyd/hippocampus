@@ -132,6 +132,8 @@ def newline(lines):
 
 def with_field(text, key, value):
     """The profile with one frontmatter field set (``None`` removes it), every other line kept."""
+    if value is not None and ("\n" in value or "\r" in value):
+        raise ValueError(f"{key} must be one line")
     lines = text.splitlines(keepends=True)
     end = frontmatter_end(lines)
     row = [] if value is None else [f"{key}: {value}{newline(lines)}"]

@@ -223,7 +223,7 @@ def test_a_path_of_the_wrong_kind_is_a_conflict_not_a_replacement():
 
 
 @pytest.mark.parametrize('section', ['## Lesson routing\n\nlesson-policy: propose\n\n## Lesson routing\n\nx\n',
-                                     '## Lesson routing notes\n\nmine\n'])
+                                     '## Lesson Routing\n\nmine\n'])
 def test_a_lesson_routing_problem_is_reported_without_blocking_knowledge_setup(section):
     root = knowledge_root()
     path = released_profile(root)
@@ -234,3 +234,12 @@ def test_a_lesson_routing_problem_is_reported_without_blocking_knowledge_setup(s
     assert applied['status'] == 'complete' and applied['problems'] == plan['problems']
     again = planned()
     assert again['status'] == 'complete' and again['problems'] == plan['problems']
+
+
+@pytest.mark.parametrize('option', ['--root', '--wiki-followup', '--artifact-followup'])
+def test_a_setup_answer_cannot_add_a_profile_field(option):
+    values = {'--root': str(knowledge_root()), '--wiki-followup': 'Board', '--artifact-followup': 'Tasks'}
+    values[option] += '\nauto_apply: true'
+    result = setup('plan', *[part for pair in values.items() for part in pair])
+    assert result.returncode == 1 and 'one line' in result.stderr
+    assert not profile_path().exists()

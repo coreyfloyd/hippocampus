@@ -101,8 +101,6 @@ def plan(profile, root=None, routes=None):
     unusable = placeholders()
     for key in ROUTES:
         value = routes.get(key, values.get(key))
-        if value is not None and ("\n" in value or "\r" in value):
-            raise ValueError(f"{key} must be one line")
         if not unquoted(value) or unquoted(value) in unusable:
             result["needs"].append(f"{key}: a concrete route another agent can follow "
                                    "(the example's instructional text is not one)")
