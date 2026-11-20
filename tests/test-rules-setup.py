@@ -27,6 +27,11 @@ class RulesSetupTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = pathlib.Path(self.temp.name).resolve()
+        # Policy reads resolve the configuration folder; keep them inside this test's directory.
+        isolated = mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(self.base / "config")})
+        isolated.start()
+        self.addCleanup(isolated.stop)
+        os.environ.pop("HIPPOCAMPUS_ROUTING", None)
         self.homes = {name: self.base / name for name in ("claude-code", "codex")}
         for name, home in self.homes.items():
             (home / "bin").mkdir(parents=True)
@@ -234,8 +239,118 @@ class RulesSetupTests(unittest.TestCase):
             str(self.homes["codex"] / "AGENTS.md"),
         })
         delivery = {row["tool"]: row["development_delivery"] for row in plan["tools"]}
-        self.assertEqual(delivery["claude-code"], "directory walk from the development root")
-        self.assertEqual(delivery["codex"], "repository block")
+        self.assertEqual(delivery["claude-code"]["file"], str(self.base / "development" / "CLAUDE.md"))
+        self.assertEqual(delivery["codex"]["file"], str(self.base / "development" / "AGENTS.md"))
+        self.assertTrue(all(row["discovery"] for row in delivery.values()))
+
+    def only(self, *tools):
+        """Leave only the named tools installed; PATH is emptied for the caller's block."""
+        helper = load_helper()
+        for tool, home in self.homes.items():
+            if tool not in tools:
+                (home / "bin" / helper.TOOLS[tool]["binary"]).unlink()
+        return mock.patch.dict(os.environ, {"PATH": str(self.base / "empty-path")})
+
+    def test_development_root_receives_only_installed_tools_entries(self):
+        helper = load_helper()
+        for tools, expected in ((("claude-code",), {"CLAUDE.md"}), (("codex",), {"AGENTS.md"}),
+                                (("claude-code", "codex"), {"CLAUDE.md", "AGENTS.md"})):
+            with self.subTest(tools=tools):
+                self.setUp()
+                root, profile = self.configured_profile()
+                dev = self.base / "development"
+                with self.only(*tools):
+                    value = helper.plan(self.describe(), "standard", development_root=dev, profile=profile)
+                    planned = {pathlib.Path(m["file"]).name for m in value["mutation_list"] if m["kind"] == "rule target"}
+                    self.assertEqual(planned, expected)
+                    self.assertEqual({row["tool"] for row in value["tools"]}, set(tools))
+                    helper.apply(value, profile, approved=True, approval_fingerprint=value["approval_fingerprint"])
+                self.assertEqual({p.name for p in dev.iterdir()}, expected)
+                if "CLAUDE.md" in expected:
+                    # Claude's entry is a minimal import of the provider-neutral source.
+                    self.assertEqual((dev / "CLAUDE.md").read_text().splitlines()[1:],
+                                     ["@" + str(root / "context" / "development-rules.md")])
+                if "AGENTS.md" in expected:
+                    self.assertIn("development rule", (dev / "AGENTS.md").read_text())
+
+    def test_recommends_thin_only_for_several_tools_or_portability(self):
+        helper = load_helper()
+        rows = [{"tool": "claude-code", "installed": True}, {"tool": "codex", "installed": False}]
+        self.assertEqual(helper.recommend_preset(rows)["preset"], "standard")
+        self.assertEqual(helper.recommend_preset(rows, portable=True)["preset"], "thin")
+        rows[1]["installed"] = True
+        self.assertEqual(helper.recommend_preset(rows)["preset"], "thin")
+        self.assertEqual(helper.recommend_preset([{"tool": "codex", "installed": False}])["preset"], "standard")
+        with self.only("codex"):
+            result = subprocess.run([sys.executable, str(SCRIPT), "plan", "--homes", self.homes_json(), "--preset", "thin"],
+                                    capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout)["recommendation"]["preset"], "standard")
+
+    def homes_json(self):
+        return json.dumps({name: str(home) for name, home in self.homes.items()})
+
+    def repository(self, tools, files, profile=None, repo=None):
+        helper = load_helper()
+        repo = repo or self.base / ("repo-" + "-".join(tools) + "-" + "-".join(sorted(files)))
+        repo.mkdir()
+        for name, text in files.items():
+            (repo / name).write_text(text)
+        before = {p.name: p.read_bytes() for p in repo.iterdir()}
+        with self.only(*tools):
+            value = helper.repository_entries(repo, self.describe(), profile)
+        self.assertEqual({p.name: p.read_bytes() for p in repo.iterdir()}, before)  # inspection writes nothing
+        return repo, value, {entry["tool"]: entry for entry in value["entries"]}
+
+    def test_repository_source_is_agents_md_whatever_entries_exist(self):
+        cases = {"neither": {}, "agents": {"AGENTS.md": "repo rule\n"}, "claude": {"CLAUDE.md": "claude rule\n"},
+                 "both": {"AGENTS.md": "repo rule\n", "CLAUDE.md": "@AGENTS.md\nclaude extra\n"}}
+        for label, files in cases.items():
+            for tools in (("claude-code",), ("codex",), ("claude-code", "codex")):
+                with self.subTest(files=label, tools=tools):
+                    self.setUp()
+                    repo, value, entries = self.repository(tools, files)
+                    self.assertEqual(value["source"]["files"], [str(repo / "AGENTS.md")])
+                    self.assertEqual(set(entries), set(tools))
+                    kept = {pathlib.Path(row["file"]).name for row in value["kept"]}
+                    if "claude-code" in entries:
+                        claude = entries["claude-code"]
+                        if "CLAUDE.md" not in files:
+                            self.assertEqual((claude["action"], claude["contents"]), ("create", "@AGENTS.md\n"))
+                        elif label == "both":
+                            self.assertEqual(claude["action"], "keep")
+                        else:
+                            self.assertEqual(claude["contents"], "@AGENTS.md\n\nclaude rule\n")
+                            self.assertIn("CLAUDE.md", kept)
+                    else:
+                        self.assertEqual("CLAUDE.md" in kept, "CLAUDE.md" in files)
+                    if "codex" in entries:
+                        self.assertEqual(entries["codex"]["action"],
+                                         "keep" if "AGENTS.md" in files else "create with the first repository rule")
+                    elif "AGENTS.md" in files:
+                        self.assertNotIn("AGENTS.md", kept)  # the source, not an unneeded entry
+                    self.assertTrue(all(entry["discovery"] for entry in entries.values()))
+
+    def test_repository_custom_sources_stay_the_users(self):
+        helper = load_helper()
+        _, profile = self.configured_profile()
+        shared = self.base / "own-rules.md"
+        shared.write_text("custom rule\n")
+        repo = self.base / "repo-custom"
+        profile.write_text(profile.read_text() + "\n## Lesson routing\n\nProduced surfaces:\n  "
+                           + str(shared) + ":\n    - path: " + str(repo / "AGENTS.md")
+                           + "\n      regeneration command: \"make rules\"\n")
+        _, value, entries = self.repository(("claude-code", "codex"), {"AGENTS.md": "generated\n"}, profile, repo)
+        self.assertEqual(value["source"]["files"], [str(shared)])
+        self.assertEqual(entries["codex"]["action"], "regenerate from its source")
+        self.assertEqual(entries["claude-code"]["action"], "create")
+        generated = self.base / "repo-generated"
+        generated.mkdir()
+        header = '<!-- hippocampus-rules: generated from ["' + str(shared) + '"]; do not hand-edit -->\n'
+        (generated / "CLAUDE.md").write_text(header + "custom rule\n")
+        with self.only("claude-code"):
+            value = helper.repository_entries(generated, self.describe())
+        self.assertEqual(value["entries"][0]["action"], "keep: produced from its own source")
+        self.assertNotIn("contents", value["entries"][0])
 
     def test_apply_requires_approval_and_never_deletes_memory(self):
         helper = load_helper()

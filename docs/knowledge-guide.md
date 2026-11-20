@@ -252,7 +252,9 @@ tools; a tool that is not installed gets no row in the plan.
 Set-up first reports each tool's state: its default user instruction file
 (`CLAUDE.md` in the Claude Code home, `AGENTS.md` in the Codex home), whether that
 file exists and who owns it, the native memory setting, and the memory store's
-location and file count. It then offers two editable starting points:
+location and file count. It then offers two editable starting points and
+recommends one: `thin` when more than one tool is installed or you want your
+rules and knowledge portable across tools, `standard` otherwise.
 
 | Preset     | Rules target per tool                       | Memory per tool                          |
 | ---------- | ------------------------------------------- | ---------------------------------------- |
@@ -267,7 +269,17 @@ A target that carries the composer's generated header is rewritten in full.
 In a file you wrote yourself, composition changes only one marked block and
 leaves the rest of the file as it was. Claude Code targets import the documents
 by path; Codex targets receive their content. With a development
-root, `CLAUDE.md` and `AGENTS.md` at that root carry the development rules.
+root, each installed tool gets its own entry there: `CLAUDE.md`, a minimal
+import of the development rules, for Claude Code, which loads `CLAUDE.md` from
+the working directory and every directory above it; `AGENTS.md` for Codex,
+which reads `AGENTS.md` from the project root (usually the Git root) down to the
+working directory. A tool that is not installed gets no entry.
+
+For one repository, `scripts/rules_setup.py repository --repository <root>`
+names the shared source, `AGENTS.md` or the source it is produced from, and
+each installed tool's entry: Codex reads `AGENTS.md` itself, and Claude Code
+gets a `CLAUDE.md` that imports it. An absent `AGENTS.md` does not make
+`CLAUDE.md` the source; existing files are reported and never deleted.
 Every target is checked before any is written, so a failed check leaves all of
 them untouched. After editing either document, run set-up again: the new plan
 lists each target whose composed content changed.

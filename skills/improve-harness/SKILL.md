@@ -56,9 +56,22 @@ Make the placement call **once per lesson**, using the implementation ladder abo
 | A deterministic "always / whenever / before X" whose placement has reached rung 7 | A **hook** in the tool's settings |
 | Something that matters only while running one skill | **That skill** (its steps or gotchas) |
 | Behavior of one agent type | **That agent's definition** |
-| A constraint of one repository | **That repository's instruction file**: `AGENTS.md` when present (both tools read it), else `CLAUDE.md` |
+| A constraint of one repository | **That repository's shared source**, named by `rules_setup.py repository` (below) |
 | Something every session must obey, in any repository | **The user-level rules file** (`~/.claude/CLAUDE.md` for Claude Code, `~/.codex/AGENTS.md` for Codex; both when it binds both tools). Last resort for rules |
 | A cross-session fact the agent needs that is not a rule and has no narrower trigger | **Memory**, when the running tool has an agent-written store; otherwise flag the missing destination |
+
+### Repository rules
+
+Before writing a repository lesson, run
+`python3 <package-root>/scripts/rules_setup.py repository --repository <repository-root> --profile <knowledge-profile>`,
+where the package root is two directories above this skill's real directory;
+Claude Code and Codex run the same command and it writes nothing. Write the
+lesson to `source.files`: the repository's `AGENTS.md`, or the source it is
+produced from. An absent `AGENTS.md` never makes `CLAUDE.md` the source. Show
+each `entries` row whose action is not `keep`, with its `contents`, in the same
+proposal: Codex reads `AGENTS.md` itself; Claude Code needs a `CLAUDE.md` that
+imports it. Existing entry content stays the user's; report `kept` rows and
+never delete or move a file.
 
 ### Memory policy
 

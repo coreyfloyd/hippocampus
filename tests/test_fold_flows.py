@@ -299,6 +299,14 @@ def test_flow_8_extend_existing_knowledge_profile_preserves_other_choices(user):
     assert 'preset: standard' in knowledge.read_text()
     assert profile.read_bytes() == checklist_before
     run(user[2], sys.executable, root / 'scripts/validate_profile.py', knowledge)
+    repository = user[1] / 'repository'
+    repository.mkdir()
+    (repository / 'CLAUDE.md').write_text('keep claude rule\n')
+    entries = json.loads(run(user[2], sys.executable, root / 'scripts/rules_setup.py', 'repository',
+                             '--repository', repository, '--homes', homes, '--profile', knowledge).stdout)
+    assert entries['source']['files'] == [str(repository.resolve() / 'AGENTS.md')]
+    assert sorted(p.name for p in repository.iterdir()) == ['CLAUDE.md']
+    assert (repository / 'CLAUDE.md').read_text() == 'keep claude rule\n'
 
 
 def test_flow_9_declined_or_invalid_setup_writes_nothing_unapproved(user):
