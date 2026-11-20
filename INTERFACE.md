@@ -153,6 +153,25 @@ also exits 2 with a reason on stderr and no stdout.
 | List reference path | `"harness_enforcement_reference"` | `["/example"]` | `""` | 2 |
 <!-- /config-get-contract -->
 
+### Knowledge setup
+
+`python3 scripts/knowledge_setup.py plan [--root R] [--wiki-followup W] [--artifact-followup A]`
+plans the knowledge setup for the configured knowledge profile and writes nothing. An
+omitted option keeps the profile's value. It prints `status` (`complete` when the
+profile and every path it names already form the knowledge setup and pass
+`validate_profile.py --require-wiki`, otherwise `incomplete`), `ready` (no `needs` and no
+`conflicts`), `needs` (values only the user supplies: the root and each follow-up route;
+the example profile's instructional text is not a route), `conflicts` (a path of the wrong
+kind, or a root without a parent directory), `create_directories`, `create_files`,
+`preserved` (existing paths and an unchanged profile), `profile_fields` (each field's
+`current` and `proposed` value; a released `wiki_enabled: false` is proposed for removal),
+`profile_diff`, `profile_exists`, `file_states` and `approval_fingerprint`. A profile
+the reader refuses exits 1 with its message. `apply` with the same options and
+`--approval-fingerprint F` recomputes the plan and refuses (exit 1) a changed plan or one
+that is not `ready`; otherwise it creates only the missing directories and empty files,
+validates the candidate profile, and writes it atomically, keeping every other line and
+the body. A failed validation removes what it created and leaves the profile unchanged.
+
 ### Policy in the knowledge profile
 
 The knowledge profile (`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`) is the one

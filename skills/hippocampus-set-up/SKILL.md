@@ -11,43 +11,25 @@ The installed, version-matched template is [`profiles/karpathy-wiki.example.md`]
 
 ## Explain the model first
 
-Before asking for values, explain that one knowledge root always contains:
+Before asking for values, explain that the knowledge setup is required and one knowledge root always contains:
 
 - `raw/`: selected source material and provenance;
 - `output/`: durable research artifacts and audit reports awaiting review or distribution;
-- `docs/`: AI-maintained operating records, including the operation log and decision log.
+- `docs/`: AI-maintained operating records, including the operation log and decision log;
+- `wiki/`: compiled, atomic articles connected by wikilinks, with `wiki/hot.md` as the session cache, the recent-context entry point.
 
-Explain the main flow: research creates an inline answer or an artifact; an approved distribution step moves useful findings to named targets or follow-up work, and — when the wiki is enabled — to the wiki.
-
-## Ask whether to use a wiki
-
-Before asking for any wiki-specific value, describe the wiki and its alternative in neutral terms and let the user choose. Neither option is the default or the recommendation:
-
-- **With a wiki**: a `wiki/` folder holds compiled, atomic articles connected
-  by Obsidian-style wikilinks, plus `wiki/hot.md` as the recent-context entry
-  point. `absorb` and `knowledge-capture` can route selected findings
-  into it, and `wiki-compile` and `wiki-audit` compile and audit it.
-  Wikilinks are a portable Markdown convention either way; Obsidian is an
-  optional client for browsing the result.
-- **Without a wiki**: no `wiki/` folder, no wiki-only profile fields, no wiki
-  routing in absorption plans or knowledge captures, and `wiki-compile`,
-  `wiki-audit` and their compatibility names (`research-to-wiki`,
-  `vault-compile`, `vault-audit`) refuse to run. `raw/`, `output/`, `docs/`, and the rest of
-  the research and distribution workflow are unaffected.
-
-If the user declines the wiki, ask none of the wiki-only questions below (the
-wiki-maintenance route or whether they use a wikilink-aware client).
+Explain the main flow: research creates an inline answer or an artifact; an approved distribution step moves useful findings to the wiki, named targets or follow-up work. `wiki-compile` and `wiki-audit` compile and audit the wiki. Wikilinks are a portable Markdown convention; no particular editor is required, and Obsidian is one optional client for browsing the result.
 
 ## Inspect before asking
 
-Read `~/.config/hippocampus/profile.md` if it exists. Inspect referenced paths without modifying them. Distinguish among:
+Run `python3 <package-root>/scripts/knowledge_setup.py plan`, where the package root is two directories above this skill's real directory; Claude Code and Codex run the same command. It reads the configured knowledge profile (`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`) and the paths it names, writes nothing, and reports `status` (`complete` or `incomplete`), `needs` (values only the user can supply), `conflicts`, and the exact proposed changes. Distinguish among:
 
-- no profile;
-- a structurally invalid or incomplete profile;
-- a valid profile whose local policy may still need clarification;
-- a requested change to an existing configuration.
+- no profile (`profile_exists` false);
+- a profile the reader refuses (the command exits 1 with the reader's message: report it and propose the smallest repair; do not replace the profile wholesale);
+- an incomplete profile, including a released profile with `wiki_enabled: false`;
+- a complete profile and a requested change to it.
 
-Do not assume that an existing directory is disposable or dedicated to this package. Preserve existing files and the free-form profile body unless the user explicitly approves changing them.
+Do not assume that an existing directory is disposable or dedicated to this package. The plan preserves existing files, profile lines and the free-form profile body.
 
 ## Configure rules and memory after the base profile is valid
 
@@ -149,51 +131,31 @@ until then, and do not rerun `apply` for them.
 Ask only for choices that cannot be inferred safely, and explain each before requesting it:
 
 1. The absolute knowledge-root location.
-2. When the wiki is enabled, the route for wiki-maintenance follow-ups.
+2. The route for wiki-maintenance follow-ups.
 3. The independent task route for source-derived actions, including meeting tasks and research findings that require work in another project.
 4. Any local policy the agents should follow: taxonomy, source-library routing, output naming, operation/decision log formats, and local boundaries.
 5. Optional meeting inputs: `meeting_transcript_source` (provider or retrieval instructions), `meeting_event_source` (calendar provider or retrieval instructions), and `meeting_note_path` (optional default local path or Google Docs link; `{date}` is optional for local paths). Each independently accepts `disabled`. Explain that notes and events are read-only context, connectors must actually be available, and omitted event/note fields skip those lookups. Do not require meeting configuration for users who do not capture meetings.
-6. When the wiki is enabled, whether the user plans to use Obsidian or another wikilink-aware client. This changes the usage guidance, not the profile schema.
+6. Whether the user plans to use Obsidian or another wikilink-aware client. This changes the usage guidance, not the profile schema.
 
-When the wiki is enabled, the two follow-up routes may be different and must be concrete enough for another agent to execute. Do not accept the unchanged instructional placeholders from the example profile as configured destinations.
+The two follow-up routes may be different and must be concrete enough for another agent to execute. The plan lists an unchanged instructional placeholder from the example profile under `needs`; it is not a configured destination. Record integrations, meeting connectors, the editor and tool memory stay independent choices; none of them is needed to complete the knowledge setup.
 
 ## Present the complete change before writing
 
-Show the proposed values and an exact mutation list: directories to create, files to create, profile fields to add or change, and policy-body edits. Call out everything that already exists and will be preserved.
-
-When the user declines the wiki, the mutation list contains no `wiki/` directory, no `wiki/hot.md`, no `hot_file`, and no `wiki_followup_destination`. It contains `raw/`, `output/`, `docs/`, the operation log, the decision log, and the profile with `wiki_enabled: false` recorded. When the user accepts the wiki, the mutation list adds `wiki/`, `wiki/hot.md`, `hot_file`, and `wiki_followup_destination` to that same base.
+Run `plan` with the user's answers: `--root <absolute path>`, `--wiki-followup <route>` and `--artifact-followup <route>`; omit any option to keep the profile's current value. Show the plan's `create_directories`, `create_files`, `profile_fields` and the exact `profile_diff`, and call out everything under `preserved`. Record the returned `approval_fingerprint` with that exact review. While `needs` or `conflicts` is not empty, ask for the missing value or have the user move the conflicting path, then plan again.
 
 Do not write or change configuration until the user approves that complete proposal. Installation and configuration are separate authorization boundaries; the fact that the package is installed is not approval to create a knowledge root.
 
+## Upgrade a released wiki-disabled profile
+
+A released profile with `wiki_enabled: false` stays readable, but its knowledge setup is incomplete. Say so, then offer the upgrade: the plan removes `wiki_enabled: false`, adds `hot_file` and `wiki_followup_destination`, and creates only a missing `wiki/` and `wiki/hot.md`. Ask only for the wiki-maintenance route and the wikilink-aware client question. A decline writes nothing: report "Knowledge setup incomplete" with the plan's `needs` and proposed changes, and leave the profile and every retained file as they are. Never delete or modify retained content.
+
 ## Apply an approved configuration safely
 
-After approval:
+On approval of that exact plan, run `apply` with the same options and `--approval-fingerprint <approval_fingerprint>`. It recomputes the plan and refuses if anything changed, so a changed answer or a path that appeared after the review needs a new plan and approval. It creates only missing directories and empty files, never truncating one, validates the result with `scripts/validate_profile.py --require-wiki`, and writes the profile atomically. If validation fails, it removes what it created, leaves the profile unchanged and exits 1 with the failure: report it and propose the smallest repair.
 
-1. Create only missing canonical directories: `raw/`, `output/`, and `docs/`, plus `wiki/` when the wiki is enabled.
-2. Create only missing state files: `docs/log.md` and `docs/DECISIONS.md`, plus `wiki/hot.md` when the wiki is enabled. Never truncate them.
-3. Create or update `~/.config/hippocampus/profile.md` from the active example schema. Use root-relative state paths and preserve unapproved frontmatter values and body content. When the wiki is declined, set `wiki_enabled: false` and omit `hot_file` and `wiki_followup_destination`; when it is enabled, omit `wiki_enabled` (or set it to `true`) and include both wiki fields.
-4. Run the active `scripts/validate_profile.py` with `python3` against the resulting profile.
-5. If validation fails, report the exact failure and propose the smallest repair; do not replace the profile wholesale.
-6. If validation succeeds, summarize the configured root and routes, then teach the user one short first workflow appropriate to their goal. When the wiki is declined, the summary and that first-workflow teaching mention no wiki.
+Rerunning `plan` on a complete setup reports `status` `complete` with no changes. Report the knowledge setup complete only then; summarize the configured root and routes, and teach the user one short first workflow appropriate to their goal.
 
-Structural validation proves that the required paths and fields exist. It does not prove that the local taxonomy, route descriptions, or operating policy are useful; confirm those meanings conversationally.
-
-## Enable or disable the wiki later
-
-When an existing profile is valid, offer to change its wiki state as part of a
-requested-change conversation. Both directions go through the same
-present-then-approve gate as any other change:
-
-- **A wiki-disabled profile**: offer to enable the wiki. If accepted, ask only
-  the wiki-only questions from Discuss the user-owned choices (the
-  wiki-maintenance route and whether the user uses a wikilink-aware client),
-  then propose creating `wiki/` and `wiki/hot.md` and adding `hot_file` and
-  `wiki_followup_destination` to the profile. Apply only after approval.
-- **A wiki-enabled profile**: offer to disable the wiki. If accepted, propose
-  removing `hot_file` and `wiki_followup_destination` from the profile and
-  recording `wiki_enabled: false`. Never delete or modify `wiki/` or anything
-  in it — disabling only changes the profile.
-
+Structural validation proves that the required paths and fields exist. It does not prove that the local taxonomy, route descriptions, or operating policy are useful; confirm those meanings conversationally, and propose policy-body edits as their own reviewed change.
 
 ## Meeting records and custom proposal policy
 
@@ -218,7 +180,7 @@ whole-library sweep, task creation or publication is part of setup.
 
 ## Checklist configuration
 
-Offer checklist configuration independently of knowledge configuration. A user may decline knowledge configuration; write no knowledge profile in that case. Show the exact checklist changes and obtain approval before applying them. Preserve both existing profile bodies and bindings.
+Offer checklist configuration as its own step, after or alongside the knowledge setup. Configuring the checklist does not complete set-up: while the knowledge setup `plan` reports `incomplete`, report set-up incomplete with its `needs`. A user may decline the knowledge setup; write no knowledge profile in that case. Show the exact checklist changes and obtain approval before applying them. Preserve both existing profile bodies and bindings.
 
 
 Interview the user, then write their choices. The user need not read or edit
@@ -391,6 +353,7 @@ On any composition error report setup incomplete; keep existing content intact.
 
 ## Report
 
+State the knowledge setup `status` from a final `plan`; set-up is complete only when it is `complete`.
 Name the user profile and user-owned read skill; list the four record-write choices, persist and the ask binding,
 including unbound destinations. Include the request kind, validator verdict and exit
 code, composer result, and outstanding access or user decisions. Report success

@@ -8,24 +8,22 @@ and the wrap checklist.
 
 ## Knowledge store
 
-The wiki is optional. A configured root contains three canonical directories,
-plus a fourth for compiled knowledge when `hippocampus-set-up` configures
-the wiki as enabled:
+A configured root contains four canonical directories, all part of the
+required knowledge setup:
 
 ```text
 <knowledge-root>/
 ├── raw/       # source material and provenance
 ├── output/    # research artifacts and audit reports
 ├── docs/      # AI-maintained operation history and durable decisions
-└── wiki/      # compiled synthesis, topic indexes, and master index (only when the wiki is enabled)
+└── wiki/      # compiled synthesis, topic indexes, and master index
 ```
 
-`raw/`, `output/`, and `docs/` are always present. `wiki/` and its two
-profile fields exist only when the wiki is enabled; declining it at setup
-skips the wiki folder, its profile fields, wiki routing in absorption plans
-and knowledge captures, and the `wiki-compile` / `wiki-audit` skills,
-which refuse to run without it. The wiki can be turned on or off later
-through `hippocampus-set-up` alone. The directory names are part of the
+`hippocampus-set-up` proposes all four, the session cache `wiki/hot.md`, both
+logs and both follow-up destinations, and creates only what is missing. A
+released profile with `wiki_enabled: false` still reads: wiki routing is absent
+from its absorption plans and knowledge captures, `wiki-compile` and
+`wiki-audit` refuse to run, and set-up offers an approved upgrade. The directory names are part of the
 public [Karpathy-wiki contract][2]. The organization of the `wiki/`is
 customizable, but relies on internal wikilinks for traversal by AI and
 wikilink-aware tools.

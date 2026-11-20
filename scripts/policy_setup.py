@@ -130,15 +130,19 @@ def newline(lines):
     return "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
 
 
-def with_setting(text, value):
+def with_field(text, key, value):
+    """The profile with one frontmatter field set (``None`` removes it), every other line kept."""
     lines = text.splitlines(keepends=True)
     end = frontmatter_end(lines)
-    row = f"auto_apply: {'true' if value else 'false'}{newline(lines)}"
+    row = [] if value is None else [f"{key}: {value}{newline(lines)}"]
     for index in range(1, end):
-        if lines[index].partition(":")[0].strip() == "auto_apply" and ":" in lines[index]:
-            lines[index] = row
-            return "".join(lines)
-    return "".join([*lines[:end], row, *lines[end:]])
+        if lines[index].partition(":")[0].strip() == key and ":" in lines[index] and not lines[index].startswith(" "):
+            return "".join([*lines[:index], *row, *lines[index + 1:]])
+    return "".join([*lines[:end], *row, *lines[end:]])
+
+
+def with_setting(text, value):
+    return with_field(text, "auto_apply", "true" if value else "false")
 
 
 def with_routing(text, routing):
@@ -169,7 +173,7 @@ def without_setting(text, config):
     return json.dumps(expected, indent=2) + "\n"
 
 
-def validated(candidate_text, profile):
+def validated(candidate_text, profile, require_wiki=False):
     """Refuse a proposed profile the validator or the policy reader would reject."""
     with tempfile.TemporaryDirectory() as temporary:
         candidate = pathlib.Path(temporary) / "profile.md"
@@ -177,7 +181,7 @@ def validated(candidate_text, profile):
         errors = io.StringIO()
         try:
             with contextlib.redirect_stderr(errors):
-                reader.validate(candidate)
+                reader.validate(candidate, require_wiki)
         except SystemExit:
             raise ValueError(f"{profile}: {errors.getvalue().strip()}") from None
         policy = compose.load_policy(candidate)

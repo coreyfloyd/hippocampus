@@ -1,4 +1,4 @@
-"""The nine fold acceptance flows, at installed CLI and instruction seams.
+"""The fold acceptance flows and installed knowledge setup, at installed CLI and instruction seams.
 
 No model conversations are simulated. Setup review/decline policy is checked in
 its installed instructions; approved choices and failures run the real writers.
@@ -324,6 +324,42 @@ def test_flow_9_declined_or_invalid_setup_writes_nothing_unapproved(user):
     assert failed.returncode != 0 and 'injected write failure' in failed.stderr
     assert profile.read_bytes() == before and set(profile.parent.iterdir()) == paths
     assert not (profile.parent / 'profile.md').exists()
+
+
+def test_flow_10_installed_knowledge_setup_completes_empty_root_and_upgrade(user):
+    install(user)
+    root = runtime(user)
+    profile = user[1] / '.config/hippocampus/profile.md'
+    routes = ['--wiki-followup', 'Wiki board', '--artifact-followup', 'Task list']
+
+    def setup_plan(*args):
+        return json.loads(run(user[2], sys.executable, root / 'scripts/knowledge_setup.py', 'plan', *args).stdout)
+
+    def setup_apply(plan, *args):
+        run(user[2], sys.executable, root / 'scripts/knowledge_setup.py', 'apply',
+            '--approval-fingerprint', plan['approval_fingerprint'], *args)
+
+    empty = user[1] / 'knowledge'
+    empty.mkdir()
+    setup_apply(setup_plan('--root', empty, *routes), '--root', empty, *routes)
+    run(user[2], sys.executable, root / 'scripts/validate_profile.py', profile, '--require-wiki')
+    assert setup_plan()['status'] == 'complete'
+    released = user[1] / 'released'
+    for name in ('raw', 'output', 'docs'):
+        (released / name).mkdir(parents=True)
+    for name in ('log.md', 'DECISIONS.md'):
+        (released / 'docs' / name).write_text('kept\n')
+    profile.write_text('---\nprofile_version: 4\nknowledge_root: ' + str(released) +
+                       '\nwiki_enabled: false\noperation_log_file: docs/log.md\n'
+                       'decision_log_file: docs/DECISIONS.md\nartifact_followup_destination: Tasks\n'
+                       '---\nKeep knowledge policy.\n')
+    before = profile.read_bytes()
+    upgrade = setup_plan('--wiki-followup', 'Wiki board')
+    assert upgrade['status'] == 'incomplete' and upgrade['ready']
+    assert profile.read_bytes() == before and not (released / 'wiki').exists()
+    setup_apply(upgrade, '--wiki-followup', 'Wiki board')
+    assert profile.read_text().endswith('---\nKeep knowledge policy.\n')
+    run(user[2], sys.executable, root / 'scripts/validate_profile.py', profile, '--require-wiki')
 
 
 def test_session_installation_guides_resolve_local_links_and_layout():
