@@ -22,6 +22,11 @@ improve-harness, slim-harness, slim-unattended) are unreleased until the first a
 the `Public launch` milestone. Until then, replace old shapes outright: no aliases,
 no migration code, no compatibility paths. hippocampus's released surfaces keep
 working: its install path, knowledge profile format and composer entry point.
+One exception: the knowledge-profile policy move (the set-up step that moves the
+retired lesson routing file, `HIPPOCAMPUS_ROUTING` and the `auto_apply_lessons`
+setting into the knowledge profile, and the refusals that send users to it) is
+kept so existing files have a migration path: "I want to provide a migration path
+for existing files. The setup step should catch it." (maintainer, 2026-11-20).
 
 ## Vocabulary
 
