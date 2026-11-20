@@ -316,9 +316,9 @@ python3 scripts/compose_rules.py surfaces --source /path/to/rules.md
 ```
 
 `check` exits with an error for missing or changed target content and writes
-nothing. `surfaces` reads the **Produced surfaces** mapping in the improve-harness
-routing file (`--routing`, then `HIPPOCAMPUS_ROUTING`, then
-`${XDG_CONFIG_HOME:-~/.config}/hippocampus/routing.md`). Its JSON result names
+nothing. `surfaces` reads the **Produced surfaces** mapping in the knowledge
+profile's `## Lesson routing` section (`--profile`, then
+`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`). Its JSON result names
 canonical sources and produced paths with regeneration commands; querying a
 produced path traces back to its source. An absent mapping or explicit `[]`
 produces no surfaces. Mapping lookup never runs commands. After editing a source,

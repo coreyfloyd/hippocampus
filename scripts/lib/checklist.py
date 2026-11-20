@@ -1042,14 +1042,14 @@ def auto_apply_state() -> dict[str, Any] | None:
         return None
     rules = lessons.routing_rules()
     reason = lessons.forbidden_reason(rules)
-    # The routing file governs lessons only; knowledge capture follows the setting.
+    # The lesson routing governs lessons only; knowledge capture follows the setting.
     state = {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
     return {**state, "knowledge": "apply"}
 
 
 def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]],
                    problems: list[str]) -> dict[str, Any] | None:
-    """The report's lessons: what auto-apply did, or why the routing file stopped it."""
+    """The report's lessons: what auto-apply did, or why the lesson routing stopped it."""
     section = copy.deepcopy(filing.get("lessons")) if isinstance(filing.get("lessons"), Mapping) else None
     try:
         state = auto_apply_state()
@@ -1406,7 +1406,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             state = auto_apply_state()
             if not state:
                 raise ValueError("record-over-limit: the auto-apply setting is off")
-            # The routing file's `lesson-policy: propose` overrides the setting (glossary,
+            # The lesson routing's `lesson-policy: propose` overrides the setting (glossary,
             # Auto-apply setting), so the blocks stay as they are with the setting off.
             if state["lessons"] == "propose":
                 raise ValueError(f"record-over-limit: {state['reason']}")

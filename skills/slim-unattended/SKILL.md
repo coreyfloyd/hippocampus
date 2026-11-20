@@ -14,7 +14,7 @@ pull request, merges or schedules. This step is separate from the sweep: never r
 through it, and never add a lesson to a slim branch.
 
 The user owns the schedule and whatever opens and merges a pull request. With the
-auto-apply setting off, or the routing file's `lesson-policy: propose`, `plan` refuses, exit 1:
+auto-apply setting off, or the lesson routing's `lesson-policy: propose`, `plan` refuses, exit 1:
 report that and stop. `slim_checkouts` in the configuration names each repository's checkout.
 
 ## Run

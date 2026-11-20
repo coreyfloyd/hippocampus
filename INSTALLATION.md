@@ -244,6 +244,10 @@ The follow-up destinations are intentionally independent. Replace the
 instructional placeholders with routes another agent can actually follow. The
 profile's free-form Markdown body can define local taxonomy, source-library
 routing, output naming, log formats, and other policy for this knowledge root.
+The profile is also the one home for lesson policy: the optional `auto_apply`
+setting (off by default) and an optional `## Lesson routing` body section that
+replaces the default lesson routing. `hippocampus-set-up` explains both and shows
+each change before writing it.
 The validated frontmatter schema is currently `profile_version: 4`.
 
 ## Install a published release

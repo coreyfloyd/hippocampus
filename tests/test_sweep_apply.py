@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from test_auto_apply_lessons import clone_pair, git, move_remote
+from test_auto_apply_lessons import clone_pair, git, move_remote, write_policy
 from test_sweep import ENGINE, assert_readable_report, command, decisions, read_run, sandbox, source, write_receipt  # noqa: F401
 
 PRODUCER = 'abandoned-session'
@@ -16,19 +16,16 @@ PRODUCER = 'abandoned-session'
 def tool(request, sandbox):
     """The same run under each tool; only the tool's own environment differs."""
     base = sandbox[0]
-    sandbox[3].update(HIPPOCAMPUS_ROUTING=str(base / 'routing.md'), CLAUDE_CONFIG_DIR=str(base / 'claude'),
+    sandbox[3].update(CLAUDE_CONFIG_DIR=str(base / 'claude'),
                       HIPPOCAMPUS_HARNESS=request.param, CODEX_THREAD_ID='driver' if request.param == 'codex' else '')
-    (base / 'routing.md').write_text('# Routing\n')
     return request.param
 
 
 def configure(sandbox, mode='act', setting=True):
     config = json.loads(sandbox[2].read_text())
     config['sweep']['mode'] = mode
-    config.pop('auto_apply_lessons', None)
-    if setting:
-        config['auto_apply_lessons'] = True
     sandbox[2].write_text(json.dumps(config))
+    write_policy(True if setting else None)
 
 
 def profile(sandbox, persist=True, ask=True):
@@ -179,13 +176,13 @@ def test_setting_off_carries_as_today(sandbox, tool, item, destination):
     assert '### Would apply' not in text and '### Lessons applied' not in text
 
 
-def test_routing_file_that_requires_proposals_carries_lessons_and_says_why(sandbox, tool):
-    (sandbox[0] / 'routing.md').write_text('lesson-policy: propose\n')
+def test_lesson_routing_that_requires_proposals_carries_lessons_and_says_why(sandbox, tool):
     path = source(sandbox, PRODUCER, loops=[lesson()])
     configure(sandbox)
+    write_policy(True, 'lesson-policy: propose\n')
     payload = start(sandbox)
     work, = payload['work']
-    assert work['operation'] == 'native_step' and 'routing file' in work['reason']
+    assert work['operation'] == 'native_step' and 'sets lesson-policy: propose' in work['reason']
     run, _ = finish(sandbox, payload, lambda work: {'write_id': work['write_id'], 'status': 'carried'})
     assert run['auto_apply']['lessons'] == 'propose' and path.exists()
 
@@ -572,10 +569,10 @@ def test_delivery_error_reports_the_commit_and_finishes_the_run(sandbox, tool, m
 
 
 def test_malformed_routing_fails_only_lessons_in_act_mode(sandbox, tool):
-    (sandbox[0] / 'routing.md').write_text('lesson-policy: sometimes\n')
     root, extra = knowledge_root(sandbox)
     lesson_path = source(sandbox, PRODUCER, loops=[lesson(), knowledge()])
     configure(sandbox)
+    write_policy(True, 'lesson-policy: sometimes\n')
     args = decisions(sandbox, [dict(rule='R4', destination='lessons'), dict(rule='R4', destination='knowledge')])
     payload = json.loads(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout)
     assert sorted(work['operation'] for work in payload['work']) == ['apply_knowledge', 'native_step']
@@ -598,11 +595,9 @@ def test_unreadable_auto_apply_input_still_writes_a_watch_report(sandbox, tool, 
     source(sandbox, PRODUCER, loops=[lesson()])
     configure(sandbox, mode='watch-only')
     if break_it == 'routing':
-        (sandbox[0] / 'routing.md').write_text('lesson-policy: sometimes\n')
+        write_policy(True, 'lesson-policy: sometimes\n')
     else:
-        config = json.loads(sandbox[2].read_text())
-        config['auto_apply_lessons'] = 'yes'
-        sandbox[2].write_text(json.dumps(config))
+        write_policy('yes')
     args = decisions(sandbox, [dict(rule='R4', destination='lessons')])
     report = Path(command(sandbox, 'run', '--scope', 'all', *args, '--user-profile', str(profile(sandbox))).stdout.strip())
     run = read_run(report)

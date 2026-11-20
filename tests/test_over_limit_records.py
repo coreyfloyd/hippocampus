@@ -7,6 +7,8 @@ import sys
 
 import pytest
 
+from test_auto_apply_lessons import write_policy
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'scripts/lib/checklist.py'
 HARNESS = ROOT / 'skills/slim-harness/scripts/harness.py'
@@ -55,12 +57,12 @@ class Session:
         self.session = session
         home = tmp_path / 'home'
         home.mkdir(exist_ok=True)
-        (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': True} if setting else {}))
-        (tmp_path / 'routing.md').write_text('# Routing\n')
+        (tmp_path / 'config.json').write_text('{}')
+        write_policy(True if setting else None)
         self.profile = tmp_path / 'profile.md'
         self.profile.write_text('```checklist-profile\n' + json.dumps({'name': 'user'}) + '\n```\n')
         self.env = {**os.environ, 'HOME': str(home), 'HIPPOCAMPUS_CONFIG': str(tmp_path / 'config.json'),
-                    'HIPPOCAMPUS_ROUTING': str(tmp_path / 'routing.md'), 'CLAUDE_CODE_ENTRYPOINT': 'cli',
+                    'CLAUDE_CODE_ENTRYPOINT': 'cli',
                     'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger'),
                     'HANDOFF_PATH': str(tmp_path / f'{session}-handoff.json'),
                     'HANDOFF_STATE_DIR': str(tmp_path / 'state'), 'CHECKLIST_STATE_DIR': str(tmp_path / 'checklist'),
@@ -219,13 +221,13 @@ def test_with_the_setting_off_nothing_is_recorded_and_the_blocks_are_unchanged(t
 
 
 
-def test_a_routing_file_that_requires_proposals_records_nothing(tmp_path, tool):
+def test_lesson_routing_that_requires_proposals_records_nothing(tmp_path, tool):
     target = rules_file(repository(tmp_path) / 'AGENTS.md')
     session = Session(tmp_path, tool, 'first')
-    (tmp_path / 'routing.md').write_text('lesson-policy: propose\n')
+    write_policy(True, 'lesson-policy: propose\n')
     result = session.run('record-over-limit', '--measure', session.slim_helper('measure', target),
                          '--duplicates', session.slim_helper('duplicates', target))
-    assert result.returncode == 1 and 'requires it' in result.stderr
+    assert result.returncode == 1 and 'sets lesson-policy: propose' in result.stderr
     assert not (tmp_path / 'ledger/over-limit-records.json').exists()
 
 

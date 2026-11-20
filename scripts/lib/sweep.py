@@ -1533,7 +1533,7 @@ def auto_apply_for(discovery):
         reason = 'auto-apply: ' + str(exc)
     discovery['errors'].append({'path': 'auto-apply', 'reason': reason})
     try:
-        # The routing file governs lessons only, so a readable setting still captures knowledge.
+        # The lesson routing governs lessons only, so a readable setting still captures knowledge.
         knowledge = 'apply' if checklist.lessons.enabled(handoff.read_config()) else 'failed'
     except (OSError, ValueError):
         knowledge = 'failed'

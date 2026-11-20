@@ -176,19 +176,19 @@ capture error is `failed`, with its error. A refusal is `declined`, with its rea
 ### 3. Fold in lessons — native `lessons`
 
 Always run this package's improve-harness, presenting carried lessons first and
-then current lessons. Read its routing file to decide destinations; profiles
-cannot replace this step. With no lessons, report `nothing`. Failed or declined
+then current lessons. Its lesson routing in the knowledge profile decides destinations;
+profiles cannot replace this step. With no lessons, report `nothing`. Failed or declined
 work reports its error or reason and keeps every unsaved lesson.
 
 With the auto-apply setting on (`plan` returns `auto_apply`), the lessons step
 applies instead of waiting, in attended and unattended runs alike: follow
 improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, the
-routing file forbids applying: run this step as if the setting were off, including
+lesson routing forbids applying: run this step as if the setting were off, including
 the over-limit and duplicate-rule blocks, which are not recorded.
 
 Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,
-or a lesson applied or written to the routing file's proposal destination.
+or a lesson applied or written to the lesson routing's proposal destination.
 Presentation, approval requests, and ask delivery alone are not capture receipts.
 Only an interactive session runs these steps and their commands (`apply-knowledge`,
 `apply-lessons`, `record-over-limit`); a sweep or scheduled session never does, and the
@@ -214,8 +214,8 @@ python3 <checklist-module> deliver-lessons --user-profile <user-profile> \
 Keep its output as `<remaining-items>`. A commit the bound command pushed needs
 nothing more. Otherwise the module pushes the branch; when the remote moved it merges
 the remote's commits and pushes again, once. A repository that refuses a direct push,
-or that the routing file's `lesson-pull-requests` names, gets the wrap's lessons for that
-checkout on one lesson branch cut from the remote, one commit each, and the routing file's
+or that the lesson routing's `lesson-pull-requests` names, gets the wrap's lessons for that
+checkout on one lesson branch cut from the remote, one commit each, and the lesson routing's
 `lesson-pull-request-command` opens one pull request that merges through the repository's
 checks; the local commit keeps a delivered mark so later wraps do not count it as unpushed.
 A lesson still not pushed is `committed, not pushed` with its error. With
@@ -495,7 +495,7 @@ persist retain their existing bound-write failure rule.
 With the auto-apply setting on, print the output's `lessons`: every applied lesson with
 its target, change, commit, branch and delivery (naming any pull request, and the
 default branch when the lesson is on another), every dropped lesson with its reason, and
-every failed lesson with its error. When the routing file forbids applying, print its
+every failed lesson with its error. When the lesson routing forbids applying, print its
 `reason` and `carried` lessons instead. Asks raised appear in the final `asks` list. A
 lesson `committed, not pushed` counts under the saved line's rules: not saved with
 persist bound, `Not pushed:` with it unbound.

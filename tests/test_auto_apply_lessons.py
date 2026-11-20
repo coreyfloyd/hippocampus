@@ -58,8 +58,18 @@ def row(index, target, new='Run the suite first.\n', **changes):
             'evidence': 'A generator reported ready with failing tests.', 'edits': [{'new': new}], **changes}
 
 
+def write_policy(auto_apply=None, routing=None):
+    """The controlled knowledge profile's policy, under the test's isolated XDG_CONFIG_HOME."""
+    path = Path(os.environ['XDG_CONFIG_HOME']) / 'hippocampus/profile.md'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    setting = '' if auto_apply is None else f'auto_apply: {str(auto_apply).lower()}\n'
+    section = '' if routing is None else f'\n## Lesson routing\n\n{routing}'
+    path.write_text(f'---\nprofile_version: 4\n{setting}---\n{section}')
+    return path
+
+
 class Wrap:
-    """One wrap's environment: profile, configuration, routing and the module's commands."""
+    """One wrap's environment: profile, knowledge policy and the module's commands."""
 
     def __init__(self, tmp_path, tool, setting=True, persist=True, ask=True, routing=None, session=SESSION):
         self.tmp = tmp_path
@@ -67,9 +77,8 @@ class Wrap:
         self.session = session
         self.home = tmp_path / 'home'
         self.home.mkdir(exist_ok=True)
-        config = {'auto_apply_lessons': True} if setting else {}
-        (tmp_path / 'config.json').write_text(json.dumps(config))
-        (tmp_path / 'routing.md').write_text(routing or '# Routing\n')
+        (tmp_path / 'config.json').write_text('{}')
+        self.policy = write_policy(True if setting else None, routing)
         profile = {'name': 'user'}
         if persist:
             profile['bindings'] = {'persist': {'command': '/persist', 'consumes': []}}
@@ -79,7 +88,7 @@ class Wrap:
         self.profile.write_text('```checklist-profile\n' + json.dumps(profile) + '\n```\n')
         self.handoff_path = tmp_path / 'handoff.json'
         self.env = {**os.environ, 'HOME': str(self.home), 'HIPPOCAMPUS_CONFIG': str(tmp_path / 'config.json'),
-                    'HIPPOCAMPUS_ROUTING': str(tmp_path / 'routing.md'), 'CLAUDE_CODE_ENTRYPOINT': 'cli',
+                    'CLAUDE_CODE_ENTRYPOINT': 'cli',
                     'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger'), 'HANDOFF_PATH': str(self.handoff_path),
                     'HANDOFF_STATE_DIR': str(tmp_path / 'state'), 'CHECKLIST_STATE_DIR': str(tmp_path / 'checklist'),
                     'HANDOFF_COMPACT_STATE_DIR': str(tmp_path / 'compact'), 'CLAUDE_CONFIG_DIR': str(tmp_path / 'claude'),
@@ -566,7 +575,7 @@ def test_refused_push_with_no_pull_request_command_is_reported_not_saved(tmp_pat
     assert check.returncode == 1
 
 
-def test_routing_file_requires_a_pull_request_for_a_repository(tmp_path, tool):
+def test_lesson_routing_requires_a_pull_request_for_a_repository(tmp_path, tool):
     checkout, remote, _ = clone_pair(tmp_path)
     _, command = pull_request_command(tmp_path)
     routing = f'{command}lesson-pull-requests:\n  - {tmp_path.name}/rules\n'
@@ -681,7 +690,7 @@ def test_plan_runs_auto_apply_unattended_too(tmp_path, tool):
     assert json.loads(result.stdout)['auto_apply'] == {'lessons': 'apply', 'knowledge': 'apply'}
 
 
-def test_routing_file_that_requires_proposals_wins_and_the_report_says_so(tmp_path, tool):
+def test_lesson_routing_that_requires_proposals_wins_and_the_report_says_so(tmp_path, tool):
     checkout, _, _ = clone_pair(tmp_path)
     wrap = Wrap(tmp_path, tool, routing='lesson-policy: propose\n')
     assert wrap.plan()['auto_apply']['lessons'] == 'propose'
@@ -694,7 +703,8 @@ def test_routing_file_that_requires_proposals_wins_and_the_report_says_so(tmp_pa
                                             'choices': item['choices']}])
     report, check, handoff = wrap.finish(filed)
     assert check.returncode == 0, check.stderr
-    assert 'routing file' in report['lessons']['reason'] and 'requires it' in report['lessons']['reason']
+    assert report['lessons']['reason'] == (f'lessons were carried because the knowledge profile {wrap.policy} '
+                                           'sets lesson-policy: propose')
     assert report['lessons']['carried'] == [item['context']]
     assert handoff['resume']['open_loops'] == [item]
 
@@ -721,9 +731,26 @@ def test_setting_off_changes_nothing(tmp_path, tool):
 
 def test_a_mistyped_setting_is_an_error(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
-    (tmp_path / 'config.json').write_text('{"auto_apply_lessons": "yes"}')
+    write_policy('yes')
     result = wrap.run('plan', '--session-id', SESSION)
-    assert result.returncode == 1 and 'must be true or false' in result.stderr
+    assert result.returncode == 1 and 'auto_apply must be true or false' in result.stderr
+
+
+@pytest.mark.parametrize('retired', ['config', 'routing file', 'environment'])
+def test_a_retired_policy_owner_is_refused_until_setup_moves_it(tmp_path, tool, retired):
+    wrap = Wrap(tmp_path, tool)
+    if retired == 'config':
+        (tmp_path / 'config.json').write_text('{"auto_apply_lessons": true}')
+    elif retired == 'routing file':
+        (wrap.policy.parent / 'routing.md').write_text('lesson-policy: apply\n')
+    else:
+        wrap.env['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'elsewhere.md')
+    owners = [tmp_path / 'config.json', wrap.policy, wrap.policy.parent / 'routing.md']
+    before = [path.read_bytes() if path.exists() else None for path in owners]
+    result = wrap.run('plan', '--session-id', SESSION)
+    assert result.returncode == 1 and 'Traceback' not in result.stderr
+    assert 'knowledge profile' in result.stderr and 'run hippocampus-set-up' in result.stderr
+    assert [path.read_bytes() if path.exists() else None for path in owners] == before  # No silent migration.
 
 
 def load_lessons_module():
@@ -761,7 +788,7 @@ def test_a_malformed_edit_is_rejected_before_anything_is_applied(tmp_path, tool)
     assert 'Traceback' not in result.stderr and git(checkout, 'rev-parse', 'HEAD') == head
 
 
-def test_a_malformed_routing_file_is_an_error_not_a_traceback(tmp_path, tool):
+def test_a_malformed_lesson_routing_is_an_error_not_a_traceback(tmp_path, tool):
     wrap = Wrap(tmp_path, tool, routing='lesson-pull-request-command: "unterminated\n')
     plan = wrap.run('plan', '--session-id', SESSION)
     assert plan.returncode == 1 and 'Traceback' not in plan.stderr and plan.stdout == ''
@@ -787,23 +814,14 @@ def test_a_malformed_routing_file_is_an_error_not_a_traceback(tmp_path, tool):
 
 
 def test_routing_keys_allow_comments_and_ignore_fenced_examples(tmp_path, tool):
-    routing = ('# Routing\n\n```\nlesson-policy: propose\n```\n\n'
+    routing = ('### Routing\n\n```\nlesson-policy: propose\n```\n\n'
                'lesson-policy: apply  # applied at wrap\n'
                'lesson-pull-requests:\n  - Owner/One  # protected\n  - "owner/two"  # quoted, with a comment\n\n'
                '- Produced surfaces are listed below, not a repository\n'
                'Other prose: not a key\n  - owner/not-listed\n')
     wrap = Wrap(tmp_path, tool, routing=routing)
     assert wrap.plan()['auto_apply']['lessons'] == 'apply'
-    import os
-    previous = os.environ.get('HIPPOCAMPUS_ROUTING')
-    os.environ['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'routing.md')
-    try:
-        rules = load_lessons_module().routing_rules()
-    finally:
-        if previous is None:
-            os.environ.pop('HIPPOCAMPUS_ROUTING')
-        else:
-            os.environ['HIPPOCAMPUS_ROUTING'] = previous
+    rules = load_lessons_module().routing_rules()
     assert rules['pull_requests'] == ['owner/one', 'owner/two'] and rules['propose'] is False
 
 
@@ -876,20 +894,6 @@ def test_an_applied_lesson_filed_under_another_rule_fails_alone(tmp_path, tool):
     assert [item['context'] for item in output['resume']['open_loops']] == [data['resume']['open_loops'][0]['context']]
 
 
-def test_config_get_prints_the_auto_apply_setting(tmp_path, tool):
-    wrap = Wrap(tmp_path, tool)
-
-    def get():
-        return subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'config-get', 'auto_apply_lessons'],
-                              text=True, capture_output=True, env=wrap.env)
-    assert get().stdout == 'true\n'
-    (tmp_path / 'config.json').write_text('{}')
-    assert get().stdout == 'false\n'
-    (tmp_path / 'config.json').write_text('{"auto_apply_lessons": "yes"}')
-    mistyped = get()
-    assert mistyped.returncode == 2 and 'must be true or false' in mistyped.stderr
-
-
 @pytest.mark.parametrize('ignored', [False, True])
 def test_an_untracked_target_in_a_repository_is_written_without_a_commit(tmp_path, tool, ignored):
     checkout, _, _ = clone_pair(tmp_path)
@@ -935,16 +939,8 @@ def test_a_lesson_creating_a_new_file_in_a_repository_is_committed_unless_ignore
 
 
 def routing_rules_for(tmp_path, text):
-    (tmp_path / 'routing.md').write_text(text)
-    previous = os.environ.get('HIPPOCAMPUS_ROUTING')
-    os.environ['HIPPOCAMPUS_ROUTING'] = str(tmp_path / 'routing.md')
-    try:
-        return load_lessons_module().routing_rules()
-    finally:
-        if previous is None:
-            os.environ.pop('HIPPOCAMPUS_ROUTING')
-        else:
-            os.environ['HIPPOCAMPUS_ROUTING'] = previous
+    write_policy(routing=text)
+    return load_lessons_module().routing_rules()
 
 
 @pytest.mark.parametrize('entries', ['\t- Owner/One\n\t- owner/two\n', '- Owner/One\n- owner/two\n',

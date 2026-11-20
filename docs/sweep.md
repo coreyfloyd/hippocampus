@@ -203,7 +203,7 @@ A run with no work still writes a report with `nothing_to_do: true` and
 
 ## Apply lessons and knowledge
 
-With `"auto_apply_lessons": true` in the hippocampus configuration, a sweep stops
+With `auto_apply: true` in the knowledge profile, a sweep stops
 carrying lessons and knowledge forever. It uses the same rules as a wrap:
 
 - Watch-only applies nothing. The report's `would_apply` lists what act mode would apply, and
@@ -234,8 +234,8 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
 - Undo leaves this run's applied lessons and captures in place and lists them, with their
   commits, in the undo report. Revert a lesson commit through the repository's normal delivery.
 
-A routing file's `lesson-policy: propose` still wins for lessons: they are carried and
-the row's reason says so. An unreadable routing file stops only lesson applying and is listed
+The lesson routing's `lesson-policy: propose` still wins for lessons: they are carried and
+the row's reason says so. An unreadable lesson routing stops only lesson applying and is listed
 in the report's errors. With the setting off, a sweep carries both as before. The
 [plan/results contract](../INTERFACE.md#12-sweep-plan-and-results-contract) has the fields.
 

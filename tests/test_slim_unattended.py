@@ -7,6 +7,7 @@ import sys
 
 import pytest
 
+from test_auto_apply_lessons import write_policy
 from test_over_limit_records import Session, git
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +77,7 @@ class Slim:
         self.count = 0
 
     def configure(self):
-        (self.tmp / 'config.json').write_text(json.dumps({'auto_apply_lessons': True, 'slim_checkouts': {
+        (self.tmp / 'config.json').write_text(json.dumps({'slim_checkouts': {
             remote.slug: str(remote.checkout) for remote in self.remotes}}))
 
     def wrap(self, session='wrap'):
@@ -392,8 +393,8 @@ def test_edits_in_two_repositories_make_one_branch_each_under_one_ask(tmp_path, 
 
 
 def routing(tmp_path, source, surface):
-    (tmp_path / 'routing.md').write_text(f'# Routing\n\nProduced surfaces:\n  {source}:\n    - path: {surface}\n'
-                                         '      regeneration command: compose --refresh\n')
+    write_policy(True, f'Produced surfaces:\n  {source}:\n    - path: {surface}\n'
+                       '      regeneration command: compose --refresh\n')
 
 
 def test_an_unverified_surface_produces_no_branch_and_an_ordinary_ask(tmp_path, tool, remote):
@@ -442,7 +443,7 @@ def test_a_repository_with_no_checkout_is_reported_and_waits(tmp_path, tool, rem
     remote.publish({'AGENTS.md': text(308)})
     slim = Slim(tmp_path, tool, remote)
     records = slim.records(remote.checkout / 'AGENTS.md')
-    (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': True}))
+    (tmp_path / 'config.json').write_text('{}')
     run = slim.plan(records)
     assert run['queued'] == 0
     assert 'slim_checkouts' in run['unreachable'][0]['reason']
@@ -452,11 +453,10 @@ def test_the_setting_off_or_a_propose_policy_refuses(tmp_path, tool, remote):
     remote.publish({'AGENTS.md': text(308)})
     slim = Slim(tmp_path, tool, remote)
     records = slim.records(remote.checkout / 'AGENTS.md')
-    (tmp_path / 'routing.md').write_text('# Routing\n\nlesson-policy: propose\n')
+    write_policy(True, 'lesson-policy: propose\n')
     refused = slim.run('plan', '--records', records)
-    assert refused.returncode == 1 and 'requires it' in refused.stderr
-    (tmp_path / 'routing.md').write_text('# Routing\n')
-    (tmp_path / 'config.json').write_text('{}')
+    assert refused.returncode == 1 and 'sets lesson-policy: propose' in refused.stderr
+    write_policy(None)
     refused = slim.run('plan', '--records', records)
     assert refused.returncode == 1 and 'the auto-apply setting is off' in refused.stderr
     assert not (tmp_path / 'ledger/slim-state.json').exists()
@@ -468,10 +468,9 @@ def test_the_attended_review_still_refuses_to_run_unattended(tmp_path, setting):
     target.write_text(text(308))
     request = tmp_path / 'request.json'
     request.write_text(json.dumps({'path': str(target), 'before': HEADING, 'after': '## Other\n', 'mode': 'unattended'}))
-    config = tmp_path / 'config.json'
-    config.write_text(json.dumps({'auto_apply_lessons': setting}))
+    write_policy(setting)
     result = subprocess.run([sys.executable, str(HARNESS), 'edit', str(request), str(tmp_path / 'journal.json')],
-                            text=True, capture_output=True, env={**os.environ, 'HIPPOCAMPUS_CONFIG': str(config)})
+                            text=True, capture_output=True)
     assert json.loads(result.stdout)['needs_user'] is True
     assert target.read_text() == text(308)
 
@@ -922,8 +921,7 @@ def test_a_duplicate_in_a_repository_with_no_checkout_is_reported_at_plan_time(t
     records = slim.records(remote.checkout / 'AGENTS.md', other.checkout / 'core.md')
     [entry] = [row for row in json.loads(records.read_text())['records'] if row['path'] == 'AGENTS.md']
     assert {span['repository'] for finding in entry['duplicates'] for span in finding['spans']} >= {'acme/shared'}
-    (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': True, 'slim_checkouts': {
-        REPOSITORY: str(remote.checkout)}}))
+    (tmp_path / 'config.json').write_text(json.dumps({'slim_checkouts': {REPOSITORY: str(remote.checkout)}}))
     run = slim.plan(records)
     assert run['queued'] == 0
     row = next(row for row in run['unreachable'] if row['path'] == 'AGENTS.md')
@@ -1097,12 +1095,11 @@ def test_workspace_refuses_with_the_setting_off(tmp_path, remote):
     slim = Slim(tmp_path, 'claude', remote, other)
     run = slim.plan(slim.records(remote.checkout / 'AGENTS.md'))
     slim.begin(run)
-    (tmp_path / 'config.json').write_text(json.dumps({'auto_apply_lessons': False, 'slim_checkouts': {
-        REPOSITORY: str(remote.checkout), 'acme/shared': str(other.checkout)}}))
+    write_policy(False)
     refused = slim.run('workspace', '--run', run['run_id'], '--repository', 'acme/shared')
     assert refused.returncode == 1 and 'the auto-apply setting is off' in refused.stderr
     assert not list(tmp_path.glob('**/core.md.clone')), 'nothing was cloned'
-    slim.configure()
+    write_policy(True)
     assert slim.ok('workspace', '--run', run['run_id'], '--repository', 'acme/shared')['repository'] == 'acme/shared'
 
 

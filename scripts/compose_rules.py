@@ -135,11 +135,88 @@ def load_config(path: pathlib.Path) -> tuple[pathlib.Path, list[Target]]:
     return root, targets
 
 
-def routing_path() -> pathlib.Path:
+POLICY_HEADING = "## Lesson routing"
+
+
+@dataclass
+class Policy:
+    """The knowledge profile's policy: the auto-apply setting and its lesson routing section."""
+    path: pathlib.Path
+    auto_apply: bool | None  # None when the profile does not declare it, which means off
+    routing: list[str] | None  # the Lesson routing section's lines; None uses the default table
+
+
+def config_directory() -> pathlib.Path:
+    return pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or pathlib.Path.home() / ".config") / "hippocampus"
+
+
+def profile_path() -> pathlib.Path:
+    return config_directory() / "profile.md"
+
+
+def retired_routing() -> pathlib.Path | None:
+    """The standalone routing file lesson routing moved out of, while it is still configured."""
     configured = os.environ.get("HIPPOCAMPUS_ROUTING")
-    if configured:
-        return pathlib.Path(os.path.expandvars(configured)).expanduser()
-    return pathlib.Path(os.environ.get("XDG_CONFIG_HOME", str(pathlib.Path.home() / ".config"))) / "hippocampus" / "routing.md"
+    path = pathlib.Path(os.path.expandvars(configured)).expanduser() if configured else config_directory() / "routing.md"
+    return path if configured or path.exists() or path.is_symlink() else None
+
+
+def load_policy(path: pathlib.Path | None = None) -> Policy:
+    """Read the profile's policy; no profile means the setting is off and the default table applies.
+
+    The section runs from its heading to the next level-one or level-two heading
+    outside a fenced block. Its own headings start at level three.
+    """
+    path = pathlib.Path(path) if path else profile_path()
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        if path.is_symlink():
+            fail(f"knowledge profile: broken symlink {path}")
+        return Policy(path, None, None)
+    except (OSError, UnicodeError) as exc:
+        fail(f"knowledge profile {path}: {exc}")
+    if not lines or lines[0] != "---" or "---" not in lines[1:]:
+        fail(f"knowledge profile {path}: missing YAML frontmatter")
+    end = lines.index("---", 1)
+    auto_apply = None
+    for line in lines[1:end]:
+        key, separator, value = line.partition(":")
+        if separator and key == "auto_apply":
+            if auto_apply is not None:
+                fail(f"knowledge profile {path}: duplicate auto_apply")
+            if value.strip() not in ("true", "false"):
+                fail(f"knowledge profile {path}: auto_apply must be true or false")
+            auto_apply = value.strip() == "true"
+    sections = policy_sections(lines, end + 1)
+    if len(sections) > 1:
+        fail(f"knowledge profile {path}: duplicate {POLICY_HEADING} section")
+    routing = [lines[index] for index in range(sections[0][0] + 1, sections[0][1])] if sections else None
+    return Policy(path, auto_apply, routing)
+
+
+def policy_sections(lines: list[str], start: int) -> list[tuple[int, int]]:
+    """Each Lesson routing section's line range, heading included, in a profile's body."""
+    sections, fenced = [], False
+    for index in range(start, len(lines)):
+        line = lines[index].rstrip("\n")
+        if not fenced and re.match(r"#{1,2}\s", line):
+            if sections and sections[-1][1] is None:
+                sections[-1] = (sections[-1][0], index)
+            if line.rstrip() == POLICY_HEADING:
+                sections.append((index, None))
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+    return [(begin, len(lines) if stop is None else stop) for begin, stop in sections]
+
+
+def lesson_routing(policy: Policy) -> list[str]:
+    """The section's lines, refused while the retired routing file is still configured."""
+    retired = retired_routing()
+    if retired is not None:
+        fail(f"lesson routing moved to the knowledge profile's {POLICY_HEADING} section; "
+             f"run hippocampus-set-up to move {retired} into {policy.path}")
+    return policy.routing or []
 
 
 def routing_scalar(value: str) -> str:
@@ -164,21 +241,17 @@ def resolved_routing_path(value: str, directory: pathlib.Path) -> pathlib.Path:
     return (path if path.is_absolute() else directory / path).resolve()
 
 
-def load_surfaces(path: pathlib.Path) -> dict[pathlib.Path, list[dict[str, str]]]:
+SURFACE_SOURCE = re.compile(r"  (.+):(?: *(\[\]))? *")
+
+
+def parse_surfaces(lines: list[str], directory: pathlib.Path, label: str) -> dict[pathlib.Path, list[dict[str, str]]]:
     """Read a Produced surfaces section, without executing its commands.
 
     The documented block form uses two spaces for sources, four for list
     entries, and six for regeneration commands. Other routing prose is ignored.
-    Malformed entries fail closed rather than silently becoming an empty list.
+    Relative paths resolve from ``directory``. Malformed entries fail closed
+    rather than silently becoming an empty list.
     """
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        if path.is_symlink():
-            fail(f"routing: broken symlink {path}")
-        return {}
-    except (OSError, UnicodeError) as exc:
-        fail(f"routing {path}: {exc}")
     mapping: dict[pathlib.Path, list[dict[str, str]]] = {}
     active = False
     found = False
@@ -196,28 +269,32 @@ def load_surfaces(path: pathlib.Path) -> dict[pathlib.Path, list[dict[str, str]]
         if not line.startswith(" "):
             active = False
             continue
-        match = re.fullmatch(r"  (.+):(?: *(\[\]))? *", line)
+        match = SURFACE_SOURCE.fullmatch(line)
         if match:
-            source = resolved_routing_path(routing_scalar(match[1]), path.parent)
+            source = resolved_routing_path(routing_scalar(match[1]), directory)
             if source in mapping:
                 fail(f"routing: duplicate source {source}")
             mapping[source] = []
             empty = match[2] is not None
             surface = None
         elif line.startswith("    - path:") and source is not None and not empty:
-            surface = {"path": str(resolved_routing_path(routing_scalar(line[11:]), path.parent))}
+            surface = {"path": str(resolved_routing_path(routing_scalar(line[11:]), directory))}
             mapping[source].append(surface)
         elif line.startswith("      regeneration command:") and surface is not None:
             if "regeneration command" in surface:
                 fail("routing: duplicate regeneration command")
             surface["regeneration command"] = routing_scalar(line.split(":", 1)[1])
         else:
-            fail(f"routing {path}: invalid Produced surfaces entry: {line.strip()}")
+            fail(f"routing {label}: invalid Produced surfaces entry: {line.strip()}")
     for source, surfaces in mapping.items():
         for surface in surfaces:
             if "regeneration command" not in surface:
                 fail(f"routing: missing regeneration command for {source}: {surface['path']}")
     return mapping
+
+
+def load_surfaces(policy: Policy) -> dict[pathlib.Path, list[dict[str, str]]]:
+    return parse_surfaces(lesson_routing(policy), policy.path.parent, str(policy.path))
 
 
 LESSON_KEYS = ("lesson-policy", "lesson-pull-request-command", "lesson-pull-requests")
@@ -236,7 +313,7 @@ def _without_comment(value: str) -> str:
     return re.split(r"\s+#", value, maxsplit=1)[0].strip()
 
 
-def load_lesson_delivery(path: pathlib.Path) -> dict:
+def parse_lesson_delivery(lines: list[str], label: str) -> dict:
     """Read the lesson delivery keys in the routing contract's YAML subset.
 
     Each key is an unindented `key: value` line outside fenced code blocks;
@@ -248,14 +325,6 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
     Produced surfaces.
     """
     rules: dict = {"policy": None, "command": None, "pull_requests": []}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        if path.is_symlink():
-            fail(f"routing: broken symlink {path}")
-        return rules
-    except (OSError, UnicodeError) as exc:
-        fail(f"routing {path}: {exc}")
     fenced = False
     listing = False
     seen: set = set()
@@ -272,7 +341,7 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
         if listing and line.lstrip().startswith("-"):
             entry = re.fullmatch(r"\s*-\s+(.+)", line)
             if not entry:
-                fail(f"routing {path}: invalid lesson-pull-requests entry: {line.strip()}")
+                fail(f"routing {label}: invalid lesson-pull-requests entry: {line.strip()}")
             rules["pull_requests"].append(routing_scalar(_without_comment(entry[1])).lower())
             continue
         listing = False
@@ -282,24 +351,28 @@ def load_lesson_delivery(path: pathlib.Path) -> dict:
         if not separator or key not in LESSON_KEYS:
             continue
         if key in seen:
-            fail(f"routing {path}: duplicate {key}")
+            fail(f"routing {label}: duplicate {key}")
         seen.add(key)
         value = _without_comment(value)
         if key == "lesson-pull-requests":
             if value:
-                fail(f"routing {path}: lesson-pull-requests takes `- owner/name` lines, not a value")
+                fail(f"routing {label}: lesson-pull-requests takes `- owner/name` lines, not a value")
             listing = True
         elif key == "lesson-policy":
             if value not in ("apply", "propose"):
-                fail(f"routing {path}: lesson-policy must be apply or propose")
+                fail(f"routing {label}: lesson-policy must be apply or propose")
             rules["policy"] = value
         else:
             rules["command"] = routing_scalar(value)
     return rules
 
 
-def surfaces_for(path: pathlib.Path, routing: pathlib.Path) -> dict:
-    mapping = load_surfaces(routing)
+def load_lesson_delivery(policy: Policy) -> dict:
+    return parse_lesson_delivery(lesson_routing(policy), str(policy.path))
+
+
+def surfaces_for(path: pathlib.Path, policy: Policy) -> dict:
+    mapping = load_surfaces(policy)
     requested = resolved_routing_path(str(path), pathlib.Path.cwd())
     # Reverse lookup comes first: even a mapped source may itself be generated.
     sources = [source for source, surfaces in mapping.items()
@@ -511,7 +584,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("compose", "refresh", "check", "surfaces"), nargs="?", default="compose")
     parser.add_argument("--config", type=pathlib.Path, help="JSON file listing explicit rule targets")
-    parser.add_argument("--routing", type=pathlib.Path, help="Produced surfaces routing file")
+    parser.add_argument("--profile", type=pathlib.Path, help="knowledge profile holding the Lesson routing section")
     parser.add_argument("--source", type=pathlib.Path, help="source or generated surface to trace")
     args = parser.parse_args()
     if args.command == "surfaces" and args.source is None:
@@ -520,7 +593,7 @@ def main() -> None:
         parser.error(f"{args.command} requires --config")
     try:
         if args.command == "surfaces":
-            print(json.dumps(surfaces_for(args.source, args.routing or routing_path())))
+            print(json.dumps(surfaces_for(args.source, load_policy(args.profile))))
         else:
             compose(args.config, check=args.command == "check")
     except ComposeError as exc:

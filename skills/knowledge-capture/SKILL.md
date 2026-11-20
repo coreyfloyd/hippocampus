@@ -23,7 +23,7 @@ For calls, meetings, supplied transcripts, or connected recordings, read [meetin
 ## Auto-apply
 
 This section applies only when the checklist's `plan` returns `auto_apply.knowledge: apply` (the
-`auto_apply_lessons` setting is on), in attended and unattended runs alike. Meeting mode, research
+knowledge profile's `auto_apply` setting is on), in attended and unattended runs alike. Meeting mode, research
 workflows and `absorb` are unchanged. With the setting off, follow the Procedure above exactly.
 
 Run steps 1 to 5 as above, but do not wait for approval of these rows:

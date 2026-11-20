@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Move lesson routing and the auto-apply setting into the knowledge profile, with approval.
+
+The knowledge profile is the one policy owner: its ``auto_apply`` field and its
+``## Lesson routing`` section. ``plan`` shows the exact move from the retired
+owners (the standalone routing file and the configuration's
+``auto_apply_lessons``), or a requested change to the setting, and writes
+nothing. ``apply`` recomputes the plan, refuses a changed plan or an unresolved
+conflict, then writes the profile and retires the old owners. Nothing here runs
+at session start.
+"""
+import argparse
+import contextlib
+import difflib
+import hashlib
+import importlib.util
+import io
+import json
+import os
+import pathlib
+import re
+import sys
+import tempfile
+
+HERE = pathlib.Path(__file__).resolve().parent
+
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+compose = _load("policy_compose_rules", HERE / "compose_rules.py")
+reader = _load("policy_validate_profile", HERE / "validate_profile.py")
+handoff = _load("policy_handoff", HERE / "lib" / "handoff.py")
+
+RETIRED_SETTING = "auto_apply_lessons"
+SURFACE_PATH = re.compile(r"(    - path:)(.*)")
+HEADING = re.compile(r"(#{1,6})(\s.*)")
+
+
+def digest(content):
+    return "absent" if content is None else hashlib.sha256(content).hexdigest()
+
+
+def read_bytes(path):
+    return path.read_bytes() if path.exists() else None
+
+
+def fixed_path(raw, old):
+    """A Produced surfaces path as written, or made absolute when it was relative to ``old``."""
+    value = compose.routing_scalar(raw)
+    if pathlib.Path(os.path.expandvars(value)).expanduser().is_absolute():
+        return raw.strip()
+    return json.dumps(str(compose.resolved_routing_path(value, old)))
+
+
+def moved_routing(text, old, rebase):
+    """The routing file's lines as a profile section: headings two levels down, paths kept effective."""
+    lines, fenced, active = [], False, False
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        if line.strip() == "Produced surfaces:":
+            active = True
+        elif active and line.strip() and not line.startswith(" ") and not line.lstrip().startswith("#"):
+            active = False
+        heading = None if fenced else HEADING.fullmatch(line)
+        if heading:
+            line = "#" * min(len(heading[1]) + 2, 6) + heading[2]
+        elif active and rebase:
+            source = compose.SURFACE_SOURCE.fullmatch(line)
+            surface = SURFACE_PATH.fullmatch(line)
+            if source:
+                line = f"  {fixed_path(source[1], old)}:" + (" []" if source[2] else "")
+            elif surface:
+                line = f"{surface[1]} {fixed_path(surface[2], old)}"
+        lines.append(line)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    return lines
+
+
+def effective(lines, directory, label):
+    """What a routing text decides: delivery keys and every produced surface, fully resolved."""
+    surfaces = compose.parse_surfaces(lines, directory, label)
+    return {"delivery": compose.parse_lesson_delivery(lines, label),
+            "surfaces": {str(source): rows for source, rows in sorted(surfaces.items())}}
+
+
+def nonblank(lines):
+    return [line for line in lines if line.strip()]
+
+
+def frontmatter_end(lines):
+    return lines.index("---\n" if "---\n" in lines[1:] else "---", 1)
+
+
+def with_setting(text, value):
+    lines = text.splitlines(keepends=True)
+    end = frontmatter_end(lines)
+    row = f"auto_apply: {'true' if value else 'false'}\n"
+    for index in range(1, end):
+        if lines[index].partition(":")[0] == "auto_apply" and ":" in lines[index]:
+            lines[index] = row
+            return "".join(lines)
+    return "".join([*lines[:end], row, *lines[end:]])
+
+
+def with_routing(text, routing):
+    lines = text.splitlines(keepends=True)
+    block = [compose.POLICY_HEADING + "\n", "\n", *(line + "\n" for line in routing)]
+    spans = compose.policy_sections(lines, frontmatter_end(lines) + 1)
+    if spans:
+        span = spans[0]
+        following = ["\n"] if span[1] < len(lines) else []
+        return "".join([*lines[:span[0]], *block, *following, *lines[span[1]:]])
+    body = "".join(lines).rstrip("\n")
+    return body + "\n\n" + "".join(block)
+
+
+def validated(candidate_text, profile):
+    """Refuse a proposed profile the validator or the policy reader would reject."""
+    with tempfile.TemporaryDirectory() as temporary:
+        candidate = pathlib.Path(temporary) / "profile.md"
+        candidate.write_text(candidate_text, encoding="utf-8")
+        errors = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(errors):
+                reader.validate(candidate)
+        except SystemExit:
+            raise ValueError(f"{profile}: {errors.getvalue().strip()}") from None
+        policy = compose.load_policy(candidate)
+        return compose.Policy(profile, policy.auto_apply, policy.routing)
+
+
+def plan(profile, auto_apply=None, keep_routing=None):
+    profile = pathlib.Path(profile)
+    if not profile.is_file():
+        raise ValueError(f"no knowledge profile at {profile}; configure the knowledge profile first")
+    original = profile.read_text(encoding="utf-8")
+    current = validated(original, profile)
+    config_file = pathlib.Path(handoff.config_path())
+    config = handoff.read_config()
+    legacy = compose.retired_routing()
+    proposed = original
+    result = {"profile": str(profile), "auto_apply": {"current": bool(current.auto_apply)},
+              "moves": [], "conflicts": [], "removals": [], "manual": [], "notes": []}
+
+    if os.environ.get("HIPPOCAMPUS_ROUTING"):
+        result["manual"].append("unset HIPPOCAMPUS_ROUTING in your shell configuration; the knowledge profile "
+                                "is the only lesson routing owner")
+    if legacy is not None and legacy.is_symlink() and not legacy.exists():
+        result["removals"].append({"kind": "routing", "file": str(legacy),
+                                   "action": "delete the broken link to a retired routing file"})
+    elif legacy is not None and legacy.is_file():
+        legacy_text = legacy.read_text(encoding="utf-8")
+        rebase = legacy.parent.resolve() != profile.parent.resolve()
+        routing = moved_routing(legacy_text, legacy.parent, rebase)
+        before = effective(legacy_text.splitlines(), legacy.parent, str(legacy))
+        same = current.routing is not None and nonblank(current.routing) == nonblank(routing)
+        if current.routing is not None and not same and keep_routing is None:
+            result["conflicts"].append({
+                "setting": "lesson routing",
+                "owners": [{"file": str(legacy), "text": legacy_text},
+                           {"file": f"{profile} {compose.POLICY_HEADING}", "text": "\n".join(current.routing)}],
+                "resolve": "choose which routing to keep (--keep-routing file or --keep-routing profile), "
+                           "or edit one to match the other"})
+        else:
+            if current.routing is None or (not same and keep_routing == "file"):
+                proposed = with_routing(proposed, routing)
+                result["moves"].append({"setting": "lesson routing", "from": str(legacy),
+                                        "to": f"{profile} {compose.POLICY_HEADING}"})
+            after = effective(validated(proposed, profile).routing or [], profile.parent, str(profile))
+            if keep_routing != "profile" and after != before:
+                raise ValueError("the moved lesson routing would change its effective destinations; nothing written")
+            result["removals"].append({"kind": "routing", "file": str(legacy),
+                                       "action": "delete the retired routing file"})
+            if rebase:
+                result["notes"].append(
+                    f"Produced surfaces paths were relative to {legacy.parent}; they are now absolute. Prose "
+                    f"destinations relative to the routing file now read relative to {profile.parent}: "
+                    "review them in profile_diff before approving.")
+
+    if RETIRED_SETTING in config:
+        value = config[RETIRED_SETTING]
+        if type(value) is not bool:
+            raise ValueError(f"hippocampus config {config_file}: {RETIRED_SETTING} must be true or false")
+        if auto_apply is None and current.auto_apply is not None and current.auto_apply != value:
+            result["conflicts"].append({
+                "setting": "auto-apply",
+                "owners": [{"file": str(config_file), "value": value},
+                           {"file": f"{profile} auto_apply", "value": current.auto_apply}],
+                "resolve": "choose the setting with --auto-apply true or --auto-apply false"})
+        else:
+            if auto_apply is None and current.auto_apply is None:
+                auto_apply = value
+            result["removals"].append({"kind": "config", "file": str(config_file),
+                                       "action": f"remove {RETIRED_SETTING}"})
+            result["moves"].append({"setting": "auto-apply", "from": f"{config_file} {RETIRED_SETTING}",
+                                    "to": f"{profile} auto_apply"})
+    if auto_apply is not None and auto_apply != current.auto_apply:
+        proposed = with_setting(proposed, auto_apply)
+    result["auto_apply"]["proposed"] = bool(validated(proposed, profile).auto_apply)
+    result["profile_diff"] = "".join(difflib.unified_diff(
+        original.splitlines(keepends=True), proposed.splitlines(keepends=True), str(profile), str(profile)))
+    result["file_states"] = {str(path): digest(read_bytes(path))
+                             for path in sorted({profile, config_file, *([legacy] if legacy else [])})}
+    payload = json.dumps(result, sort_keys=True)
+    result["approval_fingerprint"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    result["_proposed"] = proposed
+    return result
+
+
+def atomic_write(path, text):
+    mode = path.stat().st_mode & 0o7777 if path.exists() else 0o644
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        handle.write(text)
+    os.chmod(handle.name, mode)
+    os.replace(handle.name, path)
+
+
+def apply(profile, fingerprint, auto_apply=None, keep_routing=None):
+    fresh = plan(profile, auto_apply, keep_routing)
+    if fresh["approval_fingerprint"] != fingerprint:
+        raise ValueError("the approved policy move changed; rerun plan and approve the new fingerprint")
+    if fresh["conflicts"]:
+        raise ValueError("resolve the displayed conflict before the policy moves")
+    profile = pathlib.Path(profile)
+    if fresh["profile_diff"]:
+        atomic_write(profile, fresh["_proposed"])
+    for removal in fresh["removals"]:
+        path = pathlib.Path(removal["file"])
+        if removal["kind"] == "config":
+            config = handoff.read_config()
+            config.pop(RETIRED_SETTING, None)
+            atomic_write(path, json.dumps(config, indent=2) + "\n")
+        else:
+            path.unlink()
+    return fresh
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("plan", "apply"))
+    parser.add_argument("--profile", type=pathlib.Path, default=None, help="knowledge profile (default: the configured one)")
+    parser.add_argument("--auto-apply", choices=("true", "false"), help="the auto-apply setting to record")
+    parser.add_argument("--keep-routing", choices=("file", "profile"), help="resolve a lesson routing conflict")
+    parser.add_argument("--approval-fingerprint", help="fingerprint printed by the approved plan")
+    args = parser.parse_args()
+    profile = args.profile or compose.profile_path()
+    auto_apply = None if args.auto_apply is None else args.auto_apply == "true"
+    try:
+        if args.command == "plan":
+            result = plan(profile, auto_apply, args.keep_routing)
+        else:
+            if not args.approval_fingerprint:
+                parser.error("apply requires --approval-fingerprint from the approved plan")
+            result = apply(profile, args.approval_fingerprint, auto_apply, args.keep_routing)
+    except (OSError, ValueError, compose.ComposeError) as exc:
+        print(f"policy-setup: {exc}", file=sys.stderr)
+        return 1
+    result.pop("_proposed")
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
