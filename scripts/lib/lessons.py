@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 import re
 import shlex
@@ -57,6 +58,7 @@ def _compose_rules() -> Any:
     if _COMPOSE is None:
         spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
         module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
         spec.loader.exec_module(module)
         _COMPOSE = module
     return _COMPOSE

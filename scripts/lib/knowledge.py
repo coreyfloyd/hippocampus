@@ -13,6 +13,7 @@ import copy
 from datetime import datetime
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -38,6 +39,7 @@ def profile_path(explicit: Path | None) -> Path:
 def _script(name: str) -> Any:
     spec = importlib.util.spec_from_file_location(name, Path(__file__).parents[1] / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
     spec.loader.exec_module(module)
     return module
 

@@ -24,6 +24,8 @@ embed complete source bodies; omitted or ``default`` keeps tool-native rendering
 same operation: refresh is the stable entry point for synchronizers.
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
