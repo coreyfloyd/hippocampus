@@ -1,37 +1,31 @@
-# Release candidate: 0.15.8
+# Release candidate: 0.16.0
 
 ## Scope
 
-Package the integrated durable-session changes delivered by [PR257](https://github.com/coreyfloyd/hippocampus/pull/257), including the startup-budget and slimming work in [hippocampus#242](https://github.com/coreyfloyd/hippocampus/issues/242). Runtime source is unchanged from main `b897cbf819340038a0d65ced293c587f6a901cb2`; this preparation changes package version metadata and this release record only.
+Package the setup and policy part of the public-launch work delivered by [PR268](https://github.com/coreyfloyd/hippocampus/pull/268) (epic for [hippocampus#112](https://github.com/coreyfloyd/hippocampus/issues/112)): [hippocampus#217](https://github.com/coreyfloyd/hippocampus/issues/217), [hippocampus#215](https://github.com/coreyfloyd/hippocampus/issues/215), [hippocampus#216](https://github.com/coreyfloyd/hippocampus/issues/216) and the Python 3.9 import fix for [hippocampus#266](https://github.com/coreyfloyd/hippocampus/issues/266). This preparation changes package version metadata and this release record only.
 
-This package release supports the next installed real-input checks. It does not announce the Public launch milestone or claim that pending live acceptance, setup/policy implementation, local lookup or README review is complete.
+This release changes set-up behavior, hence the minor version. It does not announce the Public launch milestone or claim that local lookup or the README review is complete.
 
 ## Included
 
-- Startup budgets with per-directory overrides, usage-evidence section extraction, retained removal journals, recovery and configured-owner ask receipts.
-- Configured durable-agent ownership and stored-owner checks before ask settlement.
-- Approved user-decision filing through configured document integrations and unattended proposals retained as asks.
-- Identity-bound catch-up filing, destination reports and readiness recounts.
-- Durable checkpoints that preserve the running session, retain failures and expose configured scheduler/report integration contracts.
-- Retirement of OpenClaw setup/composition support.
-- The reviewed example/test delivery correction from PR257, without runtime changes.
+- The knowledge profile is the one owner of lesson and knowledge policy: `auto_apply` in profile frontmatter and a `## Lesson routing` section. Custom routing replaces the default table.
+- A set-up step that shows and, on approval, moves the retired lesson routing file, `HIPPOCAMPUS_ROUTING` and the `auto_apply_lessons` setting into the profile; until then wraps refuse auto-apply and say how to finish. Kept as a deliberate migration path for existing files.
+- One required knowledge setup: a knowledge root, compiled wiki and both follow-up destinations. No checklist-only or wiki-disabled finish. A released wiki-disabled profile stays readable and gets an explicit upgrade; declining changes nothing.
+- Rule entry files only for installed tools that need them; the thin preset is recommended for several tools or portable rules; a missing AGENTS.md never makes CLAUDE.md the shared source; nothing is deleted.
+- Setup and wrap modules import on Python 3.9 again.
 
 ## Compatibility and operational boundaries
 
-Claude Code and Codex consume the same package runtime. Released profile readability, installation layout and composer entry points remain supported. Record writes, document destinations, scheduler dispatch and report delivery require the user's configured integrations and their existing approval boundaries. Catch-up readiness remains required before periodic filing is enabled. Installing this release does not configure those integrations, enable a schedule or approve a removal branch.
+Claude Code and Codex consume the same package runtime. Released profile readability, installation layout and composer entry points remain supported. A user with a retired `routing.md`, an exported `HIPPOCAMPUS_ROUTING` or an `auto_apply_lessons` setting sees auto-apply refused until they run set-up and approve the move. Installing this release does not change any profile by itself.
 
-The startup proof retained so far covers a controlled loaded-file set and one Codex removal/ask loop; it does not establish every live startup overhead source. The remaining real-input acceptance belongs to the delivery tickets. This release makes the main runtime available through signed assets for those checks.
-
-Version 0.15.7 was used only for an unpublished local staging. This candidate uses 0.15.8 because its payload differs from that staging; the earlier staged payload remains untouched. No two different 0.15.7 payloads are published.
+Known limits, ticketed: rules set-up (`scripts/rules_setup.py`) still needs Python 3.11 for `tomllib`, as in earlier releases ([hippocampus#266](https://github.com/coreyfloyd/hippocampus/issues/266)); [hippocampus#261](https://github.com/coreyfloyd/hippocampus/issues/261), [#262](https://github.com/coreyfloyd/hippocampus/issues/262), [#263](https://github.com/coreyfloyd/hippocampus/issues/263), [#264](https://github.com/coreyfloyd/hippocampus/issues/264), [#267](https://github.com/coreyfloyd/hippocampus/issues/267).
 
 ## Verification and publication state
 
-The integrated runtime candidate passed independent code/fixture evaluation with its retained conditional follow-ups. PR257's final CI attempt, run `44624650193`, passed on Ubuntu and macOS. The release-preparation head requires its own affected release checks, quick checks, documentation sweep and PR CI before the exact unsigned candidate is frozen. No local full-suite run is authorized; the PR is the full gate.
+Each ticket passed native review and independent evaluation on its exact head; the integrated epic passed independent evaluation (conditional) at 8f731ea, and the Python 3.9 fix was re-checked on the affected tests. PR268 CI run 44841327012 passed on Ubuntu and macOS at head bc54041, merged to main as 160224a.
 
-Not yet signed, tagged or published. Exact commit, immutable unsigned asset digests, checks and the maintainer's SIGN are recorded by the release operation before publication. The post-publication receipt will record the final commit, tag, six public assets and fresh-download verification.
+Not yet signed, tagged or published. Exact commit, immutable unsigned asset digests and the maintainer's SIGN are recorded by the release operation before publication.
 
 ## Release-note draft
 
-Hippocampus 0.15.8 packages the integrated durable-session runtime for Claude Code and Codex. It adds startup-budget and evidence-based slimming commands, stored-owner checks for asks, approved decision-document filing, backlog catch-up and durable checkpoint workflows using configured record, scheduler and reporting integrations. Retired OpenClaw setup/composition support is removed.
-
-These workflows retain approval and receipt requirements and need the user's configured integrations. Installing the package does not enable recurring filing or approve changes to personal rules or knowledge. This is a package delivery for the next live checks, not the announced public launch of session features.
+Hippocampus 0.16.0 makes set-up opinionated. The knowledge profile now holds lesson and knowledge policy, knowledge setup with a wiki is required, and rule entry files are written only for the tools you have installed. Existing routing files and the old auto-apply setting move into the profile through set-up, after you approve the exact change. Python 3.9 can run set-up and wraps again; rules set-up still needs Python 3.11.
