@@ -114,9 +114,8 @@ underlying sources are. It never sweeps every uncompiled file. `wiki-audit`
 writes a ranked report on structure, source coverage, tensions and gaps
 without changing anything.
 
-The wiki is optional. `hippocampus-set-up` asks whether you want one, and you
-can turn it on or off later. Without it, research, meetings, sessions and rules
-work the same and nothing is routed to a wiki. [Obsidian][7] is the practical
+The wiki is part of the knowledge root that `hippocampus-set-up` configures.
+[Obsidian][7] is the practical
 way to browse it, since most Markdown viewers show wikilinks as plain text, but
 any wikilink-aware client works.
 
@@ -198,19 +197,20 @@ on", `improve-harness` decides where that lesson belongs: a hook, one skill, one
 agent definition, a repository's instruction file, your user-level rules, or
 memory. It prefers the narrowest place that still loads when the lesson is
 needed. Interactive runs propose and wait; unattended runs carry the proposal
-forward. A routing file can replace the default placement table.
+forward. A `## Lesson routing` section in your knowledge profile can replace the
+default placement table.
 
 `slim-harness` reviews one instruction file with you: it finds duplicates and
 conflicts with neighboring files, asks before resolving them, and leaves its
 edits uncommitted for you to check.
 
-One setting, `auto_apply_lessons` in the shared configuration (off by
+One setting, `auto_apply` in your knowledge profile (off by
 default), lets these run without waiting for you. With it on, a wrap applies
 the lessons it recommends and captures wiki and retained knowledge under your
 knowledge root. It records files over their size limits, and a sweep in act
 mode applies the same items from abandoned sessions. `slim-unattended` slims
 the recorded files on a branch per repository for your review and never merges
-it. A fact about you always waits for your answer, and a routing file line
+it. A fact about you always waits for your answer, and a lesson routing line
 `lesson-policy: propose` turns lesson applying off. The
 [session guide](docs/session-guide.md) explains each step and how to undo it.
 
@@ -235,16 +235,15 @@ conversation that made it is gone.
 ├── output/                # research reports and audit reports
 ├── docs/                  # operation log and decision log
 ├── meetings/              # meeting records (folder is configurable)
-└── wiki/                  # compiled articles and indexes (when enabled)
+└── wiki/                  # compiled articles and indexes
 
 ~/.local/state/hippocampus/
 ├── handoffs/              # one handoff per session and subject
 └── checklist/             # wrap state
 
 ~/.config/hippocampus/
-├── profile.md             # knowledge profile
+├── profile.md             # knowledge profile, auto-apply setting and lesson routing
 ├── checklist-profile.md   # checklist bindings and added steps
-├── routing.md             # where lessons go (optional)
 └── config.json            # shared session settings (optional)
 ```
 
@@ -271,9 +270,9 @@ Then run set-up with your agent:
 | Claude Code | `/hippocampus:<skill>`, for example `/hippocampus:research-topic` | `/hippocampus:hippocampus-set-up` |
 | Codex | The skill name, for example `Use checklist` | `Use hippocampus-set-up` |
 
-Set-up explains the storage model, asks whether you want a wiki, configures
-your knowledge root, checklist bindings and rule targets, and shows every change
-before it writes. You can configure sessions alone and add knowledge later.
+Set-up explains the storage model, configures your knowledge root with its
+wiki, checklist bindings and rule targets, and shows every change before it
+writes. Set-up is complete once the knowledge root is configured.
 Both installers undo themselves with `--uninstall`; your handoffs, profiles and
 knowledge root stay.
 

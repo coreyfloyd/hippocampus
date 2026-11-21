@@ -8,7 +8,7 @@ The old `research-tools-set-up` compatibility skill has been retired. The instal
 
 On the first migration, the installer stops without changing links when it finds a foreign skill link, a broken or tampered legacy release, or different old and new profile files. For a profile conflict, make a backup of both files, reconcile the intended content into `~/.config/hippocampus/profile.md`, then move the legacy profile out of `~/.config/research-tools/profile.md` before rerunning `bash install.sh`. After a completed migration, the Hippocampus profile is authoritative, so later approved setup changes do not conflict with the preserved legacy copy. A stopped or interrupted run is safe to rerun: every pointer and link replacement is atomic, and the old installation is never deleted.
 
-Existing version-4 profiles need no change and continue to validate unchanged. An absent `wiki_enabled` means the wiki remains enabled; setting `wiki_enabled: false` continues to opt out of it.
+Existing version-4 profiles continue to validate unchanged. The knowledge setup now requires the wiki: a profile with `wiki_enabled: false` still reads, and `wiki-compile` and `wiki-audit` still refuse for it, but `hippocampus-set-up` reports its knowledge setup incomplete and offers an upgrade. The upgrade shows the exact plan (remove `wiki_enabled: false`, add `hot_file` and `wiki_followup_destination`, create only a missing `wiki/` and `wiki/hot.md`) and writes only after approval; a decline changes nothing.
 
 ## Meeting capture and retained outputs
 
@@ -58,9 +58,11 @@ or aliases. Before changing anything, back up the files you want to keep.
    and `lessons` binding blocks; preserve `record`, `persist`, ask and your own
    added steps. The removed slots are now native steps. If both files exist,
    reconcile them yourself rather than overwriting either one.
-3. Move custom lesson routing from `~/.config/improve-harness/routing.md` to
-   `~/.config/hippocampus/routing.md`. Replace `IMPROVE_HARNESS_ROUTING` overrides
-   with `HIPPOCAMPUS_ROUTING`. Move wanted shared configuration from
+3. Copy custom lesson routing from `~/.config/improve-harness/routing.md` to
+   `~/.config/hippocampus/routing.md`, then run `hippocampus-set-up`: it shows the
+   exact move into the knowledge profile's `## Lesson routing` section and makes it
+   only after you approve. Drop `IMPROVE_HARNESS_ROUTING`; no variable overrides the
+   knowledge profile's lesson routing. Move wanted shared configuration from
    `~/.config/continuity/config.json` to `~/.config/hippocampus/config.json`,
    replacing `CONTINUITY_CONFIG` with `HIPPOCAMPUS_CONFIG`. Reconcile existing
    destination files and any old paths inside your configuration manually.

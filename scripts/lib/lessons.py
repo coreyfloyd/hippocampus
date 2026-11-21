@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 import re
 import shlex
@@ -19,7 +20,8 @@ import subprocess
 import tempfile
 from typing import Any, Mapping, Sequence
 
-SETTING = "auto_apply_lessons"
+SETTING = "auto_apply"
+RETIRED_SETTING = "auto_apply_lessons"
 OUTCOME = "lesson_outcome"
 NOT_PUSHED = "committed, not pushed"
 PULL_REQUEST = "pull request"
@@ -31,15 +33,20 @@ REFUSED_DIRECT = re.compile(r"GH006|GH013|protected branch|pull request|merge re
 REMOTE_MOVED = re.compile(r"non-fast-forward|fetch first")
 
 
+class UpgradeRequired(ValueError):
+    """A retired policy owner is still in place: auto-apply is refused until set-up moves it."""
+
+
 class LessonError(Exception):
     """One lesson could not be applied or delivered; the wrap continues without it."""
 
 
 def enabled(config: Mapping[str, Any]) -> bool:
-    value = config.get(SETTING, False)
-    if type(value) is not bool:
-        raise ValueError(f"hippocampus config: {SETTING} must be true or false")
-    return value
+    """The knowledge profile's auto-apply setting, refused while the configuration still holds it."""
+    if RETIRED_SETTING in config:
+        raise UpgradeRequired(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
+                         "run hippocampus-set-up to move it")
+    return bool(policy().auto_apply)
 
 
 _COMPOSE: Any = None
@@ -51,29 +58,41 @@ def _compose_rules() -> Any:
     if _COMPOSE is None:
         spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
         module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
         spec.loader.exec_module(module)
         _COMPOSE = module
     return _COMPOSE
 
 
-def routing_rules() -> dict[str, Any]:
-    """The routing file's delivery keys: `lesson-policy`, `lesson-pull-requests` and the command.
-
-    A malformed routing file is a ValueError, which every caller reports as an error.
-    """
+def policy() -> Any:
+    """The knowledge profile's policy; an unreadable profile is a ValueError."""
     compose = _compose_rules()
     try:
-        path = compose.routing_path()
-        parsed = compose.load_lesson_delivery(path)
+        return compose.load_policy()
     except compose.ComposeError as error:
         raise ValueError(str(error)) from None
-    return {"path": str(path), "propose": parsed["policy"] == "propose",
+
+
+def routing_rules() -> dict[str, Any]:
+    """The lesson routing's delivery keys: `lesson-policy`, `lesson-pull-requests` and the command.
+
+    A malformed Lesson routing section is a ValueError, which every caller reports as an error.
+    """
+    compose = _compose_rules()
+    current = policy()
+    try:
+        parsed = compose.load_lesson_delivery(current)
+    except compose.RetiredOwner as error:
+        raise UpgradeRequired(str(error)) from None
+    except compose.ComposeError as error:
+        raise ValueError(str(error)) from None
+    return {"path": str(current.path), "propose": parsed["policy"] == "propose",
             "pull_requests": parsed["pull_requests"], "command": parsed["command"]}
 
 
 def forbidden_reason(rules: Mapping[str, Any]) -> str | None:
     if rules["propose"]:
-        return f"lessons were carried because the routing file {rules['path']} requires it"
+        return f"lessons were carried because the knowledge profile {rules['path']} sets lesson-policy: propose"
     return None
 
 
@@ -179,13 +198,10 @@ def _rule_files() -> list[Path]:
     return seen
 
 
-def _source(target: Path, routing: Path) -> tuple[Path, list[dict[str, str]]]:
+def _source(target: Path) -> tuple[Path, list[dict[str, str]]]:
     """Trace a target to the one source a lesson may edit, with its produced surfaces."""
-    resolved = target.resolve()
-    if not routing.exists():
-        mapped: dict[str, Any] = {"sources": [str(resolved)], "surfaces": []}
-    else:
-        mapped = _compose_rules().surfaces_for(resolved, routing)
+    compose = _compose_rules()
+    mapped = compose.surfaces_for(target.resolve(), compose.load_policy())
     if len(mapped["sources"]) != 1:
         raise LessonError(f"{target} is produced from several sources: {', '.join(mapped['sources'])}")
     source = Path(mapped["sources"][0])
@@ -256,11 +272,11 @@ def _message(change: str) -> str:
     return f"lesson: {' '.join(change.split())}"
 
 
-def _apply_one(row: Mapping[str, Any], routing: Path) -> dict[str, Any]:
+def _apply_one(row: Mapping[str, Any]) -> dict[str, Any]:
     target = Path(row["target"]).expanduser()
     if not target.is_absolute():
         raise LessonError(f"target {row['target']} must be an absolute path")
-    source, surfaces = _source(target, routing)
+    source, surfaces = _source(target)
     before = source.read_bytes() if source.exists() else None
     checkout = _checkout(source)
     outcome: dict[str, Any] = {"target": str(source), "commit": None, "surfaces": surfaces,
@@ -335,7 +351,6 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                                and ("old" not in edit or (isinstance(edit["old"], str) and edit["old"]))
                                for edit in edits)):
                 raise ValueError(f"lessons: row {index}: an applied lesson requires target, change, evidence and edits")
-    routing = _compose_rules().routing_path()
     known = {tuple(outcome["identity"]): outcome for outcome in outcomes(module, session_id)}
     removed: list[Mapping[str, Any]] = []
     annotated: dict[int, dict[str, Any]] = {}
@@ -363,10 +378,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             outcome.update(change=row["change"], added=added, dictated=bool(row.get("dictated")),
                            edits=[{key: edit[key] for key in ("old", "new") if edit.get(key)} for edit in row["edits"]])
             try:
-                outcome.update(_apply_one(row, routing), status="applied")
+                outcome.update(_apply_one(row), status="applied")
             except (LessonError, OSError, ValueError, subprocess.SubprocessError) as error:
                 outcome.update(status="failed", target=row["target"], error=str(error))
-            except _compose_rules().ComposeError as error:  # A malformed routing file fails one lesson.
+            except _compose_rules().ComposeError as error:  # A malformed Lesson routing section fails one lesson.
                 outcome.update(status="failed", target=row["target"], error=str(error))
             if outcome["status"] == "applied":
                 outcome["ask"] = outcome.pop("always_loaded")
@@ -492,7 +507,7 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
     JSON request on stdin and prints the pull request's reference last.
     """
     if not command:
-        raise LessonError("a pull request is required, but the routing file names no lesson-pull-request-command")
+        raise LessonError("a pull request is required, but the knowledge profile's lesson routing names no lesson-pull-request-command")
     base = rows[0]["branch"]
     lesson_branch = _lesson_branch(session_id)
     _must(checkout, "fetch", remote, f"+refs/heads/{base}:refs/remotes/{remote}/{base}")
@@ -603,7 +618,7 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
                 update.update(delivery=NOT_PUSHED, error="the repository has no remote")
             else:
                 if _requires_pull_request(checkout, remote, rules):
-                    pushed, error, attempts = False, "routing file requires a pull request", 0
+                    pushed, error, attempts = False, "the lesson routing requires a pull request", 0
                 else:
                     key = (str(checkout), branch)
                     if key not in pushes:

@@ -6,9 +6,8 @@ operation_log_file: docs/log.md
 decision_log_file: docs/DECISIONS.md
 wiki_followup_destination: "Describe the backlog or task route for knowledge-base maintenance."
 artifact_followup_destination: "Describe the task system and routing rules for source-derived actions, including meeting actions and research follow-ups."
-# The wiki is optional; a profile without wiki_enabled uses it. To disable it, uncomment the
-# line below exactly as written, and remove hot_file and wiki_followup_destination.
-# wiki_enabled: false
+# The wiki is part of the required knowledge setup. A released profile with
+# wiki_enabled: false still reads; set-up offers its upgrade and never writes that line.
 # Optional meeting inputs; each can independently be disabled. Use unquoted values.
 # meeting_transcript_source: Connected meeting provider or supplied transcript
 # meeting_event_source: Connected calendar provider
@@ -36,9 +35,19 @@ artifact_followup_destination: "Describe the task system and routing rules for s
 #     - tool: codex
 #       rules_target: none
 #       memory: native
+# The auto-apply setting, off by default. With true, a wrap and a sweep in act mode
+# apply recommended lessons and knowledge captures without waiting; a lesson-policy of
+# propose in the lesson routing still keeps lessons as proposals, and a fact about you
+# still waits for your answer. Set up previews this change before writing it.
+# auto_apply: false
 ---
 
 Copy to `~/.config/hippocampus/profile.md` and set `knowledge_root`.
+
+Custom lesson destinations go in an optional `## Lesson routing` section of
+this body (headings inside it start at level three). When present it replaces
+improve-harness's default routing table; without it the defaults apply. This
+example deliberately has none.
 
 ## Optional local policy
 
@@ -52,9 +61,8 @@ helper is one implementation; a runtime's browser-automation tool or another
 browser's scripting interface are equally valid), which the research skills
 consult before accepting reduced coverage. Skills that read the profile read this
 free-form local policy body after the validated YAML frontmatter. The required frontmatter fields configure the root, operation log, decision
-log and source-derived action destination. Wiki-enabled profiles also require
-the session cache and independent wiki-maintenance destination; omit those
-wiki-only fields when the wiki is disabled. Use this body to define local entry
+log, session cache and the two independent destinations: wiki maintenance and
+source-derived actions. Use this body to define local entry
 formats, optional knowledge search locations/rules and routing distinctions.
 
 Meeting filing destinations may be overridden in this free-form local policy body,

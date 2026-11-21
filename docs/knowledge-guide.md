@@ -8,24 +8,22 @@ and the wrap checklist.
 
 ## Knowledge store
 
-The wiki is optional. A configured root contains three canonical directories,
-plus a fourth for compiled knowledge when `hippocampus-set-up` configures
-the wiki as enabled:
+A configured root contains four canonical directories, all part of the
+required knowledge setup:
 
 ```text
 <knowledge-root>/
 ├── raw/       # source material and provenance
 ├── output/    # research artifacts and audit reports
 ├── docs/      # AI-maintained operation history and durable decisions
-└── wiki/      # compiled synthesis, topic indexes, and master index (only when the wiki is enabled)
+└── wiki/      # compiled synthesis, topic indexes, and master index
 ```
 
-`raw/`, `output/`, and `docs/` are always present. `wiki/` and its two
-profile fields exist only when the wiki is enabled; declining it at setup
-skips the wiki folder, its profile fields, wiki routing in absorption plans
-and knowledge captures, and the `wiki-compile` / `wiki-audit` skills,
-which refuse to run without it. The wiki can be turned on or off later
-through `hippocampus-set-up` alone. The directory names are part of the
+`hippocampus-set-up` proposes all four, the session cache `wiki/hot.md`, both
+logs and both follow-up destinations, and creates only what is missing. A
+released profile with `wiki_enabled: false` still reads: wiki routing is absent
+from its absorption plans and knowledge captures, `wiki-compile` and
+`wiki-audit` refuse to run, and set-up offers an approved upgrade. The directory names are part of the
 public [Karpathy-wiki contract][2]. The organization of the `wiki/`is
 customizable, but relies on internal wikilinks for traversal by AI and
 wikilink-aware tools.
@@ -254,7 +252,9 @@ tools; a tool that is not installed gets no row in the plan.
 Set-up first reports each tool's state: its default user instruction file
 (`CLAUDE.md` in the Claude Code home, `AGENTS.md` in the Codex home), whether that
 file exists and who owns it, the native memory setting, and the memory store's
-location and file count. It then offers two editable starting points:
+location and file count. It then offers two editable starting points and
+recommends one: `thin` when more than one tool is installed or you want your
+rules and knowledge portable across tools, `standard` otherwise.
 
 | Preset     | Rules target per tool                       | Memory per tool                          |
 | ---------- | ------------------------------------------- | ---------------------------------------- |
@@ -269,7 +269,17 @@ A target that carries the composer's generated header is rewritten in full.
 In a file you wrote yourself, composition changes only one marked block and
 leaves the rest of the file as it was. Claude Code targets import the documents
 by path; Codex targets receive their content. With a development
-root, `CLAUDE.md` and `AGENTS.md` at that root carry the development rules.
+root, each installed tool gets its own entry there: `CLAUDE.md`, a minimal
+import of the development rules, for Claude Code, which loads `CLAUDE.md` from
+the working directory and every directory above it; `AGENTS.md` for Codex,
+which reads `AGENTS.md` from the project root (usually the Git root) down to the
+working directory. A tool that is not installed gets no entry.
+
+For one repository, `scripts/rules_setup.py repository --repository <root>`
+names the shared source, `AGENTS.md` or the source it is produced from, and
+each installed tool's entry: Codex reads `AGENTS.md` itself, and Claude Code
+gets a `CLAUDE.md` that imports it. An absent `AGENTS.md` does not make
+`CLAUDE.md` the source; existing files are reported and never deleted.
 Every target is checked before any is written, so a failed check leaves all of
 them untouched. After editing either document, run set-up again: the new plan
 lists each target whose composed content changed.
@@ -316,9 +326,9 @@ python3 scripts/compose_rules.py surfaces --source /path/to/rules.md
 ```
 
 `check` exits with an error for missing or changed target content and writes
-nothing. `surfaces` reads the **Produced surfaces** mapping in the improve-harness
-routing file (`--routing`, then `HIPPOCAMPUS_ROUTING`, then
-`${XDG_CONFIG_HOME:-~/.config}/hippocampus/routing.md`). Its JSON result names
+nothing. `surfaces` reads the **Produced surfaces** mapping in the knowledge
+profile's `## Lesson routing` section (`--profile`, then
+`${XDG_CONFIG_HOME:-~/.config}/hippocampus/profile.md`). Its JSON result names
 canonical sources and produced paths with regeneration commands; querying a
 produced path traces back to its source. An absent mapping or explicit `[]`
 produces no surfaces. Mapping lookup never runs commands. After editing a source,

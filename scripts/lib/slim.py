@@ -57,7 +57,7 @@ handoff = checklist._load_handoff_module()
 
 
 def _require_setting(operation: str) -> None:
-    """Refuse unless the auto-apply setting is on and the routing file lets lessons apply."""
+    """Refuse unless the auto-apply setting is on and the lesson routing lets lessons apply."""
     state = checklist.auto_apply_state()
     if not state:
         raise ValueError(f"{operation}: the auto-apply setting is off")
@@ -597,16 +597,21 @@ def _open(current: dict[str, Any], config: Mapping[str, Any]) -> tuple[str | Non
 def _briefing(state: Mapping[str, Any], run: Mapping[str, Any]) -> dict[str, Any]:
     current = run["current"]
     record = current["record"]
+    surfaces_error = None
     try:
         surfaces = _surfaces(record["repository"], record["path"], handoff.read_config())["surfaces"]
-    except lessons._compose_rules().ComposeError:
-        surfaces = []  # `finish` reports the malformed routing file as a surface it cannot verify.
-    return {"done": False, "run_id": run["id"], "slim_id": current["id"], "repository": record["repository"],
+    except lessons._compose_rules().ComposeError as error:
+        # Unknown, not none: `finish` also reports it as a surface it cannot verify.
+        surfaces, surfaces_error = [], str(error)
+    briefing = {"done": False, "run_id": run["id"], "slim_id": current["id"], "repository": record["repository"],
             "path": record["path"], "file": str(Path(current["workspaces"][record["repository"]]) / record["path"]),
             "workspaces": current["workspaces"], "limits": record["limits"], "duplicates": record["duplicates"],
             "frozen": [{"repository": repository, "path": path, "changed_by": branch}
                        for (repository, path), branch in _frozen(state).items()],
             "surfaces": surfaces}
+    if surfaces_error:
+        briefing["surfaces_error"] = surfaces_error
+    return briefing
 
 
 def workspace(run_id: str, repository: str) -> dict[str, Any]:
@@ -630,13 +635,13 @@ def _keep_workspaces(run_id: str, current: Mapping[str, Any]) -> None:
 
 
 def _surfaces(repository: str, path: str, config: Mapping[str, Any]) -> dict[str, Any]:
-    """The surfaces the routing file produces from a file, by its path in the user's checkout."""
+    """The surfaces the lesson routing produces from a file, by its path in the user's checkout."""
     compose = lessons._compose_rules()
     checkout = _checkout(config, repository)
     source = (checkout / path).resolve() if checkout else None
     if source is None:
         return {"sources": [], "surfaces": []}
-    return compose.surfaces_for(source, compose.routing_path())
+    return compose.surfaces_for(source, compose.load_policy())
 
 
 def _surface_gaps(changed: Sequence[tuple[str, str]], result: Mapping[str, Any],

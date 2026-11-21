@@ -1042,20 +1042,20 @@ def auto_apply_state() -> dict[str, Any] | None:
         return None
     rules = lessons.routing_rules()
     reason = lessons.forbidden_reason(rules)
-    # The routing file governs lessons only; knowledge capture follows the setting.
+    # The lesson routing governs lessons only; knowledge capture follows the setting.
     state = {"lessons": "propose", "reason": reason} if reason else {"lessons": "apply"}
     return {**state, "knowledge": "apply"}
 
 
 def lesson_section(filing: Mapping[str, Any], loops: Sequence[Mapping[str, Any]],
                    problems: list[str]) -> dict[str, Any] | None:
-    """The report's lessons: what auto-apply did, or why the routing file stopped it."""
+    """The report's lessons: what auto-apply did, or why the lesson routing stopped it."""
     section = copy.deepcopy(filing.get("lessons")) if isinstance(filing.get("lessons"), Mapping) else None
     try:
         state = auto_apply_state()
     except (OSError, ValueError) as error:
-        problems.append(f"auto-apply: {error}")
-        return section
+        # The plan ran the wrap with the setting off; the refusal is reported, not a failure.
+        return {**(section or {}), "auto_apply_refused": f"auto-apply: {error}"}
     if state and state["lessons"] == "propose":
         section = {**(section or {}), "reason": state["reason"],
                    "carried": [item.get("context") for item in loops if item.get("type") == "lesson"]}
@@ -1362,7 +1362,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                       "ask": ask, "rerun_all_steps": True, "handoff": handoff}
             if args.unattended:
                 output["when_answer_needed"] = UNATTENDED_RULE
-            auto_apply = auto_apply_state()
+            try:
+                auto_apply = auto_apply_state()
+            except (OSError, ValueError) as error:
+                # The wrap still plans every step, with the setting off, and names the problem.
+                auto_apply, output["auto_apply_refused"] = None, f"auto-apply: {error}"
             if auto_apply:
                 output["auto_apply"] = auto_apply
         elif args.operation in ("apply-lessons", "deliver-lessons"):
@@ -1406,7 +1410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             state = auto_apply_state()
             if not state:
                 raise ValueError("record-over-limit: the auto-apply setting is off")
-            # The routing file's `lesson-policy: propose` overrides the setting (glossary,
+            # The lesson routing's `lesson-policy: propose` overrides the setting (glossary,
             # Auto-apply setting), so the blocks stay as they are with the setting off.
             if state["lessons"] == "propose":
                 raise ValueError(f"record-over-limit: {state['reason']}")

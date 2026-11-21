@@ -35,13 +35,13 @@ user presence; no schedule is installed.
    Use `scripts/harness.py measure <manifest.json>` (schema below). Do not infer a
    loaded set from the filesystem. If text was truncated, read the source in full
    for review but retain the actual session loading scope for the trigger.
-5. Read the improve-harness routing file: `$HIPPOCAMPUS_ROUTING`, otherwise
-   `hippocampus/routing.md` under `$XDG_CONFIG_HOME` (default `~/.config`).
-   From its **Produced surfaces** section, find the resolved source's entry and
+5. Read the lesson routing: the `## Lesson routing` section of the knowledge profile,
+   `hippocampus/profile.md` under `$XDG_CONFIG_HOME` (default `~/.config`).
+   From its **Produced surfaces** block, find the resolved source's entry and
    each produced surface path with its regeneration command. A source with
    no entry produces no surfaces; an explicit empty list means the same. Do not
    ask about outputs in either case. Use the package's
-   `scripts/compose_rules.py surfaces --source <path>` (optional `--routing <file>`)
+   `scripts/compose_rules.py surfaces --source <path>` (optional `--profile <file>`)
    for the canonical mapping; malformed entries are errors.
    If handed a generated surface, trace it to its owning source through that mapping
    or ask the user; never edit a generated surface. Review the source only, never

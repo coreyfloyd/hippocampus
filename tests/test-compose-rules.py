@@ -134,15 +134,27 @@ class ComposerTests(unittest.TestCase):
         finally:
             self.targets.chmod(0o755)
 
-    def surfaces(self, path, routing=None, env=None):
+    def profile(self, routing, path=None, setting=""):
+        """A controlled knowledge profile whose Lesson routing section holds ``routing``."""
+        path = path or self.base / "profile.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        section = "" if routing is None else "\n## Lesson routing\n\n" + routing
+        path.write_text("---\nprofile_version: 4\n" + setting + "---\n\nLocal policy.\n" + section)
+        return path
+
+    def environment(self, **values):
+        env = {**os.environ, "XDG_CONFIG_HOME": str(self.base / "unused-config"), **values}
+        env.pop("HIPPOCAMPUS_ROUTING", None)
+        return env
+
+    def surfaces(self, path, profile=None, env=None):
         args = ["python3", str(COMPOSER), "surfaces", "--source", str(path)]
-        if routing is not None:
-            args += ["--routing", str(routing)]
-        return subprocess.run(args, capture_output=True, text=True, env=env)
+        if profile is not None:
+            args += ["--profile", str(profile)]
+        return subprocess.run(args, capture_output=True, text=True, env=env or self.environment())
 
     def test_absent_empty_and_generated_source_mappings(self):
-        routing = self.base / "routing.md"
-        routing.write_text('''# Routing
+        profile = self.profile('''### Routing
 
 ```yaml
 Produced surfaces:
@@ -155,11 +167,11 @@ Produced surfaces:
 ```
 ''')
         for source in (self.extra, self.development):
-            result = self.surfaces(source, routing)
+            result = self.surfaces(source, profile)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout), {"sources": [str(source.resolve())], "surfaces": []})
-        source = self.surfaces(self.cross, routing)
-        generated = self.surfaces(self.codex, routing)
+        source = self.surfaces(self.cross, profile)
+        generated = self.surfaces(self.codex, profile)
         self.assertEqual(source.returncode, 0, source.stderr)
         self.assertEqual(generated.returncode, 0, generated.stderr)
         self.assertEqual(json.loads(source.stdout), json.loads(generated.stdout))
@@ -169,38 +181,53 @@ Produced surfaces:
         self.assertTrue(all(row["regeneration command"] for row in mapping["surfaces"]))
         self.assertFalse(self.codex.exists())  # Lookup never runs the declared command.
 
-    def test_routing_defaults_and_path_aliases(self):
-        routing = self.base / "hippocampus" / "routing.md"
-        routing.parent.mkdir()
+    def test_profile_discovery_and_path_aliases(self):
+        profile = self.profile('Produced surfaces:\n  "$RULE_SOURCE":\n    - path: "../targets/codex.md"\n'
+                               '      regeneration command: "compose rules"\n', self.base / "hippocampus" / "profile.md")
         alias = self.base / "source-link.md"
         alias.symlink_to(self.cross)
-        routing.write_text('Produced surfaces:\n  "$RULE_SOURCE":\n    - path: "../targets/codex.md"\n      regeneration command: "compose rules"\n')
-        env = dict(os.environ, XDG_CONFIG_HOME=str(self.base), RULE_SOURCE=str(self.cross.resolve()))
-        env.pop("HIPPOCAMPUS_ROUTING", None)
+        env = self.environment(XDG_CONFIG_HOME=str(self.base), RULE_SOURCE=str(self.cross.resolve()))
         result = self.surfaces(alias, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["sources"], [str(self.cross.resolve())])
         self.assertEqual(json.loads(result.stdout)["surfaces"][0]["path"], str(self.codex.resolve()))
-        env["HIPPOCAMPUS_ROUTING"] = str(routing)
         env["XDG_CONFIG_HOME"] = str(self.base / "unused")
-        self.assertEqual(self.surfaces(alias, env=env).returncode, 0)
+        self.assertEqual(self.surfaces(alias, profile, env=env).returncode, 0)
 
-    def test_missing_routing_or_section_produces_nothing(self):
-        routing = self.base / "routing.md"
-        for content in (None, "# Routing\nOther instructions.\n"):
-            if content is not None:
-                routing.write_text(content)
-            result = self.surfaces(self.cross, routing)
+    def test_a_retired_routing_owner_is_refused(self):
+        profile = self.profile("", self.base / "hippocampus" / "profile.md")
+        for retired in ("file", "environment"):
+            env = self.environment(XDG_CONFIG_HOME=str(self.base))
+            if retired == "file":
+                (profile.parent / "routing.md").write_text("Produced surfaces:\n")
+            else:
+                (profile.parent / "routing.md").unlink()
+                env["HIPPOCAMPUS_ROUTING"] = str(self.base / "elsewhere.md")
+            result = self.surfaces(self.cross, env=env)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("run hippocampus-set-up", result.stderr)
+            if retired == "environment":
+                self.assertIn("unset HIPPOCAMPUS_ROUTING", result.stderr)
+                self.assertIn("does not exist", result.stderr)
+
+    def test_missing_profile_section_or_other_section_produces_nothing(self):
+        other = "\n## Other policy\n\nProduced surfaces:\n  rules.md:\n    - path: elsewhere.md\n"
+        for profile in (self.base / "absent.md", self.profile(None), self.profile("### Routing\nOther instructions.\n"),
+                        self.profile("lesson-policy: apply\n" + other)):
+            result = self.surfaces(self.cross, profile)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(json.loads(result.stdout)["surfaces"], [])
 
-    def test_malformed_mapping_fails_instead_of_claiming_no_surfaces(self):
-        routing = self.base / "routing.md"
+    def test_malformed_mapping_or_profile_fails_instead_of_claiming_no_surfaces(self):
         for entry in ("    - path: targets/codex.md\n", "    - path: targets/codex.md\n      regeneration command: \"\"\n"):
-            routing.write_text("Produced surfaces:\n  rules.md:\n" + entry)
-            result = self.surfaces(self.cross, routing)
+            result = self.surfaces(self.cross, self.profile("Produced surfaces:\n  rules.md:\n" + entry))
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("routing", result.stderr)
+        twice = self.profile("lesson-policy: apply\n\n## Lesson routing\n\nlesson-policy: propose\n")
+        for profile in (twice, self.profile(None, setting="auto_apply: yes\n")):
+            result = self.surfaces(self.cross, profile)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("knowledge profile", result.stderr)
 
     def test_unknown_tool_prevents_every_write(self):
         self.write_config([

@@ -11,7 +11,7 @@ TOP_LEVEL_FIELDS = {
     "wiki_enabled",
     "meeting_transcript_source", "meeting_event_source", "meeting_note_path",
     "meeting_record_folder", "meeting_record_template",
-    "rules",
+    "rules", "auto_apply",
 }
 
 RULE_FIELDS = {"preset", "cross_tool_document", "development_document", "tools"}
@@ -94,7 +94,7 @@ def parse(path):
             continue
         if line.startswith("#"):
             continue
-        if line.startswith(" "):
+        if line.startswith((" ", "\t")):  # The policy reader treats a tab as indentation too.
             fail("nested profile fields are not supported")
         key, value = parse_mapping(line, "profile")
         if key == "meeting_daily_note_path":
@@ -112,18 +112,18 @@ def parse(path):
     fail("unterminated YAML frontmatter")
 
 
-def contained(root, candidate, label):
+def contained(root, candidate, label, planned=frozenset()):
     resolved = candidate.resolve()
     try:
         resolved.relative_to(root)
     except ValueError:
         fail(f"{label} escapes knowledge_root")
-    if not resolved.is_dir():
+    if not resolved.is_dir() and resolved not in planned:
         fail(f"{label} is not an existing directory")
     return resolved
 
 
-def contained_file(root, value, label):
+def contained_file(root, value, label, planned=frozenset()):
     if not value:
         fail(f"missing {label}")
     candidate = pathlib.Path(value)
@@ -134,7 +134,7 @@ def contained_file(root, value, label):
         resolved.relative_to(root)
     except ValueError:
         fail(f"{label} escapes knowledge_root")
-    if not resolved.is_file():
+    if not resolved.is_file() and resolved not in planned:
         fail(f"{label} is not an existing file")
     return resolved
 
@@ -209,7 +209,9 @@ def validate_rules(root, rules):
             fail("rules memory must be native or off")
 
 
-def validate(path, require_wiki=False):
+def validate(path, require_wiki=False, planned=()):
+    """Validate a profile; ``planned`` names paths an approved set-up plan will create."""
+    planned = frozenset(pathlib.Path(item).resolve() for item in planned)
     values = parse(pathlib.Path(path))
     if values.get("profile_version") != "4":
         fail("profile_version must be 4")
@@ -217,22 +219,24 @@ def validate(path, require_wiki=False):
     if not root_value or not pathlib.Path(root_value).is_absolute():
         fail("knowledge_root must be an absolute path")
     root = pathlib.Path(root_value).resolve()
-    if not root.is_dir():
+    if not root.is_dir() and root not in planned:
         fail("knowledge_root is not an existing directory")
 
     wiki_value = values.get("wiki_enabled")
     if wiki_value is not None and wiki_value not in ("true", "false"):
         fail("wiki_enabled must be true or false")
     wiki_enabled = wiki_value != "false"
+    if values.get("auto_apply", "false") not in ("true", "false"):
+        fail("auto_apply must be true or false")
 
     # Checks common to both wiki states run first, so a profile missing more
     # than one canonical directory or file may report a different offender
     # than a pre-#12 profile would have (message ordering only; a single
     # defect still fails with the same message either way).
     for key in ("raw", "output", "docs"):
-        contained(root, root / key, key)
+        contained(root, root / key, key, planned)
     for key in ("operation_log_file", "decision_log_file"):
-        contained_file(root, values.get(key), key)
+        contained_file(root, values.get(key), key, planned)
     if not values.get("artifact_followup_destination"):
         fail("missing artifact_followup_destination")
 
@@ -267,8 +271,8 @@ def validate(path, require_wiki=False):
         fail(str(exc))
 
     if wiki_enabled:
-        contained(root, root / "wiki", "wiki")
-        contained_file(root, values.get("hot_file"), "hot_file")
+        contained(root, root / "wiki", "wiki", planned)
+        contained_file(root, values.get("hot_file"), "hot_file", planned)
         if not values.get("wiki_followup_destination"):
             fail("missing wiki_followup_destination")
     else:

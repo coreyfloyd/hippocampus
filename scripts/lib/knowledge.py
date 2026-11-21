@@ -13,6 +13,7 @@ import copy
 from datetime import datetime
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -35,15 +36,34 @@ def profile_path(explicit: Path | None) -> Path:
     return Path(base) / "hippocampus" / "profile.md"
 
 
-def read_profile(path: Path) -> tuple[Path, bool, dict[str, Path]]:
-    """The knowledge root, whether the wiki is enabled and the compile's files, from a validated profile."""
-    spec = importlib.util.spec_from_file_location("validate_profile",
-                                                  Path(__file__).parents[1] / "validate_profile.py")
+def _script(name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).parents[1] / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
     spec.loader.exec_module(module)
+    return module
+
+
+def read_profile(path: Path) -> tuple[Path, bool, dict[str, Path]]:
+    """The knowledge root, whether the wiki is enabled and the compile's files, from a validated profile.
+
+    A named profile only chooses where knowledge goes. Policy belongs to the configured
+    profile alone, so a named one that holds policy is refused rather than ignored.
+    """
+    module = _script("validate_profile")
     if not path.is_file():
         raise ValueError(f"apply-knowledge: no knowledge profile at {path}; run hippocampus-set-up")
     root, values = module.validate(path)
+    compose = _script("compose_rules")
+    owner = compose.profile_path()
+    if path.resolve() != owner.resolve():
+        try:
+            named = compose.load_policy(path)
+        except compose.ComposeError as error:
+            raise ValueError(f"apply-knowledge: {error}") from None
+        if named.auto_apply is not None or named.routing is not None or named.routing_error:
+            raise ValueError(f"apply-knowledge: {path} holds auto_apply or a {compose.POLICY_HEADING} section, "
+                             f"which only the configured knowledge profile {owner} owns; move them there")
     # A compile file that escapes the root is kept as its reason, so only a row naming a file
     # outside the folders is affected, and the message names the profile key.
     files: dict[str, Path | str] = {}

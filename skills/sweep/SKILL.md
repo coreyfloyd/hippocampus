@@ -241,7 +241,7 @@ See [undo and retention](../../docs/sweep.md#undo-and-retention) for boundaries.
 
 R4 native work is returned as `operation: "native_step"`, with `native_step`,
 the package `command`, and `unattended: true`, when the auto-apply setting is off
-or the routing file's `lesson-policy: propose` covers a lesson (its row's `reason` says so). Run that skill in unattended mode
+or the lesson routing's `lesson-policy: propose` covers a lesson (its row's `reason` says so). Run that skill in unattended mode
 with the complete original item. Return `carried` (or `nothing`, `not configured`,
 `declined`, `failed`, or `uncertain` as appropriate); native `written` and
 `already_written` results are rejected. No native item is archived by these
@@ -266,7 +266,7 @@ assessed item whose session is open again comes back `carried` with that reason,
 nothing is committed or pushed for it, and a commit from an earlier round whose
 session is now open stays `not pushed` for a later sweep. Two handoffs carrying one
 fact or always-loaded lesson get one ask; the second row shares its result.
-An unreadable routing file, or a mistyped setting, stops only what it governs: those
+An unreadable lesson routing, or a mistyped setting, stops only what it governs: those
 items stay `native_step`, and the report's errors name it.
 
 For `apply_lesson`, assess the item as improve-harness's Auto-apply section does,

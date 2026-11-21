@@ -205,17 +205,16 @@ current pointer is not an installer release".
 ## Configure a knowledge root manually
 
 The guided skill is recommended because a useful configuration includes local
-policy and two meaningful follow-up routes, not just valid paths. To configure
-the same contract manually, replace the example path with the root you want the
-skills to use:
+policy and two meaningful follow-up routes, not just valid paths. It runs
+`scripts/knowledge_setup.py`, which shows the exact plan and writes only an
+approved one. To configure the same contract manually, replace the example path
+with the root you want the skills to use:
 
 ```bash
 HIPPOCAMPUS_KNOWLEDGE_ROOT=/absolute/path/to/knowledge
 mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT"/{raw,output,docs}
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/log.md"
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/docs/DECISIONS.md"
-
-# Only when using the wiki:
 mkdir -p "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki"
 touch "$HIPPOCAMPUS_KNOWLEDGE_ROOT/wiki/hot.md"
 
@@ -229,21 +228,25 @@ Edit `~/.config/hippocampus/profile.md` and set:
 - `knowledge_root` to the existing absolute root;
 - `operation_log_file` and `decision_log_file` to existing files relative to
   that root;
+- `hot_file` to the session cache, an existing file relative to that root;
+- `wiki_followup_destination` to the route for knowledge-base maintenance;
 - `artifact_followup_destination` to the task route for source-derived actions,
   including meeting tasks and research follow-ups.
 
-Set-up asks whether you want a wiki and recommends neither answer. In the
-profile itself the wiki is enabled by default: a profile without
-`wiki_enabled` uses it. To use it, also set `hot_file` to an existing
-file relative to the root and `wiki_followup_destination` to the route for
-knowledge-base maintenance. To skip the wiki, add `wiki_enabled: false` to the
-profile and omit both wiki fields; the `wiki/` directory is then neither
-required nor created, and `wiki-compile`, its compatibility commands and `wiki-audit` refuse to run.
+The wiki is part of the required knowledge setup. A released profile with
+`wiki_enabled: false` still reads, and `wiki-compile`, its compatibility
+commands and `wiki-audit` refuse to run for it; `hippocampus-set-up` reports its
+knowledge setup incomplete and offers an upgrade that writes only after your
+approval.
 
 The follow-up destinations are intentionally independent. Replace the
 instructional placeholders with routes another agent can actually follow. The
 profile's free-form Markdown body can define local taxonomy, source-library
 routing, output naming, log formats, and other policy for this knowledge root.
+The profile is also the one home for lesson policy: the optional `auto_apply`
+setting (off by default) and an optional `## Lesson routing` body section that
+replaces the default lesson routing. `hippocampus-set-up` explains both and shows
+each change before writing it.
 The validated frontmatter schema is currently `profile_version: 4`.
 
 ## Install a published release
