@@ -1,348 +1,89 @@
 # Hippocampus
 
-Hippocampus is a portable, holistic system for keeping your agents' rules and
-knowledge. It works with any agent: installers ship for Claude Code and Codex
-today, and because the skills are standard Agent Skills and the rules are
-composed into `AGENTS.md`, any agent that reads those can use them.
-Everything is plain files you own. It remembers five kinds of things:
+**A self-improving AI knowledge system that works in both Claude Code and Codex**
 
-- **Captured knowledge** from meetings and conversations, kept as
-  source-linked records.
-- **Research**: reports that answer a question, cite their sources and end in
-  decisions.
-- **The wiki**, where selected evidence is compiled into short, linked articles.
-- **Sessions**: where a piece of work stands, written as a handoff the next
-  session can pick up.
-- **Rules**: the instruction files, skills and memory settings that govern
-  your agents.
+Keep what you and your AI learn, and make it useful in the next conversation. Throughout our sessions, you learn new information, discover better ways of working, and collect knowledge that is often lost when you close your chat. Platform-specific memory features help, but lock those learnings in proprietary formats and locations.
 
-Most memory tools keep one of these. Hippocampus keeps all five because they
-feed each other: a lesson from a session becomes a rule, a source from a
-research question becomes a wiki article, and the next session starts with
-both. Every change to a person, document, task, wiki article or rule is
-proposed first and runs only once approved.
+Hippocampus gives you tools and hooks to capture your research, meetings, lessons, and unfinished work in a shared home. And more importantly, it gives you workflows to file all that information where it belongs so your projects, documents and ticket systems stay up to date. It detects when your sessions compact and saves important information before it's lost. It's customizable so you define your own checklists that can capture the information that is important to you, and store it in the files or services you use.
 
-Hippocampus runs on top of your agent's own compaction and complements it.
-Compaction summarizes a long conversation and can drop detail. Hippocampus
-keeps a handoff for each session (where the work stands, its open loops, the
-files it changed), checks it at the end of every turn, and puts it back into
-context after the agent compacts. Because the handoff is kept current at every
-stop rather than written at the last moment, it holds even when the agent
-compacts a session while you are away, as Claude Code now does with idle
-sessions. A wrap at the end of a task sends what the session learned to your
-rules, your knowledge and your record before the conversation is gone.
+As we use our agents for longer, we collect a lot of rules, memories, and practices that become disorganized and bloated. And as models improve, rules that were important become dead weight and take up context. Hippocampus helps you catch these files, then prune and organize them over time using the best practices from Anthropic and OpenAI. It helps you remove duplication and contradictions, while reducing the number of tokens your agents load.
+
+## What you gain
+
+- Improve how your agents work with you. Turn corrections and experience into reusable rules and skills, then review those instructions for duplication, conflict and unnecessary size.
+- Spend less time re-establishing context with a wiki of specific knowledge about you, your interests and your work, and keep that information consistent across your chats and projects.
+- Preserve where work stands, what was decided and what still needs attention when a session ends or compacts.
+- Keep your knowledge when you change tools. Your sources, notes, rules and handoffs remain ordinary files you own. Direct integrations currently ship for Claude Code and Codex.
+- Turn your agent questions into durable research you can reference later. Turn your meetings into notes and actions.
+- Help reduce token usage by capturing important information when it's cheap.
 
 ## How the parts fit together
 
+Hippocampus connects three kinds of memory: what you know, how your agents should work, and where your current work stands.
+
+Each of these can be collected with you in the loop when you want more control, and automated after you establish your own rules and practices. Hippocampus supplies the workflows to enable this, while your own documents and task systems remain the record of your work.
+
 ![Hippocampus has five parts. A session writes a handoff through checkpoint or checklist and captures knowledge through knowledge-capture; sources become a meeting record through meeting-capture or a research report through research-topic. You approve or decline each proposed change: lessons reach rules and the agent harness through improve-harness, and absorb carries captures and research to the wiki through wiki-compile and to documents and follow-up work. Through pickup, the next session resumes from its handoff under the improved rules, with the wiki to read.](docs/images/overview.svg)
 
-Every step writes Markdown or JSON to disk, and every step that changes
-something you own asks first. You can run any step on its own. The wrap
-checklist runs the loop for you at the end of a task: it reconciles your
-record, captures knowledge, folds lessons into your rules, persists the work
-and writes a handoff, in that order.
+## Research that leads somewhere
 
-## The session loop
+Hippocampus started its life as a research skill, and these skills still remain one of its most useful workflows.
 
-![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](docs/images/session-lifecycle.svg)
+Most agent chats contain either explicit or implicit online searches to answer your questions. Both Claude and Codex agents know how to perform research well. What Hippocampus provides is a workflow for capturing that knowledge from your sessions and turning it into actions.
 
-The handoff is how one session passes its work to the next. Hippocampus keeps
-your **record** (tickets, project status, documents) as the
-source of truth and writes a thin **handoff** that points back to it, with the
-session's open loops and uncommitted files.
+Start with a question, an article, a video, a podcast or a collection of sources. Use a short research workflow for an inline answer, or a deeper one when the question needs a durable report and a fuller evidence base.
 
-Hippocampus does not impose its own files for projects and tasks. Most people
-already run a project-management tool or task tracker, so Hippocampus writes to
-the one you use: the checklist's record and persist steps call your own
-commands or skills, and follow-up work from research and meetings goes to the
-task route you describe in set-up.
+Research retains its sources and distinguishes evidence from interpretation. Review the findings, then use absorb to apply the changes you authorize: update a document, retain a source, compile knowledge or file follow-up work in your own system. Research does not have to remain a backlog of conversations waiting for you to remember what to do next.
 
-- `checkpoint` writes the handoff now, mid-task. It never commits or pushes.
-- `checklist` wraps a finished task through five fixed steps: reconcile the
-  record, capture knowledge, fold in lessons, persist, and write and validate
-  the handoff. A checklist profile binds the record and persist steps to your
-  own commands and can add steps, but cannot remove any.
-- `pickup` lists handoffs after a cold start, including ones from other
-  worktrees of the same repository, and checks the one you choose against the
-  record.
-- `wip` reports current work, blockers and pending approvals.
-  `handoff-prompt` writes a prompt for deliberately handing work to another
-  session or tool. `sweep` reports abandoned sessions and, when configured,
-  files their open items.
+Hippocampus also works with [Gemini Notebook](https://notebooklm.google.com) (its integration still uses the former name, NotebookLM) in order to create focused research notebooks that provide more grounded answers than using either Claude or Codex on its own.
 
-Handoffs live outside either tool's data folder, so you can checkpoint in
-Claude Code and pick up in Codex. Checkpoints never schedule timers.
-Use `keep-warm on` only while waiting on a specific result or reply that will
-message this session, expected within about two hours. It starts off, allows at
-most two wakes around 55 and 110 minutes from activation, and stops at the first
-wake without new incoming work. Empty wakes write no handoff. `keep-warm off`
-cancels pending work; Claude Code executes native CronDelete.
-The pre-compaction hook preserves real work from retained facts.
-Hooks also remind you to checkpoint when context
-passes 50%, restore the handoff after compaction, and suggest a wrap after a
-commit, push or passing test run. The [session guide](docs/session-guide.md)
-covers every skill, hook and file the package writes.
-
-## What it remembers
-
-| Area | What it keeps | Where it lives | Skills |
-|---|---|---|---|
-| Wiki | Atomic articles compiled from selected sources, with topic indexes | `wiki/` in your knowledge root | `wiki-compile`, `wiki-audit` |
-| Research | Reports that answer a question, assess the sources and end in decisions | `output/`, with sources in `raw/` | `research-topic`, `research-sources`, `quick-research`, `dev-research`, `feature-research`, `feedback-research`, `absorb` |
-| Meetings | One source-linked record per meeting, plus the people, documents and follow-ups it changes | `meetings/` in your knowledge root | `meeting-capture`, `transcribe`, `absorb` |
-| Conversations | Sources and conclusions from the current session that are worth keeping | Wherever the approved disposition says | `knowledge-capture` |
-| Sessions | Handoffs, a ledger of touched files, checklist state | `~/.local/state/hippocampus/` | `checkpoint`, `checklist`, `pickup`, `wip`, `handoff-prompt`, `sweep` |
-| Rules | Rule sources composed into each tool's instruction file; lesson routing | A rules document in your knowledge root, composed into `CLAUDE.md` and `AGENTS.md` | `improve-harness`, `slim-harness`, `slim-unattended`, `hippocampus-set-up` |
-
-## The wiki
-
-The wiki is where research ends up when it is worth keeping. It follows
-[Andrej Karpathy's LLM Wiki pattern][1]: one concept per article, written as
-claims rather than source summaries, with attribution in each article's sources
-and `[[wikilinks]]` between related ideas. Agents read it the same way you do.
-
-Three kinds of index keep it fast to search as it grows. `wiki/hot.md` lists
-what changed recently, so a session starts there instead of reading everything.
-Each topic folder has an `_index.md`, and `wiki/_master-index.md` maps every
-topic. The skills update all three as they write.
-
-`wiki-compile` only works from a selected set of primary sources in `raw/`. It
-reads those sources before it reads the existing wiki, drafts claims, then
-compares them with nearby articles and records tensions and gaps instead of
-blending conflicting claims. A research report is never compile input; its
-underlying sources are. It never sweeps every uncompiled file. `wiki-audit`
-writes a ranked report on structure, source coverage, tensions and gaps
-without changing anything.
-
-The wiki is part of the knowledge root that `hippocampus-set-up` configures.
-[Obsidian][7] is the practical
-way to browse it, since most Markdown viewers show wikilinks as plain text, but
-any wikilink-aware client works.
-
-## Research
+Meetings follow the same principle. If you capture meetings with Wispr Flow (through the Wispr Flow plugin) or Granola (through [Granola's MCP connector](https://docs.granola.ai/help-center/sharing/integrations/mcp)), or supply a transcript from a tool like Google Meet, you can create a source-linked record and identify the people, documents and actions affected by what was discussed.
 
 ![Ask a broad question or bring selected sources; Hippocampus writes a research report; absorb carries approved outcomes to people, documents, follow-up work, the wiki and a retained reference record.](docs/images/question-answer-action.svg)
 
-**Ask** a broad question with `research-topic`, or **bring** sources you
-already have with `research-sources`. Both start by settling the **question**:
-what you want to understand or decide, the scope, and the evidence needed. Both
-produce an **answer** in a research report, with citations, a source
-assessment and open gaps.
-
-Substantial research is grounded in [NotebookLM][8], which answers from the
-sources you selected and cites them. That keeps the synthesis tied to what your
-sources say rather than to a model's training data. Citations still need
-checking, and the report says how far to trust each claim.
-
-The report ends in proposed outcomes. Review them, then run `absorb` for the
-approved **action**: update people and documents, file follow-up work, and
-compile selected evidence into the wiki through `wiki-compile`. You can
-decline any single proposal. Once every approved route is done or declined,
-the report stays in your knowledge root as a reference record. The report
-structure, distribution rules and the deliverables that skip `absorb` are in
-the [knowledge guide](docs/knowledge-guide.md#durable-research-and-distribution).
-
-## Meetings
-
 ![Bring a calendar event, note or transcript; Hippocampus writes a meeting record in your meeting folder; absorb carries approved outcomes to people, documents (including the original transcript, filed after approved routes complete), follow-up work, the wiki and a retained reference record.](docs/images/capture-meetings.svg)
 
-Bring a **calendar event**, a **note** or a **transcript** to
-`meeting-capture`. Each is optional and each adds something different: the
-event gives schedule and agenda, notes keep what you observed, and the
-transcript records what was said. The record says which inputs it had.
-`transcribe` turns local audio or video into a timestamped transcript on macOS
-26 or later.
+## Knowledge for you and your AI
 
-The skill writes a source-linked **meeting record** to its folder (default
-`meetings/`) from a bundled or chosen template. The record stays there.
-`absorb` carries approved outcomes to the same people, document, follow-up and
-wiki destinations as research, and files the original transcript only after
-those routes finish. Local policy can add custom classes of proposal with their
-own searches, fields and routes; see the
-[opt-in worked example](docs/examples/capture-writing.md). Configuration and
-source handling are in the
-[knowledge guide](docs/knowledge-guide.md#meeting-configuration-and-source-handling).
+Your knowledge lives in a folder on your computer. It includes some standard folders, and skills for maintaining the content and for helping you organize context for your agents. Sources stay in `raw/`, research and created artifacts go in `output/`, and compiled knowledge in `wiki/`. The folder works best with Obsidian, but agents can read the Markdown directly.
 
-## Research skills
+The wiki is based on Karpathy's idea for agent knowledge management, and has been expanded to support your agent rules, memories, and multiple providers. It contains short, linked articles built from selected primary sources. It keeps attribution and records disagreements and gaps rather than merging every source into one answer. It includes tools for writing and auditing content.
 
-General research:
+## Built-in self-improvement
 
-| Skill | Use it when | Result |
-|---|---|---|
-| `quick-research` | You need a cited answer to a general question. | Findings inline in the conversation. |
-| `research-sources` | You have URLs, files, media, a source collection or a named target to analyze. | A source-grounded report ending in the decisions it raises; then `absorb`. |
-| `research-topic` | You need deep, topic-first research with persistent sources, gap filling and claim verification. | A NotebookLM-backed report ending in the decisions it raises; then `absorb`. |
+When you correct an agent or discover a better practice, `improve-harness` helps put the lesson where it will be useful: a focused skill, a shared rule, an agent definition or another appropriate part of your setup. Hippocampus understands that a line in your AGENTS.md file and a line in the system prompt have different impacts. It helps you find the best place for your rules.
 
-Specific domains:
+Shared instructions can live alongside your knowledge. The rule composer delivers them to each tool's instruction format, so you can maintain one source rather than independently edit copies for each provider.
 
-| Skill | Use it when | Result |
-|---|---|---|
-| `feature-research` | You need competitor UX, common patterns or platform conventions before designing a feature. | A design input document filed with the project. Not absorbed. |
-| `feedback-research` | An adopt, buy, upgrade or wait decision depends on current community experience. | A decision memo with communities to watch. Not absorbed. |
-| `dev-research` | You are diagnosing a bug or checking an API, library or implementation approach. | Competing explanations and sources inline. |
+Improvement also means removing what no longer helps. `slim-harness` reviews instructions with you for duplication, conflicts and unnecessary detail. With automatic applying enabled, the system can retain size and duplication findings for `slim-unattended` to prepare review branches. It does not merge those branches for you.
 
-Getting results where they belong:
+These workflows preserve user-owned instructions and follow the approval policy you choose. They do not retrain the underlying model or guarantee that an agent will never repeat a mistake.
 
-| Skill | Use it when | Result |
-|---|---|---|
-| `absorb` | A research report or meeting record has approved changes ready to run. | Runs each approved row and records a receipt for it. |
-| `knowledge-capture` | The current conversation produced sources or conclusions worth keeping. | A complete disposition proposal, then the approved captures. |
-| `wiki-compile` | A selected set of raw sources is ready to become wiki articles. | New or updated articles, indexes and source status. |
-| `wiki-audit` | You want a structural and source-coverage review of the wiki. | A ranked report in `output/`; nothing else changes. |
+## Continue work across sessions
 
-## Rules and the agent harness
+In order to make sure you don't lose your work, Hippocampus maintains handoff files for your sessions. It captures checkpoints automatically when a session compacts or stops, not on a timer, or manually when you invoke it. The handoff complements your agent's own compaction. It preserves a structured account of the work outside the conversation, and the supported hooks restore it after compaction.
 
-When a session teaches something, such as a mistake you corrected or a "from now
-on", `improve-harness` decides where that lesson belongs: a hook, one skill, one
-agent definition, a repository's instruction file, your user-level rules, or
-memory. It prefers the narrowest place that still loads when the lesson is
-needed. Interactive runs propose and wait; unattended runs carry the proposal
-forward. A `## Lesson routing` section in your knowledge profile can replace the
-default placement table.
+Create custom checklists for the end of your sessions to make sure everything gets filed where you want and none of your work is lost. It points to your task and document systems rather than replacing them.
 
-`slim-harness` reviews one instruction file with you: it finds duplicates and
-conflicts with neighboring files, asks before resolving them, and leaves its
-edits uncommitted for you to check.
+When your long-running sessions "fall out of cache" and are expensive to continue, you can "pickup" the work in a new session without needing to compact the old conversation or spending tokens searching its transcript for lost work.
 
-One setting, `auto_apply` in your knowledge profile (off by
-default), lets these run without waiting for you. With it on, a wrap applies
-the lessons it recommends and captures wiki and retained knowledge under your
-knowledge root. It records files over their size limits, and a sweep in act
-mode applies the same items from abandoned sessions. `slim-unattended` slims
-the recorded files on a branch per repository for your review and never merges
-it. A fact about you always waits for your answer, and a lesson routing line
-`lesson-policy: propose` turns lesson applying off. The
-[session guide](docs/session-guide.md) explains each step and how to undo it.
+It also provides a quick way to pass part of a task to a new session with a standard handoff prompt (that the new agent doesn't assume you wrote yourself).
 
-Your rules can live in your knowledge root as plain Markdown, one document for
-every tool and an optional one for development work. The rule composer writes
-them into each tool's own instruction file (`CLAUDE.md` for Claude Code,
-`AGENTS.md` for Codex) and checks for drift. Set-up shows each
-tool's current instruction file and memory setting, offers a preset, and lists
-every file it will change before it writes. It never deletes a memory store.
-Details are in the
-[knowledge guide](docs/knowledge-guide.md#rules-and-memory-configuration).
+![Mid-task, checkpoint writes a handoff; a finished task wraps through checklist and writes one. Pickup in Claude Code or Codex reads the handoff and follows it back to your record.](docs/images/session-lifecycle.svg)
 
-## Your files
+## Your tools, your files
 
-Everything is Markdown or JSON on your disk. No database, no hosted service.
-You can read and edit it in any editor, version it, and keep it after the
-conversation that made it is gone.
+The packaged installation and hook integrations support Claude Code and Codex. The knowledge and rule sources use Markdown, with JSON for structured state. Other tools can use compatible files and skills, but full workflow and hook support depends on the integration.
 
-```text
-<knowledge-root>/          # chosen in set-up
-├── raw/                   # source material and provenance
-├── output/                # research reports and audit reports
-├── docs/                  # operation log and decision log
-├── meetings/              # meeting records (folder is configurable)
-└── wiki/                  # compiled articles and indexes
+Hippocampus does not require a particular task tracker or hosted knowledge service. Some research and transcription routes use optional external tools; their availability depends on your setup. One is [Defuddle](https://defuddle.md), which gives agents a web page's readable text instead of its full markup, so reading sites costs fewer tokens. It does not synchronize files across machines or create a general agent scheduler.
 
-~/.local/state/hippocampus/
-├── handoffs/              # one handoff per session and subject
-└── checklist/             # wrap state
+## Guides
 
-~/.config/hippocampus/
-├── profile.md             # knowledge profile, auto-apply setting and lesson routing
-├── checklist-profile.md   # checklist bindings and added steps
-└── config.json            # shared session settings (optional)
-```
+Every skill, what it does and when to use it, is described in the knowledge and session guides.
 
-The [knowledge guide](docs/knowledge-guide.md#knowledge-store) and
-[session guide](docs/session-guide.md#where-things-live) list every location
-and the setting that moves it.
-
-## Install
-
-Hippocampus runs on macOS and Linux (and WSL). It needs Python 3.9 or newer
-(3.11 or newer for rules set-up) and `git`; the Claude Code hooks also need
-`jq`. From a checkout or a signature-verified release, run the installer for
-each tool you use:
-
-```bash
-python3 scripts/install-claude.py   # Claude Code plugin, skills and hooks
-python3 scripts/install-codex.py    # Codex skills and trusted hooks
-```
-
-Then run set-up with your agent:
-
-| Tool | How you invoke a skill | Set-up |
-|---|---|---|
-| Claude Code | `/hippocampus:<skill>`, for example `/hippocampus:research-topic` | `/hippocampus:hippocampus-set-up` |
-| Codex | The skill name, for example `Use checklist` | `Use hippocampus-set-up` |
-
-Set-up explains the storage model, configures your knowledge root with its
-wiki, checklist bindings and rule targets, and shows every change before it
-writes. Set-up is complete once the knowledge root is configured.
-Both installers undo themselves with `--uninstall`; your handoffs, profiles and
-knowledge root stay.
-
-[INSTALLATION.md][6] covers prerequisites per platform, the signed-release
-route and its fingerprint, manual configuration and verification.
-[docs/session-installation.md](docs/session-installation.md) covers the
-installed layout for each tool, shared configuration and uninstall.
-
-## Coming from continuity
-
-Continuity, the earlier session package, is now part of Hippocampus. It was
-never released, so there is no automatic migration:
-
-1. Uninstall continuity from each tool. The Hippocampus installers refuse to
-   run while it is present and print the commands to remove it.
-2. Install Hippocampus as above.
-3. Move your checklist profile to `~/.config/hippocampus/checklist-profile.md`
-   and delete its `knowledge` and `lessons` binding blocks. Those steps are now
-   built in. Replace `record` with per-kind `record_writes`; keep `persist` and ask.
-
-Moving routing, configuration and saved handoffs is optional; the steps are in
-[MIGRATION.md](MIGRATION.md#manual-continuity-cutover).
-
-## Built on
-
-Hippocampus stands on tools others built: [NotebookLM][8] for source-grounded
-synthesis, [notebooklm-py][4] for agent access to it, [yt-dlp][5] and
-[Defuddle][9] for gathering sources, Apple Speech for transcription, and
-[Obsidian][7] for browsing. None of them is bundled except the Apple Speech
-transcriber, and each is optional or detected at runtime; see
-[external and optional integrations](docs/knowledge-guide.md#external-and-optional-integrations).
-What Hippocampus adds is the part that makes them one system: the contracts for
-how evidence becomes durable knowledge, reports that end in decisions instead
-of summaries, approval before every change, and handoffs and rules that carry
-what was learned into the next session.
-
-I built it for my own work, mostly to learn about AI and to improve the agents
-I run. A typical use: after a video or podcast, I hand over the URL and ask it
-to dig into the ideas that caught my attention and how they apply to what I'm
-building. The result lands in the wiki, and the lessons land in my rules.
-
-## Reference
-
-- [Knowledge guide](docs/knowledge-guide.md): knowledge root, research reports
-  and distribution, meetings, wiki compile and audit, rule composition,
-  integrations, example requests.
-- [Session guide](docs/session-guide.md): session skills, hooks, handoff and
-  checklist files.
-- [Sweep](docs/sweep.md): abandoned-session sweeps and act mode.
-- [Glossary](docs/glossary.md): record, handoff, checkpoint, wrap, slot and the
-  rest of the vocabulary.
-- [INTERFACE.md](INTERFACE.md): contracts for adapter and profile authors.
-- [Karpathy-wiki contract][2] and [research artifact contract][3].
-- Architecture maps:
-  [knowledge](docs/architecture/runtime.html) and
-  [sessions](docs/architecture/session/runtime.html).
-- [MIGRATION.md](MIGRATION.md): upgrades between releases.
-
-`research-absorb`, `research-to-wiki`, `vault-compile` and `vault-audit` remain
-as compatibility names that hand off to `absorb`, `wiki-compile` and
-`wiki-audit`.
-
-Apache-2.0. See [LICENSE](LICENSE).
-
-[1]:	https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
-[2]:	contracts/karpathy-wiki.md
-[3]:	skills/absorb/references/artifact-contract.md
-[4]:	https://github.com/teng-lin/notebooklm-py
-[5]:	https://github.com/yt-dlp/yt-dlp
-[6]:	INSTALLATION.md
-[7]:	https://obsidian.md
-[8]:	https://notebooklm.google.com
-[9]:	https://defuddle.md
+- [Installation and setup](INSTALLATION.md)
+- [Knowledge workflows](docs/knowledge-guide.md)
+- [Session workflows](docs/session-guide.md)
+- [Session installation and configuration](docs/session-installation.md)
+- [Interfaces and integrations](INTERFACE.md)
+- [Shared vocabulary](docs/glossary.md)
