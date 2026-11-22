@@ -684,6 +684,27 @@ Before compaction, real work is preserved from ledger facts and current git
 state without an agent turn. Fresh sessions, manual/context checkpoints and
 post-compaction restore never enable keep-warm.
 
+### Settled-identity store
+
+Location: `settled-identities.jsonl` beside the session ledgers, one per machine.
+Every settle path appends a settlement receipt, and `handoff.py settle-identity
+--receipts <file>` records receipts supplied by an operator. Pickup, checkpoint and
+the other carry paths skip any session item whose identity has a receipt.
+
+```text
+settled-identities.jsonl                # append-only JSON lines, one receipt per identity
+└── receipt
+    ├── identity                        # session_id, produced_at, type, text (the item's context)
+    ├── disposition                     # captured, dropped, filed, applied, recorded or done
+    ├── reason                          # one line: why the item is settled
+    ├── destination                     # where it was filed, or null
+    ├── settled_at                      # timestamp with timezone
+    └── settled_by                      # the session that settled it
+```
+
+No example is required: the store is a receipt log, outside the three captured
+output formats above.
+
 ### Pre-compaction backups
 
 Location: `pre-compact-<YYYYMMDD_HHMMSS>.json` in the resolved backup
