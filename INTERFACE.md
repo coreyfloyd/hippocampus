@@ -27,10 +27,11 @@ stays carried with its original identity and judgment.
 
 Reports contain `session_id`, `started_at`, `ended_at`, `filed`, `unfiled`, `items`
 (when filing ran) and `errors`, preserving identities, destinations and receipts.
-Filing rows index the loops as supplied. The checkpoint drops only settled items, so
-each row follows its supplied position into the written loops; a row whose item is
-settled by the time the pass writes (a retry after it was filed) is skipped and its item
-listed under `already_settled`.
+Filing rows index the loops as supplied. The checkpoint reports where each supplied
+position landed in the loops it wrote, and each row follows that map; a row whose item
+the checkpoint dropped as settled (a retry after it was filed) is skipped and its item
+listed under `already_settled`, present (possibly empty) on every report. A row the map
+cannot place is skipped and listed under `skipped_rows` with its reason; the pass goes on.
 `--scheduled-report COMMAND` invokes the configured adapter using argv parsing
 (no shell), JSON stdin and JSON stdout. The request is
 `{"operation":"report","kind":"durable_checkpoint","report":{...}}`.
@@ -267,8 +268,13 @@ status and get no receipt. Pickup and checkpoint record a receipt for such a ter
 item whose reason says no filing step settled it, and report how many they closed:
 checkpoint prints a `Closed N carried item(s) ...` line and pickup's report has
 `terminal_closed`. An identity also supplied as an unsettled copy in the same write stays
-open. A write's own receipts already apply to the handoff it writes, and are saved only
-after that write succeeds; checklist `settle` returns its receipts in `settled_items`,
+open, and an identity the store already settled is neither closed nor counted again.
+These past-tense values state a fact: on a carried item they mean it is settled and close
+it machine-wide, so a writer states intent with plan words (`drop`, `file`, `keep`,
+`pending`), which are never terminal. A write's own receipts already apply to the
+handoff it writes, and are saved as soon as that file is written, before its lint;
+pickup saves them before it copies the chain, so a retry after a failed store write
+redoes both; checklist `settle` returns its receipts in `settled_items`,
 which the checkpoint saving the payload records (`lessons` as applied, `knowledge` as
 captured, other slots as filed). The
 stale-handoff guard and the context-usage warning ask for new lessons, decisions and

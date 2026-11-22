@@ -225,7 +225,7 @@ def test_checkpoint_failures_publish_report_without_using_stale_handoff(tmp_path
     original = b'{"resume":{"open_loops":[],"next_action":"stale continuation"}}'
     if failure == 'keep-warm':
         path.write_bytes(original)
-    def checkpoint(*_):
+    def checkpoint(*_, **__):
         if failure == 'exception':
             raise OSError('fixture checkpoint refused')
         if failure.startswith('lint'):
@@ -246,7 +246,7 @@ def test_checkpoint_failures_publish_report_without_using_stale_handoff(tmp_path
     report = json.loads(Path(args.report).read_text())
     assert report['filed'] == [] and report['unfiled'] == [source, retained]
     assert report['next_action'] == 'Continue fixture work'
-    assert report['errors']
+    assert report['errors'] and report['already_settled'] == []
     published = json.loads(script.with_suffix('.json').read_text())['report']
     assert published['unfiled'] == [source, retained] and published['errors']
     if adapter_failure:
@@ -484,3 +484,39 @@ def test_a_row_for_a_settled_item_is_skipped_and_later_rows_follow_their_item(tm
     assert report['already_settled'] == [settled]
     assert [row['receipt']['identity']['text'] for row in report['filed']] == ['Still to file']
     assert [row['identity']['text'] for row in json.loads((tmp_path / 'store.json').read_text())] == ['Still to file']
+
+
+def test_an_item_settled_by_another_session_mid_pass_is_still_filed_from_the_written_handoff(tmp_path, monkeypatch):
+    import handoff
+    import durable_checkpoint
+    from types import SimpleNamespace
+    for key, value in {'HANDOFF_LEDGER_DIR': 'ledger', 'HANDOFF_STATE_DIR': 'state',
+                       'HANDOFF_PATH': 'handoff.json'}.items():
+        monkeypatch.setenv(key, str(tmp_path / value))
+    monkeypatch.setenv('CLAUDE_CODE_ENTRYPOINT', 'cli')
+    monkeypatch.setenv('CODEX_THREAD_ID', '')
+    binding = store(tmp_path)
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture', 'record_writes': {'tickets': binding}}))
+    first = {**item('First to file'), 'session_id': 'fixture', 'disposition': 'File in fixture record'}
+    second = {**item('Settled elsewhere mid-pass'), 'session_id': 'fixture', 'disposition': 'File in fixture record'}
+    rows = tmp_path / 'rows.json'
+    rows.write_text(json.dumps([{'index': i, 'rule': 'R2', 'status': 'pending', 'read_status': 'ok'} for i in (0, 1)]))
+    real = handoff.checkpoint
+
+    def checkpoint(*args, **kwargs):
+        result = real(*args, **kwargs)
+        # Another session settles the second item after this pass wrote its handoff.
+        handoff.write_settlement_receipts([handoff.settlement_receipt(second, 'other', 'dropped', 'Not needed.')])
+        return result
+    monkeypatch.setattr(handoff, 'checkpoint', checkpoint)
+    supplied = {'resume': {'headline': 'Continue fixture work', 'next_action': 'Continue fixture work',
+                           'session_summary': 'Investigated fixture work and retained the result.', 'open_loops': []},
+                'session_items': [first, second], 'spawned_processes': []}
+    args = SimpleNamespace(user_profile=str(tmp_path / 'profile.json'), repository_profile=[], filing=str(rows),
+                           report=str(tmp_path / 'report.json'), session_id='fixture', cwd=str(tmp_path),
+                           trigger='checkpoint', scheduled_report=None)
+    result = durable_checkpoint.run(handoff, supplied, args)
+    report = json.loads((tmp_path / 'report.json').read_text())
+    assert report['errors'] == [] and report['already_settled'] == [] and 'skipped_rows' not in report
+    assert [row['receipt']['identity']['text'] for row in report['filed']] == ['First to file', 'Settled elsewhere mid-pass']
+    assert result.exit_code == 0

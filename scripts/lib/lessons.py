@@ -407,7 +407,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         offset = len(loops)
         kept = [annotated.get(offset + index, item) for index, item in enumerate(current) if item not in removed]
         result["session_items"] = [*(item for item in handoff["session_items"] if item.get("recorded") is True), *kept]
-    module.settle_session_items(removed, session_id, lambda item: (
+    module.settle_session_items(removed, session_id, settlement=lambda item: (
         ("dropped", "the lessons step skipped it") if item in dropped
         else ("applied", "the lessons step applied it")))
     module.retain_session_items(list(annotated.values()), session_id)

@@ -9,35 +9,29 @@ import checklist
 import filing_catchup
 
 
-def settled_rows(module, supplied, session_id, loops, rows):
-    """Rows index the loops as supplied. Follow each to its position in the written loops.
+def settled_rows(positions, rows):
+    """Rows index the loops as supplied. Follow each to its index in the written loops.
 
-    The checkpoint drops only settled items, so the written loops are the supplied
-    positions minus those; a row for a dropped position names an item settled since,
-    such as on a retry, and is skipped.
+    ``positions`` is the checkpoint's own map from each supplied position to its written
+    index, None for an item it dropped as settled (such as on a retry), and its loop. Returns the rows to
+    file, the items already settled, and the rows skipped with their reason.
     """
     if not isinstance(rows, list):
-        return rows, []
-    store = module.settled_identities()
-    positions = module.checkpoint_loops(supplied, session_id, store=store, drop_settled=False)
-    if not isinstance(positions, list):
-        return rows, []
-    kept = [module.may_carry(item, store) for item in positions]
-    written = [item for item, keep in zip(positions, kept) if keep]
-    if [module.session_item_identity(item) for item in written] != [
-            module.session_item_identity(item) for item in loops] or len(written) != len(loops):
-        raise ValueError('durable: the written loops do not follow the supplied positions; filing skipped')
-    moved = {index: sum(kept[:index]) for index, keep in enumerate(kept) if keep}
-    result, settled = [], []
+        return rows, [], []
+    result, settled, skipped = [], [], []
     for row in rows:
         index = row.get('index') if isinstance(row, dict) else None
-        if type(index) is int and 0 <= index < len(positions):
-            if index not in moved:
-                settled.append(positions[index])
-                continue
-            row = dict(row, index=moved[index])
-        result.append(row)
-    return result, settled
+        if type(index) is not int or index < 0:
+            result.append(row)
+        elif positions is None:
+            skipped.append({'row': row, 'reason': 'the checkpoint could not map supplied positions to written loops'})
+        elif index >= len(positions):
+            result.append(row)  # Out of range: filing validation refuses it.
+        elif positions[index][0] is None:
+            settled.append(positions[index][1])
+        else:
+            result.append(dict(row, index=positions[index][0]))
+    return result, settled, skipped
 
 
 def run(module, supplied, args):
@@ -47,7 +41,8 @@ def run(module, supplied, args):
     if Path(args.report).resolve() == Path(path).resolve():
         raise ValueError('durable report must differ from the handoff')
     report = dict(session_id=args.session_id, started_at=module.utc_now(),
-                  filed=[], unfiled=copy.deepcopy(module.supplied_session_items(supplied)), errors=[])
+                  filed=[], unfiled=copy.deepcopy(module.supplied_session_items(supplied)), errors=[],
+                  already_settled=[])
     resume = supplied.get('resume') if isinstance(supplied, dict) else None
     continuation = resume.get('next_action') if isinstance(resume, dict) else None
     report['next_action'] = continuation
@@ -62,7 +57,7 @@ def run(module, supplied, args):
         rows = json.loads(Path(args.filing).read_text())
         # Retain and validate before writes. Never read an earlier handoff when
         # checkpoint deliberately skipped writing this pass (e.g. keep-warm).
-        initial = module.checkpoint(supplied, args.cwd, args.session_id, args.trigger)
+        initial = module.checkpoint(supplied, args.cwd, args.session_id, args.trigger, positions=True)
         output = initial.output
         if initial.exit_code:
             raise ValueError('; '.join(initial.errors) or 'checkpoint failed')
@@ -74,7 +69,9 @@ def run(module, supplied, args):
             raise ValueError('checkpoint has no open_loops array; filing skipped')
         continuation = data['resume'].get('next_action', continuation)
         report.update(unfiled=copy.deepcopy(loops), next_action=continuation)
-        rows, report['already_settled'] = settled_rows(module, supplied, args.session_id, loops, rows)
+        rows, report['already_settled'], skipped = settled_rows(initial.positions, rows)
+        if skipped:
+            report['skipped_rows'] = skipped
         # Validate the entire set before dispatching asks. Their writer shares
         # the record lookup protocol; file_items validates the returned owner.
         checklist.file_items(plan, data, rows, ask, execute_writes=False)

@@ -336,7 +336,7 @@ def settle(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         # A saved item is settled, so no later checkpoint restores it from the ledger.
         module = _load_handoff_module()
         session_id = result.get("subject", {}).get("session_id") or module.ambient_session_id()
-        module.settle_session_items([loop for i, loop in enumerate(loops) if i in removed], session_id, None)
+        module.settle_session_items([loop for i, loop in enumerate(loops) if i in removed], session_id)
         # The checkpoint that saves this payload writes one receipt per identity, after the write.
         settled = list(result.get("settled_items", []))
         identities = {module.session_item_identity(row.get("item")) for row in settled if isinstance(row, dict)}
@@ -700,7 +700,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                     destination if isinstance(destination, str) and destination.strip() else None)
         ticket_module.settle_session_items(
             [item for item in loops if ticket_module.session_item_identity(item) not in kept_identities],
-            session_id, settlement)
+            session_id, settlement=settlement)
     if execute_writes:
         result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
     return result

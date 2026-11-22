@@ -268,7 +268,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         offset = len(loops)
         kept = [annotated.get(offset + index, item) for index, item in enumerate(current) if item not in removed]
         result["session_items"] = [*(item for item in handoff["session_items"] if item.get("recorded") is True), *kept]
-    module.settle_session_items(removed, session_id, ("captured", "the knowledge step captured it"))
+    module.settle_session_items(removed, session_id, settlement=("captured", "the knowledge step captured it"))
     module.retain_session_items(list(annotated.values()), session_id)
     result["knowledge_outcomes"] = outcomes(module, session_id)
     return result
