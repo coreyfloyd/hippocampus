@@ -268,7 +268,9 @@ status and get no receipt. Pickup and checkpoint record a receipt for such a ter
 item whose reason says no filing step settled it, and report how many they closed:
 checkpoint prints a `Closed N carried item(s) ...` line and pickup's report has
 `terminal_closed`. An identity also supplied as an unsettled copy in the same write stays
-open, and an identity the store already settled is neither closed nor counted again.
+open, and an identity the store already settled is neither closed nor counted again. An
+item the payload's own wrap `filing` report kept (neither filed nor dropped) is written
+whatever an earlier receipt says, since that filing is this write's judgment.
 These past-tense values state a fact: on a carried item they mean it is settled and close
 it machine-wide, so a writer states intent with plan words (`drop`, `file`, `keep`,
 `pending`), which are never terminal. A write's own receipts already apply to the

@@ -1547,8 +1547,9 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     stored = settled_identities()
     receipts, closed = closing_receipts(items, session_id, stored)
     receipts += settled_item_receipts(supplied, session_id)
-    # This write's own settlements already apply to the handoff it writes.
-    store = stored | {receipt_key(receipt["identity"]) for receipt in receipts}
+    # This write's own settlements already apply to the handoff it writes, and an item
+    # its own filing report kept stays carried whatever an earlier receipt says.
+    store = (stored | {receipt_key(receipt["identity"]) for receipt in receipts}) - filing_kept(supplied)
     handoff = overlay_checkpoint(supplied, cwd, session_id, trigger, store=store)
     if positions:
         positions = supplied_positions(supplied, session_id, store, handoff.get("resume", {}).get("open_loops"))
@@ -1592,6 +1593,16 @@ def supplied_positions(supplied: Mapping[str, Any], session_id: str, store: set[
         else:
             positions.append((None, loop))
     return positions if kept == len(written) else None
+
+
+def filing_kept(supplied: Mapping[str, Any]) -> set[tuple[str, ...]]:
+    """Identities the payload's own wrap filing kept carried: neither filed nor dropped."""
+    filing = supplied.get("filing") if isinstance(supplied, Mapping) else None
+    entries = filing.get("items") if isinstance(filing, Mapping) else None
+    return {identity for entry in entries if isinstance(entry, Mapping)
+            and entry.get("status") not in ("filed", "dropped")
+            for identity in [session_item_identity(entry.get("item"))] if identity} \
+        if isinstance(entries, list) else set()
 
 
 def terminal_line(closed: int) -> str:

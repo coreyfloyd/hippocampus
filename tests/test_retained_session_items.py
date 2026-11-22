@@ -530,3 +530,18 @@ def test_a_checkpoint_parses_the_store_once(tmp_path, monkeypatch):
     assert module.checkpoint(payload, str(tmp_path), 'A', 'checkpoint').exit_code == 0
     assert len(reads) == 1
     assert len(store(tmp_path)) == 2
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_item_the_wrap_keeps_is_written_even_after_an_earlier_receipt(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    assert settle_identity(tmp_path, [receipt(lesson())], tool)[0] == 0
+    data = handoff(tmp_path, 'A')
+    data['resume']['open_loops'] = [lesson()]
+    (tmp_path / 'A.json').write_text(json.dumps(data))
+    kept = wrap_filing(tmp_path, 'A', tool, {'index': 0, 'rule': 'R4', 'status': 'declined',
+                                              'reason': 'The user wants to discuss it first.'})
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', '--trigger', 'wrap', tool=tool, payload=kept)
+    assert result.returncode == 0, result.stderr
+    assert lessons(handoff(tmp_path, 'A')) == [lesson()]
