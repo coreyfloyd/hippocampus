@@ -443,7 +443,8 @@ python3 <checklist-module> settle --user-profile <user-profile> \
 ```
 
 The returned JSON removes only acknowledged loops of types the slot or native step consumes.
-It preserves every other field and never rewrites the source handoff. Merge its
+It preserves every other field and never rewrites the source handoff. Each settled
+item also gets a settlement receipt, so no session on the machine carries it again. Merge its
 remaining loops with this session's unsaved items, then apply the filing rules
 in step 5 under the current session. Unbound destinations warn without failing.
 

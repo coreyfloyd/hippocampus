@@ -373,8 +373,11 @@ than an artifact in the session ledger, keyed by `session_id`, `produced_at`, `t
 and `context`, and every later checkpoint, pre-compaction write, stop skeleton and
 wrap restores it, once, without the agent supplying it again. The wrap settles an
 item when it files or drops it or a native step returns its receipt; a later input
-copy with `recorded: true` settles it too. A settled item is not restored. Another
-session's items enter only through pickup. The stale-handoff guard and the
+copy with `recorded: true`, or with a terminal `disposition` or `status` (`captured`,
+`dropped`, `filed`, `applied`, `recorded` or `done`), settles it too. Each settlement
+also writes a settlement receipt to the machine's settled-identity store, and no
+session on the machine carries a settled item again, whether its ledger retains it or
+its agent supplies it again. Another session's items enter only through pickup. The stale-handoff guard and the
 context-usage warning both ask for new lessons, decisions and knowledge in
 `session_items`. Pending artifacts are supplied from the
 ledger, preserving their producer and time. Extra session-supplied fields are
@@ -430,7 +433,8 @@ ledger JSONL                          # one JSON object per line
 ├── settled session item
 │   └── kind, identity
 │       # kind=session_item_settled; [session_id, produced_at, type, context]
-│       # of an item the wrap filed or dropped; never restored again
+│       # of an item the wrap filed or dropped; never restored again; the
+│       # settlement receipt in settled-identities.jsonl closes it machine-wide
 ├── resumed-chain record
 │   └── kind, record
 │       # kind=resumed_chain; selected handoff, producing session, resume time,

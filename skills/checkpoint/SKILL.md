@@ -50,7 +50,8 @@ JSON
 ```
 
 Repeat `--repository-profile` for additive profiles. The command writes and
-validates a checkpoint before filing, settles successful items in the ledger,
+validates a checkpoint before filing, settles successful items in the ledger
+and the machine's settled-identity store,
 keeps failed/unbound items, preserves the continuation, and reports actual receipts.
 Checkpoint errors, invalid handoffs and no-write keep-warm results still produce
 a failed pass report at the supplied writable report path. They never file from

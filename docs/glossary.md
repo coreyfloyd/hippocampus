@@ -118,7 +118,15 @@ One item carried in a handoff, with a disposition saying what should happen to i
 _Avoid_: todo, task
 
 **Retained session item**:
-A session item, other than an artifact, that a checkpoint received and stored in the session ledger with its original identity: producing session, time, type, and context. Every later checkpoint, pre-compaction write, stop skeleton, and wrap restores it as an open loop, once, until it is settled. The wrap settles an item when it files or drops it, or when a native step returns its receipt; a later item marked recorded settles it too. Another session's items enter the ledger only through pickup, which copies the resumed session's unsettled items to the successor.
+A session item, other than an artifact, that a checkpoint received and stored in the session ledger with its original identity: producing session, time, type, and context. Every later checkpoint, pre-compaction write, stop skeleton, and wrap restores it as an open loop, once, until it is settled. The wrap settles an item when it files or drops it, or when a native step returns its receipt; a later item marked recorded, or one whose disposition or status is terminal (captured, dropped, filed, applied, recorded or done), settles it too. Every settlement also adds a settlement receipt to the settled-identity store. Another session's items enter the ledger only through pickup, which copies the resumed session's unsettled items to the successor.
+
+**Settled-identity store**:
+One file per machine, beside the session ledgers, holding one settlement receipt per settled item: the item's identity (producing session, time and text), its terminal disposition, a one-line reason, its destination or none, when it was settled and by which session. No pickup, checkpoint or wrap on that machine carries an item whose identity has a receipt, whichever session settled it, and no carry path restores an item whose own disposition or status is terminal. `handoff.py settle-identity` records receipts produced elsewhere, such as a catch-up's drops.
+_Avoid_: settled list, drop list, blocklist
+
+**Settlement receipt**:
+One row of the settled-identity store: proof that one item identity is settled and how.
+_Avoid_: tombstone, drop marker
 
 **Sweep**:
 An unattended-safe pass over the handoffs in one scope: a directory together with every worktree of its repository, or every handoff on the machine. For each abandoned session in scope it applies the filing rules to the handoff's items, removes the session's clean, merged worktrees, archives the handoff once nothing in it is left unhandled, and writes a sweep report. With the auto-apply setting on, in act mode, it applies the session's carried lessons and knowledge by a wrap's rules. A sweep never acts on a session that is still open.

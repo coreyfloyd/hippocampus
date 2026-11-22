@@ -353,6 +353,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 raise ValueError(f"lessons: row {index}: an applied lesson requires target, change, evidence and edits")
     known = {tuple(outcome["identity"]): outcome for outcome in outcomes(module, session_id)}
     removed: list[Mapping[str, Any]] = []
+    dropped: list[Mapping[str, Any]] = []
     annotated: dict[int, dict[str, Any]] = {}
     for row in sorted(rows, key=lambda row: row["index"]):
         item = items[row["index"]]
@@ -360,6 +361,8 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         if identity is None:
             raise ValueError(f"lessons: item {row['index']} has no session item identity")
         prior = known.get(identity)
+        if prior and prior["status"] == "dropped":
+            dropped.append(item)
         if item.get("applied"):
             continue
         if prior and prior["status"] != "failed":
@@ -373,6 +376,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             outcome.update(status="dropped", target=row.get("target"), change=row.get("change") or item["context"],
                            reason=row["reason"])
             removed.append(item)
+            dropped.append(item)
         else:
             added = " ".join(edit["new"].strip() for edit in row["edits"])
             outcome.update(change=row["change"], added=added, dictated=bool(row.get("dictated")),
@@ -403,7 +407,9 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         offset = len(loops)
         kept = [annotated.get(offset + index, item) for index, item in enumerate(current) if item not in removed]
         result["session_items"] = [*(item for item in handoff["session_items"] if item.get("recorded") is True), *kept]
-    module.settle_session_items(removed, session_id)
+    module.settle_session_items(removed, session_id, lambda item: (
+        ("dropped", "the lessons step skipped it") if item in dropped
+        else ("applied", "the lessons step applied it")))
     module.retain_session_items(list(annotated.values()), session_id)
     result["lesson_outcomes"] = outcomes(module, session_id)
     return result

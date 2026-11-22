@@ -334,7 +334,9 @@ def settle(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         # A saved item is settled, so no later checkpoint restores it from the ledger.
         module = _load_handoff_module()
         session_id = result.get("subject", {}).get("session_id") or module.ambient_session_id()
-        module.settle_session_items([loop for i, loop in enumerate(loops) if i in removed], session_id)
+        for slot, indexes in receipts.items():
+            module.settle_session_items([loops[i] for i in indexes], session_id,
+                                        ("filed", f"acknowledged by the {slot} step's receipt"))
     return result
 
 
@@ -675,9 +677,18 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     if execute_writes and session_id:
         # Filed and dropped items are settled; kept items stay retained.
         kept_identities = {ticket_module.session_item_identity(item) for item in kept}
+        entries = {ticket_module.receipt_identity(entry["item"]): entry for entry in report["items"]}
+
+        def settlement(item):
+            entry = entries.get(ticket_module.receipt_identity(item), {})
+            if entry.get("status") == "dropped":
+                return "dropped", entry.get("reason") or "dropped by the wrap", None
+            destination = entry.get("destination")
+            return ("filed", f"filed by the wrap's {entry.get('binding') or 'native'} step",
+                    destination if isinstance(destination, str) and destination.strip() else None)
         ticket_module.settle_session_items(
             [item for item in loops if ticket_module.session_item_identity(item) not in kept_identities],
-            session_id)
+            session_id, settlement)
     if execute_writes:
         result["resume"].update(ticket_module.ticket_facts(result["resume"], session_id))
     return result
