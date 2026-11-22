@@ -764,8 +764,7 @@ def test_carried_items_preserve_producer_and_decision_and_summary(tmp_path, monk
     assert "session_items" not in data
     assert data["resume"]["session_summary"] == "Implemented hippocampus capture."
     again = module.checkpoint(data, str(tmp_path), "successor", "checkpoint")
-    # The recorded copy settled its identity, so no later checkpoint carries it.
-    assert module.read_json(again.path)["resume"]["open_loops"][1:] == items[1:]
+    assert module.read_json(again.path)["resume"]["open_loops"][1:] == items
 
 
 def test_artifact_command_is_ledger_backed_and_retired_explicitly(tmp_path, monkeypatch):

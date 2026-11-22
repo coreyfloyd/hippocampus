@@ -375,7 +375,8 @@ wrap restores it, once, without the agent supplying it again. The wrap settles a
 item when it files or drops it or a native step returns its receipt; a later input
 copy with `recorded: true`, or with a terminal `disposition` or `status` (`captured`,
 `dropped`, `filed`, `applied`, `recorded` or `done`), settles it too. Each settlement
-also writes a settlement receipt to the machine's settled-identity store, and no
+also writes a settlement receipt, keyed by `session_id`, `produced_at`, `type` and
+`context`, to the machine's settled-identity store, and no
 session on the machine carries a settled item again, whether its ledger retains it or
 its agent supplies it again. Another session's items enter only through pickup. The stale-handoff guard and the
 context-usage warning both ask for new lessons, decisions and knowledge in

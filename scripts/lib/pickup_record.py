@@ -128,7 +128,10 @@ def main():
     if not (args.complete or args.ticket_status is not None or args.commitments is not None):
         if report.get('source') == 'handoff' and 'error' not in report:
             try:
-                record_pickup(report['handoff_path'], report['handoff'], ambient_session_id())
+                closed = record_pickup(report['handoff_path'], report['handoff'], ambient_session_id())
+                if closed:
+                    # Carried items closed for a terminal disposition are reported, never silent.
+                    report['terminal_closed'] = closed
             except (OSError, ValueError) as error:
                 report.update(error='chain_copy_failed', message=str(error))
                 print(json.dumps(report, ensure_ascii=False, indent=2))

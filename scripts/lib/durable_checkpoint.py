@@ -9,6 +9,37 @@ import checklist
 import filing_catchup
 
 
+def settled_rows(module, supplied, session_id, loops, rows):
+    """Rows index the loops as supplied. Follow each to its position in the written loops.
+
+    The checkpoint drops only settled items, so the written loops are the supplied
+    positions minus those; a row for a dropped position names an item settled since,
+    such as on a retry, and is skipped.
+    """
+    if not isinstance(rows, list):
+        return rows, []
+    store = module.settled_identities()
+    positions = module.checkpoint_loops(supplied, session_id, store=store, drop_settled=False)
+    if not isinstance(positions, list):
+        return rows, []
+    kept = [module.may_carry(item, store) for item in positions]
+    written = [item for item, keep in zip(positions, kept) if keep]
+    if [module.session_item_identity(item) for item in written] != [
+            module.session_item_identity(item) for item in loops] or len(written) != len(loops):
+        raise ValueError('durable: the written loops do not follow the supplied positions; filing skipped')
+    moved = {index: sum(kept[:index]) for index, keep in enumerate(kept) if keep}
+    result, settled = [], []
+    for row in rows:
+        index = row.get('index') if isinstance(row, dict) else None
+        if type(index) is int and 0 <= index < len(positions):
+            if index not in moved:
+                settled.append(positions[index])
+                continue
+            row = dict(row, index=moved[index])
+        result.append(row)
+    return result, settled
+
+
 def run(module, supplied, args):
     if not args.report:
         raise ValueError('durable requires --report')
@@ -29,11 +60,6 @@ def run(module, supplied, args):
         profiles = checklist.load_profiles(Path(args.user_profile), [Path(p) for p in args.repository_profile])
         plan, ask = checklist.compose(profiles), checklist.ask_binding(profiles[0])
         rows = json.loads(Path(args.filing).read_text())
-        # Rows index the loops as supplied; match each to its item before settled ones drop out.
-        supplied_loops = module.checkpoint_loops(supplied, args.session_id, drop_settled=False)
-        matched = [(row, supplied_loops[row['index']]) if isinstance(row, dict) and isinstance(supplied_loops, list)
-                   and type(row.get('index')) is int and 0 <= row['index'] < len(supplied_loops) else (row, None)
-                   for row in rows] if isinstance(rows, list) else []
         # Retain and validate before writes. Never read an earlier handoff when
         # checkpoint deliberately skipped writing this pass (e.g. keep-warm).
         initial = module.checkpoint(supplied, args.cwd, args.session_id, args.trigger)
@@ -48,11 +74,7 @@ def run(module, supplied, args):
             raise ValueError('checkpoint has no open_loops array; filing skipped')
         continuation = data['resume'].get('next_action', continuation)
         report.update(unfiled=copy.deepcopy(loops), next_action=continuation)
-        if matched:
-            # A retry's row for an item settled since is already done; the others follow their item.
-            report['already_settled'] = [item for row, item in matched if item is not None and item not in loops]
-            rows = [dict(row, index=loops.index(item)) if item is not None else row
-                    for row, item in matched if item is None or item in loops]
+        rows, report['already_settled'] = settled_rows(module, supplied, args.session_id, loops, rows)
         # Validate the entire set before dispatching asks. Their writer shares
         # the record lookup protocol; file_items validates the returned owner.
         checklist.file_items(plan, data, rows, ask, execute_writes=False)

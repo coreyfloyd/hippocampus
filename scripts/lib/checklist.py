@@ -34,6 +34,8 @@ _over_limit_spec.loader.exec_module(over_limit)
 SLOTS = ("persist",)
 NATIVE = {"knowledge": {"command": "/hippocampus:knowledge-capture", "consumes": ["knowledge"]},
           "lessons": {"command": "/hippocampus:improve-harness", "consumes": ["lesson"]}}
+# The terminal disposition a slot's acknowledgement records; record writes and asks file.
+SETTLED_AS = {"lessons": "applied", "knowledge": "captured"}
 NATIVE_STATUSES = ("nothing", "not configured", "declined")
 TYPES = {"progress", "commitment", "decision", "knowledge", "lesson", "artifact", "open_loop"}
 TITLES = ("Reconcile the record", "Capture knowledge", "Fold in lessons", "Persist")
@@ -334,9 +336,19 @@ def settle(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         # A saved item is settled, so no later checkpoint restores it from the ledger.
         module = _load_handoff_module()
         session_id = result.get("subject", {}).get("session_id") or module.ambient_session_id()
+        module.settle_session_items([loop for i, loop in enumerate(loops) if i in removed], session_id, None)
+        # The checkpoint that saves this payload writes one receipt per identity, after the write.
+        settled = list(result.get("settled_items", []))
+        identities = {module.session_item_identity(row.get("item")) for row in settled if isinstance(row, dict)}
         for slot, indexes in receipts.items():
-            module.settle_session_items([loops[i] for i in indexes], session_id,
-                                        ("filed", f"acknowledged by the {slot} step's receipt"))
+            for index in indexes:
+                identity = module.session_item_identity(loops[index])
+                if identity and identity not in identities:
+                    identities.add(identity)
+                    settled.append({"item": copy.deepcopy(loops[index]), "disposition": SETTLED_AS.get(slot, "filed"),
+                                    "reason": f"acknowledged by the {slot} step's receipt"})
+        if settled:
+            result["settled_items"] = settled
     return result
 
 
@@ -677,10 +689,10 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     if execute_writes and session_id:
         # Filed and dropped items are settled; kept items stay retained.
         kept_identities = {ticket_module.session_item_identity(item) for item in kept}
-        entries = {ticket_module.receipt_identity(entry["item"]): entry for entry in report["items"]}
+        entries = {ticket_module.session_item_identity(entry["item"]): entry for entry in report["items"]}
 
         def settlement(item):
-            entry = entries.get(ticket_module.receipt_identity(item), {})
+            entry = entries.get(ticket_module.session_item_identity(item), {})
             if entry.get("status") == "dropped":
                 return "dropped", entry.get("reason") or "dropped by the wrap", None
             destination = entry.get("destination")

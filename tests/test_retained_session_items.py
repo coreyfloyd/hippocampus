@@ -212,7 +212,7 @@ def pickup(tmp_path, successor, source, tool):
 
 def receipt(item, disposition='dropped', reason='Already written in its destination.', **changes):
     return {'identity': {'session_id': item['session_id'], 'produced_at': item['produced_at'],
-                         'text': item['context']},
+                         'type': item['type'], 'text': item['context']},
             'disposition': disposition, 'reason': reason, 'destination': None,
             'settled_at': '2026-11-22T12:00:00+00:00', 'settled_by': 'catch-up', **changes}
 
@@ -256,17 +256,63 @@ def test_a_predecessor_never_restores_an_item_its_successor_settled(tmp_path, to
 @pytest.mark.parametrize('tool', TOOLS)
 @pytest.mark.parametrize('field', ['disposition', 'status'])
 @pytest.mark.parametrize('value', TERMINAL)
-def test_an_item_with_a_terminal_disposition_is_never_carried(tmp_path, tool, field, value):
+def test_an_item_with_a_terminal_disposition_is_never_carried_and_says_so(tmp_path, tool, field, value):
     settled = lesson(**{field: value})
-    assert lessons(checkpoint(tmp_path, 'A', tool, items=[settled])) == []
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', tool=tool, payload={
+                         'resume': {'headline': 'Work', 'next_action': 'Continue', 'open_loops': [],
+                                    'session_summary': 'Worked in A.'},
+                         'spawned_processes': [], 'session_items': [settled]})
+    assert result.returncode == 0, result.stderr
+    assert 'Closed 1 carried item whose disposition or status was terminal' in result.stdout
+    assert lessons(handoff(tmp_path, 'A')) == []
+    row, = store(tmp_path)
+    assert (row['disposition'], row['settled_by']) == (value, 'A')
+    assert row['reason'] == f"carried with {field} '{value}'; no filing step in this session settled it"
     assert lessons(checkpoint(tmp_path, 'A', tool, resume={'open_loops': [settled]})) == []
-    # An older handoff still carrying it: pickup settles it instead of copying it.
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_pickup_closes_and_reports_a_carried_terminal_item(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool)
+    settled = lesson(disposition='done')
     data = handoff(tmp_path, 'A')
     data['resume']['open_loops'].append(settled)
     (tmp_path / 'A.json').write_text(json.dumps(data))
-    pickup(tmp_path, 'B', 'A', tool)
+    result = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', tmp_path / 'A.json', tool=tool)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)['terminal_closed'] == 1
     assert lessons(checkpoint(tmp_path, 'B', tool)) == []
-    assert receipt(settled)['identity'] in [row['identity'] for row in store(tmp_path)]
+    row, = store(tmp_path)
+    assert (row['disposition'], row['settled_by']) == ('done', 'B')
+    assert row['reason'] == "carried with disposition 'done'; no filing step in this session settled it"
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_receipt_closes_only_the_item_of_its_type(tmp_path, tool):
+    commitment = lesson(type='commitment')
+    checkpoint(tmp_path, 'A', tool, items=[lesson(), commitment])
+    assert settle_identity(tmp_path, [receipt(lesson())], tool)[0] == 0
+    data = checkpoint(tmp_path, 'A', tool)
+    assert lessons(data) == [] and commitment in data['resume']['open_loops']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_unsettled_copy_in_the_same_write_keeps_the_item_open(tmp_path, tool):
+    first = checkpoint(tmp_path, 'A', tool, items=[lesson(), lesson(recorded=True)])
+    assert lessons(first) == [lesson()] and store(tmp_path) == []
+    # A recorded copy alone settles it, and that write's handoff no longer carries it.
+    assert lessons(checkpoint(tmp_path, 'A', tool, items=[lesson(recorded=True)])) == []
+    assert [row['disposition'] for row in store(tmp_path)] == ['recorded']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_artifact_gets_no_receipt(tmp_path, tool):
+    artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
+                'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z'}
+    checkpoint(tmp_path, 'A', tool, resume={'open_loops': [artifact]})
+    wrap_filing(tmp_path, 'A', tool, {'index': 0, 'rule': 'R6', 'status': 'dropped', 'reason': 'Removed.'})
+    assert store(tmp_path) == []
 
 
 @pytest.mark.parametrize('tool', TOOLS)
@@ -286,7 +332,8 @@ def test_a_wrap_settlement_closes_the_item_for_a_later_pickup_in_another_session
     (tmp_path / 'A.json').write_text(json.dumps(stale))  # A later reader finds the older handoff.
     pickup(tmp_path, 'C', 'A', tool)
     assert lessons(checkpoint(tmp_path, 'C', tool)) == []
-    assert [(row['disposition'], row['settled_by']) for row in store(tmp_path)] == [('dropped', 'A')]
+    assert [(row['disposition'], row['settled_by'], row['identity']['type'])
+            for row in store(tmp_path)] == [('dropped', 'A', 'lesson')]
 
 
 @pytest.mark.parametrize('tool', TOOLS)
@@ -330,6 +377,8 @@ def test_settle_identity_retry_is_idempotent(tmp_path, tool):
     receipt(lesson(), disposition='carry'),
     receipt(lesson(), settled_at='2026-11-22T12:00:00'),
     receipt(lesson(produced_at='2026-11-05T12:00:00')),
+    receipt(lesson(type='artifact')),
+    {**receipt(lesson()), 'identity': {k: v for k, v in receipt(lesson())['identity'].items() if k != 'type'}},
     receipt(lesson(), settled_by=''),
     receipt(lesson(), destination=3),
     {k: v for k, v in receipt(lesson()).items() if k != 'reason'},
@@ -361,3 +410,33 @@ def test_concurrent_settle_identity_appends_do_not_interleave(tmp_path):
     texts = [row['identity']['text'] for row in store(tmp_path)]
     assert sorted(texts) == sorted([shared['identity']['text'], *(row['identity']['text']
                                                                    for batch in batches for row in batch)])
+
+
+def test_a_torn_last_row_never_swallows_the_next_receipt(tmp_path):
+    path = tmp_path / 'ledger/settled-identities.jsonl'
+    path.parent.mkdir()
+    path.write_text(json.dumps(receipt(lesson(context='First.'))) + '\n{"identity": {"sess')
+    assert settle_identity(tmp_path, [receipt(lesson(context='Second.'))], 'codex') == (
+        0, {'written': 1, 'skipped': 0, 'invalid': []})
+    lines = path.read_text().splitlines()
+    assert json.loads(lines[-1])['identity']['text'] == 'Second.'
+    assert lessons(checkpoint(tmp_path, 'A', 'codex', items=[lesson(context='Second.')])) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('slot, disposition', [('lessons', 'applied'), ('knowledge', 'captured')])
+def test_settle_records_the_slots_disposition_once_the_handoff_is_saved(tmp_path, tool, slot, disposition):
+    item = lesson() if slot == 'lessons' else lesson(type='knowledge')
+    checkpoint(tmp_path, 'A', tool, items=[item])
+    receipts = tmp_path / 'acks.json'
+    receipts.write_text(json.dumps({slot: [0]}))
+    settled = command(tmp_path, 'A', 'scripts/lib/checklist.py', 'settle', '--handoff', tmp_path / 'A.json',
+                      '--receipts', receipts, tool=tool)
+    assert settled.returncode == 0, settled.stderr
+    assert store(tmp_path) == []  # Nothing is closed machine-wide before the handoff is saved.
+    payload = json.loads(settled.stdout)
+    saved = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                    '--session-id', 'A', tool=tool, payload=dict(payload, spawned_processes=[]))
+    assert saved.returncode == 0, saved.stderr
+    assert [(row['disposition'], row['identity']['type']) for row in store(tmp_path)] == [(disposition, item['type'])]
+    assert item not in handoff(tmp_path, 'A')['resume']['open_loops']

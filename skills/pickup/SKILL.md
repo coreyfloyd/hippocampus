@@ -230,7 +230,7 @@ Passing `plan --handoff` is optional after pickup, but a path that differs from
 the recorded selection fails, even when it names the same producing session.
 An item with a settlement receipt in the machine's settled-identity store, or whose
 disposition or status is terminal, is never copied; pickup records a receipt for the
-terminal one. A skeleton's earlier entries are copied too. Only pickup, native same-session
+terminal one and reports the count as `terminal_closed`. A skeleton's earlier entries are copied too. Only pickup, native same-session
 resume, and compaction continue a session; a written brief or pasted prompt
 without pickup starts its own chain. Do not copy earlier history in by hand.
 
