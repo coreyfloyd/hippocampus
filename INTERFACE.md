@@ -58,9 +58,9 @@ catch-up's `--store`, settled by the carry step's rule (`handoff.settlement_key`
 re-read before each write; it never files or counts them as unfiled. A line the carry step
 skips is counted in one `warnings` entry and settles nothing; only an unreadable store is
 an error, and it stops every remaining `run` write ([catch-up pass](docs/filing-catchup.md)).
-Catch-up ignores an open loop with no `type`: it is not a session item. A handoff whose
-`resume.open_loops` is null, and a typed item with no producing session or time, carry
-nothing to file; each is one `warnings` entry naming the handoff, never an error.
+Catch-up and the sweep read open loops through one function (`sweep.carried_items`):
+every loop, typed or not, is an item with the sweep's fallback identity. A null
+`resume.open_loops` in a handoff older than the cutoff is one `warnings` entry.
 
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or

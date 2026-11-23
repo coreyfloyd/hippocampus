@@ -1381,3 +1381,31 @@ def test_deferred_ask_intent_uses_configured_agent_owner():
     assert report['work'][0]['ask']['owner_agent'] == 'fixture-agent'
     assert report['work'][0]['identity']['session_id'] == 'producer'
     assert report['work'][0]['choices'] == ['keep', 'close']
+
+
+def test_catch_up_and_sweep_read_the_same_items_and_identities(sandbox):
+    base, store, _, env = sandbox
+    captured = json.loads(FIXTURE.read_text())['resume']['open_loops']
+    source(sandbox, loops=[captured[0], {'context': 'Untyped note', 'disposition': 'consider'},
+                           {'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check'}])
+    legacy = json.loads(FIXTURE.read_text())
+    legacy.pop('subject', None)
+    legacy.update(schema_version=1, uncommitted_files=[])
+    legacy['resume'].update(open_loops=[{'context': 'Legacy note', 'disposition': 'consider'}],
+                            session_history=[])
+    (store / 'legacy.json').write_text(json.dumps(legacy))
+    profile = bound_profile(sandbox)
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert swept['errors'] == []
+    report = base / 'catch-up.json'
+    caught = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/lib/filing_catchup.py'), 'inspect',
+                             '--node', 'fixture-node', '--store', str(store), '--cutoff', '2100-01-01T00:00:00Z',
+                             '--user-profile', str(profile), '--report', str(report)],
+                            env=env, text=True, capture_output=True)
+    assert caught.returncode == 1, caught.stderr
+    caught = json.loads(report.read_text())
+    assert caught['errors'] == []
+    key = lambda identity: json.dumps(identity, sort_keys=True)
+    sweep_ids = {key(item['identity']) for candidate in swept['candidates'] for item in candidate['items']}
+    assert len(sweep_ids) == 4
+    assert {key(row['identity']) for row in caught['items']} == sweep_ids

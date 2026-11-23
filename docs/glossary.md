@@ -114,7 +114,7 @@ The per-session list of what one session touched: one entry for each file it cha
 _Avoid_: log, history
 
 **Open loop**:
-One item carried in a handoff, with a disposition saying what should happen to it. A loop with no `type` is a continuation note, not a session item: no filing step consumes it. A carried item names its session-item type (progress, commitment, decision, knowledge, lesson, artifact, or open loop) and keeps the identity of the session that produced it and when; a decision also keeps who made it and where. A slot that consumes an open loop removes it from the handoff.
+One item carried in a handoff, with a disposition saying what should happen to it. A carried item names its session-item type (progress, commitment, decision, knowledge, lesson, artifact, or open loop) and keeps the identity of the session that produced it and when; a decision also keeps who made it and where. A slot that consumes an open loop removes it from the handoff.
 _Avoid_: todo, task
 
 **Retained session item**:
@@ -220,8 +220,9 @@ cutoff, before periodic durable filing starts. It preserves source handoffs,
 deduplicates by producing session, time and text, and reports each destination
 with its receipt. An item the settled-identity store already settles, read as the
 carry step reads it, is reported as already settled, never filed or counted as
-unfiled. An open loop with no `type` is not a session item and is ignored. A null
-`open_loops`, and a typed item with no producing session or time, carry nothing to
-file and are warnings naming the handoff. Store lines the carry step skips are
-warnings; only an unreadable store stops its writes. A recount with any unfiled item or inventory error blocks
+unfiled. It reads open loops as the sweep does: every loop, typed or not, is an
+item, identified by its own session and time, else its handoff's, else the file's
+name and modification time. Warnings never block: store lines the carry step skips,
+and a null `open_loops` in a handoff older than the cutoff. Only an unreadable store
+stops its writes. A recount with any unfiled item or inventory error blocks
 cutover. Every node must provide its own successful report for the same cutoff.

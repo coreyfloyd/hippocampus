@@ -117,9 +117,9 @@ def inventory(store, cutoff, receipts, paths=None):
     """Read both providers' handoffs without consulting sessions or knowledge.
 
     Returns the open items, the identities ``receipts`` already settle, source snapshots,
-    errors and warnings. An open loop with no ``type`` is not a session item and is
-    skipped. A null ``open_loops`` and a typed item with no producing session or time
-    carry nothing to file, so each is a warning naming its file, never an error.
+    errors and warnings. Items and identities come from ``sweep.carried_items``, as for the
+    sweep. A null ``open_loops`` in a handoff older than the cutoff carries nothing, so it
+    is a warning naming the file, never an error.
     """
     items, sources, errors, warnings = {}, {}, [], []
     if store.is_symlink() or not store.is_dir():
@@ -131,26 +131,17 @@ def inventory(store, cutoff, receipts, paths=None):
             resume = data.get('resume', {})
             loops = resume.get('open_loops')
             if loops is None and 'open_loops' in resume:
-                warnings.append(str(path) + ': resume.open_loops is null; read as no carried items')
                 loops = []
+                written = sweep.item_identity({}, data, path)['produced_at']
+                if sweep.timestamp(written) < sweep.timestamp(cutoff):
+                    warnings.append(str(path) + ': resume.open_loops is null; read as no carried items')
             if not isinstance(loops, list):
                 raise ValueError('resume.open_loops must be an array')
             sources[str(path)] = snapshot
-            for index, original in enumerate(loops):
-                if not isinstance(original, dict):
-                    raise ValueError('carried item must be an object')
-                if 'type' not in original:
-                    continue
-                subject = data.get('subject') or {}
-                if (not (original.get('session_id') or subject.get('session_id') or data.get('session_id'))
-                        or not (original.get('produced_at') or data.get('written_at'))):
-                    warnings.append(str(path) + ': open_loops[' + str(index) + '] lacks producing session '
-                                    'or time; not filed')
-                    continue
-                identity = sweep.item_identity(original, data, path)
-                item = {**original, 'session_id': identity['session_id'],
+            for carried in sweep.carried_items(loops, data, path):
+                identity = carried['identity']
+                item = {**carried['item'], 'session_id': identity['session_id'],
                         'produced_at': identity['produced_at']}
-                record_write.identity(item)
                 if sweep.timestamp(identity['produced_at']) >= sweep.timestamp(cutoff):
                     continue
                 key = sweep.identity_key(identity)

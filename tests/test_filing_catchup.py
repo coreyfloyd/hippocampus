@@ -23,7 +23,7 @@ def setup(tmp_path, items, mode='ok'):
     profile = {'name': 'fixture', 'record_writes': {'tickets': store(tmp_path, mode)}}
     (tmp_path / 'profile.json').write_text(json.dumps(profile))
     decisions = [{'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'],
-                              'text': x['context']}, 'rule': 'R2', 'read_status': 'ok'} for x in items if 'type' in x]
+                              'text': x['context']}, 'rule': 'R2', 'read_status': 'ok'} for x in items if 'session_id' in x]
     (tmp_path / 'decisions.json').write_text(json.dumps(decisions))
     return sources
 
@@ -606,23 +606,35 @@ def test_attempted_write_keeps_its_failure_when_settled_meanwhile(tmp_path):
     assert [entry['identity']['text'] for entry in out['already_settled']] == ['change']
 
 
-def test_untyped_open_loops_are_not_session_items(tmp_path):
-    untyped = {'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'}
-    setup(tmp_path, [item(), untyped, {'context': 'Test module seam', 'disposition': 'file if needed'}])
+
+def sweep_identity(path, x, session='carrier', at='2026-11-18T12:00:00Z'):
+    """The sweep's fallback: the handoff's session and time, then the file's stem and mtime."""
+    return {'session_id': x.get('session_id') or session, 'produced_at': x.get('produced_at') or at,
+            'text': x.get('context', '')}
+
+
+@pytest.mark.parametrize('loop', [
+    {'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'},
+    {'context': 'Test module seam', 'disposition': 'file if needed'},
+    {'type': '', 'context': 'Empty type', 'disposition': 'file'},
+    {'type': None, 'context': 'Null type', 'disposition': 'file'},
+], ids=['what-owner', 'untyped', 'empty-type', 'null-type'])
+def test_every_open_loop_is_an_item_with_the_sweeps_identity(tmp_path, loop):
+    sources = setup(tmp_path, [item(), loop])
     assert run(tmp_path, 'inspect').returncode == 1
     inspected = report(tmp_path)
     assert inspected['errors'] == [] and inspected['warnings'] == []
-    assert inspected['unique_items'] == inspected['unfiled_before_cutoff'] == 1
-    assert [row['item']['context'] for row in inspected['items']] == ['change']
-    assert run(tmp_path).returncode == 0
-    assert report(tmp_path)['ready_for_durable_filing']
+    assert inspected['unique_items'] == inspected['unfiled_before_cutoff'] == 2
+    identities = [row['identity'] for row in inspected['items']]
+    assert sweep_identity(sources / 'claude.json', loop) in identities
 
 
-def test_null_open_loops_carry_nothing_and_are_a_warning(tmp_path):
+def test_null_open_loops_warn_only_inside_the_cutoff(tmp_path):
     sources = setup(tmp_path, [item()])
-    old = sources / 'old.json'
-    old.write_text(json.dumps({'schema_version': 2, 'subject': {'session_id': 'old'},
-                               'written_at': '2026-11-16T12:00:00Z', 'resume': {'open_loops': None}}))
+    old, new = sources / 'old.json', sources / 'new.json'
+    for path, at in ((old, '2026-11-16T12:00:00Z'), (new, CUTOFF)):
+        path.write_text(json.dumps({'schema_version': 2, 'subject': {'session_id': path.stem},
+                                    'written_at': at, 'resume': {'open_loops': None}}))
     assert run(tmp_path).returncode == 0
     out = report(tmp_path)
     assert out['errors'] == [] and out['ready_for_durable_filing']
@@ -630,13 +642,17 @@ def test_null_open_loops_carry_nothing_and_are_a_warning(tmp_path):
     assert str(old) in out['sources']
 
 
-def test_typed_item_without_producing_session_or_time_is_a_warning(tmp_path):
+def test_typed_item_without_producing_session_or_time_is_unfiled_under_the_sweeps_identity(tmp_path):
     sources = setup(tmp_path, [item()])
     old = sources / 'old.json'
     orphan = {'type': 'commitment', 'context': 'unknown', 'disposition': 'file'}
-    old.write_text(json.dumps({'resume': {'open_loops': [{'context': 'note', 'disposition': 'keep'}, orphan]}}))
-    assert run(tmp_path).returncode == 0
+    old.write_text(json.dumps({'resume': {'open_loops': [orphan]}}))
+    stamp = 1763208000  # 2025-11-15T12:00:00Z, before the cutoff
+    os.utime(old, (stamp, stamp))
+    assert run(tmp_path).returncode == 1
     out = report(tmp_path)
-    assert out['errors'] == [] and out['ready_for_durable_filing']
-    assert out['warnings'] == [str(old) + ': open_loops[1] lacks producing session or time; not filed']
-    assert [row['item']['context'] for row in out['items']] == ['change']
+    assert out['errors'] == [] and not out['ready_for_durable_filing']
+    assert out['unfiled_before_cutoff'] == 1
+    row, = [row for row in out['items'] if row['item']['context'] == 'unknown']
+    assert row['identity'] == sweep_identity(old, orphan, 'old', '2025-11-15T12:00:00+00:00')
+    assert row['status'] == 'pending'

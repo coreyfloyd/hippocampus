@@ -106,6 +106,17 @@ def item_identity(item, data, path):
             'text': item.get('context', '')}
 
 
+def carried_items(loops, data, path):
+    """Every open loop is a carried item, typed or not, with its source's fallback identity.
+
+    The sweep and the catch-up pass both read handoffs through this one function, so they
+    agree on what an item is and how it is identified.
+    """
+    if not all(isinstance(item, dict) for item in loops):
+        raise ValueError('carried item must be an object')
+    return [{'item': item, 'identity': item_identity(item, data, path)} for item in loops]
+
+
 def identity_key(identity):
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
@@ -226,8 +237,7 @@ def discover(scope, config, now):
             for transcript in transcripts.get(session, []):
                 activity = max(activity, transcript.stat().st_mtime)
             idle = max(0, now.timestamp() - activity)
-            items = [{'item': item, 'identity': item_identity(item, data, path)}
-                     for item in data.get('resume', {}).get('open_loops', [])]
+            items = carried_items(data.get('resume', {}).get('open_loops', []), data, path)
             occurrences = Counter(identity_key(item['identity']) for item in items)
             for item in items:
                 item['identity_occurrences'] = occurrences[identity_key(item['identity'])]
