@@ -35,16 +35,21 @@ def setup(tmp_path, items, mode='ok'):
     return sources
 
 
-def run(tmp_path, command='run', ledger=True, cutoff=CUTOFF):
+def isolated_env(tmp_path, ledger=True):
     env = {**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1',
            'XDG_CONFIG_HOME': str(tmp_path / 'config'), 'HANDOFF_STATE_DIR': str(tmp_path / 'state'),
            'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger')}
     if not ledger:
         del env['HANDOFF_LEDGER_DIR']
+    return env
+
+
+def run(tmp_path, command='run', ledger=True, cutoff=CUTOFF):
     return subprocess.run([sys.executable, str(CLI), command, '--node', 'fixture-node',
         '--store', str(tmp_path / 'sources'), '--cutoff', cutoff,
         '--user-profile', str(tmp_path / 'profile.json'), '--decisions', str(tmp_path / 'decisions.json'),
-        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True, env=env)
+        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True,
+        env=isolated_env(tmp_path, ledger))
 
 
 def report(tmp_path):
@@ -640,13 +645,11 @@ def test_untyped_loop_with_context_files_under_its_handoffs_identity_and_reaches
 
 
 @pytest.mark.parametrize('loop, problem', [
-    ({'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'},
-     'has no context; it cannot be filed (see #285 for writers, #271 for existing loops)'),
     ({'type': 'commitment', 'context': 'Unknown producer', 'disposition': 'file'},
      'is a typed item without its own session_id and produced_at; the carry step cannot settle it'),
     ({'type': 'commitment', 'context': 'Unknown time', 'disposition': 'file', 'session_id': 'producer'},
      'is a typed item without its own session_id and produced_at; the carry step cannot settle it'),
-], ids=['no-context', 'typed-no-session', 'typed-no-time'])
+], ids=['typed-no-session', 'typed-no-time'])
 def test_loop_without_a_fileable_identity_is_an_error_and_never_written(tmp_path, loop, problem):
     sources = setup(tmp_path, [item(), loop])
     assert run(tmp_path).returncode == 1
@@ -1061,3 +1064,137 @@ def test_each_older_copy_is_compared_with_the_newest_copy_alone(tmp_path):
     assert [(copy['item'], copy['difference']) for copy in row['superseded_copies']] == [
         (first, 'differs in anchor'), (second, 'differs in anchor')]
     assert [write['item'] for write in json.loads((tmp_path / 'store.json').read_text())] == [newest]
+
+
+EMPTY = {'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'}
+
+
+def drop_receipt(identity, disposition='dropped'):
+    return {'identity': identity, 'disposition': disposition, 'reason': REASON, 'destination': None,
+            'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'maintainer'}
+
+
+def settle_identity(tmp_path, *receipts):
+    """Record receipts through the carry step's own ``settle-identity`` command."""
+    path = tmp_path / 'receipts.jsonl'
+    path.write_text(''.join(json.dumps(row) + '\n' for row in receipts))
+    result = subprocess.run([sys.executable, str(ROOT / 'scripts/lib/handoff.py'), 'settle-identity',
+                             '--receipts', str(path)], text=True, capture_output=True, env=isolated_env(tmp_path))
+    return result.returncode, json.loads(result.stdout)
+
+
+def receipt_identities(tmp_path):
+    """The receipt identity inspect reports for each unfiled row, by its text."""
+    assert run(tmp_path, 'inspect').returncode == 1
+    return {row['identity']['text']: row.get('receipt_identity') for row in report(tmp_path)['items']}
+
+
+@pytest.mark.parametrize('tool', carry.TOOLS)
+def test_a_dropped_receipt_settles_an_untyped_loop_and_no_carry_step_restores_it(tmp_path, tool):
+    loop = {'context': 'Legacy note', 'disposition': 'keep', 'session_id': 'A',
+            'produced_at': '2026-11-05T12:00:00Z'}
+    written = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
+    assert loop in written['resume']['open_loops']
+    (tmp_path / 'sources').mkdir()
+    stale = (tmp_path / 'A.json').read_text()
+    (tmp_path / 'sources/A.json').write_text(stale)
+    (tmp_path / 'stale.json').write_text(stale)
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
+    judge(tmp_path)
+    identity = receipt_identities(tmp_path)['Legacy note']
+    assert identity == {'session_id': 'A', 'produced_at': loop['produced_at'], 'type': 'untyped_loop',
+                        'text': 'Legacy note'}
+    assert settle_identity(tmp_path, drop_receipt(identity)) == (0, {'written': 1, 'skipped': 0, 'invalid': []})
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['items'] == [] and out['unfiled_before_cutoff'] == 0 and out['errors'] == []
+    assert [(row['type'], row['disposition']) for row in out['already_settled']] == [('untyped_loop', 'dropped')]
+    # Neither a checkpoint re-supplying the stale handoff's loop nor a pickup of it restores the loop.
+    again = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
+    assert loop not in again['resume']['open_loops']
+    carry.pickup(tmp_path, 'B', 'stale', tool)
+    resumed = carry.checkpoint(tmp_path, 'B', tool)
+    assert loop not in resumed['resume']['open_loops']
+
+
+def test_an_empty_loop_is_named_by_its_handoff_and_position_and_a_drop_settles_it(tmp_path):
+    sources = setup(tmp_path, [item(), EMPTY, {'owner': 'agent'}])
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R2', 'read_status': 'ok'})
+    seen = []
+    for stamp in (0, 4102444800):  # File times never name an empty loop.
+        for path in sources.iterdir():
+            os.utime(path, (stamp, stamp))
+        identities = receipt_identities(tmp_path)
+        assert report(tmp_path)['errors'] == []
+        seen.append(identities)
+    assert seen[0] == seen[1]
+    empty = [seen[0]['open_loops[' + str(index) + ']'] for index in (1, 2)]
+    assert empty == [{'session_id': 'carrier', 'produced_at': WRITTEN, 'type': 'empty_loop',
+                      'text': 'open_loops[' + str(index) + ']'} for index in (1, 2)]
+    assert settle_identity(tmp_path, *map(drop_receipt, empty))[0] == 0
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['ready_for_durable_filing'] and out['errors'] == []
+    assert [row['identity']['text'] for row in out['items']] == ['change']
+    assert sorted(row['identity']['text'] for row in out['already_settled']) == ['open_loops[1]', 'open_loops[2]']
+    assert stored(tmp_path) == [record_identity_of(item())]
+    # A rerun no longer reports either empty loop.
+    assert list(receipt_identities(tmp_path)) == ['change']
+
+
+@pytest.mark.parametrize('loop', [{'context': 'Legacy note', 'disposition': 'keep'}, EMPTY], ids=['untyped', 'empty'])
+@pytest.mark.parametrize('disposition', ['filed', 'done', 'captured'])
+def test_only_a_dropped_receipt_settles_an_untyped_or_empty_loop(tmp_path, loop, disposition):
+    setup(tmp_path, [loop])
+    [identity] = receipt_identities(tmp_path).values()
+    code, summary = settle_identity(tmp_path, drop_receipt(identity, disposition))
+    assert code == 1 and summary['written'] == 0
+    assert summary['invalid'] == [{'line': 1, 'error': 'an untyped or empty open loop is never filed; '
+                                                         'only disposition dropped settles it'}]
+    assert settled_store(tmp_path) == []
+    # A row written to the store by hand settles nothing either.
+    store_path(tmp_path).write_text(json.dumps(drop_receipt(identity, disposition)) + '\n')
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert [row['receipt_identity'] for row in out['items']] == [identity] and out['already_settled'] == []
+
+
+def test_each_drop_keeps_its_reason_in_the_receipt_and_the_report(tmp_path):
+    loop = {'context': 'Legacy note', 'disposition': 'keep'}
+    setup(tmp_path, [loop, EMPTY])
+    identities = list(receipt_identities(tmp_path).values())
+    assert settle_identity(tmp_path, *map(drop_receipt, identities))[0] == 0
+    assert [(row['identity'], row['reason']) for row in settled_store(tmp_path)] == [
+        (identity, REASON) for identity in identities]
+    assert run(tmp_path).returncode == 0
+    rows = report(tmp_path)['already_settled']
+    assert sorted(rows, key=lambda row: row['type']) == [
+        {'identity': {key: identity[key] for key in ('session_id', 'produced_at', 'text')}, 'type': identity['type'],
+         'disposition': 'dropped', 'reason': REASON, 'settled_at': '2026-11-20T12:00:00Z'}
+        for identity in sorted(identities, key=lambda identity: identity['type'])]
+
+
+@pytest.mark.parametrize('drop', ['written_at', 'subject'])
+def test_an_empty_loop_without_its_handoffs_session_or_time_stays_a_loop_error(tmp_path, drop):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    data = {'subject': {'session_id': 'old'}, 'written_at': WRITTEN, 'resume': {'open_loops': [EMPTY]}}
+    del data[drop]
+    old.write_text(json.dumps(data))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert out['errors'] == [str(old) + ': open_loops[0] has no context, and its handoff has no session_id or '
+                             'valid written_at to name it by position; a file name or time is not an identity']
+    assert not out['ready_for_durable_filing']
+
+
+@pytest.mark.parametrize('rule', ['R2', 'R6'])
+def test_a_run_judgment_never_files_or_drops_an_empty_loop(tmp_path, rule):
+    setup(tmp_path, [EMPTY])
+    [identity] = receipt_identities(tmp_path).values()
+    judge(tmp_path, {'identity': {key: identity[key] for key in ('session_id', 'produced_at', 'text')},
+                     'rule': rule, 'reason': REASON, 'read_status': 'ok'})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert row['status'] == 'failed' and 'settle-identity' in row['error']
+    assert settled_store(tmp_path) == [] and stored(tmp_path) == []

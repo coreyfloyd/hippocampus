@@ -117,11 +117,19 @@ _Avoid_: log, history
 One item carried in a handoff, with a disposition saying what should happen to it. A carried item names its session-item type (progress, commitment, decision, knowledge, lesson, artifact, or open loop) and keeps the identity of the session that produced it and when; a decision also keeps who made it and where. A slot that consumes an open loop removes it from the handoff.
 _Avoid_: todo, task
 
+**Untyped loop**:
+An open loop with context but no session-item type, written before carried items were typed. It is never filed: catch-up names it by its own session and time, else its handoff's, and its context, and only a dropped settlement receipt with a reason settles it.
+_Avoid_: legacy item, bare loop
+
+**Empty loop**:
+An open loop with no context. It is never filed: catch-up names it by its handoff's session, written time and position among the handoff's open loops, never by the file's name or time, and only a dropped settlement receipt with a reason settles it. A handoff without that session or time leaves it an inventory error.
+_Avoid_: blank loop, null loop
+
 **Retained session item**:
 A session item, other than an artifact, that a checkpoint received and stored in the session ledger with its original identity: producing session, time, type, and context. Every later checkpoint, pre-compaction write, stop skeleton, and wrap restores it as an open loop, once, until it is settled. The wrap settles an item when it files or drops it, or when a native step returns its receipt; a later item marked recorded, or one whose disposition or status is terminal (captured, dropped, filed, applied, recorded or done), settles it too. Every settlement also adds a settlement receipt to the settled-identity store. Another session's items enter the ledger only through pickup, which copies the resumed session's unsettled items to the successor.
 
 **Settled-identity store**:
-One file per machine, beside the session ledgers, holding one settlement receipt per settled item: the item's identity (producing session, time, type and text), its terminal disposition, a one-line reason, its destination or none, when it was settled and by which session. No pickup, checkpoint or wrap on that machine carries an item whose identity has a receipt, whichever session settled it, and no carry path restores an item whose own disposition or status is terminal; that item gets a receipt saying no filing step settled it, and the checkpoint or pickup reports how many it closed. The terminal values are past-tense statements of fact (captured, dropped, filed, applied, recorded, done); an item's author states intent with plan words such as drop, file, keep or pending, which never close it. A wrap gives an artifact no receipt, since it keeps its own ledger status; a catch-up drop is the one receipt that settles an artifact. `handoff.py settle-identity` records receipts produced elsewhere.
+One file per machine, beside the session ledgers, holding one settlement receipt per settled item: the item's identity (producing session, time, type and text), its terminal disposition, a one-line reason, its destination or none, when it was settled and by which session. No pickup, checkpoint or wrap on that machine carries an item whose identity has a receipt, whichever session settled it, and no carry path restores an item whose own disposition or status is terminal; that item gets a receipt saying no filing step settled it, and the checkpoint or pickup reports how many it closed. The terminal values are past-tense statements of fact (captured, dropped, filed, applied, recorded, done); an item's author states intent with plan words such as drop, file, keep or pending, which never close it. A wrap gives an artifact no receipt, since it keeps its own ledger status; a catch-up drop is the one receipt that settles an artifact. An untyped or empty loop's receipt names a reserved type (`untyped_loop` or `empty_loop`) and is valid only as dropped. `handoff.py settle-identity` records receipts produced elsewhere.
 _Avoid_: settled list, drop list, blocklist
 
 **Settlement receipt**:
@@ -222,7 +230,9 @@ with its receipt. An item the settled-identity store already settles, read as th
 carry step reads it, is reported as already settled, never filed or counted as
 unfiled. Like the sweep, it counts every open loop, typed or not, as an item. An
 item's identity is its own session and time, else its handoff's; a typed item needs
-its own, and a loop with no context or no such identity is an inventory error.
+its own, an empty loop is named by its handoff and position, and a loop with no
+such identity is an inventory error. Untyped and empty loops are never filed: each
+is dropped by a dropped receipt with a reason, which the report keeps.
 Warnings never block: store lines the carry step skips, and a null `open_loops`.
 Only an unreadable store stops its writes. Knowledge, lessons, decisions and
 commitments are filed, never dropped; a progress, open loop or artifact item may

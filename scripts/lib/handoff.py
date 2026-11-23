@@ -1066,7 +1066,44 @@ def receipt_key(identity: Any) -> tuple[str, ...] | None:
     key = tuple(identity[field] for field in RECEIPT_IDENTITY)
     if any(not isinstance(value, str) or not value.strip() for value in key):
         return None
-    return key if key[2] in ITEM_TYPES else None
+    return key if key[2] in ITEM_TYPES or key[2] in LOOP_RECEIPT_TYPES else None
+
+
+# Reserved receipt types for the two kinds of carried open loop that are not session items:
+# an untyped loop (context, but no session-item type) and an empty loop (no context).
+# Neither is ever filed: only a ``dropped`` receipt settles one.
+UNTYPED_LOOP = "untyped_loop"
+EMPTY_LOOP = "empty_loop"
+LOOP_RECEIPT_TYPES = (UNTYPED_LOOP, EMPTY_LOOP)
+
+
+def loop_receipt_identity(item: Any, handoff: Any = None, position: int | None = None) -> dict[str, str] | None:
+    """The receipt identity of an untyped or empty open loop, else None.
+
+    Identity is content only, never a file name or modification time. An empty loop is named
+    by its handoff's session (``subject.session_id``, else ``session_id``), ``written_at`` and
+    its position in ``open_loops`` (text ``open_loops[N]``); an untyped loop by its own
+    ``session_id`` and ``produced_at``, else its handoff's, and its context. Catch-up, the sweep
+    and the carry step all key these loops here; without a handoff only an untyped loop that
+    carries its own session and time has one.
+    """
+    if not isinstance(item, Mapping):
+        return None
+    data = handoff if isinstance(handoff, Mapping) else {}
+    subject = data.get("subject") if isinstance(data.get("subject"), Mapping) else {}
+    session = subject.get("session_id") or data.get("session_id")
+    context = item.get("context")
+    if not isinstance(context, str) or not context.strip():
+        if position is None:
+            return None
+        key = (session, data.get("written_at"), EMPTY_LOOP, f"open_loops[{position}]")
+    elif isinstance(item.get("type"), str) and item["type"] in ITEM_TYPES:
+        return None
+    else:
+        key = (item.get("session_id") or session, item.get("produced_at") or data.get("written_at"),
+               UNTYPED_LOOP, context)
+    identity = dict(zip(RECEIPT_IDENTITY, key))
+    return identity if receipt_key(identity) else None
 
 
 def carry_identity(item: Any) -> tuple[str, ...] | None:
@@ -1082,8 +1119,14 @@ def carry_identity(item: Any) -> tuple[str, ...] | None:
 
 
 def settlement_key(row: Any) -> tuple[str, ...] | None:
-    """The identity a store row settles: any object whose identity is a valid receipt key."""
-    return receipt_key(row.get("identity")) if isinstance(row, Mapping) else None
+    """The identity a store row settles: any object whose identity is a valid receipt key.
+
+    An untyped or empty loop's identity is settled only by a ``dropped`` row.
+    """
+    key = receipt_key(row.get("identity")) if isinstance(row, Mapping) else None
+    if key and key[2] in LOOP_RECEIPT_TYPES and row.get("disposition") != "dropped":
+        return None
+    return key
 
 
 _STORE_CACHE: dict[str, tuple[tuple[int, int, int], frozenset]] = {}
@@ -1126,6 +1169,9 @@ def may_carry(item: Any, store: set[tuple[str, ...]], identity: Any = _UNKNOWN) 
     """
     if isinstance(item, Mapping) and item.get("type") == "artifact":
         return carry_identity(item) not in store
+    loop = loop_receipt_identity(item)
+    if loop:
+        return receipt_key(loop) not in store
     identity = session_item_identity(item) if identity is _UNKNOWN else identity
     return identity is None or (identity not in store and terminal_disposition(item) is None)
 
@@ -1176,11 +1222,14 @@ def invalid_receipt(row: Any) -> str | None:
     if set(row) != set(RECEIPT_FIELDS):
         return "a receipt has exactly the fields " + ", ".join(RECEIPT_FIELDS)
     if not receipt_key(row["identity"]):
-        return "identity requires non-empty session_id, produced_at, type (a session-item type) and text"
+        return ("identity requires non-empty session_id, produced_at, type (a session-item type, "
+                + " or ".join(LOOP_RECEIPT_TYPES) + ") and text")
     if not _valid_history_time(row["identity"]["produced_at"]):
         return "identity.produced_at must be an ISO time with timezone"
     if row["disposition"] not in TERMINAL_DISPOSITIONS:
         return "disposition must be one of " + ", ".join(TERMINAL_DISPOSITIONS)
+    if row["identity"]["type"] in LOOP_RECEIPT_TYPES and row["disposition"] != "dropped":
+        return "an untyped or empty open loop is never filed; only disposition dropped settles it"
     if not isinstance(row["reason"], str) or not row["reason"].strip() or "\n" in row["reason"]:
         return "reason must be one non-empty line"
     if row["destination"] is not None and (not isinstance(row["destination"], str)

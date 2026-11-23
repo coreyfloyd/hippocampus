@@ -216,6 +216,7 @@ def discover(scope, config, now):
         return result
     if not store.exists():
         return result
+    settled = handoff.settled_identities()
     for path in sorted(store.glob('*.json')):
         try:
             source_bytes, source_snapshot = read_handoff_source(path)
@@ -261,7 +262,9 @@ def discover(scope, config, now):
             for transcript in transcripts.get(session, []):
                 activity = max(activity, transcript.stat().st_mtime)
             idle = max(0, now.timestamp() - activity)
-            items = carried_items(data, path)
+            # An untyped or empty loop settled by its dropped receipt is never filed again.
+            items = [item for index, item in enumerate(carried_items(data, path))
+                     if handoff.receipt_key(handoff.loop_receipt_identity(item['item'], data, index)) not in settled]
             occurrences = Counter(identity_key(item['identity']) for item in items)
             for item in items:
                 item['identity_occurrences'] = occurrences[identity_key(item['identity'])]

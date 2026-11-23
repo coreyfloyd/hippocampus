@@ -1420,3 +1420,23 @@ def test_catch_up_and_sweep_both_read_null_open_loops_as_empty_with_a_warning(sa
     assert 'resume.open_loops is null; read as no carried items' in candidate['warnings']
     assert caught['warnings'] == [str(path) + ': resume.open_loops is null; read as no carried items']
     assert path.read_bytes() == before
+
+
+def test_untyped_and_empty_loops_settled_by_a_dropped_receipt_are_never_swept(sandbox):
+    loops = [{'context': 'Optional observation', 'disposition': 'consider'}, {'owner': 'agent'}]
+    source(sandbox, loops=loops)
+    _, data = report(sandbox)
+    assert len(data['directories'][str(sandbox[0])]['filing_outcomes']) == 2
+    # The receipts catch-up names: the handoff's session and written_at, then the context or the position.
+    written_at = json.loads(FIXTURE.read_text())['written_at']
+    receipts = [{'identity': {'session_id': 'source', 'produced_at': written_at, 'type': kind, 'text': text},
+                 'disposition': 'dropped', 'reason': 'Superseded by the migration ticket.', 'destination': None,
+                 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'maintainer'}
+                for kind, text in (('untyped_loop', 'Optional observation'), ('empty_loop', 'open_loops[1]'))]
+    store = Path(sandbox[3].get('HANDOFF_LEDGER_DIR') or sandbox[1].parent) / 'settled-identities.jsonl'
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(''.join(json.dumps(row) + '\n' for row in receipts))
+    _, data = report(sandbox)
+    section = data['directories'][str(sandbox[0])]
+    assert section['filing_outcomes'] == []
+    assert [row['outcome'] for row in section['handoffs_archived']] == ['dry run']
