@@ -1,37 +1,31 @@
-# Release candidate: 0.16.1
-
-## For the next release
-
-Carry these into the next release's scope and release-note draft.
-
-- Migration: a configuration that still sets `auto_apply_lessons` in `config.json`, or still has a standalone lesson routing file (`routing.md` or `HIPPOCAMPUS_ROUTING`), must run `hippocampus-set-up` to move them into the knowledge profile (`auto_apply` in its frontmatter, a `## Lesson routing` section). Until then auto-apply and lesson routing stay refused. `install.sh`, `install.sh --verify-runtime`, `install.sh --verify` and the Claude and Codex install helpers now print one warning per retired setting they find, naming the file, its replacement and `hippocampus-set-up`; the exit status is unchanged.
+# Release candidate: 0.16.2
 
 ## Scope
 
-Package the carry fix from [hippocampus#147](https://github.com/coreyfloyd/hippocampus/issues/147), merged through [PR277](https://github.com/coreyfloyd/hippocampus/pull/277). It is the only change on main since 0.16.0. This preparation changes package version metadata and this release record only.
+Package three catch-up and setup fixes merged since 0.16.1: [hippocampus#280](https://github.com/coreyfloyd/hippocampus/issues/280) through [PR283](https://github.com/coreyfloyd/hippocampus/pull/283), [hippocampus#281](https://github.com/coreyfloyd/hippocampus/issues/281) through [PR287](https://github.com/coreyfloyd/hippocampus/pull/287), and [hippocampus#284](https://github.com/coreyfloyd/hippocampus/issues/284) through [PR288](https://github.com/coreyfloyd/hippocampus/pull/288). This preparation changes package version metadata and this release record only.
 
-This is a patch release: it fixes sessions carrying items that are already settled and adds no new setup step. It does not announce the Public launch milestone.
+This is a patch release. It does not announce the Public launch milestone.
 
 ## Included
 
-- One settled-identity store per machine, `settled-identities.jsonl` beside the session ledgers. Every settle path writes a settlement receipt keyed by the item's producing session, time, type and text.
-- Pickup, checkpoint, merge, the stop-hook skeleton and pre-compaction skip any session item that has a receipt, so a predecessor no longer restores an item its successor settled, and copies in other handoffs stop coming back.
-- A carried item whose status or disposition is a past-tense terminal value (captured, dropped, filed, applied, recorded, done) is closed with a receipt saying no filing step settled it, and the checkpoint reports how many it closed.
-- `handoff.py settle-identity --receipts <file>` records operator-supplied receipts: it validates each row, writes each identity once, survives a torn last line and reports invalid rows by line number.
-- Durable filing matches rows to items by position, not equality.
+- Catch-up (`filing_catchup.py`) skips identities that already have a receipt in the settled-identity store, using the carry step's settle rule and line tolerance. It lists them under `already_settled` and never files them. It rechecks the store before each write, and an unreadable store blocks every write.
+- Catch-up reads open loops through the sweep's own reader, so both count the same items with the same identity. A loop with no `context`, a typed item without its own producing session and time, or an identity that would come from file metadata is an inventory error naming the file and loop. A null `open_loops` in an old handoff reads as no items with a warning. Checkpoint and pre-compaction now write `[]` instead of keeping a null.
+- `install.sh` (install, `--verify-runtime` and `--verify`) and the Claude and Codex install helpers print one warning for each retired lesson setting still in the configuration. The exit status is unchanged.
+
+## Migration
+
+A configuration that still sets `auto_apply_lessons` in `config.json`, or still has a standalone lesson routing file (`routing.md` or `HIPPOCAMPUS_ROUTING`), must run `hippocampus-set-up` to move them into the knowledge profile: `auto_apply` in its frontmatter and a `## Lesson routing` section. Until then, auto-apply and lesson routing stay refused, as they have been since 0.16.0. This release adds warnings that name each retired setting, its replacement and `hippocampus-set-up`.
 
 ## Compatibility and operational boundaries
 
-Claude Code and Codex use the same code. Handoff, ledger and profile formats are unchanged; the store is a new file. Installing this release changes no handoff by itself: items settle when the next checkpoint or pickup runs. Agents should state intent with plan words (drop, file, keep, pending); a past-tense value on a carried item now closes it for every session on the machine.
-
-Catch-up readiness (`filing_catchup.py`) is unchanged and is decided in [hippocampus#271](https://github.com/coreyfloyd/hippocampus/issues/271). Known follow-ups: [hippocampus#276](https://github.com/coreyfloyd/hippocampus/issues/276).
+Claude Code and Codex use the same code. Handoff, ledger, store and profile formats are unchanged. Catch-up still refuses drops and still reports conflicting carried copies as errors: reasoned drops, newer-copy-wins and the unanchored-commitment hold are [hippocampus#271](https://github.com/coreyfloyd/hippocampus/issues/271) and come in the next release, so catch-up readiness cannot certify on this release. Catch-up runs one item at a time: a drop judgment or a conflicting copy is recorded with no write, and the run continues. Known follow-ups: [hippocampus#282](https://github.com/coreyfloyd/hippocampus/issues/282), [#285](https://github.com/coreyfloyd/hippocampus/issues/285), [#286](https://github.com/coreyfloyd/hippocampus/issues/286).
 
 ## Verification and publication state
 
-The change passed two native reviews (all findings fixed but one kept by design and documented) and independent evaluation (conditional pass), then CI: PR277 run 45085713696 passed on Ubuntu and macOS at head aacb40b, merged to main as ee2b829.
+Each change passed two native review rounds with every finding repaired, then independent evaluation: #280 CONDITIONAL PASS, #281 CONDITIONAL PASS, #284 PASS. Each passed CI on Ubuntu and macOS at its exact head before merge.
 
-Not yet signed, tagged or published. Exact commit, immutable unsigned asset digests and the maintainer's SIGN are recorded by the release operation before publication.
+Not yet signed, tagged or published. The release operation records the exact commit, the immutable unsigned asset digests and the maintainer's SIGN before publication.
 
 ## Release-note draft
 
-Hippocampus 0.16.1 stops sessions from carrying items that are already settled. Each machine now keeps one store of settlement receipts, and pickup and checkpoint skip any item with a receipt, so a predecessor no longer brings back what its successor filed or dropped. An item marked with a past-tense status such as done or filed is closed the same way, with a receipt that says so. A new `settle-identity` command records receipts in bulk.
+Hippocampus 0.16.2 makes catch-up agree with the rest of the package. It skips items already settled, reads open loops the same way the sweep does, and reports loops it could never file instead of retrying them forever. Install and verify now warn when your configuration still uses the retired `auto_apply_lessons` setting or a standalone lesson routing file. Run `hippocampus-set-up` to move them into your knowledge profile.
