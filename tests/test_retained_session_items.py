@@ -307,6 +307,15 @@ def test_an_unsettled_copy_in_the_same_write_keeps_the_item_open(tmp_path, tool)
 
 
 @pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('terminal', [{'status': 'recorded'}, {'status': 'done'}])
+def test_an_artifact_is_stopped_only_by_a_receipt_never_by_its_own_status(tmp_path, tool, terminal):
+    artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
+                'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z', **terminal}
+    written = checkpoint(tmp_path, 'A', tool, resume={'open_loops': [artifact]})
+    assert artifact in written['resume']['open_loops']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
 def test_an_artifact_gets_no_receipt(tmp_path, tool):
     artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
                 'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z'}
@@ -377,7 +386,7 @@ def test_settle_identity_retry_is_idempotent(tmp_path, tool):
     receipt(lesson(), disposition='carry'),
     receipt(lesson(), settled_at='2026-11-22T12:00:00'),
     receipt(lesson(produced_at='2026-11-05T12:00:00')),
-    receipt(lesson(type='artifact')),
+    receipt(lesson(type='not-a-type')),
     {**receipt(lesson()), 'identity': {k: v for k, v in receipt(lesson())['identity'].items() if k != 'type'}},
     receipt(lesson(), settled_by=''),
     receipt(lesson(), destination=3),

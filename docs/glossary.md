@@ -121,7 +121,7 @@ _Avoid_: todo, task
 A session item, other than an artifact, that a checkpoint received and stored in the session ledger with its original identity: producing session, time, type, and context. Every later checkpoint, pre-compaction write, stop skeleton, and wrap restores it as an open loop, once, until it is settled. The wrap settles an item when it files or drops it, or when a native step returns its receipt; a later item marked recorded, or one whose disposition or status is terminal (captured, dropped, filed, applied, recorded or done), settles it too. Every settlement also adds a settlement receipt to the settled-identity store. Another session's items enter the ledger only through pickup, which copies the resumed session's unsettled items to the successor.
 
 **Settled-identity store**:
-One file per machine, beside the session ledgers, holding one settlement receipt per settled item: the item's identity (producing session, time, type and text), its terminal disposition, a one-line reason, its destination or none, when it was settled and by which session. No pickup, checkpoint or wrap on that machine carries an item whose identity has a receipt, whichever session settled it, and no carry path restores an item whose own disposition or status is terminal; that item gets a receipt saying no filing step settled it, and the checkpoint or pickup reports how many it closed. The terminal values are past-tense statements of fact (captured, dropped, filed, applied, recorded, done); an item's author states intent with plan words such as drop, file, keep or pending, which never close it. Artifacts keep their own ledger status and get no receipt. `handoff.py settle-identity` records receipts produced elsewhere, such as a catch-up's drops.
+One file per machine, beside the session ledgers, holding one settlement receipt per settled item: the item's identity (producing session, time, type and text), its terminal disposition, a one-line reason, its destination or none, when it was settled and by which session. No pickup, checkpoint or wrap on that machine carries an item whose identity has a receipt, whichever session settled it, and no carry path restores an item whose own disposition or status is terminal; that item gets a receipt saying no filing step settled it, and the checkpoint or pickup reports how many it closed. The terminal values are past-tense statements of fact (captured, dropped, filed, applied, recorded, done); an item's author states intent with plan words such as drop, file, keep or pending, which never close it. A wrap gives an artifact no receipt, since it keeps its own ledger status; a catch-up drop is the one receipt that settles an artifact. `handoff.py settle-identity` records receipts produced elsewhere.
 _Avoid_: settled list, drop list, blocklist
 
 **Settlement receipt**:
@@ -224,6 +224,13 @@ unfiled. Like the sweep, it counts every open loop, typed or not, as an item. An
 item's identity is its own session and time, else its handoff's; a typed item needs
 its own, and a loop with no context or no such identity is an inventory error.
 Warnings never block: store lines the carry step skips, and a null `open_loops`.
-Only an unreadable store stops its writes. A recount with any unfiled item or
+Only an unreadable store stops its writes. Knowledge, lessons, decisions and
+commitments are filed, never dropped; a progress, open loop or artifact item may
+be dropped with a reason, which writes a settlement receipt and keeps the item in
+the report. Where copies of one identity differ only in anchor or proposal text,
+the copy from the handoff written last wins and the older ones are kept in the
+report as superseded copies; copies that differ in type or other filing content
+stay an error. A commitment files only as a comment on its ticket anchor; without
+one it stays unfiled. A recount with any unfiled item or
 inventory error blocks cutover. Every node must provide its own successful report
 for the same cutoff.

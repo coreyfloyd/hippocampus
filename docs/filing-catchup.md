@@ -91,7 +91,14 @@ receipt still governs completion. Native ask delivery is not a capture receipt.
 ```
 
 Supply the shared filing rules' judgment and read evidence; a missing judgment
-remains unfiled. New tickets require `priority` and `priority_reason`. Project
+remains unfiled. New tickets require `priority` and `priority_reason`. A
+commitment files only as a ticket comment (`R2`) through `tickets` on its
+`anchor.ticket`, which must be a non-empty string. Without one, catch-up never
+files it under any rule or binding (ask, documents, projects, scheduled jobs or a
+new ticket): it stays pending, with a `reason` saying so, until the maintainer
+sets a rule. An anchored commitment judged any other way fails with an error
+saying commitments file only as anchored R2 comments. Neither writes anything.
+Durable checkpoint asks keep the wrap's routes. Project
 writes require `session_summary`, and accept `close_outcomes` and
 `touched_projects`. Decision documents require the existing explicit user
 approval, author/source and configured folder safeguards. Agent operational
@@ -105,26 +112,62 @@ the ask command implements the same `lookup` / `write` request protocol as recor
 writes, using `kind: "asks"` and the full owned ask as `item`. Its receipt must
 confirm the exact identity, destination and saved `owner_agent`. A failed lookup
 never writes; an uncertain write retries by lookup, including after interruption.
-No supplied receipt alone bypasses the writer. Drops do not count as filing.
+No supplied receipt alone bypasses the writer.
+
+A drop judgment uses the wrap's drop rules, `R1` or `R6`, with no status or
+`status: "dropped"`, and a non-empty `reason`; it passes the same checks as at a
+wrap, so an `R1` drop needs `read_status: "ok"` unless it is `information_only`. Only `progress`, `open_loop` and
+`artifact` items may be dropped. Knowledge, lessons, decisions, commitments and
+untyped loops are filed, never dropped: their drop judgment fails with an error
+saying so and writes nothing, and a drop without a reason fails the same way. A
+drop writes one settlement receipt (`disposition: "dropped"`, the reason,
+`destination: null`, `settled_by: "filing-catchup:<node>"`) through the carry
+step's writer into the settled-identity store catch-up reads, so no later
+checkpoint or pickup restores the item, an artifact included. The drop counts
+only when the store then settles the identity as this drop; if another receipt
+settled it first, the row fails with an error naming that receipt's disposition.
+The run report
+keeps the dropped row with `status: "dropped"`, its `reason`, the `receipt`, the
+item and every source, so the item can be recovered; a later report lists the
+identity under `already_settled`. A recorded drop counts as settled for readiness.
+The recount compares a dropped row with the current copies, read without
+receipts, as it does a filed row: changed content gives a `recount_error` and
+leaves the identity unfiled, and the identity is removed from `already_settled`.
 
 Copies of one producing identity may differ in `status` and `recorded` hints,
-which never prove settlement. Nonconflicting `anchor` fields are combined so a
-later ticket or project reference reaches the writer. All original copies and
-source paths remain in the report. Other item content must agree exactly,
-including proposal text, choices, author, type and record kind; conflicting
-anchor destinations also block that identity before any write. Missing versus
-present proposal fields are ambiguous. Retry preserves the same refusal until
-the substantive conflict is resolved; it never selects the first proposal.
+which never prove settlement. When copies otherwise agree, nonconflicting
+`anchor` fields are combined so a later ticket or project reference reaches the
+writer. All original copies and source paths remain in the report. Any copy
+whose `anchor` is present but not an object is an inventory error: it is never
+superseded or filed. When copies differ only in their anchor destinations or
+proposal text (`choices`, `ask_text`), the copy from the newest handoff wins:
+copies are ordered by each handoff's own `written_at`, never by a file's name
+or time. That copy, with its own anchor, is inventoried and filed. Each older
+copy is compared with it alone; one that differs is listed under the row's
+`superseded_copies` with its `source`, `written_at`, `item` and the differing
+fields, and its anchor never merges into the filed copy. Superseded copies share
+the newest copy's type and text, so one receipt for that carry identity settles
+all of the identity's copies. Copies that differ in `type` or any other
+field that decides filing (author, record kind, decision record, location, or a
+missing versus present field) stay an inventory error, so a filed type is never
+superseded by a droppable one. Two artifacts of one session and `produced_at`
+with different locations share an identity, so catch-up neither drops nor
+settles either and reports an error saying so. A conflict also stays an error
+when it cannot be ordered, because a handoff has no valid `written_at` or the
+conflicting copies share the newest `written_at`. An error blocks that identity
+before any write; retry keeps the same refusal and never selects the first
+proposal.
 
 Exit 0 requires `ready_for_durable_filing: true`: every older identity has a
-confirmed destination for its eligible content and there are no inventory errors.
+confirmed destination for its eligible content or a recorded drop, and there are
+no inventory errors.
 The final recount scans the entire store again. Checkpoint timestamps, new or
 rewritten newer-only handoffs, and changes to newer items do not block readiness.
 Changed older proposals or destinations invalidate readiness; newly discovered
 older identities remain pending for retry. Failed initial items remain counted
 even if a concurrent checkpoint omits them. Source snapshots remain in the
 report for audit, rather than requiring whole-file equality. Missing stores,
-malformed handoffs, conflicting copies, unbound destinations and failed writes
+malformed handoffs, conflicting copies that cannot be ordered, unbound destinations and failed writes
 block readiness. Newer items remain for periodic filing. The report is saved before effects and after each result. Source
 handoffs and dated history remain untouched, including on failure.
 

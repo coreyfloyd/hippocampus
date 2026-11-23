@@ -7,6 +7,7 @@ import sys
 
 import pytest
 from test_record_writes import item, store
+import test_retained_session_items as carry
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'scripts/lib/filing_catchup.py'
@@ -34,14 +35,14 @@ def setup(tmp_path, items, mode='ok'):
     return sources
 
 
-def run(tmp_path, command='run', ledger=True):
+def run(tmp_path, command='run', ledger=True, cutoff=CUTOFF):
     env = {**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1',
            'XDG_CONFIG_HOME': str(tmp_path / 'config'), 'HANDOFF_STATE_DIR': str(tmp_path / 'state'),
            'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger')}
     if not ledger:
         del env['HANDOFF_LEDGER_DIR']
     return subprocess.run([sys.executable, str(CLI), command, '--node', 'fixture-node',
-        '--store', str(tmp_path / 'sources'), '--cutoff', CUTOFF,
+        '--store', str(tmp_path / 'sources'), '--cutoff', cutoff,
         '--user-profile', str(tmp_path / 'profile.json'), '--decisions', str(tmp_path / 'decisions.json'),
         '--report', str(tmp_path / 'report.json')], text=True, capture_output=True, env=env)
 
@@ -705,3 +706,358 @@ def test_null_open_loops_warn_unless_written_after_the_cutoff(tmp_path, written,
     assert out['warnings'] == ([str(old) + ': resume.open_loops is null; read as no carried items']
                                if warned else [])
     assert str(old) in out['sources']
+
+
+def judge(tmp_path, *rows):
+    (tmp_path / 'decisions.json').write_text(json.dumps(list(rows)))
+
+
+def settled_store(tmp_path):
+    return carry.store(tmp_path)
+
+
+REASON = 'Superseded by the migration ticket.'
+
+
+@pytest.mark.parametrize('tool', carry.TOOLS)
+@pytest.mark.parametrize('kind', ['progress', 'open_loop', 'artifact'])
+def test_a_reasoned_drop_writes_one_receipt_and_no_carry_step_restores_it(tmp_path, tool, kind):
+    if kind == 'artifact':
+        result = carry.command(tmp_path, 'A', 'scripts/lib/handoff.py', 'ledger-artifact', '--cwd', tmp_path,
+                               '--session-id', 'A', '--location', 'https://example.com/a',
+                               '--disposition', 'remove', tool=tool)
+        assert result.returncode == 0, result.stderr
+        written = carry.checkpoint(tmp_path, 'A', tool)
+    else:
+        written = carry.checkpoint(tmp_path, 'A', tool, items=[{'type': kind, 'context': 'Ran the migration.',
+            'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z', 'disposition': 'carry'}])
+    [loop] = [x for x in written['resume']['open_loops'] if x.get('type') == kind]
+    sources = tmp_path / 'sources'
+    sources.mkdir()
+    stale = (tmp_path / 'A.json').read_text()
+    (sources / 'A.json').write_text(stale)
+    (tmp_path / 'stale.json').write_text(stale)
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
+    identity = {'session_id': 'A', 'produced_at': loop['produced_at'], 'text': loop['context']}
+    judge(tmp_path, {'identity': identity, 'rule': 'R6', 'reason': REASON})
+    result = run(tmp_path, cutoff='2099-01-01T00:00:00Z')
+    assert result.returncode == 0, result.stderr
+    out = report(tmp_path)
+    assert out['ready_for_durable_filing'] and out['unfiled_before_cutoff'] == 0
+    [row] = out['items']
+    # The report keeps what was dropped, why, and where it came from.
+    assert (row['status'], row['reason'], row['item'], row['sources']) == ('dropped', REASON, loop,
+                                                                          [str(sources / 'A.json')])
+    [receipt] = settled_store(tmp_path)
+    assert receipt == {**row['receipt'], 'destination': None}
+    assert receipt['identity'] == {**identity, 'type': kind}
+    assert (receipt['disposition'], receipt['reason'], receipt['settled_by']) == (
+        'dropped', REASON, 'filing-catchup:fixture-node')
+    # Neither a checkpoint re-supplying the stale handoff's loop nor a pickup of it restores the item.
+    again = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
+    assert [x for x in again['resume']['open_loops'] if x.get('type') == kind] == []
+    carry.pickup(tmp_path, 'B', 'stale', tool)
+    resumed = carry.checkpoint(tmp_path, 'B', tool)
+    assert [x for x in resumed['resume']['open_loops'] if x.get('type') == kind] == []
+    # A rerun reports the identity as settled and writes nothing more.
+    assert run(tmp_path, cutoff='2099-01-01T00:00:00Z').returncode == 0
+    assert report(tmp_path)['already_settled'][0]['disposition'] == 'dropped'
+    assert len(settled_store(tmp_path)) == 1
+
+
+@pytest.mark.parametrize('kind', ['knowledge', 'lesson', 'decision', 'commitment', None])
+def test_a_drop_of_a_filed_type_is_refused_and_writes_nothing(tmp_path, kind):
+    loop = {**item(), 'type': kind} if kind else {k: v for k, v in item().items() if k != 'type'}
+    setup(tmp_path, [loop])
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': 'R1', 'reason': REASON})
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    [row] = out['items']
+    assert row['status'] == 'failed' and 'filed, never dropped' in row['error']
+    assert out['unfiled_before_cutoff'] == 1
+    assert settled_store(tmp_path) == [] and not (tmp_path / 'store.json').exists()
+
+
+@pytest.mark.parametrize('reason', ['', '   ', None])
+def test_a_drop_without_a_reason_is_refused(tmp_path, reason):
+    setup(tmp_path, [item()])
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R6',
+                     **({} if reason is None else {'reason': reason})})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert row['status'] == 'failed' and 'reason' in row['error']
+    assert settled_store(tmp_path) == []
+
+
+def recording_store(tmp_path):
+    """The fixture ticket store, also keeping the item each write received."""
+    script = tmp_path / 'store.py'
+    script.write_text(script.read_text().replace("receipt = {'identity': r['identity'], ",
+                                                 "receipt = {'item': r['item'], 'identity': r['identity'], "))
+
+
+def conflicting(tmp_path, newer_written_at, older_written_at=WRITTEN):
+    older = item()
+    newer = {**item(), 'anchor': {'ticket': 'example/repo#2'}, 'choices': ['approve the newer text', 'defer']}
+    sources = setup(tmp_path, [{**older, 'anchor': {'ticket': 'example/repo#1'}}])
+    for name, loop, written in (('claude.json', {**older, 'anchor': {'ticket': 'example/repo#1'}}, older_written_at),
+                                ('codex.json', newer, newer_written_at)):
+        data = json.loads((sources / name).read_text())
+        data['resume']['open_loops'] = [loop]
+        if written is None:
+            del data['written_at']
+        else:
+            data['written_at'] = written
+        (sources / name).write_text(json.dumps(data))
+    recording_store(tmp_path)
+    return sources, newer
+
+
+def test_conflicting_copies_inventory_and_file_as_the_newest_handoffs_copy(tmp_path):
+    sources, newer = conflicting(tmp_path, '2026-11-18T13:00:00Z')
+    assert run(tmp_path, 'inspect').returncode == 1
+    inspected = report(tmp_path)
+    assert inspected['errors'] == [] and inspected['items'][0]['item'] == newer
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    [row] = out['items']
+    assert row['status'] == 'filed' and row['item'] == newer
+    assert row['superseded_copies'] == [{'source': str(sources / 'claude.json'), 'written_at': WRITTEN,
+        'item': {**item(), 'anchor': {'ticket': 'example/repo#1'}}, 'difference': 'differs in anchor, choices'}]
+    assert [write['item'] for write in json.loads((tmp_path / 'store.json').read_text())] == [newer]
+
+
+def test_order_comes_from_written_at_never_from_file_times(tmp_path):
+    sources, newer = conflicting(tmp_path, '2026-11-18T13:00:00Z')
+    os.utime(sources / 'codex.json', (0, 0))
+    assert run(tmp_path, 'inspect').returncode == 1
+    assert report(tmp_path)['errors'] == [] and report(tmp_path)['items'][0]['item'] == newer
+
+
+@pytest.mark.parametrize('newer_written_at,older_written_at,problem', [
+    (WRITTEN, WRITTEN, 'written at the same time'),
+    (None, WRITTEN, 'no valid written_at'),
+])
+def test_conflicting_copies_that_cannot_be_ordered_stay_an_inventory_error(tmp_path, newer_written_at,
+                                                                          older_written_at, problem):
+    conflicting(tmp_path, newer_written_at, older_written_at)
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert problem in str(out['errors']) and out['items'][0]['status'] == 'pending'
+    assert not (tmp_path / 'store.json').exists()
+
+
+def commitment(**extra):
+    return {**item('Send the migration notes'), 'type': 'commitment', **extra}
+
+
+def test_an_unanchored_commitment_is_never_made_a_new_ticket(tmp_path):
+    loop = commitment()
+    setup(tmp_path, [loop])
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': 'R5', 'read_status': 'ok',
+                     'priority': 'P2', 'priority_reason': 'Follow-up work.'})
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    [row] = out['items']
+    assert row['status'] == 'pending' and 'never creates a ticket' in row['reason']
+    assert out['unfiled_before_cutoff'] == 1 and not (tmp_path / 'store.json').exists()
+
+
+def test_an_anchored_commitment_files_as_a_ticket_comment(tmp_path):
+    loop = commitment(anchor={'ticket': 'example/repo#1'})
+    setup(tmp_path, [loop])
+    assert run(tmp_path).returncode == 0
+    [row] = report(tmp_path)['items']
+    assert row['status'] == 'filed' and row['destination'].startswith('tickets:')
+
+
+def copies_in(tmp_path, *handoffs):
+    """Rewrite the ``setup`` handoffs: each is (name, written_at, loops)."""
+    for name, written, loops in handoffs:
+        path = tmp_path / 'sources' / name
+        data = json.loads(path.read_text())
+        data.update(written_at=written)
+        data['resume']['open_loops'] = loops
+        path.write_text(json.dumps(data))
+
+
+NEWER = '2026-11-18T13:00:00Z'
+
+
+@pytest.mark.parametrize('settled', [(), ('progress',), ('progress', 'commitment')])
+def test_a_newer_copy_of_another_type_never_supersedes_a_filed_type(tmp_path, settled):
+    older, newer = {**item(), 'type': 'commitment'}, item()
+    setup(tmp_path, [older])
+    copies_in(tmp_path, ('claude.json', WRITTEN, [older]), ('codex.json', NEWER, [newer]))
+    judge(tmp_path, {'identity': carrier_identity(newer), 'rule': 'R6', 'reason': REASON})
+    store_path(tmp_path).write_text(''.join(json.dumps(receipt({**newer, 'type': kind})) + '\n' for kind in settled))
+    assert run(tmp_path).returncode == (0 if len(settled) == 2 else 1)
+    out = report(tmp_path)
+    if len(settled) == 2:
+        # Each copy's own receipt settles it; nothing was superseded or dropped.
+        assert out['errors'] == [] and sorted(row['type'] for row in out['already_settled']) == list(sorted(settled))
+    else:
+        assert 'copies differ in type (commitment, then progress)' in str(out['errors'])
+        assert out['items'][0]['status'] == 'pending' and 'superseded_copies' not in out['items'][0]
+        assert len(settled_store(tmp_path)) == len(settled)
+
+
+def test_supersession_is_by_copy_and_every_copy_still_needs_its_receipt(tmp_path):
+    old = {**item(), 'choices': ['approve the old text', 'defer']}
+    new = {**item(), 'choices': ['approve the new text', 'defer']}
+    setup(tmp_path, [old])
+    # The older handoff lists the identity twice: once as the newer copy says, once superseded.
+    copies_in(tmp_path, ('claude.json', WRITTEN, [new, old]), ('codex.json', NEWER, [new]))
+    assert run(tmp_path, 'inspect').returncode == 1
+    [row] = report(tmp_path)['items']
+    assert report(tmp_path)['errors'] == [] and row['item'] == new
+    assert [(copy['source'], copy['item']) for copy in row['superseded_copies']] == [
+        (str(tmp_path / 'sources/claude.json'), old)]
+    store_path(tmp_path).write_text(json.dumps(receipt(new)) + '\n')
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['items'] == [] and [row['type'] for row in out['already_settled']] == ['progress']
+
+
+def drop_directly(tmp_path, monkeypatch, decision):
+    import checklist
+    import filing_catchup
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path / 'ledger'))
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
+    profile = checklist.load_profile(tmp_path / 'profile.json')
+    source = {'item': item(disposition='carry'), 'subject': {'session_id': 'carrier'}}
+    return filing_catchup.drop_item(source, decision, checklist.compose([profile]), checklist.ask_binding(profile),
+                                    tmp_path / 'sources', 'fixture-node')
+
+
+def test_a_drop_counts_only_when_the_store_settles_it_as_that_drop(tmp_path, monkeypatch):
+    decision = {'rule': 'R6', 'reason': REASON}
+    # Another writer settled the identity first, after catch-up's re-read.
+    store_path(tmp_path).write_text(json.dumps(receipt(item(disposition='carry'))) + '\n')
+    with pytest.raises(ValueError, match='another receipt .disposition filed. settled this identity first'):
+        drop_directly(tmp_path, monkeypatch, decision)
+    assert len(settled_store(tmp_path)) == 1
+    # A retry of the same drop finds its own receipt.
+    store_path(tmp_path).unlink()
+    first = drop_directly(tmp_path, monkeypatch, decision)
+    assert drop_directly(tmp_path, monkeypatch, decision)['receipt'] == first['receipt']
+    assert len(settled_store(tmp_path)) == 1
+
+
+def test_a_drop_passes_the_wraps_checks_for_its_rule(tmp_path):
+    setup(tmp_path, [item()])
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R1', 'reason': REASON})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert row['status'] == 'read failed' and settled_store(tmp_path) == []
+
+
+@pytest.mark.parametrize('anchor,rule,refusal', [
+    ({'ticket': '   '}, 'R5', 'stays unfiled'),
+    ({'ticket': {}}, 'R5', 'stays unfiled'),
+    ({'ticket': '   '}, 'R2', 'stays unfiled'),
+    ({'ticket': 'example/repo#1'}, 'R5', 'only as anchored R2 comments on their ticket, never R5'),
+])
+def test_a_commitment_files_only_as_a_comment_on_its_ticket(tmp_path, anchor, rule, refusal):
+    loop = commitment(anchor=anchor)
+    setup(tmp_path, [loop])
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': rule, 'read_status': 'ok',
+                     'priority': 'P2', 'priority_reason': 'Follow-up work.'})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert refusal in (row.get('reason') or '') + (row.get('error') or '')
+    assert row['status'] in ('pending', 'failed') and not (tmp_path / 'store.json').exists()
+
+
+def test_a_dropped_item_changed_before_the_recount_is_reported(tmp_path):
+    dropped, filed = item('dropped', disposition='carry'), item('filed')
+    sources = setup(tmp_path, [dropped, filed])
+    judge(tmp_path, {'identity': carrier_identity(dropped), 'rule': 'R6', 'reason': REASON},
+          {'identity': carrier_identity(filed), 'rule': 'R2', 'read_status': 'ok'})
+    # The second item's writer stands in for a concurrent checkpoint rewriting the first item.
+    script = tmp_path / 'store.py'
+    change = ''.join(f"d = json.loads(Path({str(p)!r}).read_text()); d['resume']['open_loops'][0]['detail'] = 'new'; "
+                     f"Path({str(p)!r}).write_text(json.dumps(d)); " for p in sorted(sources.iterdir()))
+    script.write_text(script.read_text().replace('data.append(receipt);', change + 'data.append(receipt);'))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    rows = {row['identity']['text']: row for row in out['items']}
+    assert rows['dropped']['status'] == 'dropped' and 'content changed' in rows['dropped']['recount_error']
+    assert rows['filed']['status'] == 'filed' and 'recount_error' not in rows['filed']
+    assert out['unfiled_before_cutoff'] == 1 and not out['ready_for_durable_filing']
+    # The report agrees: the identity is not also listed as settled.
+    assert [row['identity']['text'] for row in out['already_settled']] == []
+
+
+@pytest.mark.parametrize('same_handoff', [True, False])
+def test_artifacts_sharing_an_identity_are_never_dropped(tmp_path, same_handoff):
+    first = {**item('Published artifact'), 'type': 'artifact', 'disposition': 'remove', 'location': 'https://example.com/a'}
+    second = {**first, 'location': 'https://example.com/b'}
+    setup(tmp_path, [first])
+    if same_handoff:
+        copies_in(tmp_path, ('claude.json', WRITTEN, [first, second]), ('codex.json', WRITTEN, [first]))
+    else:
+        copies_in(tmp_path, ('claude.json', WRITTEN, [first]), ('codex.json', NEWER, [second]))
+    judge(tmp_path, {'identity': carrier_identity(first), 'rule': 'R6', 'reason': REASON})
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert 'artifacts of one session and produced_at have different locations' in str(out['errors'])
+    assert out['items'][0]['status'] == 'pending' and settled_store(tmp_path) == []
+
+
+@pytest.mark.parametrize('anchor', [None, {'ticket': 'example/repo#1'}])
+@pytest.mark.parametrize('rule,extra', [
+    ('R3', {'choices': ['approve', 'defer']}),
+    ('R7', {}),
+    ('R2', {'record_kind': 'projects', 'session_summary': 'Worked.'}),
+    ('R5', {}),
+    ('R2', {'scheduled': True}),
+])
+def test_a_commitment_never_files_except_as_an_anchored_ticket_comment(tmp_path, anchor, rule, extra):
+    scheduled = extra.pop('scheduled', False)
+    loop = commitment(**({'anchor': anchor} if anchor else {}), **({'time': '09:00'} if scheduled else {}))
+    setup(tmp_path, [loop])
+    profile = json.loads((tmp_path / 'profile.json').read_text())
+    for kind in ('projects', 'documents', 'scheduled_jobs'):
+        profile['record_writes'][kind] = profile['record_writes']['tickets']
+    (tmp_path / 'profile.json').write_text(json.dumps(profile))
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': rule, 'read_status': 'ok',
+                     'priority': 'P2', 'priority_reason': 'Follow-up work.', **extra})
+    if anchor and rule == 'R2' and not scheduled:
+        # The one allowed filing: an R2 comment through tickets on the anchor.
+        assert run(tmp_path).returncode == 0
+        assert report(tmp_path)['items'][0]['destination'].startswith('tickets:')
+        return
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    expected = 'only as anchored R2 comments' if anchor else 'without a ticket anchor stays unfiled'
+    assert expected in (row.get('reason') or '') + (row.get('error') or '')
+    assert not (tmp_path / 'store.json').exists()
+
+
+@pytest.mark.parametrize('malformed', ['older', 'newest'])
+def test_a_malformed_anchor_is_a_conflict_never_superseded_or_filed(tmp_path, malformed):
+    bad, good = {**item(), 'anchor': 'T-1'}, {**item(), 'anchor': {'ticket': 'example/repo#2'}}
+    setup(tmp_path, [good])
+    older, newest = (bad, good) if malformed == 'older' else (good, bad)
+    copies_in(tmp_path, ('claude.json', WRITTEN, [older]), ('codex.json', NEWER, [newest]))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert 'anchor that is not an object' in str(out['errors'])
+    assert 'superseded_copies' not in out['items'][0] and not (tmp_path / 'store.json').exists()
+
+
+def test_each_older_copy_is_compared_with_the_newest_copy_alone(tmp_path):
+    newest = item()
+    first, second = ({**item(), 'anchor': {'ticket': 'example/repo#' + n}} for n in ('1', '2'))
+    setup(tmp_path, [newest])
+    copies_in(tmp_path, ('claude.json', WRITTEN, [first, second]), ('codex.json', NEWER, [newest]))
+    recording_store(tmp_path)
+    assert run(tmp_path).returncode == 0
+    [row] = report(tmp_path)['items']
+    # The newest copy's anchor (none) is filed; both older anchors are listed, neither merged in.
+    assert row['item'] == newest
+    assert [(copy['item'], copy['difference']) for copy in row['superseded_copies']] == [
+        (first, 'differs in anchor'), (second, 'differs in anchor')]
+    assert [write['item'] for write in json.loads((tmp_path / 'store.json').read_text())] == [newest]
