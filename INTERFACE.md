@@ -52,6 +52,13 @@ python3 scripts/lib/durable_checkpoint.py --session-id <running-session> \
   --adapter '<configured-scheduler-adapter-command>'
 ```
 
+Each catch-up report lists under `already_settled` the identities that have a receipt in
+the settled-identity store, read from `HANDOFF_LEDGER_DIR`, else from the parent of the
+catch-up's `--store`, settled by the carry step's rule (`handoff.settlement_key`) and
+re-read before each write; it never files or counts them as unfiled. A line the carry step
+skips is counted in one `warnings` entry and settles nothing; only an unreadable store is
+an error, and it stops every remaining `run` write ([catch-up pass](docs/filing-catchup.md)).
+
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or
 remaining old items. Supply current per-node recount reports; an older successful

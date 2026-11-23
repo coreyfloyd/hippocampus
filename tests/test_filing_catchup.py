@@ -28,12 +28,16 @@ def setup(tmp_path, items, mode='ok'):
     return sources
 
 
-def run(tmp_path, command='run'):
+def run(tmp_path, command='run', ledger=True):
+    env = {**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1',
+           'XDG_CONFIG_HOME': str(tmp_path / 'config'), 'HANDOFF_STATE_DIR': str(tmp_path / 'state'),
+           'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger')}
+    if not ledger:
+        del env['HANDOFF_LEDGER_DIR']
     return subprocess.run([sys.executable, str(CLI), command, '--node', 'fixture-node',
         '--store', str(tmp_path / 'sources'), '--cutoff', CUTOFF,
         '--user-profile', str(tmp_path / 'profile.json'), '--decisions', str(tmp_path / 'decisions.json'),
-        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True,
-        env={**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1'})
+        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True, env=env)
 
 
 def report(tmp_path):
@@ -394,3 +398,209 @@ def test_native_approval_retry_cannot_enable_until_capture(tmp_path, provider, k
     assert run(tmp_path).returncode == 0
     assert report(tmp_path)['unfiled_before_cutoff'] == 0
     assert durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [report(tmp_path)])
+
+
+def settle(path, *items, lines=()):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [json.dumps({'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'],
+                                     'type': x['type'], 'text': x['context']},
+                        'disposition': 'filed', 'reason': 'filed by a wrap', 'destination': 'tickets:1',
+                        'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler'}) for x in items]
+    path.write_text(''.join(row + '\n' for row in [*lines, *rows]))
+
+
+@pytest.mark.parametrize('ledger', [True, False])
+def test_settled_identity_is_reported_and_never_filed(tmp_path, ledger):
+    settled, open_item = item('settled'), item('open')
+    setup(tmp_path, [settled, open_item])
+    # With no ledger override the store sits beside the supplied handoff store, as for the carry step.
+    settle((tmp_path / 'ledger' if ledger else tmp_path) / 'settled-identities.jsonl', settled)
+    assert run(tmp_path, 'inspect', ledger=ledger).returncode == 1
+    out = report(tmp_path)
+    assert out['unfiled_before_cutoff'] == 1 and out['unique_items'] == 2 and not out['errors']
+    assert out['already_settled'] == [{'identity': {'session_id': 'producer', 'produced_at': settled['produced_at'],
+        'text': 'settled'}, 'type': 'progress', 'disposition': 'filed', 'settled_at': '2026-11-20T12:00:00Z'}]
+    assert [row['identity']['text'] for row in out['items']] == ['open']
+    assert run(tmp_path, ledger=ledger).returncode == 0
+    out = report(tmp_path)
+    assert out['ready_for_durable_filing'] and out['unfiled_before_cutoff'] == 0
+    assert [row['identity']['text'] for row in out['items']] == ['open']
+    written = json.loads((tmp_path / 'store.json').read_text())
+    assert [row['identity'] for row in written] == [record_identity(open_item)]
+
+
+def record_identity(x):
+    return {'session_id': x['session_id'], 'produced_at': x['produced_at'], 'text': x['context']}
+
+
+def test_receipt_for_another_type_does_not_settle(tmp_path):
+    setup(tmp_path, [item()])
+    settle(tmp_path / 'ledger/settled-identities.jsonl', {**item(), 'type': 'decision'})
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['unfiled_before_cutoff'] == 1 and out['already_settled'] == []
+
+
+def receipt(x, **changes):
+    return {'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'], 'type': x['type'],
+                         'text': x['context']}, 'disposition': 'filed', 'reason': 'filed by a wrap',
+            'destination': 'tickets:1', 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler', **changes}
+
+
+def store_path(tmp_path):
+    path = tmp_path / 'ledger/settled-identities.jsonl'
+    path.parent.mkdir(exist_ok=True)
+    return path
+
+
+def written_identities(tmp_path):
+    path = tmp_path / 'store.json'
+    return [row['identity'] for row in json.loads(path.read_text())] if path.exists() else []
+
+
+@pytest.mark.parametrize('lines', [
+    pytest.param(lambda r: [r[:40], r], id='torn-line-then-valid-receipt'),
+    pytest.param(lambda r: [b'', r], id='blank-middle-line'),
+    pytest.param(lambda r: [b'[]', r], id='non-object-row'),
+    pytest.param(lambda r: [json.dumps({'identity': {'session_id': 'producer'}}).encode(), r], id='no-valid-identity'),
+    pytest.param(lambda r: [b'{"text": "\xff"}', r], id='undecodable-line'),
+])
+def test_lines_the_carry_step_skips_are_warnings_and_never_block(tmp_path, lines):
+    settled, open_item = item('settled'), item('open')
+    setup(tmp_path, [settled, open_item])
+    store_path(tmp_path).write_bytes(b'\n'.join(lines(json.dumps(receipt(settled)).encode())) + b'\n')
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    (warning,) = out['warnings']
+    assert '1 lines skipped' in warning and warning.endswith('first lines: 1')
+    assert [row['identity']['text'] for row in out['already_settled']] == ['settled']
+    assert written_identities(tmp_path) == [record_identity(open_item)]
+
+
+def test_skipped_lines_are_counted_with_the_first_twenty_line_numbers(tmp_path):
+    setup(tmp_path, [item()])
+    store_path(tmp_path).write_text('[]\n' * 25)
+    assert run(tmp_path, 'inspect').returncode == 1
+    (warning,) = report(tmp_path)['warnings']
+    assert '25 lines skipped' in warning and warning.endswith(', '.join(map(str, range(1, 21))))
+
+
+def test_unreadable_store_is_an_error_and_blocks_writes(tmp_path):
+    setup(tmp_path, [item()])
+    store_path(tmp_path).mkdir()
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert len(out['errors']) == 1 and 'unreadable' in out['errors'][0]
+    assert [(row['status'], row['error']) for row in out['items']] == [
+        ('pending', 'settled store unreadable; no write attempted')]
+    assert written_identities(tmp_path) == []
+
+
+def test_strict_invalid_receipt_settles_and_warns_only_for_carried_identities(tmp_path):
+    settled = item()
+    setup(tmp_path, [settled])
+    unrelated = receipt(item('unrelated'), disposition='keep')
+    store_path(tmp_path).write_text(json.dumps(unrelated) + '\n'
+                                    + json.dumps(receipt(settled, disposition='keep', extra=1)) + '\n')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and len(out['warnings']) == 1 and 'line 2' in out['warnings'][0]
+    assert out['already_settled'][0]['disposition'] == 'keep' and out['items'] == []
+    assert written_identities(tmp_path) == []
+
+
+def test_receipt_text_with_unicode_line_separators_matches(tmp_path):
+    settled = item('first\u2028second\u0085third')
+    setup(tmp_path, [settled])
+    store_path(tmp_path).write_text(json.dumps(receipt(settled), ensure_ascii=False) + '\n', encoding='utf-8')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['warnings'] == [] and len(out['already_settled']) == 1
+    assert written_identities(tmp_path) == []
+
+
+def test_receipt_wins_over_conflicting_copies_and_ignores_its_judgment(tmp_path):
+    settled = item()
+    sources = setup(tmp_path, [settled])
+    path = sources / 'codex.json'
+    data = json.loads(path.read_text())
+    data['resume']['open_loops'][0]['record_kind'] = 'documents'
+    path.write_text(json.dumps(data))
+    store_path(tmp_path).write_text(json.dumps(receipt(settled)) + '\n')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing'] and len(out['already_settled']) == 1
+    assert out['ignored_decisions'] == [{'identity': record_identity(settled),
+                                         'reason': 'identity already settled; judgment not used'}]
+    assert written_identities(tmp_path) == []
+
+
+@pytest.mark.parametrize('settled_types', [('progress', 'decision'), ('progress',)])
+def test_copies_of_different_types_settle_only_when_every_type_has_a_receipt(tmp_path, settled_types):
+    progress = item()
+    sources = setup(tmp_path, [progress])
+    path = sources / 'codex.json'
+    data = json.loads(path.read_text())
+    data['resume']['open_loops'][0]['type'] = 'decision'
+    path.write_text(json.dumps(data))
+    store_path(tmp_path).write_text(''.join(json.dumps(receipt({**progress, 'type': kind})) + '\n'
+                                            for kind in settled_types))
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    if len(settled_types) == 2:
+        assert out['errors'] == [] and out['unfiled_before_cutoff'] == 0 and out['unique_items'] == 1
+        assert sorted(row['type'] for row in out['already_settled']) == ['decision', 'progress']
+    else:
+        assert out['already_settled'] == [] and out['unfiled_before_cutoff'] == 1
+        assert 'conflicting' in str(out['errors'])
+
+
+def writer_settles(tmp_path, settled_item):
+    """The fixture record writer stands in for a carry step that settles an identity mid-run."""
+    store_path(tmp_path)
+    (tmp_path / 'store.py').rename(tmp_path / 'store_orig.py')
+    (tmp_path / 'store.py').write_text('import runpy\nfrom pathlib import Path\n'
+        'here = Path(__file__).parent\n'
+        'with (here / "ledger/settled-identities.jsonl").open("a") as handle:\n'
+        '    handle.write(' + repr(json.dumps(receipt(settled_item)) + '\n') + ')\n'
+        'runpy.run_path(str(here / "store_orig.py"), run_name="__main__")\n')
+
+
+def test_receipt_written_before_a_later_write_prevents_that_write(tmp_path):
+    filed, settled_later = item('filed'), item('later')
+    setup(tmp_path, [filed, settled_later])
+    writer_settles(tmp_path, settled_later)
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['unfiled_before_cutoff'] == 0
+    assert [row['identity']['text'] for row in out['already_settled']] == ['later']
+    statuses = {row['identity']['text']: row for row in out['items']}
+    assert statuses['filed']['status'] == 'filed'
+    assert statuses['later']['status'] == 'already_settled' and 'error' not in statuses['later']
+    # Only the first identity reached the writer (written to the original writer's store).
+    stored = json.loads((tmp_path / 'store_orig.json').read_text())
+    assert [row['identity'] for row in stored] == [record_identity(filed)]
+
+
+def test_unjudged_row_settled_during_run_is_relabelled(tmp_path):
+    filed, settled_later = item('filed'), item('later')
+    setup(tmp_path, [filed, settled_later])
+    decisions = json.loads((tmp_path / 'decisions.json').read_text())
+    (tmp_path / 'decisions.json').write_text(json.dumps(decisions[:1]))
+    writer_settles(tmp_path, settled_later)
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    later = next(row for row in report(tmp_path)['items'] if row['identity']['text'] == 'later')
+    assert later['status'] == 'already_settled' and 'error' not in later
+
+
+def test_attempted_write_keeps_its_failure_when_settled_meanwhile(tmp_path):
+    failing = item()
+    setup(tmp_path, [failing], 'failed')
+    writer_settles(tmp_path, failing)
+    run(tmp_path)
+    out = report(tmp_path)
+    (row,) = out['items']
+    assert row['status'] == 'failed' and row['error']
+    assert row['recount_note'] == 'identity now settled by a receipt; this run attempted a write'
+    assert [entry['identity']['text'] for entry in out['already_settled']] == ['change']

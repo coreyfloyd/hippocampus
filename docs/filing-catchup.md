@@ -24,7 +24,36 @@ returns 1 until a run proves readiness. Reports must be outside the handoff stor
 Keep each dated report; give retries a new report path and the same cutoff.
 
 The inspect report lists unique items with immutable `identity`, original item,
-and every source path. A decisions file is an array with one object per identity:
+and every source path. `unique_items` counts every carried identity older than
+the cutoff, settled or not.
+
+Catch-up reads the settled-identity store the carry step reads:
+`settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory
+of `--store`, and reads it the same way: a row settles the identity (producing
+session, time, type and text) named by its valid `identity`. A settled identity is
+never filed and never counted in `unfiled_before_cutoff`, and its receipt wins over
+conflicting carried copies. Copies of one session, time and text with different
+types are settled only when every type has a receipt. The report lists one
+`already_settled` entry per settled type, with the identity, type, and the
+receipt's `disposition` and `settled_at`; a filing judgment supplied for a settled
+identity is listed under `ignored_decisions`.
+
+`run` reads the store again before each write and skips an identity settled by
+then, giving its row `status: "already_settled"`. The recount reads it once more:
+a row this run never tried to write whose identity is now settled gets the same
+status and no error; a row with an attempted write keeps its status and error and
+gains a `recount_note` that the identity is now settled.
+
+Every line the carry step skips (blank, undecodable, unparseable, not an object,
+or with no valid identity) settles nothing and is one `warnings` entry giving the
+count and the first 20 line numbers. A settling row that fails another receipt
+check still settles, as for the carry step, and is warned about only when it
+settles a carried identity. Warnings never block writes or readiness. Only an
+unreadable store is an error: it blocks readiness and stops every remaining `run`
+write, leaving each item pending with `settled store unreadable; no write
+attempted`. A missing store has no receipts and no error.
+
+A decisions file is an array with one object per identity:
 
 In `run`, an omitted status requests filing, as in the example below. An explicit
 pending, dropped, failed, uncertain or read-failed judgment remains unfiled and
