@@ -28,12 +28,16 @@ def setup(tmp_path, items, mode='ok'):
     return sources
 
 
-def run(tmp_path, command='run'):
+def run(tmp_path, command='run', ledger=True):
+    env = {**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1',
+           'XDG_CONFIG_HOME': str(tmp_path / 'config'), 'HANDOFF_STATE_DIR': str(tmp_path / 'state'),
+           'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger')}
+    if not ledger:
+        del env['HANDOFF_LEDGER_DIR']
     return subprocess.run([sys.executable, str(CLI), command, '--node', 'fixture-node',
         '--store', str(tmp_path / 'sources'), '--cutoff', CUTOFF,
         '--user-profile', str(tmp_path / 'profile.json'), '--decisions', str(tmp_path / 'decisions.json'),
-        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True,
-        env={**os.environ, 'HOME': str(tmp_path / 'empty-home'), 'PYTHONDONTWRITEBYTECODE': '1'})
+        '--report', str(tmp_path / 'report.json')], text=True, capture_output=True, env=env)
 
 
 def report(tmp_path):
@@ -394,3 +398,60 @@ def test_native_approval_retry_cannot_enable_until_capture(tmp_path, provider, k
     assert run(tmp_path).returncode == 0
     assert report(tmp_path)['unfiled_before_cutoff'] == 0
     assert durable_checkpoint.schedule_request('fixture', str(tmp_path), ['fixture-node'], [report(tmp_path)])
+
+
+def settle(path, *items, lines=()):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [json.dumps({'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'],
+                                     'type': x['type'], 'text': x['context']},
+                        'disposition': 'filed', 'reason': 'filed by a wrap', 'destination': 'tickets:1',
+                        'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler'}) for x in items]
+    path.write_text(''.join(row + '\n' for row in [*lines, *rows]))
+
+
+@pytest.mark.parametrize('ledger', [True, False])
+def test_settled_identity_is_reported_and_never_filed(tmp_path, ledger):
+    settled, open_item = item('settled'), item('open')
+    setup(tmp_path, [settled, open_item])
+    # With no ledger override the store sits beside the supplied handoff store, as for the carry step.
+    settle((tmp_path / 'ledger' if ledger else tmp_path) / 'settled-identities.jsonl', settled)
+    assert run(tmp_path, 'inspect', ledger=ledger).returncode == 1
+    out = report(tmp_path)
+    assert out['unfiled_before_cutoff'] == 1 and out['unique_items'] == 2 and not out['errors']
+    assert out['already_settled'] == [{'identity': {'session_id': 'producer', 'produced_at': settled['produced_at'],
+        'text': 'settled'}, 'type': 'progress', 'disposition': 'filed', 'settled_at': '2026-11-20T12:00:00Z'}]
+    assert [row['identity']['text'] for row in out['items']] == ['open']
+    assert run(tmp_path, ledger=ledger).returncode == 0
+    out = report(tmp_path)
+    assert out['ready_for_durable_filing'] and out['unfiled_before_cutoff'] == 0
+    assert [row['identity']['text'] for row in out['items']] == ['open']
+    written = json.loads((tmp_path / 'store.json').read_text())
+    assert [row['identity'] for row in written] == [record_identity(open_item)]
+
+
+def record_identity(x):
+    return {'session_id': x['session_id'], 'produced_at': x['produced_at'], 'text': x['context']}
+
+
+def test_receipt_for_another_type_does_not_settle(tmp_path):
+    setup(tmp_path, [item()])
+    settle(tmp_path / 'ledger/settled-identities.jsonl', {**item(), 'type': 'decision'})
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['unfiled_before_cutoff'] == 1 and out['already_settled'] == []
+
+
+@pytest.mark.parametrize('bad', ['{not json', '[]', json.dumps({'identity': {'session_id': 'producer'}}),
+    json.dumps({'identity': {'session_id': 'producer', 'produced_at': item()['produced_at'], 'type': 'progress',
+                             'text': 'change'}, 'disposition': 'keep', 'reason': 'not terminal',
+                'destination': None, 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler'})])
+def test_invalid_settled_store_line_is_an_error_and_settles_nothing(tmp_path, bad):
+    settled = item()
+    setup(tmp_path, [settled])
+    store_path = tmp_path / 'ledger/settled-identities.jsonl'
+    store_path.parent.mkdir()
+    store_path.write_text(bad + '\n')
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert out['already_settled'] == [] and not out['ready_for_durable_filing']
+    assert any('line 1' in error for error in out['errors'])

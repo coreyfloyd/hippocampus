@@ -1054,8 +1054,8 @@ RECEIPT_FIELDS = ("identity", "disposition", "reason", "destination", "settled_a
 RECEIPT_IDENTITY = ("session_id", "produced_at", "type", "text")
 
 
-def settled_store_path() -> str:
-    return os.path.join(ledger_dir(), "settled-identities.jsonl")
+def settled_store_path(handoff_dir: str | None = None) -> str:
+    return os.path.join(ledger_dir(handoff_dir), "settled-identities.jsonl")
 
 
 def receipt_key(identity: Any) -> tuple[str, ...] | None:
@@ -1699,10 +1699,10 @@ def _ledger_records(path: str) -> list[dict[str, Any]]:
     return records
 
 
-def ledger_dir() -> str:
+def ledger_dir(handoff_dir: str | None = None) -> str:
     # The ledger sits beside the handoff directory, so one configured value places both.
     return os.path.expanduser(os.environ.get("HANDOFF_LEDGER_DIR")
-                              or os.path.dirname(state_dir().rstrip(os.sep)))
+                              or os.path.dirname((handoff_dir or state_dir()).rstrip(os.sep)))
 
 
 def ledger_path(session_id: str) -> str:

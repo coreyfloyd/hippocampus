@@ -24,7 +24,20 @@ returns 1 until a run proves readiness. Reports must be outside the handoff stor
 Keep each dated report; give retries a new report path and the same cutoff.
 
 The inspect report lists unique items with immutable `identity`, original item,
-and every source path. A decisions file is an array with one object per identity:
+and every source path. `unique_items` counts every carried identity older than
+the cutoff, settled or not.
+
+Catch-up reads the settled-identity store the carry step reads:
+`settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory
+of `--store`. An identity whose producing session, time, type and text have a
+settlement receipt is never filed and never counted in `unfiled_before_cutoff`;
+the report lists it under `already_settled` with its identity, type, and the
+receipt's `disposition` and `settled_at`. The recount reads the store again, so a
+receipt written during the run also settles its identity. An unreadable store, or
+a line that is not valid JSON or not a valid receipt, is a report error naming the
+line; it settles nothing and blocks readiness.
+
+A decisions file is an array with one object per identity:
 
 In `run`, an omitted status requests filing, as in the example below. An explicit
 pending, dropped, failed, uncertain or read-failed judgment remains unfiled and

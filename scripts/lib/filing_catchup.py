@@ -16,6 +16,43 @@ import sweep
 
 checklist = sweep.checklist
 record_write = checklist.record_write
+handoff = sweep.handoff
+
+
+def settlement_receipts(store):
+    """The settled-identity store the carry step reads for this handoff store, validated.
+
+    Returns receipts by carry identity and errors naming each unreadable or invalid line;
+    an invalid line settles nothing.
+    """
+    path = Path(handoff.settled_store_path(str(store)))
+    receipts, errors = {}, []
+    try:
+        lines = path.read_text(encoding='utf-8').splitlines()
+    except FileNotFoundError:
+        return receipts, errors
+    except (OSError, UnicodeDecodeError) as error:
+        return receipts, ['settled store ' + str(path) + ' is unreadable: ' + str(error)]
+    for number, line in enumerate(lines, 1):
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            errors.append('settled store ' + str(path) + ' line ' + str(number) + ': not valid JSON')
+            continue
+        problem = handoff.invalid_receipt(row)
+        if problem:
+            errors.append('settled store ' + str(path) + ' line ' + str(number) + ': ' + problem)
+            continue
+        receipts.setdefault(handoff.receipt_key(row['identity']), row)
+    return receipts, errors
+
+
+def settled_row(row, receipts):
+    """The receipt settling every copy of this identity, matched on the carry step's identity fields."""
+    keys = {tuple(copy['item'].get(field) for field in handoff.SESSION_ITEM_IDENTITY) for copy in row['copies']}
+    receipt = receipts.get(keys.pop()) if len(keys) == 1 else None
+    return receipt and dict(identity=row['identity'], type=receipt['identity']['type'],
+                            disposition=receipt['disposition'], settled_at=receipt['settled_at'])
 
 
 def merge_copies(first, second):
@@ -44,11 +81,15 @@ def merge_copies(first, second):
     return left
 
 
-def inventory(store, cutoff, paths=None):
-    """Read both providers' handoffs without consulting sessions or knowledge."""
+def inventory(store, cutoff, receipts, paths=None):
+    """Read both providers' handoffs without consulting sessions or knowledge.
+
+    Returns the open items, the identities ``receipts`` already settle, source snapshots
+    and errors.
+    """
     items, sources, errors = {}, {}, []
     if store.is_symlink() or not store.is_dir():
-        return items, sources, ['handoff store must be an existing regular directory']
+        return items, [], sources, ['handoff store must be an existing regular directory']
     for path in sorted(store.glob('*.json') if paths is None else map(Path, paths)):
         try:
             raw, snapshot = sweep.read_handoff_source(path)
@@ -82,7 +123,13 @@ def inventory(store, cutoff, paths=None):
                     errors.append('conflicting carried copies of identity ' + key + ': ' + str(error))
         except (OSError, ValueError, TypeError, AttributeError) as error:
             errors.append(str(path) + ': ' + str(error))
-    return items, sources, errors
+    settled = []
+    for key, row in list(items.items()):
+        receipt = settled_row(row, receipts)
+        if receipt:
+            settled.append(receipt)
+            del items[key]
+    return items, settled, sources, errors
 
 
 def save(path, report):
@@ -168,8 +215,11 @@ def run(args):
         by_identity[key] = {k: v for k, v in row.items() if k != 'identity'}
     report = dict(node=args.node, cutoff=args.cutoff, started_at=datetime.now(timezone.utc).isoformat(),
                   mode=args.command, items=[], errors=[], ready_for_durable_filing=False)
-    items, sources, errors = inventory(store, args.cutoff)
-    report.update(errors=errors, sources=sources, unique_items=len(items), unfiled_before_cutoff=len(items))
+    receipts, errors = settlement_receipts(store)
+    items, settled, sources, problems = inventory(store, args.cutoff, receipts)
+    errors += problems
+    report.update(errors=errors, sources=sources, unique_items=len(items) + len(settled),
+                  unfiled_before_cutoff=len(items), already_settled=settled)
     save(report_path, report)
     for key, source in items.items():
         outcome = dict(source, status='pending', error='no filing judgment supplied')
@@ -179,7 +229,7 @@ def run(args):
         elif args.command == 'run' and key in by_identity:
             try:
                 # Check the eligible content, not checkpoint timestamps/newer work.
-                refreshed, _, problems = inventory(store, args.cutoff, source['sources'])
+                refreshed, _, _, problems = inventory(store, args.cutoff, receipts, source['sources'])
                 actual = refreshed.get(key)
                 if (problems or actual is None or actual.get('conflicts')
                         or actual['item'] != source['item']):
@@ -192,10 +242,15 @@ def run(args):
             except (ValueError, OSError, TypeError, KeyError) as error:
                 outcome.update(status='failed', error=str(error))
         save(report_path, report)
-    current, snapshots, errors = inventory(store, args.cutoff)
+    receipts, errors = settlement_receipts(store)
+    current, settled, snapshots, problems = inventory(store, args.cutoff, receipts)
+    errors += problems
     report['errors'].extend(errors)
     report['recount_sources'] = snapshots
-    confirmed = set()
+    # A receipt the carry step wrote during the run settles the identity for both.
+    confirmed = {sweep.identity_key(row['identity']) for row in settled}
+    known = {sweep.identity_key(row['identity']) for row in report['already_settled']}
+    report['already_settled'] += [row for row in settled if sweep.identity_key(row['identity']) not in known]
     for row in report['items']:
         key = sweep.identity_key(row['identity'])
         actual = current.get(key)
