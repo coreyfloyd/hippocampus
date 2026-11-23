@@ -147,11 +147,22 @@ identity, `disposition: "dropped"` and the reason, through
 `handoff.py settle-identity --receipts FILE`, the carry step's own writer and
 store; any other disposition is refused as invalid, and a store row with another
 disposition settles nothing. The next report lists the loop under `already_settled`
-with the receipt's `reason`. The sweep never files a loop so settled. A checkpoint
-does not carry it again: one carrying its own `session_id` and `produced_at` is
-matched by them, and one named by its handoff is matched by its content and its
-position in the writer's previous handoff or the handoff it picked up, where the
-receipt settles it. A run judgment for an untyped or empty loop fails, saying so.
+with the receipt's `reason`. The sweep never files a loop so settled, reading the
+settled-identity store beside its handoff store. A run judgment for an untyped or
+empty loop fails, saying so.
+
+The session and time that name such a loop must be non-blank strings, and the
+time an ISO time with a timezone, exactly as a valid receipt requires. An untyped
+or empty loop without them has no receipt identity and is a loop error, never
+filed by its handoff's other identity.
+
+Two limits follow from naming a loop by its handoff. An empty loop's identity
+belongs to one handoff write: a rewrite gives it a new `written_at`, and so a new
+identity that the earlier drop does not settle. And a checkpoint matches a dropped
+loop only when the loop carries its own `session_id` and `produced_at`; a live
+session that writes the loop again writes it in a handoff after the cutoff. Neither
+reaches catch-up, which reads only handoffs written before the cutoff, whose
+sessions no longer write them.
 
 Copies of one producing identity may differ in `status` and `recorded` hints,
 which never prove settlement. When copies otherwise agree, nonconflicting

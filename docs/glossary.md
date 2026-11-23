@@ -122,7 +122,7 @@ An open loop with context but no session-item type, written before carried items
 _Avoid_: legacy item, bare loop
 
 **Empty loop**:
-An open loop with no type and no context; a typed item without context is an inventory error instead. It is never filed: catch-up names it by its handoff's session, written time and position among the handoff's open loops, never by the file's name or time, and only a dropped settlement receipt with a reason settles it. A handoff without that session or time leaves it an inventory error.
+An open loop with no type and no context; a typed item without context is an inventory error instead. It is never filed: catch-up names it by its handoff's session, written time and position among the handoff's open loops, never by the file's name or time, and only a dropped settlement receipt with a reason settles it. Its identity belongs to that one handoff write. A handoff without a valid session or time leaves it an inventory error.
 _Avoid_: blank loop, null loop
 
 **Retained session item**:

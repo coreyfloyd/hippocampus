@@ -1187,8 +1187,7 @@ def test_an_empty_loop_without_its_handoffs_session_or_time_stays_a_loop_error(t
     old.write_text(json.dumps(data))
     assert run(tmp_path).returncode == 1
     out = report(tmp_path)
-    assert out['errors'] == [str(old) + ': open_loops[0] has no context, and its handoff has no session_id or '
-                             'valid written_at to name it by position; a file name or time is not an identity']
+    assert out['errors'] == [str(old) + ': open_loops[0] ' + EMPTY_ERROR]
     assert not out['ready_for_durable_filing']
 
 
@@ -1217,32 +1216,6 @@ def test_a_typed_item_without_context_stays_a_loop_error_whatever_the_store_hold
     assert out['already_settled'] == [] and not out['ready_for_durable_filing']
 
 
-@pytest.mark.parametrize('tool', carry.TOOLS)
-def test_a_settled_loop_named_by_its_handoff_is_not_carried_by_checkpoint_or_pickup(tmp_path, tool):
-    loop = {'context': 'Legacy note', 'disposition': 'keep'}
-    written = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
-    (tmp_path / 'sources').mkdir()
-    stale = (tmp_path / 'A.json').read_text()
-    (tmp_path / 'sources/A.json').write_text(stale)
-    (tmp_path / 'stale.json').write_text(stale)
-    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
-    judge(tmp_path)
-    identity = receipt_identities(tmp_path, '2099-01-01T00:00:00Z')['Legacy note']
-    assert identity == {'session_id': 'A', 'produced_at': written['written_at'], 'type': 'untyped_loop',
-                        'text': 'Legacy note'}
-    assert settle_identity(tmp_path, drop_receipt(identity))[0] == 0
-    # The writer re-supplying the loop from its own previous handoff no longer carries it.
-    again = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
-    assert loop not in again['resume']['open_loops']
-    # A successor that picked up the stale handoff does not carry it either.
-    carry.pickup(tmp_path, 'B', 'stale', tool)
-    resumed = carry.checkpoint(tmp_path, 'B', tool, resume={'open_loops': [loop]})
-    assert loop not in resumed['resume']['open_loops']
-    # Content that is not settled in either handoff is still carried.
-    other = {'context': 'New note', 'disposition': 'keep'}
-    assert other in carry.checkpoint(tmp_path, 'B', tool, resume={'open_loops': [loop, other]})['resume']['open_loops']
-
-
 def test_the_receipt_writer_never_counts_a_loop_receipt_that_is_not_dropped(tmp_path):
     sys.path.insert(0, str(ROOT / 'scripts/lib'))
     import handoff
@@ -1265,3 +1238,60 @@ def test_an_empty_loop_and_an_untyped_loop_of_the_same_text_never_share_a_row(tm
     out = report(tmp_path)
     assert [row['identity']['type'] for row in out['items']] == ['untyped_loop']
     assert [row['type'] for row in out['already_settled']] == ['empty_loop']
+
+
+EMPTY_ERROR = ('has no context, and its handoff has no valid session_id and written_at to name it by position; '
+               'a file name or time is not an identity')
+UNTYPED = {'context': 'Legacy note', 'disposition': 'keep'}
+
+
+@pytest.mark.parametrize('loop, problem', [
+    (EMPTY, EMPTY_ERROR),
+    (UNTYPED, None),
+], ids=['empty', 'untyped'])
+@pytest.mark.parametrize('field, value', [
+    ('subject', {'session_id': '   '}), ('subject', {'session_id': 5}),
+    ('written_at', '   '), ('written_at', 7), ('written_at', 'yesterday'),
+], ids=['blank-session', 'number-session', 'blank-time', 'number-time', 'bad-time'])
+def test_a_loop_whose_session_or_time_is_not_valid_is_a_loop_error_never_filed(tmp_path, loop, problem, field, value):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    old.write_text(json.dumps({'subject': {'session_id': 'old'}, 'written_at': WRITTEN, field: value,
+                               'resume': {'open_loops': [loop, dict(loop)]}}))
+    # A judgment naming the legacy identity is never used to file or drop the loop.
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R2', 'read_status': 'ok'},
+          {'identity': {'session_id': 'old', 'produced_at': WRITTEN, 'text': loop.get('context', '')}, 'rule': 'R2',
+           'read_status': 'ok'})
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    problem = problem or ('has no producing session in the item or its handoff; a file name is not an identity'
+                          if field == 'subject' else
+                          'has no producing time in the item or its handoff; a file time is not an identity')
+    assert out['errors'] == [str(old) + ': open_loops[' + str(index) + '] ' + problem for index in (0, 1)]
+    assert [row['identity']['text'] for row in out['items']] == ['change']
+    assert stored(tmp_path) == [record_identity_of(item())] and settled_store(tmp_path) == []
+
+
+@pytest.mark.parametrize('value', ['   ', 5])
+def test_an_untyped_loop_with_a_malformed_own_session_is_a_loop_error(tmp_path, value):
+    sources = setup(tmp_path, [item(), {**UNTYPED, 'session_id': value}])
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['errors'] == [str(sources / name) + ': open_loops[1] has no producing session in the item or its '
+                             'handoff; a file name is not an identity' for name in ('claude.json', 'codex.json')]
+
+
+def test_an_empty_loops_identity_belongs_to_one_handoff_write(tmp_path):
+    """A rewrite of the handoff names its empty loop anew; catch-up reads handoffs written before the cutoff,
+    which no session rewrites, so a drop of one write settles that write's loop only."""
+    sources = setup(tmp_path, [EMPTY])
+    [identity] = receipt_identities(tmp_path).values()
+    assert settle_identity(tmp_path, drop_receipt(identity))[0] == 0
+    assert run(tmp_path, 'inspect').returncode == 1 and report(tmp_path)['items'] == []
+    for name in ('claude.json', 'codex.json'):
+        data = json.loads((sources / name).read_text())
+        data['written_at'] = '2026-11-18T13:00:00Z'
+        (sources / name).write_text(json.dumps(data))
+    [rewritten] = receipt_identities(tmp_path).values()
+    assert rewritten == {**identity, 'produced_at': '2026-11-18T13:00:00Z'}
+    assert report(tmp_path)['already_settled'] == []

@@ -216,7 +216,8 @@ def discover(scope, config, now):
         return result
     if not store.exists():
         return result
-    settled = handoff.settled_identities()
+    # The settled-identity store beside this handoff store, as catch-up reads it.
+    settled = handoff.settled_identities(handoff.settled_store_path(str(store)))
     for path in sorted(store.glob('*.json')):
         try:
             source_bytes, source_snapshot = read_handoff_source(path)

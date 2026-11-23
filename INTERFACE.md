@@ -68,8 +68,9 @@ modification time, or a typed item with no `context`. An empty loop (no `type` a
 judgment for one fails: inspect gives each an `identity` and `receipt_identity` with the reserved
 type `untyped_loop` or `empty_loop`, and only a `dropped` receipt with a reason, recorded through
 `settle-identity`, settles it; the report then lists it under `already_settled` with that reason,
-the sweep never files it, and no checkpoint carries it again from the writer's previous or
-picked-up handoff. Where copies of one identity differ only in
+and the sweep never files it. Its session and time must be non-blank strings and the time
+an ISO time with a timezone, else the loop is a loop error. An empty loop's identity belongs
+to one handoff write; catch-up reads only handoffs written before the cutoff. Where copies of one identity differ only in
 anchor or proposal text, the copy from the handoff with the newest `written_at` is filed and
 older ones are listed under `superseded_copies`; a difference in type or other filing content,
 or an unordered conflict, stays an inventory error. A `progress`, `open_loop` or `artifact`

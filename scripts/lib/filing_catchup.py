@@ -200,11 +200,11 @@ def handoff_time(data):
         return None
 
 
-EMPTY_WITHOUT_IDENTITY = ('has no context, and its handoff has no session_id or valid written_at to name it '
+EMPTY_WITHOUT_IDENTITY = ('has no context, and its handoff has no valid session_id and written_at to name it '
                           'by position; a file name or time is not an identity')
 
 
-def unstable_identity(item, data):
+def unstable_identity(item, data, index):
     """Why catch-up cannot give this loop a stable identity, else None.
 
     Identity is content only: the item's own fields, else its handoff's ``subject.session_id``
@@ -219,16 +219,16 @@ def unstable_identity(item, data):
         if not (item.get('session_id') and item.get('produced_at')):
             return 'is a typed item without its own session_id and produced_at; the carry step cannot settle it'
         return None
+    # An untyped or empty loop has a receipt identity or is a loop error: never the legacy filing path.
+    if handoff.loop_receipt_identity(item, data, index):
+        return None
     if empty:
-        session, _ = handoff.handoff_producer(data)
-        return EMPTY_WITHOUT_IDENTITY if handoff_time(data) is None or not session else None
-    subject = data.get('subject')
-    subject = subject if isinstance(subject, dict) else {}
-    if not (item.get('session_id') or subject.get('session_id') or data.get('session_id')):
+        return EMPTY_WITHOUT_IDENTITY
+    session, _ = handoff.handoff_producer(data)
+    session = item.get('session_id') or session
+    if not isinstance(session, str) or not session.strip():
         return 'has no producing session in the item or its handoff; a file name is not an identity'
-    if not (item.get('produced_at') or data.get('written_at')):
-        return 'has no producing time in the item or its handoff; a file time is not an identity'
-    return None
+    return 'has no producing time in the item or its handoff; a file time is not an identity'
 
 
 def written_before(data, cutoff):
@@ -260,7 +260,7 @@ def inventory(store, cutoff, receipts, paths=None):
                 warnings.append(str(path) + ': ' + sweep.NULL_LOOPS)
             subject = data.get('subject')
             for index, carried in enumerate(carried_items):
-                problem = unstable_identity(carried['item'], data)
+                problem = unstable_identity(carried['item'], data, index)
                 if problem:
                     loop_errors.append(str(path) + ': open_loops[' + str(index) + '] ' + problem)
                     continue

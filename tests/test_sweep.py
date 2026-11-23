@@ -1442,3 +1442,36 @@ def test_untyped_and_empty_loops_settled_by_a_dropped_receipt_are_never_swept(sa
     section = data['directories'][str(sandbox[0])]
     assert section['filing_outcomes'] == []
     assert [row['outcome'] for row in section['handoffs_archived']] == ['dry run']
+
+
+
+@pytest.mark.parametrize('field, value', [('subject', '   '), ('written_at', 'yesterday')],
+                         ids=['blank-session', 'bad-time'])
+def test_a_handoff_without_a_valid_session_or_time_is_an_error_never_a_settled_skip(sandbox, field, value):
+    path = source(sandbox, loops=[{'owner': 'agent'}])
+    data = json.loads(path.read_text())
+    if field == 'subject':
+        data['subject']['session_id'] = value
+    else:
+        data['written_at'] = value
+    path.write_text(json.dumps(data))
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert swept['candidates'] == [] and [error['path'] for error in swept['errors']] == [str(path)]
+
+
+@pytest.mark.parametrize('field, value', [('session_id', '   '), ('session_id', 5), ('produced_at', '   '),
+                                          ('produced_at', 'yesterday')],
+                         ids=['blank-session', 'number-session', 'blank-time', 'bad-time'])
+def test_an_untyped_loop_without_a_valid_receipt_identity_is_never_skipped_as_settled(sandbox, field, value):
+    loop = {'context': 'Optional observation', 'disposition': 'consider', field: value}
+    source(sandbox, loops=[loop])
+    # A store row naming the loop's own fields as they are settles nothing: they are not a valid identity.
+    identity = {'session_id': 'source', 'produced_at': json.loads(FIXTURE.read_text())['written_at'],
+                'type': 'untyped_loop', 'text': 'Optional observation', field: value}
+    store = Path(sandbox[3].get('HANDOFF_LEDGER_DIR') or sandbox[1].parent) / 'settled-identities.jsonl'
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(json.dumps({'identity': identity, 'disposition': 'dropped', 'reason': 'Superseded.',
+                                 'destination': None, 'settled_at': '2026-11-20T12:00:00Z',
+                                 'settled_by': 'maintainer'}) + '\n')
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert [item['item'] for candidate in swept['candidates'] for item in candidate['items']] == [loop]
