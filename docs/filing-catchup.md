@@ -29,23 +29,29 @@ the cutoff, settled or not.
 
 Catch-up reads the settled-identity store the carry step reads:
 `settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory
-of `--store`, and settles by the same rule: a row settles the identity (producing
+of `--store`, and reads it the same way: a row settles the identity (producing
 session, time, type and text) named by its valid `identity`. A settled identity is
 never filed and never counted in `unfiled_before_cutoff`, and its receipt wins over
-conflicting carried copies. The report lists it under `already_settled` with its
-identity, type, and the receipt's `disposition` and `settled_at`; a filing judgment
-supplied for it is listed under `ignored_decisions`. The recount reads the store
-again: an identity a receipt written during the run settles is added to
-`already_settled`, and its row in `items`, unless this run filed it, gets
-`status: "already_settled"` and no error.
+conflicting carried copies. Copies of one session, time and text with different
+types are settled only when every type has a receipt. The report lists one
+`already_settled` entry per settled type, with the identity, type, and the
+receipt's `disposition` and `settled_at`; a filing judgment supplied for a settled
+identity is listed under `ignored_decisions`.
 
-An unreadable store, an unparseable line, or a row with no valid identity is a
-report error naming the line: it settles nothing, blocks readiness, and in `run`
-stops every write, leaving each item pending with `settled store unreadable; no
-write attempted`. Two cases are `warnings`, which never block readiness: a torn
-final line with no trailing newline, which the store's writer tolerates, and a row
-with a valid identity that fails another receipt check, which still settles as it
-does for the carry step.
+`run` reads the store again before each write and skips an identity settled by
+then, giving its row `status: "already_settled"`. The recount reads it once more:
+a row this run never tried to write whose identity is now settled gets the same
+status and no error; a row with an attempted write keeps its status and error and
+gains a `recount_note` that the identity is now settled.
+
+Every line the carry step skips (blank, undecodable, unparseable, not an object,
+or with no valid identity) settles nothing and is one `warnings` entry giving the
+count and the first 20 line numbers. A settling row that fails another receipt
+check still settles, as for the carry step, and is warned about only when it
+settles a carried identity. Warnings never block writes or readiness. Only an
+unreadable store is an error: it blocks readiness and stops every remaining `run`
+write, leaving each item pending with `settled store unreadable; no write
+attempted`. A missing store has no receipts and no error.
 
 A decisions file is an array with one object per identity:
 
