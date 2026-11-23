@@ -377,7 +377,7 @@ def test_settle_identity_retry_is_idempotent(tmp_path, tool):
     receipt(lesson(), disposition='carry'),
     receipt(lesson(), settled_at='2026-11-22T12:00:00'),
     receipt(lesson(produced_at='2026-11-05T12:00:00')),
-    receipt(lesson(type='artifact')),
+    receipt(lesson(type='not-a-type')),
     {**receipt(lesson()), 'identity': {k: v for k, v in receipt(lesson())['identity'].items() if k != 'type'}},
     receipt(lesson(), settled_by=''),
     receipt(lesson(), destination=3),

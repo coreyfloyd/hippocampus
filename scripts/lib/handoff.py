@@ -1048,8 +1048,8 @@ def _session_item_rows(session_id: str) -> tuple[dict[tuple[str, ...], list[dict
     return items, settled
 
 
-# The machine's settled-identity store: one settlement receipt per session-item identity,
-# whichever session settled it, so no session on the machine carries that item again.
+# The machine's settled-identity store: one settlement receipt per session-item or artifact
+# identity, whichever session settled it, so no session on the machine carries that item again.
 TERMINAL_DISPOSITIONS = ("captured", "dropped", "filed", "applied", "recorded", "done")
 RECEIPT_FIELDS = ("identity", "disposition", "reason", "destination", "settled_at", "settled_by")
 RECEIPT_IDENTITY = ("session_id", "produced_at", "type", "text")
@@ -1060,13 +1060,25 @@ def settled_store_path(handoff_dir: str | None = None) -> str:
 
 
 def receipt_key(identity: Any) -> tuple[str, ...] | None:
-    """A receipt identity as a session-item identity: producer, time, type and text."""
+    """A receipt identity as a carry identity (``carry_identity``): producer, time, type and text."""
     if not isinstance(identity, Mapping) or set(identity) != set(RECEIPT_IDENTITY):
         return None
     key = tuple(identity[field] for field in RECEIPT_IDENTITY)
     if any(not isinstance(value, str) or not value.strip() for value in key):
         return None
-    return key if key[2] in ITEM_TYPES and key[2] != "artifact" else None
+    return key if key[2] in ITEM_TYPES else None
+
+
+def carry_identity(item: Any) -> tuple[str, ...] | None:
+    """The identity a settlement receipt settles: a session item's, or a well-formed artifact's.
+
+    Artifacts are never retained as session items, but a catch-up drop settles one so no
+    carry step restores it.
+    """
+    if isinstance(item, Mapping) and item.get("type") == "artifact":
+        key = tuple(item.get(field) for field in SESSION_ITEM_IDENTITY)
+        return key if all(isinstance(value, str) and value.strip() for value in key) else None
+    return session_item_identity(item)
 
 
 def settlement_key(row: Any) -> tuple[str, ...] | None:
@@ -1077,9 +1089,9 @@ def settlement_key(row: Any) -> tuple[str, ...] | None:
 _STORE_CACHE: dict[str, tuple[tuple[int, int, int], frozenset]] = {}
 
 
-def settled_identities() -> set[tuple[str, ...]]:
+def settled_identities(path: str | None = None) -> set[tuple[str, ...]]:
     """The settled identities, parsed once per process while the append-only store is unchanged."""
-    path = settled_store_path()
+    path = path or settled_store_path()
     try:
         stat = os.stat(path)
         version = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
@@ -1108,16 +1120,17 @@ _UNKNOWN: Any = object()
 def may_carry(item: Any, store: set[tuple[str, ...]], identity: Any = _UNKNOWN) -> bool:
     """Whether a carry path may restore the item: no settlement receipt and not terminal.
 
-    Artifacts and items without a session-item identity keep their own rules. A caller
-    that already computed the item's identity passes it.
+    Items without a carry identity keep their own rules. A caller that already computed
+    the item's session-item identity passes it.
     """
-    identity = session_item_identity(item) if identity is _UNKNOWN else identity
+    if identity is _UNKNOWN or (identity is None and isinstance(item, Mapping) and item.get("type") == "artifact"):
+        identity = carry_identity(item)
     return identity is None or (identity not in store and terminal_disposition(item) is None)
 
 
 def settlement_receipt(item: Any, session_id: str, disposition: str, reason: str,
                        destination: str | None = None) -> dict[str, Any] | None:
-    identity = session_item_identity(item)
+    identity = carry_identity(item)
     if not identity or not session_id.strip():
         return None
     return {"identity": dict(zip(RECEIPT_IDENTITY, identity)), "disposition": disposition,
@@ -1161,7 +1174,7 @@ def invalid_receipt(row: Any) -> str | None:
     if set(row) != set(RECEIPT_FIELDS):
         return "a receipt has exactly the fields " + ", ".join(RECEIPT_FIELDS)
     if not receipt_key(row["identity"]):
-        return "identity requires non-empty session_id, produced_at, type (a session-item type other than artifact) and text"
+        return "identity requires non-empty session_id, produced_at, type (a session-item type) and text"
     if not _valid_history_time(row["identity"]["produced_at"]):
         return "identity.produced_at must be an ISO time with timezone"
     if row["disposition"] not in TERMINAL_DISPOSITIONS:
@@ -1178,14 +1191,18 @@ def invalid_receipt(row: Any) -> str | None:
     return None
 
 
-def write_settlement_receipts(receipts: Sequence[Mapping[str, Any]]) -> dict[str, int]:
-    """Append receipts for identities not yet settled, once each, under an exclusive lock."""
-    path = Path(settled_store_path())
+def write_settlement_receipts(receipts: Sequence[Mapping[str, Any]],
+                              path: str | None = None) -> dict[str, int]:
+    """Append receipts for identities not yet settled, once each, under an exclusive lock.
+
+    ``path`` names a store other than this machine's default, as catch-up reads it.
+    """
+    path = Path(path or settled_store_path())
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
-            settled = settled_identities()
+            settled = settled_identities(str(path))
             rows = []
             for receipt in receipts:
                 key = receipt_key(receipt["identity"])
@@ -1471,8 +1488,10 @@ def checkpoint_loops(supplied: Mapping[str, Any], session_id: str, *,
             continue
         loops.append(dict(item, type=item.get("type", "")) if isinstance(item, dict) else item)
     # Retained items survive checkpoints that do not re-supply them.
+    store = settled_identities() if store is None else store
     loops = merge_session_items(loops, session_id, recorded, store=store, drop_settled=drop_settled)
-    return carry_artifacts(loops, session_id)
+    # A settled artifact stays settled, even while its ledger row is still pending.
+    return [loop for loop in carry_artifacts(loops, session_id) if not drop_settled or may_carry(loop, store)]
 
 
 def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str,

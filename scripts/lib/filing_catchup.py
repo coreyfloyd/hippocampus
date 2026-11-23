@@ -78,9 +78,13 @@ def store_warnings(read, settled):
 
 
 def settled_row(row, receipts):
-    """One entry per carry identity among the copies, when every one has a receipt, else none."""
+    """One entry per carry identity among the current copies, when every one has a receipt, else none.
+
+    A superseded copy (``resolve_copies``) is not current: the newer copy replaced it.
+    """
+    superseded = [copy['source'] for copy in row.get('superseded_copies', [])]
     keys = sorted({tuple(copy['item'].get(field) for field in handoff.SESSION_ITEM_IDENTITY)
-                   for copy in row['copies']}, key=repr)
+                   for copy in row['copies'] if copy['source'] not in superseded}, key=repr)
     if not all(key in receipts for key in keys):
         return []
     return [dict(identity=row['identity'], type=key[2], disposition=receipts[key].get('disposition'),
@@ -113,6 +117,52 @@ def merge_copies(first, second):
     return left
 
 
+def resolve_copies(row):
+    """Merge an identity's copies; where they conflict, the copy from the newest handoff wins.
+
+    Copies are ordered by their handoff's ``written_at`` (content, never file metadata). Every
+    older copy that does not merge into the newest one is kept under ``superseded_copies`` with
+    its source and the difference. When the conflict cannot be ordered (a handoff without a
+    valid ``written_at``, or conflicting copies written at the same time) it stays a conflict.
+    """
+    item = row['copies'][0]['item']
+    try:
+        for copy in row['copies'][1:]:
+            item = merge_copies(item, copy['item'])
+        row['item'] = item
+        return
+    except ValueError:
+        pass
+    if any(copy['written_at'] is None for copy in row['copies']):
+        row['conflicts'] = ['copies differ and a handoff has no valid written_at to order them']
+        return
+    ordered = sorted(row['copies'], key=lambda copy: (-copy['written_at'], copy['source']))
+    newest = [copy for copy in ordered if copy['written_at'] == ordered[0]['written_at']]
+    item = newest[0]['item']
+    try:
+        for copy in newest[1:]:
+            item = merge_copies(item, copy['item'])
+    except ValueError as error:
+        row['conflicts'] = ['copies written at the same time differ: ' + str(error)]
+        return
+    superseded = []
+    for copy in ordered[len(newest):]:
+        try:
+            item = merge_copies(item, copy['item'])
+        except ValueError as error:
+            superseded.append(dict(source=copy['source'], written_at=copy['written_at_text'],
+                                   item=copy['item'], difference=str(error)))
+    row.update(item=item, superseded_copies=superseded)
+
+
+def handoff_time(data):
+    """A handoff's own ``written_at`` as a number, or None when it has no valid one."""
+    try:
+        return sweep.timestamp(data['written_at'])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def unstable_identity(item, data):
     """Why catch-up cannot give this loop a stable, fileable identity, else None.
 
@@ -137,10 +187,8 @@ def unstable_identity(item, data):
 
 def written_before(data, cutoff):
     """Whether a handoff's own ``written_at`` is before the cutoff; unknown counts as before."""
-    try:
-        return sweep.timestamp(data['written_at']) < sweep.timestamp(cutoff)
-    except (KeyError, TypeError, ValueError):
-        return True
+    written = handoff_time(data)
+    return written is None or written < sweep.timestamp(cutoff)
 
 
 def inventory(store, cutoff, receipts, paths=None):
@@ -150,7 +198,8 @@ def inventory(store, cutoff, receipts, paths=None):
     errors, loop errors and warnings. Items come from ``sweep.carried_items``, as for the
     sweep. A loop without a stable, fileable identity (``unstable_identity``) is a loop
     error, never an item; it blocks readiness but not the other items of its handoff. A null
-    ``open_loops`` in a handoff not written after the cutoff is a warning naming it.
+    ``open_loops`` in a handoff not written after the cutoff is a warning naming it. Copies of
+    one identity resolve through ``resolve_copies``.
     """
     items, sources, errors, loop_errors, warnings = {}, {}, [], [], []
     if store.is_symlink() or not store.is_dir():
@@ -178,15 +227,14 @@ def inventory(store, cutoff, receipts, paths=None):
                 row = items.setdefault(key, dict(identity=identity, item=item,
                     sources=[], copies=[], subject=subject if isinstance(subject, dict) else {}))
                 row['sources'].append(str(path))
-                row['copies'].append(dict(source=str(path), item=item))
-                try:
-                    row['item'] = merge_copies(row['item'], item)
-                except ValueError as error:
-                    row.setdefault('conflicts', []).append(str(error))
+                row['copies'].append(dict(source=str(path), item=item, written_at=handoff_time(data),
+                                          written_at_text=data.get('written_at')))
         except (OSError, ValueError, TypeError, AttributeError) as error:
             errors.append(str(path) + ': ' + str(error))
     settled = []
     for key, row in list(items.items()):
+        resolve_copies(row)
+        row['copies'] = [dict(source=copy['source'], item=copy['item']) for copy in row['copies']]
         entries = settled_row(row, receipts)
         if entries:
             # A settlement receipt wins: a settled identity's conflicting copies need no write.
@@ -212,6 +260,34 @@ def save(path, report):
         temporary.unlink(missing_ok=True)
 
 
+DROPPABLE = ('progress', 'open_loop', 'artifact')
+UNANCHORED_COMMITMENT = ('a commitment without a ticket anchor stays unfiled: catch-up never creates '
+                         'a ticket (R5) for it until the maintainer sets a rule')
+
+
+def drop_item(source, decision, store, node):
+    """Settle a droppable item with a ``dropped`` receipt, so the carry step stops carrying it.
+
+    Knowledge, lessons, decisions and commitments are filed, never dropped; every drop needs
+    a reason. The receipt goes through the carry step's own writer into the store catch-up reads.
+    """
+    item = source['item']
+    if decision.get('status', 'filed') not in ('filed', 'dropped'):
+        raise ValueError('a drop judgment (R1 or R6) takes status dropped or none')
+    if item.get('type') not in DROPPABLE:
+        raise ValueError('a ' + str(item.get('type') or 'untyped') + ' item is filed, never dropped; '
+                         'catch-up drops only ' + ', '.join(DROPPABLE) + ' items')
+    reason = decision.get('reason')
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError('a drop requires a non-empty reason')
+    receipt = handoff.settlement_receipt(item, 'filing-catchup:' + node, 'dropped', reason)
+    if not receipt:
+        raise ValueError('item has no carry identity to settle')
+    handoff.write_settlement_receipts([receipt], handoff.settled_store_path(str(store)))
+    return dict(status='dropped', rule=decision['rule'], reason=receipt['reason'], destination=None,
+                receipt=receipt)
+
+
 def file_item(source, decision, plan, ask):
     """Use wrap's filing safeguards, but never read or settle a session ledger."""
     item = source['item']
@@ -223,11 +299,15 @@ def file_item(source, decision, plan, ask):
     validation = ({**row, 'status': 'filed', 'destination': row.get('destination') or 'planned'}
                   if status == 'filed' or requested else row)
     if row.get('rule') in ('R1', 'R6'):
-        # Catch-up requires an actual home; a judgment to drop is not proof of filing.
+        # A drop is settled by ``drop_item``'s receipt, never by a record write.
         raise ValueError('catch-up requires a destination receipt, not a drop')
     single = {'subject': source['subject'], 'resume': {'open_loops': [item]}}
     checked = checklist.file_items(plan, single, [validation], ask, execute_writes=False)['filing']['items'][0]
     kind = checked.get('binding')
+    anchor = item.get('anchor')
+    if (item.get('type') == 'commitment' and checked.get('rule') == 'R5' and kind == 'tickets'
+            and not (isinstance(anchor, dict) and anchor.get('ticket'))):
+        return {**checked, 'status': 'pending', 'reason': UNANCHORED_COMMITMENT}
     if status != 'filed' and not (requested and kind == 'ask'):
         return {**checked, 'status': status}
     approval_pending = kind == 'ask' and checked.get('ask_status') == 'filed'
@@ -336,7 +416,9 @@ def run(args):
                     outcome.update(status='uncertain', error='write pending')
                     save(report_path, report)
                     attempted.add(key)
-                    result = file_item(source, by_identity[key], plan, ask)
+                    judgment = by_identity[key]
+                    result = (drop_item(source, judgment, store, args.node) if judgment.get('rule') in ('R1', 'R6')
+                              else file_item(source, judgment, plan, ask))
                     outcome.pop('error', None)
                     outcome.update(result)
             except (ValueError, OSError, TypeError, KeyError) as error:
@@ -359,7 +441,7 @@ def run(args):
     for row in report['items']:
         key = sweep.identity_key(row['identity'])
         actual = current.get(key)
-        if key in confirmed and row['status'] != 'filed':
+        if key in confirmed and row['status'] not in ('filed', 'dropped'):
             if key in attempted:
                 # The receipt may not come from this write; keep what the write reported.
                 row['recount_note'] = 'identity now settled by a receipt; this run attempted a write'
