@@ -41,12 +41,99 @@ class LessonError(Exception):
     """One lesson could not be applied or delivered; the wrap continues without it."""
 
 
+def _holds_retired_setting(config: Mapping[str, Any]) -> bool:
+    return RETIRED_SETTING in config
+
+
 def enabled(config: Mapping[str, Any]) -> bool:
     """The knowledge profile's auto-apply setting, refused while the configuration still holds it."""
-    if RETIRED_SETTING in config:
+    if _holds_retired_setting(config):
         raise UpgradeRequired(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
                          "run hippocampus-set-up to move it")
     return bool(policy().auto_apply)
+
+
+WARNED = "HIPPOCAMPUS_RETIRED_SETTINGS_WARNED"
+SKIPPED = "retired-settings check skipped"
+
+
+def config_file() -> Path:
+    """The configuration file the readers read, by the rule handoff.config_path shares."""
+    return Path(_load("config_location", Path(__file__).with_name("config_location.py")).config_path())
+
+
+def _setting_warnings() -> list[str]:
+    path = config_file()
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as error:
+        return [f"{path}: config unreadable; {SKIPPED} ({error})"]
+    if not isinstance(config, dict):
+        return [f"{path}: config unreadable; {SKIPPED} (not a JSON object)"]
+    if not _holds_retired_setting(config):
+        return []
+    return [f"{path} still sets {RETIRED_SETTING}: replace it with {SETTING} in the knowledge "
+            "profile's frontmatter; run hippocampus-set-up to move it"]
+
+
+def _routing_warnings() -> list[str]:
+    compose = _compose_rules()
+    try:
+        # The retired-file check comes first and reads only the profile's path, so a profile
+        # that does not parse still gets the warning.
+        compose.lesson_routing(compose.Policy(compose.profile_path(), None, None))
+    except compose.RetiredOwner as error:
+        return [str(error)]
+    return []
+
+
+def retired_owners() -> tuple[int, list[str]]:
+    """How many retired policy owners are still in place, and the warning lines: one per owner
+    (the file, its replacement in the knowledge profile, and hippocampus-set-up) and one per
+    check that could not run. A failed check never hides another check's warning."""
+    found, lines = 0, []
+    for check in (_setting_warnings, _routing_warnings):
+        try:
+            messages = check()
+        except Exception as error:  # A warning must never turn a finished install into a failure.
+            lines.append(f"{SKIPPED}: {error}")
+            continue
+        found += sum(SKIPPED not in message for message in messages)
+        lines += messages
+    return found, lines
+
+
+def print_retired() -> int:
+    """Print each warning line on stderr; returns how many retired owners were found."""
+    try:
+        found, lines = retired_owners()
+    except Exception as error:
+        found, lines = 0, [f"{SKIPPED}: {error}"]
+    for line in lines:
+        print(f"warning: {line}", file=sys.stderr)
+    return found
+
+
+def warn_retired() -> None:
+    """An install helper's warning, once per install flow.
+
+    The helper marks the environment with its process id, so the install.sh it runs as a child
+    does not repeat the warning; a value naming any other process is stale and ignored.
+    """
+    if os.environ.get(WARNED) == str(os.getppid()):
+        return
+    os.environ[WARNED] = str(os.getpid())
+    print_retired()
+
+
+def _load(name: str, path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
+    spec.loader.exec_module(module)
+    return module
 
 
 _COMPOSE: Any = None
@@ -56,11 +143,7 @@ def _compose_rules() -> Any:
     """The routing contract's parser, loaded once so its ComposeError is one class."""
     global _COMPOSE
     if _COMPOSE is None:
-        spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
-        spec.loader.exec_module(module)
-        _COMPOSE = module
+        _COMPOSE = _load("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
     return _COMPOSE
 
 
@@ -648,3 +731,10 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
         for row, update in zip(group, updates):
             _record(module, session_id, {**row, **update})
     return outcomes(module, session_id)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] != ["warn-retired"]:
+        raise SystemExit("usage: lessons.py warn-retired")
+    # install.sh decides whether its flow already warned; exit 10 tells it a retired owner was found.
+    raise SystemExit(10 if print_retired() else 0)

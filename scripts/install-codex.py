@@ -15,6 +15,7 @@ import sys
 from lib import codex_trust as trust
 from lib import install_recovery as recovery
 from lib.install_conflicts import refuse_standalone
+from lib.lessons import warn_retired
 from lib.restore_projection import POST_COMPACT_CONTEXT_BYTES
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -222,6 +223,7 @@ def main():
     args=parser.parse_args()
     if not args.uninstall:
         refuse_standalone(codex_home=args.codex_home)
+        warn_retired()  # first, so the install.sh --verify-runtime it may run does not repeat it
     if not args.codex and not args.uninstall:
         raise ValueError('codex executable required for hooks/list trust verification')
     home=args.codex_home.expanduser().resolve(); package=Path.home()/'.local/share/hippocampus/current'; skills=home/'skills'

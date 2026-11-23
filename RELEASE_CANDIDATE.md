@@ -1,5 +1,11 @@
 # Release candidate: 0.16.1
 
+## For the next release
+
+Carry these into the next release's scope and release-note draft.
+
+- Migration: a configuration that still sets `auto_apply_lessons` in `config.json`, or still has a standalone lesson routing file (`routing.md` or `HIPPOCAMPUS_ROUTING`), must run `hippocampus-set-up` to move them into the knowledge profile (`auto_apply` in its frontmatter, a `## Lesson routing` section). Until then auto-apply and lesson routing stay refused. `install.sh`, `install.sh --verify-runtime`, `install.sh --verify` and the Claude and Codex install helpers now print one warning per retired setting they find, naming the file, its replacement and `hippocampus-set-up`; the exit status is unchanged.
+
 ## Scope
 
 Package the carry fix from [hippocampus#147](https://github.com/coreyfloyd/hippocampus/issues/147), merged through [PR277](https://github.com/coreyfloyd/hippocampus/pull/277). It is the only change on main since 0.16.0. This preparation changes package version metadata and this release record only.

@@ -38,6 +38,11 @@ _projection_spec = importlib.util.spec_from_file_location(
 _projection = importlib.util.module_from_spec(_projection_spec)
 _projection_spec.loader.exec_module(_projection)
 POST_COMPACT_CONTEXT_BYTES = _projection.POST_COMPACT_CONTEXT_BYTES
+_location_spec = importlib.util.spec_from_file_location(
+    "config_location", Path(__file__).with_name("config_location.py")
+)
+_location = importlib.util.module_from_spec(_location_spec)
+_location_spec.loader.exec_module(_location)
 
 
 DEFAULT_STATE_DIR = "~/.local/state/hippocampus/handoffs"
@@ -96,11 +101,7 @@ def canonical_subject(cwd: str) -> str:
 
 
 def config_path() -> str:
-    explicit = os.environ.get("HIPPOCAMPUS_CONFIG")
-    if explicit:
-        return os.path.expanduser(explicit)
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, "hippocampus", "config.json")
+    return _location.config_path()
 
 
 def read_config() -> dict:

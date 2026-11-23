@@ -227,6 +227,18 @@ acquire_lock() {
   printf '%s\n' "$$" > "$LOCK_DIR/pid"; LOCK_HELD=1
   trap release_lock EXIT; trap 'interrupted 129' HUP; trap 'interrupted 130' INT; trap 'interrupted 143' TERM
 }
+# A retired lesson setting is a warning, never a failed install or verify. An install helper
+# that already warned runs this script with the marker set to its own process id; any other
+# value is stale. This script then marks the flow as its own for its children.
+RETIRED_WARNED=0
+[ "${HIPPOCAMPUS_RETIRED_SETTINGS_WARNED:-}" != "$PPID" ] || RETIRED_WARNED=1
+export HIPPOCAMPUS_RETIRED_SETTINGS_WARNED=$$
+RETIRED_FOUND=0
+warn_retired_settings() {
+  [ "$RETIRED_WARNED" = 0 ] || return 0
+  RETIRED_WARNED=1
+  python3 "$ROOT/scripts/lib/lessons.py" warn-retired || { [ "$?" != 10 ] || RETIRED_FOUND=1; }
+}
 verify_check() { what="$1" path="$2"; shift 2; "$@" || { echo "verify failed: $what $path" >&2; exit 1; }; }
 for_each_skill() { for name in "$ROOT"/skills/*; do [ -f "$name/SKILL.md" ] && printf '%s\n' "$(basename "$name")"; done; }
 
@@ -289,12 +301,14 @@ record_profile_migration() {
 }
 
 if [ "${1:-}" = "--verify-runtime" ]; then
+  warn_retired_settings
   validate_current_pointer
   [ -n "$CURRENT_RELEASE" ] || { echo "current release missing" >&2; exit 1; }
   exit 0
 fi
 
 if [ "${1:-}" = "--verify" ]; then
+  warn_retired_settings
   reject_retired_links
   verify_check "current pointer" "$CURRENT_LINK" test -L "$CURRENT_LINK"
   verify_check "current manifest" "$CURRENT_LINK/manifest" test -f "$CURRENT_LINK/manifest"
@@ -383,5 +397,7 @@ remove_listed_retired_links
 current_expected="__absent__"; [ ! -L "$CURRENT_LINK" ] || current_expected="$(readlink "$CURRENT_LINK")"
 set_current_release "$RELEASE_DIR" "$current_expected"
 record_profile_migration
-if validate_profile >/dev/null 2>&1; then echo "Hippocampus $VERSION installed and configured"
+warn_retired_settings
+if [ "$RETIRED_FOUND" = 1 ]; then echo "Hippocampus $VERSION installed; run the hippocampus-set-up skill to move its retired lesson settings"
+elif validate_profile >/dev/null 2>&1; then echo "Hippocampus $VERSION installed and configured"
 else echo "Hippocampus $VERSION installed; run the hippocampus-set-up skill to configure it"; fi

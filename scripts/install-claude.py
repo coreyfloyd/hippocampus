@@ -12,6 +12,7 @@ import sys
 
 from lib import install_recovery as recovery
 from lib.install_conflicts import PLUGIN, marketplace_plan, read_object, refuse_standalone
+from lib.lessons import warn_retired
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -100,6 +101,7 @@ def main():
     args = parser.parse_args()
     if not args.uninstall:
         refuse_standalone()
+        warn_retired()
     if not args.claude:
         parser.error('claude executable is required')
     home = Path.home()
