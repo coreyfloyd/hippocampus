@@ -37,6 +37,8 @@ hashes, public key, installer, verifier, and exact upload inventory. A changed
 candidate needs a new summary and a new SIGN. No agent interpretation, standing
 permission, ticket state or unrelated reply substitutes for that approval.
 The maintainer is never asked to run signing commands.
+SIGN authorizes signing, publishing, verifying and installing that exact
+release on the maintainer's machines; installation needs no second approval.
 
 After approval, the operator signs only the frozen checksum using a dedicated,
 expiring, signing-only subkey supplied by the managed-secret service on the
@@ -82,7 +84,7 @@ unchanged.
 
 ## Live activation boundary
 
-While preparing a release, validate candidate installations in temporary test homes. Do not activate a source checkout in the user's live skill directories unless the user explicitly authorizes a development installation. After publication, install from the downloaded, signature-verified release assets. A versioned local directory and a successful `install.sh --verify` do not attest a maintainer-signed release.
+While preparing a release, validate candidate installations in temporary test homes. Do not activate a source checkout in the user's live skill directories unless the user explicitly authorizes a development installation. After publication and verification, the operator installs from the downloaded, signature-verified release assets under the same SIGN, with no further approval. A versioned local directory and a successful `install.sh --verify` do not attest a maintainer-signed release.
 
 ## Prerequisites
 
