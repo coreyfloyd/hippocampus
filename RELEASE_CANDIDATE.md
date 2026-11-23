@@ -1,31 +1,31 @@
-# Release candidate: 0.16.0
+# Release candidate: 0.16.1
 
 ## Scope
 
-Package the setup and policy part of the public-launch work delivered by [PR268](https://github.com/coreyfloyd/hippocampus/pull/268) (epic for [hippocampus#112](https://github.com/coreyfloyd/hippocampus/issues/112)): [hippocampus#217](https://github.com/coreyfloyd/hippocampus/issues/217), [hippocampus#215](https://github.com/coreyfloyd/hippocampus/issues/215), [hippocampus#216](https://github.com/coreyfloyd/hippocampus/issues/216) and the Python 3.9 import fix for [hippocampus#266](https://github.com/coreyfloyd/hippocampus/issues/266). This preparation changes package version metadata and this release record only.
+Package the carry fix from [hippocampus#147](https://github.com/coreyfloyd/hippocampus/issues/147), merged through [PR277](https://github.com/coreyfloyd/hippocampus/pull/277). It is the only change on main since 0.16.0. This preparation changes package version metadata and this release record only.
 
-This release changes set-up behavior, hence the minor version. It does not announce the Public launch milestone or claim that local lookup or the README review is complete.
+This is a patch release: it fixes sessions carrying items that are already settled and adds no new setup step. It does not announce the Public launch milestone.
 
 ## Included
 
-- The knowledge profile is the one owner of lesson and knowledge policy: `auto_apply` in profile frontmatter and a `## Lesson routing` section. Custom routing replaces the default table.
-- A set-up step that shows and, on approval, moves the retired lesson routing file, `HIPPOCAMPUS_ROUTING` and the `auto_apply_lessons` setting into the profile; until then wraps refuse auto-apply and say how to finish. Kept as a deliberate migration path for existing files.
-- One required knowledge setup: a knowledge root, compiled wiki and both follow-up destinations. No checklist-only or wiki-disabled finish. A released wiki-disabled profile stays readable and gets an explicit upgrade; declining changes nothing.
-- Rule entry files only for installed tools that need them; the thin preset is recommended for several tools or portable rules; a missing AGENTS.md never makes CLAUDE.md the shared source; nothing is deleted.
-- Setup and wrap modules import on Python 3.9 again.
+- One settled-identity store per machine, `settled-identities.jsonl` beside the session ledgers. Every settle path writes a settlement receipt keyed by the item's producing session, time, type and text.
+- Pickup, checkpoint, merge, the stop-hook skeleton and pre-compaction skip any session item that has a receipt, so a predecessor no longer restores an item its successor settled, and copies in other handoffs stop coming back.
+- A carried item whose status or disposition is a past-tense terminal value (captured, dropped, filed, applied, recorded, done) is closed with a receipt saying no filing step settled it, and the checkpoint reports how many it closed.
+- `handoff.py settle-identity --receipts <file>` records operator-supplied receipts: it validates each row, writes each identity once, survives a torn last line and reports invalid rows by line number.
+- Durable filing matches rows to items by position, not equality.
 
 ## Compatibility and operational boundaries
 
-Claude Code and Codex consume the same package runtime. Released profile readability, installation layout and composer entry points remain supported. A user with a retired `routing.md`, an exported `HIPPOCAMPUS_ROUTING` or an `auto_apply_lessons` setting sees auto-apply refused until they run set-up and approve the move. Installing this release does not change any profile by itself.
+Claude Code and Codex use the same code. Handoff, ledger and profile formats are unchanged; the store is a new file. Installing this release changes no handoff by itself: items settle when the next checkpoint or pickup runs. Agents should state intent with plan words (drop, file, keep, pending); a past-tense value on a carried item now closes it for every session on the machine.
 
-Known limits, ticketed: rules set-up (`scripts/rules_setup.py`) still needs Python 3.11 for `tomllib`, as in earlier releases ([hippocampus#266](https://github.com/coreyfloyd/hippocampus/issues/266)); [hippocampus#261](https://github.com/coreyfloyd/hippocampus/issues/261), [#262](https://github.com/coreyfloyd/hippocampus/issues/262), [#263](https://github.com/coreyfloyd/hippocampus/issues/263), [#264](https://github.com/coreyfloyd/hippocampus/issues/264), [#267](https://github.com/coreyfloyd/hippocampus/issues/267).
+Catch-up readiness (`filing_catchup.py`) is unchanged and is decided in [hippocampus#271](https://github.com/coreyfloyd/hippocampus/issues/271). Known follow-ups: [hippocampus#276](https://github.com/coreyfloyd/hippocampus/issues/276).
 
 ## Verification and publication state
 
-Each ticket passed native review and independent evaluation on its exact head; the integrated epic passed independent evaluation (conditional) at 8f731ea, and the Python 3.9 fix was re-checked on the affected tests. PR268 CI run 44841327012 passed on Ubuntu and macOS at head bc54041, merged to main as 160224a.
+The change passed two native reviews (all findings fixed but one kept by design and documented) and independent evaluation (conditional pass), then CI: PR277 run 45085713696 passed on Ubuntu and macOS at head aacb40b, merged to main as ee2b829.
 
 Not yet signed, tagged or published. Exact commit, immutable unsigned asset digests and the maintainer's SIGN are recorded by the release operation before publication.
 
 ## Release-note draft
 
-Hippocampus 0.16.0 makes set-up opinionated. The knowledge profile now holds lesson and knowledge policy, knowledge setup with a wiki is required, and rule entry files are written only for the tools you have installed. Existing routing files and the old auto-apply setting move into the profile through set-up, after you approve the exact change. Python 3.9 can run set-up and wraps again; rules set-up still needs Python 3.11.
+Hippocampus 0.16.1 stops sessions from carrying items that are already settled. Each machine now keeps one store of settlement receipts, and pickup and checkpoint skip any item with a receipt, so a predecessor no longer brings back what its successor filed or dropped. An item marked with a past-tense status such as done or filed is closed the same way, with a receipt that says so. A new `settle-identity` command records receipts in bulk.
