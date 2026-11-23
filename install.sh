@@ -227,8 +227,12 @@ acquire_lock() {
   printf '%s\n' "$$" > "$LOCK_DIR/pid"; LOCK_HELD=1
   trap release_lock EXIT; trap 'interrupted 129' HUP; trap 'interrupted 130' INT; trap 'interrupted 143' TERM
 }
-# A retired lesson setting is a warning, never a failed install or verify.
-warn_retired_settings() { python3 "$ROOT/scripts/lib/lessons.py" warn-retired || true; }
+# A retired lesson setting is a warning, never a failed install or verify. The marker
+# keeps a helper's child install.sh from repeating a warning already shown in this flow.
+warn_retired_settings() {
+  python3 "$ROOT/scripts/lib/lessons.py" warn-retired || true
+  export HIPPOCAMPUS_RETIRED_SETTINGS_WARNED=1
+}
 verify_check() { what="$1" path="$2"; shift 2; "$@" || { echo "verify failed: $what $path" >&2; exit 1; }; }
 for_each_skill() { for name in "$ROOT"/skills/*; do [ -f "$name/SKILL.md" ] && printf '%s\n' "$(basename "$name")"; done; }
 
@@ -291,12 +295,14 @@ record_profile_migration() {
 }
 
 if [ "${1:-}" = "--verify-runtime" ]; then
+  warn_retired_settings
   validate_current_pointer
   [ -n "$CURRENT_RELEASE" ] || { echo "current release missing" >&2; exit 1; }
-  warn_retired_settings; exit 0
+  exit 0
 fi
 
 if [ "${1:-}" = "--verify" ]; then
+  warn_retired_settings
   reject_retired_links
   verify_check "current pointer" "$CURRENT_LINK" test -L "$CURRENT_LINK"
   verify_check "current manifest" "$CURRENT_LINK/manifest" test -f "$CURRENT_LINK/manifest"
@@ -306,7 +312,7 @@ if [ "${1:-}" = "--verify" ]; then
   verify_check "rules setup helper" "$CURRENT_LINK/scripts/rules_setup.py" test -f "$CURRENT_LINK/scripts/rules_setup.py"
   python3 "$ROOT/scripts/verify-install.py" "$CURRENT_LINK" "$CLAUDE_DIR" "$CODEX_DIR"
   verify_check "wiki contract" "$CURRENT_LINK/contracts/karpathy-wiki.md" test -f "$CURRENT_LINK/contracts/karpathy-wiki.md"
-  validate_profile; warn_retired_settings; exit 0
+  validate_profile; exit 0
 fi
 
 mkdir -p "$(dirname "$LOCK_DIR")"; acquire_lock; repair_current_version; validate_current_pointer; validate_legacy_current_pointer

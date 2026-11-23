@@ -101,6 +101,7 @@ def main():
     args = parser.parse_args()
     if not args.uninstall:
         refuse_standalone()
+        warn_retired()
     if not args.claude:
         parser.error('claude executable is required')
     home = Path.home()
@@ -143,8 +144,6 @@ def main():
         recovery.discard(backup)
     finally:
         lock.rmdir()
-    if not args.uninstall:
-        warn_retired()
     return 0
 
 

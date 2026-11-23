@@ -223,6 +223,7 @@ def main():
     args=parser.parse_args()
     if not args.uninstall:
         refuse_standalone(codex_home=args.codex_home)
+        warn_retired()  # first, so the install.sh --verify-runtime it may run does not repeat it
     if not args.codex and not args.uninstall:
         raise ValueError('codex executable required for hooks/list trust verification')
     home=args.codex_home.expanduser().resolve(); package=Path.home()/'.local/share/hippocampus/current'; skills=home/'skills'
@@ -374,8 +375,6 @@ def main():
     elif backup.exists():
         shutil.rmtree(backup)
     print(f'Installed {len(SKILLS)} hippocampus skills, six hooks, and the checklist actor guard; seven trusted handlers')
-    if not args.uninstall and not (adopting or shared_runtime):
-        warn_retired()  # install.sh --verify-runtime above has already warned
     return 0
 
 

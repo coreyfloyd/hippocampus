@@ -41,25 +41,40 @@ class LessonError(Exception):
     """One lesson could not be applied or delivered; the wrap continues without it."""
 
 
-def _retired_setting(config: Mapping[str, Any], config_file: str) -> str | None:
-    if RETIRED_SETTING not in config:
-        return None
-    return (f"{config_file}: {RETIRED_SETTING} moved to the knowledge profile's {SETTING} frontmatter field; "
-            "run hippocampus-set-up to move it")
+def _holds_retired_setting(config: Mapping[str, Any]) -> bool:
+    return RETIRED_SETTING in config
 
 
 def enabled(config: Mapping[str, Any]) -> bool:
     """The knowledge profile's auto-apply setting, refused while the configuration still holds it."""
-    if retired := _retired_setting(config, "hippocampus config"):
-        raise UpgradeRequired(retired)
+    if _holds_retired_setting(config):
+        raise UpgradeRequired(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
+                         "run hippocampus-set-up to move it")
     return bool(policy().auto_apply)
 
 
-def retired_owners(config: Mapping[str, Any], config_file: str) -> list[str]:
-    """One message per retired policy owner still in place, as the readers refuse it: the file, its
-    replacement in the knowledge profile, and hippocampus-set-up."""
+WARNED = "HIPPOCAMPUS_RETIRED_SETTINGS_WARNED"
+
+
+def retired_owners() -> list[str]:
+    """One message per retired policy owner still in place: the file, its replacement in the
+    knowledge profile, and hippocampus-set-up. The configuration path follows handoff.config_path."""
+    explicit = os.environ.get("HIPPOCAMPUS_CONFIG")
+    config_file = (Path(explicit).expanduser() if explicit else
+                   Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "hippocampus" / "config.json")
+    found = []
+    try:
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        config = {}
+    except (OSError, ValueError) as error:
+        config, found = {}, [f"{config_file}: config unreadable; retired-settings check skipped ({error})"]
+    if not isinstance(config, dict):
+        found = [f"{config_file}: config unreadable; retired-settings check skipped (not a JSON object)"]
+    elif _holds_retired_setting(config):
+        found.append(f"{config_file} still sets {RETIRED_SETTING}: replace it with {SETTING} in the knowledge "
+                     "profile's frontmatter; run hippocampus-set-up to move it")
     compose = _compose_rules()
-    found = [retired] if (retired := _retired_setting(config, config_file)) else []
     try:
         # The retired-file check comes first and reads only the profile's path, so a profile
         # that does not parse still gets the warning.
@@ -70,22 +85,18 @@ def retired_owners(config: Mapping[str, Any], config_file: str) -> list[str]:
 
 
 def warn_retired() -> None:
-    """Print one warning per retired policy owner on stderr; install and verify keep their exit status."""
-    handoff = _load("lessons_handoff", Path(__file__).with_name("handoff.py"))
+    """Print one warning per retired policy owner on stderr, never changing the caller's exit status.
+
+    Once per install flow: the first process to warn marks the environment its child processes inherit.
+    """
+    if os.environ.get(WARNED):
+        return
+    os.environ[WARNED] = "1"
     try:
-        config = handoff.read_config()
-    except ValueError:
-        config = {}  # A malformed configuration is reported by every command that reads it.
-    for message in retired_owners(config, handoff.config_path()):
-        print(f"warning: {message}", file=sys.stderr)
-
-
-def _load(name: str, path: Path) -> Any:
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
-    spec.loader.exec_module(module)
-    return module
+        for message in retired_owners():
+            print(f"warning: {message}", file=sys.stderr)
+    except Exception as error:  # A warning must never turn a finished install into a failure.
+        print(f"warning: retired-settings check skipped: {error}", file=sys.stderr)
 
 
 _COMPOSE: Any = None
@@ -95,7 +106,11 @@ def _compose_rules() -> Any:
     """The routing contract's parser, loaded once so its ComposeError is one class."""
     global _COMPOSE
     if _COMPOSE is None:
-        _COMPOSE = _load("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
+        spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
+        spec.loader.exec_module(module)
+        _COMPOSE = module
     return _COMPOSE
 
 
