@@ -54,49 +54,86 @@ def enabled(config: Mapping[str, Any]) -> bool:
 
 
 WARNED = "HIPPOCAMPUS_RETIRED_SETTINGS_WARNED"
+SKIPPED = "retired-settings check skipped"
 
 
-def retired_owners() -> list[str]:
-    """One message per retired policy owner still in place: the file, its replacement in the
-    knowledge profile, and hippocampus-set-up. The configuration path follows handoff.config_path."""
-    explicit = os.environ.get("HIPPOCAMPUS_CONFIG")
-    config_file = (Path(explicit).expanduser() if explicit else
-                   Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "hippocampus" / "config.json")
-    found = []
+def config_file() -> Path:
+    """The configuration file the readers read, by the rule handoff.config_path shares."""
+    return Path(_load("config_location", Path(__file__).with_name("config_location.py")).config_path())
+
+
+def _setting_warnings() -> list[str]:
+    path = config_file()
     try:
-        config = json.loads(config_file.read_text(encoding="utf-8"))
+        config = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        config = {}
+        return []
     except (OSError, ValueError) as error:
-        config, found = {}, [f"{config_file}: config unreadable; retired-settings check skipped ({error})"]
+        return [f"{path}: config unreadable; {SKIPPED} ({error})"]
     if not isinstance(config, dict):
-        found = [f"{config_file}: config unreadable; retired-settings check skipped (not a JSON object)"]
-    elif _holds_retired_setting(config):
-        found.append(f"{config_file} still sets {RETIRED_SETTING}: replace it with {SETTING} in the knowledge "
-                     "profile's frontmatter; run hippocampus-set-up to move it")
+        return [f"{path}: config unreadable; {SKIPPED} (not a JSON object)"]
+    if not _holds_retired_setting(config):
+        return []
+    return [f"{path} still sets {RETIRED_SETTING}: replace it with {SETTING} in the knowledge "
+            "profile's frontmatter; run hippocampus-set-up to move it"]
+
+
+def _routing_warnings() -> list[str]:
     compose = _compose_rules()
     try:
         # The retired-file check comes first and reads only the profile's path, so a profile
         # that does not parse still gets the warning.
         compose.lesson_routing(compose.Policy(compose.profile_path(), None, None))
     except compose.RetiredOwner as error:
-        found.append(str(error))
+        return [str(error)]
+    return []
+
+
+def retired_owners() -> tuple[int, list[str]]:
+    """How many retired policy owners are still in place, and the warning lines: one per owner
+    (the file, its replacement in the knowledge profile, and hippocampus-set-up) and one per
+    check that could not run. A failed check never hides another check's warning."""
+    found, lines = 0, []
+    for check in (_setting_warnings, _routing_warnings):
+        try:
+            messages = check()
+        except Exception as error:  # A warning must never turn a finished install into a failure.
+            lines.append(f"{SKIPPED}: {error}")
+            continue
+        found += sum(SKIPPED not in message for message in messages)
+        lines += messages
+    return found, lines
+
+
+def print_retired() -> int:
+    """Print each warning line on stderr; returns how many retired owners were found."""
+    try:
+        found, lines = retired_owners()
+    except Exception as error:
+        found, lines = 0, [f"{SKIPPED}: {error}"]
+    for line in lines:
+        print(f"warning: {line}", file=sys.stderr)
     return found
 
 
 def warn_retired() -> None:
-    """Print one warning per retired policy owner on stderr, never changing the caller's exit status.
+    """An install helper's warning, once per install flow.
 
-    Once per install flow: the first process to warn marks the environment its child processes inherit.
+    The helper marks the environment with its process id, so the install.sh it runs as a child
+    does not repeat the warning; a value naming any other process is stale and ignored.
     """
-    if os.environ.get(WARNED):
+    if os.environ.get(WARNED) == str(os.getppid()):
         return
-    os.environ[WARNED] = "1"
-    try:
-        for message in retired_owners():
-            print(f"warning: {message}", file=sys.stderr)
-    except Exception as error:  # A warning must never turn a finished install into a failure.
-        print(f"warning: retired-settings check skipped: {error}", file=sys.stderr)
+    os.environ[WARNED] = str(os.getpid())
+    print_retired()
+
+
+def _load(name: str, path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
+    spec.loader.exec_module(module)
+    return module
 
 
 _COMPOSE: Any = None
@@ -106,11 +143,7 @@ def _compose_rules() -> Any:
     """The routing contract's parser, loaded once so its ComposeError is one class."""
     global _COMPOSE
     if _COMPOSE is None:
-        spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
-        spec.loader.exec_module(module)
-        _COMPOSE = module
+        _COMPOSE = _load("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
     return _COMPOSE
 
 
@@ -703,4 +736,5 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
 if __name__ == "__main__":
     if sys.argv[1:] != ["warn-retired"]:
         raise SystemExit("usage: lessons.py warn-retired")
-    warn_retired()
+    # install.sh decides whether its flow already warned; exit 10 tells it a retired owner was found.
+    raise SystemExit(10 if print_retired() else 0)

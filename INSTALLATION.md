@@ -138,7 +138,8 @@ Installing, verifying and each client's install helper also print one warning pe
 retired lesson setting still in place: `auto_apply_lessons` in the configuration
 (replaced by `auto_apply` in the knowledge profile frontmatter) and a standalone
 lesson routing file (replaced by its `## Lesson routing` section). Run
-`hippocampus-set-up` to move them; the warning does not change the exit status.
+`hippocampus-set-up` to move them; while one remains, the install's last line asks for that
+instead of reporting the package configured. The warning does not change the exit status.
 Claude can have plain skill links or an enabled, registered `hippocampus@hippocampus`
 plugin whose `readFromFolder` resolves to the current release and whose
 `version` matches that release's `VERSION`. Claude copies directory plugins into

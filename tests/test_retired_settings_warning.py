@@ -60,9 +60,41 @@ def test_each_install_flow_warns_once_per_retired_setting_and_exits_zero(env):
         result = install(env, *args)
         assert result.returncode == 0, result.stderr
         assert_one_per_setting(env, result.stderr)
-    # A helper that already warned passes the marker to the install.sh it runs.
-    result = install(dict(env, **{WARNED: "1"}), "--verify-runtime")
-    assert result.returncode == 0 and warnings(result.stderr) == []
+
+
+
+def test_install_names_set_up_in_its_final_line_after_the_warnings(env):
+    retire(env)
+    (config(env) / "profile.md").write_text("---\nauto_apply: true\n---\n")
+    result = install(env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[-1].endswith("run the hippocampus-set-up skill to move its retired lesson settings")
+    assert "configured" not in result.stdout
+
+
+def test_install_sh_run_by_a_helper_that_warned_stays_quiet(env):
+    install(env)
+    retire(env)
+    # The marker names the parent process: this shell, which runs install.sh as its child.
+    script = f'export {WARNED}=$$; bash "$0" --verify-runtime; exit $?'
+    result = subprocess.run(["bash", "-c", script, str(ROOT / "install.sh")], env=env, capture_output=True, text=True)
+    assert result.returncode == 0 and warnings(result.stderr) == [], result.stderr
+
+
+def test_a_stale_marker_never_suppresses_the_warning(env, tmp_path):
+    install(env)
+    retire(env)
+    stale = dict(env, **{WARNED: "1"})
+    result = install(stale, "--verify-runtime")
+    assert result.returncode == 0
+    assert_one_per_setting(env, result.stderr)
+    cli = tmp_path / "claude"
+    cli.write_text("#!/bin/sh\nexit 0\n")
+    cli.chmod(0o755)
+    result = subprocess.run([sys.executable, str(ROOT / "scripts/install-claude.py"), "--claude", str(cli)],
+                            env=stale, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert_one_per_setting(env, result.stderr)
 
 
 def test_verify_warns_and_keeps_its_exit_status_without_a_profile(env):
@@ -99,6 +131,7 @@ def test_a_malformed_configuration_is_named_and_the_check_skipped(env):
     assert str(config(env) / "config.json") in line and "config unreadable; retired-settings check skipped" in line
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads through mode 000")
 def test_an_unreadable_routing_path_never_fails_the_install(env, tmp_path):
     locked = tmp_path / "locked"
     locked.mkdir()
@@ -112,17 +145,43 @@ def test_an_unreadable_routing_path_never_fails_the_install(env, tmp_path):
     assert "Traceback" not in result.stderr and len(warnings(result.stderr)) == 1, result.stderr
 
 
-def test_a_failing_check_prints_one_skipped_line(env, monkeypatch, capsys):
+def lessons_module():
     sys.path.insert(0, str(ROOT / "scripts"))
     from lib import lessons
-    compose = lessons._compose_rules()
+    return lessons
+
+
+def test_a_failed_routing_check_keeps_the_setting_warning(env, monkeypatch, capsys):
+    (config(env) / "config.json").write_text(json.dumps({"auto_apply_lessons": True}))
+    lessons = lessons_module()
 
     def unreadable():
         raise PermissionError("routing.md: permission denied")
-    monkeypatch.setattr(compose, "retired_routing", unreadable)
-    lessons.warn_retired()
-    assert warnings(capsys.readouterr().err) == [
-        "warning: retired-settings check skipped: routing.md: permission denied"]
+    monkeypatch.setattr(lessons._compose_rules(), "retired_routing", unreadable)
+    assert lessons.print_retired() == 1
+    setting, skipped = warnings(capsys.readouterr().err)
+    assert "auto_apply_lessons" in setting and "hippocampus-set-up" in setting
+    assert skipped == "warning: retired-settings check skipped: routing.md: permission denied"
+
+
+def test_the_warning_reads_the_file_handoff_reads(env, monkeypatch, tmp_path):
+    spec = importlib.util.spec_from_file_location("retired_handoff", ROOT / "scripts/lib/handoff.py")
+    handoff = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(handoff)
+    lessons = lessons_module()
+    for explicit in (None, "~/elsewhere.json"):
+        if explicit:
+            monkeypatch.setenv("HIPPOCAMPUS_CONFIG", explicit)
+        assert str(lessons.config_file()) == handoff.config_path()
+    assert lessons.config_file() == Path(env["HOME"]) / "elsewhere.json"
+    monkeypatch.delenv("HIPPOCAMPUS_CONFIG")
+    assert lessons.config_file() == config(env) / "config.json"
+    # The warning path loads no part of handoff.py.
+    probe = ("import sys; sys.path.insert(0, sys.argv[1]); from lib import lessons; lessons.print_retired(); "
+             "print(any(str(getattr(m, '__file__', '')).endswith('handoff.py') for m in list(sys.modules.values())))")
+    result = subprocess.run([sys.executable, "-c", probe, str(ROOT / "scripts")], env=env,
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == "False"
 
 
 def test_the_claude_helper_alone_warns_once_and_not_on_uninstall(env, tmp_path):
