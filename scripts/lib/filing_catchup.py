@@ -113,39 +113,70 @@ def merge_copies(first, second):
     return left
 
 
+def unstable_identity(item, data):
+    """Why catch-up cannot give this loop a stable, fileable identity, else None.
+
+    Identity is content only: the item's own fields, else its handoff's ``subject.session_id``
+    and ``written_at``, never the file's name or modification time. A typed item is identified
+    by its own fields alone, as the carry step settles it (``handoff.session_item_identity``).
+    """
+    if not isinstance(item.get('context'), str) or not item['context'].strip():
+        return 'has no context; it cannot be filed (see #285 for writers, #271 for existing loops)'
+    if item.get('type') in handoff.ITEM_TYPES:
+        if not (item.get('session_id') and item.get('produced_at')):
+            return 'is a typed item without its own session_id and produced_at; the carry step cannot settle it'
+        return None
+    subject = data.get('subject')
+    subject = subject if isinstance(subject, dict) else {}
+    if not (item.get('session_id') or subject.get('session_id') or data.get('session_id')):
+        return 'has no producing session in the item or its handoff; a file name is not an identity'
+    if not (item.get('produced_at') or data.get('written_at')):
+        return 'has no producing time in the item or its handoff; a file time is not an identity'
+    return None
+
+
+def written_before(data, cutoff):
+    """Whether a handoff's own ``written_at`` is before the cutoff; unknown counts as before."""
+    try:
+        return sweep.timestamp(data['written_at']) < sweep.timestamp(cutoff)
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
 def inventory(store, cutoff, receipts, paths=None):
     """Read both providers' handoffs without consulting sessions or knowledge.
 
-    Returns the open items, the identities ``receipts`` already settle, source snapshots
-    and errors.
+    Returns the open items, the identities ``receipts`` already settle, source snapshots,
+    errors, loop errors and warnings. Items come from ``sweep.carried_items``, as for the
+    sweep. A loop without a stable, fileable identity (``unstable_identity``) is a loop
+    error, never an item; it blocks readiness but not the other items of its handoff. A null
+    ``open_loops`` in a handoff not written after the cutoff is a warning naming it.
     """
-    items, sources, errors = {}, {}, []
+    items, sources, errors, loop_errors, warnings = {}, {}, [], [], []
     if store.is_symlink() or not store.is_dir():
-        return items, [], sources, ['handoff store must be an existing regular directory']
+        return items, [], sources, ['handoff store must be an existing regular directory'], [], warnings
     for path in sorted(store.glob('*.json') if paths is None else map(Path, paths)):
         try:
             raw, snapshot = sweep.read_handoff_source(path)
-            data = json.loads(raw)
-            loops = data.get('resume', {}).get('open_loops')
-            if not isinstance(loops, list):
-                raise ValueError('resume.open_loops must be an array')
+            data, null_loops = sweep.null_loops_as_empty(json.loads(raw))
+            carried_items = sweep.carried_items(data, path)
             sources[str(path)] = snapshot
-            for original in loops:
-                if not isinstance(original, dict):
-                    raise ValueError('carried item must be an object')
-                subject = data.get('subject') or {}
-                if (not (original.get('session_id') or subject.get('session_id') or data.get('session_id'))
-                        or not (original.get('produced_at') or data.get('written_at'))):
-                    raise ValueError('carried item lacks producing session or time')
-                identity = sweep.item_identity(original, data, path)
-                item = {**original, 'session_id': identity['session_id'],
+            if null_loops and written_before(data, cutoff):
+                warnings.append(str(path) + ': ' + sweep.NULL_LOOPS)
+            subject = data.get('subject')
+            for index, carried in enumerate(carried_items):
+                problem = unstable_identity(carried['item'], data)
+                if problem:
+                    loop_errors.append(str(path) + ': open_loops[' + str(index) + '] ' + problem)
+                    continue
+                identity = carried['identity']
+                item = {**carried['item'], 'session_id': identity['session_id'],
                         'produced_at': identity['produced_at']}
-                record_write.identity(item)
                 if sweep.timestamp(identity['produced_at']) >= sweep.timestamp(cutoff):
                     continue
                 key = sweep.identity_key(identity)
                 row = items.setdefault(key, dict(identity=identity, item=item,
-                    sources=[], copies=[], subject=data.get('subject', {})))
+                    sources=[], copies=[], subject=subject if isinstance(subject, dict) else {}))
                 row['sources'].append(str(path))
                 row['copies'].append(dict(source=str(path), item=item))
                 try:
@@ -164,7 +195,7 @@ def inventory(store, cutoff, receipts, paths=None):
         else:
             errors += ['conflicting carried copies of identity ' + key + ': ' + conflict
                        for conflict in row.get('conflicts', [])]
-    return items, settled, sources, errors
+    return items, settled, sources, errors, loop_errors, warnings
 
 
 def save(path, report):
@@ -264,9 +295,10 @@ def run(args):
     report = dict(node=args.node, cutoff=args.cutoff, started_at=datetime.now(timezone.utc).isoformat(),
                   mode=args.command, items=[], errors=[], warnings=[], ready_for_durable_filing=False)
     read = settlement_receipts(store)
-    items, settled, sources, problems = inventory(store, args.cutoff, read['receipts'])
+    items, settled, sources, problems, unfileable, notes = inventory(store, args.cutoff, read['receipts'])
     settled_ids = {sweep.identity_key(row['identity']): row['identity'] for row in settled}
-    report.update(errors=read['errors'] + problems, warnings=store_warnings(read, settled), sources=sources,
+    report.update(errors=read['errors'] + problems + unfileable, warnings=store_warnings(read, settled) + notes,
+                  sources=sources,
                   unique_items=len(items) + len(settled_ids), unfiled_before_cutoff=len(items),
                   already_settled=[], ignored_decisions=[
                       dict(identity=identity, reason='identity already settled; judgment not used')
@@ -288,7 +320,7 @@ def run(args):
                 if store_failed:
                     raise ValueError(UNREADABLE)
                 # Check the eligible content, not checkpoint timestamps/newer work.
-                refreshed, now_settled, _, problems = inventory(store, args.cutoff, fresh['receipts'],
+                refreshed, now_settled, _, problems, _, _ = inventory(store, args.cutoff, fresh['receipts'],
                                                                 source['sources'])
                 mine = [row for row in now_settled if sweep.identity_key(row['identity']) == key]
                 if mine:
@@ -317,9 +349,9 @@ def run(args):
             outcome['error'] = UNREADABLE
         save(report_path, report)
     read = settlement_receipts(store)
-    current, settled, snapshots, problems = inventory(store, args.cutoff, read['receipts'])
-    add_unique(report, 'errors', read['errors'] + problems)
-    add_unique(report, 'warnings', store_warnings(read, settled))
+    current, settled, snapshots, problems, unfileable, notes = inventory(store, args.cutoff, read['receipts'])
+    add_unique(report, 'errors', read['errors'] + problems + unfileable)
+    add_unique(report, 'warnings', store_warnings(read, settled) + notes)
     report['recount_sources'] = snapshots
     # A receipt the carry step wrote during the run settles the identity for both.
     confirmed = {sweep.identity_key(row['identity']) for row in settled}

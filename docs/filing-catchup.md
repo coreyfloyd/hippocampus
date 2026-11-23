@@ -27,6 +27,25 @@ The inspect report lists unique items with immutable `identity`, original item,
 and every source path. `unique_items` counts every carried identity older than
 the cutoff, settled or not.
 
+Catch-up lists open loops with the sweep's own reader (`sweep.carried_items`):
+every loop is an item, whatever its `type`. Both read a null
+`resume.open_loops` in an existing handoff as no items, with a warning; catch-up
+names the file only when its `written_at` is not after the cutoff. Any other
+non-array `open_loops` is an inventory error. Writers still refuse a null list.
+
+Catch-up then requires an identity it can keep stable and file, and reports an
+inventory error naming the file and `open_loops` index for any loop without one.
+The error blocks readiness; the handoff's other items are still filed.
+
+- A loop with no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`,
+  cannot be filed.
+- A typed item (a session-item `type`) needs its own `session_id` and
+  `produced_at`, because the carry step settles it by its own fields.
+- Any other loop takes a missing session from its handoff's `subject.session_id`
+  and a missing time from its `written_at`. The sweep falls back further, to the
+  file's name and modification time; catch-up never does, so touching or copying
+  a file never changes an identity or the cutoff decision.
+
 Catch-up reads the settled-identity store the carry step reads:
 `settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory
 of `--store`, and reads it the same way: a row settles the identity (producing
@@ -104,9 +123,9 @@ rewritten newer-only handoffs, and changes to newer items do not block readiness
 Changed older proposals or destinations invalidate readiness; newly discovered
 older identities remain pending for retry. Failed initial items remain counted
 even if a concurrent checkpoint omits them. Source snapshots remain in the
-report for audit, rather than requiring whole-file equality. Missing stores, malformed handoffs, conflicting copies, absent provenance,
-unbound destinations and failed writes block readiness. Newer items remain for
-periodic filing. The report is saved before effects and after each result. Source
+report for audit, rather than requiring whole-file equality. Missing stores,
+malformed handoffs, conflicting copies, unbound destinations and failed writes
+block readiness. Newer items remain for periodic filing. The report is saved before effects and after each result. Source
 handoffs and dated history remain untouched, including on failure.
 
 The coordinator must retain a successful report for **every expected node**, with

@@ -328,3 +328,35 @@ def test_long_symlink_target_keeps_original_resolvable_filename(monkeypatch):
     assert 'original.json' in output
     assert 'different-target.json' not in output
     assert 'handoff.py state-dir' in output
+
+
+def test_writers_turn_a_null_open_loops_into_an_array(runtime):
+    directory, _, _ = runtime
+    payload = {'resume': {'headline': 'Continue', 'next_action': 'Verify',
+                          'session_summary': 'Checked null open loops.', 'open_loops': None},
+               'spawned_processes': []}
+    result = run(runtime, 'checkpoint', '--session-id', 'test', payload=payload)
+    assert result.returncode == 0, result.stdout + result.stderr
+    handoff_path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
+    assert json.loads(handoff_path.read_text())['resume']['open_loops'] == []
+    old = json.loads(handoff_path.read_text())
+    old['resume']['open_loops'] = None
+    handoff_path.write_text(json.dumps(old))
+    result = run(runtime, 'pre-compact', payload=event(runtime, trigger='auto'))
+    assert result.returncode == 0, result.stderr
+    assert json.loads(handoff_path.read_text())['resume']['open_loops'] == []
+    assert run(runtime, 'lint', str(handoff_path)).returncode == 0
+
+
+def test_checkpoint_with_null_open_loops_keeps_supplied_session_items(runtime):
+    directory, _, _ = runtime
+    commitment = {'type': 'commitment', 'context': 'Send the release notes', 'disposition': 'file',
+              'session_id': 'test', 'produced_at': '2026-11-18T12:00:00Z'}
+    payload = {'resume': {'headline': 'Continue', 'next_action': 'Verify',
+                          'session_summary': 'Checked null open loops with items.', 'open_loops': None},
+               'session_items': [commitment], 'spawned_processes': []}
+    result = run(runtime, 'checkpoint', '--session-id', 'test', payload=payload)
+    assert result.returncode == 0, result.stdout + result.stderr
+    handoff_path = Path(run(runtime, 'resolve', str(directory), '--session-id', 'test').stdout.strip())
+    assert json.loads(handoff_path.read_text())['resume']['open_loops'] == [commitment]
+    assert run(runtime, 'lint', str(handoff_path)).returncode == 0

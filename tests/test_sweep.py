@@ -1381,3 +1381,42 @@ def test_deferred_ask_intent_uses_configured_agent_owner():
     assert report['work'][0]['ask']['owner_agent'] == 'fixture-agent'
     assert report['work'][0]['identity']['session_id'] == 'producer'
     assert report['work'][0]['choices'] == ['keep', 'close']
+
+
+def catch_up_inspect(sandbox):
+    base, store, _, env = sandbox
+    report = base / 'catch-up.json'
+    result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/lib/filing_catchup.py'), 'inspect',
+                             '--node', 'fixture-node', '--store', str(store), '--cutoff', '2100-01-01T00:00:00Z',
+                             '--user-profile', str(bound_profile(sandbox)), '--report', str(report)],
+                            env=env, text=True, capture_output=True)
+    assert result.returncode == 1, result.stderr
+    return json.loads(report.read_text())
+
+
+def test_catch_up_and_sweep_read_the_same_items_and_identities(sandbox):
+    captured = json.loads(FIXTURE.read_text())['resume']['open_loops']
+    source(sandbox, loops=[captured[0], {'context': 'Untyped note', 'disposition': 'consider'}])
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    caught = catch_up_inspect(sandbox)
+    assert swept['errors'] == [] and caught['errors'] == []
+    key = lambda identity: json.dumps(identity, sort_keys=True)
+    sweep_ids = {key(item['identity']) for candidate in swept['candidates'] for item in candidate['items']}
+    assert len(sweep_ids) == 2
+    assert {key(row['identity']) for row in caught['items']} == sweep_ids
+
+
+def test_catch_up_and_sweep_both_read_null_open_loops_as_empty_with_a_warning(sandbox):
+    path = source(sandbox)
+    data = json.loads(path.read_text())
+    data['resume']['open_loops'] = None
+    path.write_text(json.dumps(data))
+    before = path.read_bytes()
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    caught = catch_up_inspect(sandbox)
+    assert swept['errors'] == [] and caught['errors'] == []
+    candidate, = swept['candidates']
+    assert candidate['items'] == [] and caught['items'] == []
+    assert 'resume.open_loops is null; read as no carried items' in candidate['warnings']
+    assert caught['warnings'] == [str(path) + ': resume.open_loops is null; read as no carried items']
+    assert path.read_bytes() == before

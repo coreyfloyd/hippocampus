@@ -1455,6 +1455,8 @@ def checkpoint_loops(supplied: Mapping[str, Any], session_id: str, *,
     """
     resume = supplied.get("resume")
     loops = resume.get("open_loops", []) if isinstance(resume, Mapping) else None
+    if loops is None and isinstance(resume, Mapping):
+        loops = []  # A null list carries nothing; write the array every reader requires.
     items = supplied.get("session_items", [])
     if not isinstance(items, list):
         # Preserve a malformed input for post-write lint instead of losing it.

@@ -11,19 +11,25 @@ from test_record_writes import item, store
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'scripts/lib/filing_catchup.py'
 CUTOFF = '2026-11-19T12:00:00Z'
+WRITTEN = '2026-11-18T12:00:00Z'
+
+
+def carrier_identity(x):
+    """The identity catch-up gives a loop in a ``setup`` handoff: its own fields, else the handoff's."""
+    return {'session_id': x.get('session_id') or 'carrier', 'produced_at': x.get('produced_at') or WRITTEN,
+            'text': x.get('context', '')}
 
 
 def setup(tmp_path, items, mode='ok'):
     sources = tmp_path / 'sources'
     sources.mkdir()
     data = {'subject': {'session_id': 'carrier', 'working_directory': '/fixture'},
-            'written_at': '2026-11-18T12:00:00Z', 'resume': {'open_loops': items}}
+            'written_at': WRITTEN, 'resume': {'open_loops': items}}
     for provider in ('claude', 'codex'):
         (sources / (provider + '.json')).write_text(json.dumps(data))
     profile = {'name': 'fixture', 'record_writes': {'tickets': store(tmp_path, mode)}}
     (tmp_path / 'profile.json').write_text(json.dumps(profile))
-    decisions = [{'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'],
-                              'text': x['context']}, 'rule': 'R2', 'read_status': 'ok'} for x in items]
+    decisions = [{'identity': carrier_identity(x), 'rule': 'R2', 'read_status': 'ok'} for x in items]
     (tmp_path / 'decisions.json').write_text(json.dumps(decisions))
     return sources
 
@@ -68,7 +74,7 @@ def test_lost_receipt_keeps_unfiled_then_retry_looks_up(tmp_path):
     assert len(json.loads((tmp_path / 'store.json').read_text())) == 1
 
 
-@pytest.mark.parametrize('problem', ['missing-store', 'invalid-json', 'missing-identity', 'missing-decision'])
+@pytest.mark.parametrize('problem', ['missing-store', 'invalid-json', 'non-array-loops', 'missing-decision'])
 def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
     sources = setup(tmp_path, [item()])
     if problem == 'missing-store':
@@ -76,8 +82,8 @@ def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
         sources.rmdir()
     elif problem == 'invalid-json':
         (sources / 'broken.json').write_text('{')
-    elif problem == 'missing-identity':
-        (sources / 'broken.json').write_text(json.dumps({'resume': {'open_loops': [{'context': 'unknown'}]}}))
+    elif problem == 'non-array-loops':
+        (sources / 'broken.json').write_text(json.dumps({'resume': {'open_loops': 'unknown'}}))
     else:
         (tmp_path / 'decisions.json').write_text('[]')
     assert run(tmp_path).returncode == 1
@@ -604,3 +610,98 @@ def test_attempted_write_keeps_its_failure_when_settled_meanwhile(tmp_path):
     assert row['status'] == 'failed' and row['error']
     assert row['recount_note'] == 'identity now settled by a receipt; this run attempted a write'
     assert [entry['identity']['text'] for entry in out['already_settled']] == ['change']
+
+
+
+def stored(tmp_path):
+    path = tmp_path / 'store.json'
+    return [row['identity'] for row in json.loads(path.read_text())] if path.exists() else []
+
+
+def record_identity_of(x):
+    return {'session_id': x['session_id'], 'produced_at': x['produced_at'], 'text': x['context']}
+
+
+@pytest.mark.parametrize('loop', [
+    {'context': 'Test module seam', 'disposition': 'file if needed'},
+    {'type': '', 'context': 'Empty type', 'disposition': 'file'},
+    {'type': None, 'context': 'Null type', 'disposition': 'file'},
+], ids=['untyped', 'empty-type', 'null-type'])
+def test_untyped_loop_with_context_files_under_its_handoffs_identity_and_reaches_ready(tmp_path, loop):
+    setup(tmp_path, [item(), loop])
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    assert carrier_identity(loop) in [row['identity'] for row in out['items']]
+    assert len(stored(tmp_path)) == 2
+    assert run(tmp_path).returncode == 0
+    assert len(stored(tmp_path)) == 2
+
+
+@pytest.mark.parametrize('loop, problem', [
+    ({'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'},
+     'has no context; it cannot be filed (see #285 for writers, #271 for existing loops)'),
+    ({'type': 'commitment', 'context': 'Unknown producer', 'disposition': 'file'},
+     'is a typed item without its own session_id and produced_at; the carry step cannot settle it'),
+    ({'type': 'commitment', 'context': 'Unknown time', 'disposition': 'file', 'session_id': 'producer'},
+     'is a typed item without its own session_id and produced_at; the carry step cannot settle it'),
+], ids=['no-context', 'typed-no-session', 'typed-no-time'])
+def test_loop_without_a_fileable_identity_is_an_error_and_never_written(tmp_path, loop, problem):
+    sources = setup(tmp_path, [item(), loop])
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert out['errors'] == [str(sources / name) + ': open_loops[1] ' + problem
+                             for name in ('claude.json', 'codex.json')]
+    assert not out['ready_for_durable_filing']
+    assert [row['item']['context'] for row in out['items']] == ['change']
+    assert stored(tmp_path) == [record_identity_of(item())]
+
+
+@pytest.mark.parametrize('drop, problem', [
+    ('written_at', 'has no producing time in the item or its handoff; a file time is not an identity'),
+    ('subject', 'has no producing session in the item or its handoff; a file name is not an identity'),
+])
+def test_untyped_loop_never_takes_its_identity_from_the_file(tmp_path, drop, problem):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    data = {'subject': {'session_id': 'old'}, 'written_at': WRITTEN,
+            'resume': {'open_loops': [{'context': 'Legacy note', 'disposition': 'keep'}]}}
+    del data[drop]
+    old.write_text(json.dumps(data))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert out['errors'] == [str(old) + ': open_loops[0] ' + problem]
+    assert not out['ready_for_durable_filing']
+    assert stored(tmp_path) == [record_identity_of(item())]
+
+
+def test_file_times_never_change_an_identity_or_the_cutoff_decision(tmp_path):
+    loop = {'context': 'Test module seam', 'disposition': 'file if needed'}
+    sources = setup(tmp_path, [item(), loop, {**item('later'), 'produced_at': CUTOFF}])
+    seen = []
+    for stamp in (0, 4102444800):  # 1970 and 2100: both sides of the cutoff
+        for path in sources.iterdir():
+            os.utime(path, (stamp, stamp))
+        assert run(tmp_path, 'inspect').returncode == 1
+        out = report(tmp_path)
+        assert out['errors'] == []
+        seen.append(sorted(json.dumps(row['identity'], sort_keys=True) for row in out['items']))
+    assert seen[0] == seen[1] and len(seen[0]) == 2
+
+
+@pytest.mark.parametrize('written, warned', [
+    ('2026-11-16T12:00:00Z', True), (CUTOFF, False), (None, True), (7, True)])
+@pytest.mark.parametrize('subject', [{'session_id': 'old'}, None])
+def test_null_open_loops_warn_unless_written_after_the_cutoff(tmp_path, written, warned, subject):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    data = {'schema_version': 2, 'subject': subject, 'resume': {'open_loops': None}}
+    if written is not None:
+        data['written_at'] = written
+    old.write_text(json.dumps(data))
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    assert out['warnings'] == ([str(old) + ': resume.open_loops is null; read as no carried items']
+                               if warned else [])
+    assert str(old) in out['sources']
