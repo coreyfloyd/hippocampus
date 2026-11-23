@@ -41,12 +41,51 @@ class LessonError(Exception):
     """One lesson could not be applied or delivered; the wrap continues without it."""
 
 
+def _retired_setting(config: Mapping[str, Any], config_file: str) -> str | None:
+    if RETIRED_SETTING not in config:
+        return None
+    return (f"{config_file}: {RETIRED_SETTING} moved to the knowledge profile's {SETTING} frontmatter field; "
+            "run hippocampus-set-up to move it")
+
+
 def enabled(config: Mapping[str, Any]) -> bool:
     """The knowledge profile's auto-apply setting, refused while the configuration still holds it."""
-    if RETIRED_SETTING in config:
-        raise UpgradeRequired(f"hippocampus config: {RETIRED_SETTING} moved to the knowledge profile's {SETTING}; "
-                         "run hippocampus-set-up to move it")
+    if retired := _retired_setting(config, "hippocampus config"):
+        raise UpgradeRequired(retired)
     return bool(policy().auto_apply)
+
+
+def retired_owners(config: Mapping[str, Any], config_file: str) -> list[str]:
+    """One message per retired policy owner still in place, as the readers refuse it: the file, its
+    replacement in the knowledge profile, and hippocampus-set-up."""
+    compose = _compose_rules()
+    found = [retired] if (retired := _retired_setting(config, config_file)) else []
+    try:
+        # The retired-file check comes first and reads only the profile's path, so a profile
+        # that does not parse still gets the warning.
+        compose.lesson_routing(compose.Policy(compose.profile_path(), None, None))
+    except compose.RetiredOwner as error:
+        found.append(str(error))
+    return found
+
+
+def warn_retired() -> None:
+    """Print one warning per retired policy owner on stderr; install and verify keep their exit status."""
+    handoff = _load("lessons_handoff", Path(__file__).with_name("handoff.py"))
+    try:
+        config = handoff.read_config()
+    except ValueError:
+        config = {}  # A malformed configuration is reported by every command that reads it.
+    for message in retired_owners(config, handoff.config_path()):
+        print(f"warning: {message}", file=sys.stderr)
+
+
+def _load(name: str, path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
+    spec.loader.exec_module(module)
+    return module
 
 
 _COMPOSE: Any = None
@@ -56,11 +95,7 @@ def _compose_rules() -> Any:
     """The routing contract's parser, loaded once so its ComposeError is one class."""
     global _COMPOSE
     if _COMPOSE is None:
-        spec = importlib.util.spec_from_file_location("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module  # dataclasses resolve deferred annotations through sys.modules
-        spec.loader.exec_module(module)
-        _COMPOSE = module
+        _COMPOSE = _load("compose_rules", Path(__file__).parents[1] / "compose_rules.py")
     return _COMPOSE
 
 
@@ -648,3 +683,9 @@ def deliver(module: Any, session_id: str, persist_bound: bool, rules: Mapping[st
         for row, update in zip(group, updates):
             _record(module, session_id, {**row, **update})
     return outcomes(module, session_id)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] != ["warn-retired"]:
+        raise SystemExit("usage: lessons.py warn-retired")
+    warn_retired()

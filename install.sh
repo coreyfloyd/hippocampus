@@ -227,6 +227,8 @@ acquire_lock() {
   printf '%s\n' "$$" > "$LOCK_DIR/pid"; LOCK_HELD=1
   trap release_lock EXIT; trap 'interrupted 129' HUP; trap 'interrupted 130' INT; trap 'interrupted 143' TERM
 }
+# A retired lesson setting is a warning, never a failed install or verify.
+warn_retired_settings() { python3 "$ROOT/scripts/lib/lessons.py" warn-retired || true; }
 verify_check() { what="$1" path="$2"; shift 2; "$@" || { echo "verify failed: $what $path" >&2; exit 1; }; }
 for_each_skill() { for name in "$ROOT"/skills/*; do [ -f "$name/SKILL.md" ] && printf '%s\n' "$(basename "$name")"; done; }
 
@@ -291,7 +293,7 @@ record_profile_migration() {
 if [ "${1:-}" = "--verify-runtime" ]; then
   validate_current_pointer
   [ -n "$CURRENT_RELEASE" ] || { echo "current release missing" >&2; exit 1; }
-  exit 0
+  warn_retired_settings; exit 0
 fi
 
 if [ "${1:-}" = "--verify" ]; then
@@ -304,7 +306,7 @@ if [ "${1:-}" = "--verify" ]; then
   verify_check "rules setup helper" "$CURRENT_LINK/scripts/rules_setup.py" test -f "$CURRENT_LINK/scripts/rules_setup.py"
   python3 "$ROOT/scripts/verify-install.py" "$CURRENT_LINK" "$CLAUDE_DIR" "$CODEX_DIR"
   verify_check "wiki contract" "$CURRENT_LINK/contracts/karpathy-wiki.md" test -f "$CURRENT_LINK/contracts/karpathy-wiki.md"
-  validate_profile; exit 0
+  validate_profile; warn_retired_settings; exit 0
 fi
 
 mkdir -p "$(dirname "$LOCK_DIR")"; acquire_lock; repair_current_version; validate_current_pointer; validate_legacy_current_pointer
@@ -385,3 +387,4 @@ set_current_release "$RELEASE_DIR" "$current_expected"
 record_profile_migration
 if validate_profile >/dev/null 2>&1; then echo "Hippocampus $VERSION installed and configured"
 else echo "Hippocampus $VERSION installed; run the hippocampus-set-up skill to configure it"; fi
+warn_retired_settings

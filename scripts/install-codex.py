@@ -15,6 +15,7 @@ import sys
 from lib import codex_trust as trust
 from lib import install_recovery as recovery
 from lib.install_conflicts import refuse_standalone
+from lib.lessons import warn_retired
 from lib.restore_projection import POST_COMPACT_CONTEXT_BYTES
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -373,6 +374,8 @@ def main():
     elif backup.exists():
         shutil.rmtree(backup)
     print(f'Installed {len(SKILLS)} hippocampus skills, six hooks, and the checklist actor guard; seven trusted handlers')
+    if not args.uninstall and not (adopting or shared_runtime):
+        warn_retired()  # install.sh --verify-runtime above has already warned
     return 0
 
 
