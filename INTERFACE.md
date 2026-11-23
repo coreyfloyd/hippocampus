@@ -69,8 +69,8 @@ judgment for one fails: inspect gives each an `identity` and `receipt_identity` 
 type `untyped_loop` or `empty_loop`, and only a `dropped` receipt with a reason, recorded through
 `settle-identity`, settles it; the report then lists it under `already_settled` with that reason,
 and the sweep never files it. Its session and time must be non-blank strings and the time
-an ISO time with a timezone, else the loop is a loop error. An empty loop's identity belongs
-to one handoff write; catch-up reads only handoffs written before the cutoff. Where copies of one identity differ only in
+an ISO time with a timezone, else the loop is a loop error. An empty loop's identity names a slot
+(position) in one handoff write; catch-up reads only handoffs written before the cutoff. Where copies of one identity differ only in
 anchor or proposal text, the copy from the handoff with the newest `written_at` is filed and
 older ones are listed under `superseded_copies`; a difference in type or other filing content,
 or an unordered conflict, stays an inventory error. A `progress`, `open_loop` or `artifact`
@@ -287,7 +287,10 @@ Pickup copies the resumed session's unsettled items into the successor's ledger.
 settlement also writes a settlement receipt to the settled-identity store, keyed by the
 item's `session_id`, `produced_at`, `type` and `context` (the receipt's `text`), so a
 receipt closes only an item of its own type; no pickup, checkpoint, pre-compaction
-write, stop skeleton or wrap on the machine carries an item with a receipt, or an item
+write, stop skeleton or wrap on the machine carries a session item or artifact with a
+receipt, an untyped loop with a receipt that carries its own `session_id` and
+`produced_at` (an untyped loop named by its handoff, and any empty loop, are left to the
+carry step unchanged), or an item
 whose `disposition` or `status` is `captured`, `dropped`, `filed`, `applied`, `recorded`
 or `done`, whichever session supplies or retains it. A wrap gives an artifact no receipt:
 it keeps its own ledger status. Only a catch-up drop settles an artifact by receipt, and

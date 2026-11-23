@@ -568,14 +568,15 @@ def test_copies_of_different_types_settle_only_when_every_type_has_a_receipt(tmp
         assert 'conflicting' in str(out['errors'])
 
 
-def writer_settles(tmp_path, settled_item):
+def writer_settles(tmp_path, settled_item, row=None):
     """The fixture record writer stands in for a carry step that settles an identity mid-run."""
+    row = row or receipt(settled_item)
     store_path(tmp_path)
     (tmp_path / 'store.py').rename(tmp_path / 'store_orig.py')
     (tmp_path / 'store.py').write_text('import runpy\nfrom pathlib import Path\n'
         'here = Path(__file__).parent\n'
         'with (here / "ledger/settled-identities.jsonl").open("a") as handle:\n'
-        '    handle.write(' + repr(json.dumps(receipt(settled_item)) + '\n') + ')\n'
+        '    handle.write(' + repr(json.dumps(row) + '\n') + ')\n'
         'runpy.run_path(str(here / "store_orig.py"), run_name="__main__")\n')
 
 
@@ -1266,7 +1267,9 @@ def test_a_loop_whose_session_or_time_is_not_valid_is_a_loop_error_never_filed(t
     out = report(tmp_path)
     problem = problem or ('has no producing session in the item or its handoff; a file name is not an identity'
                           if field == 'subject' else
-                          'has no producing time in the item or its handoff; a file time is not an identity')
+                          'has no producing time in the item or its handoff; a file time is not an identity'
+                          if value == '   ' else
+                          'has a producing time that is not an ISO time with a timezone: ' + json.dumps(value))
     assert out['errors'] == [str(old) + ': open_loops[' + str(index) + '] ' + problem for index in (0, 1)]
     assert [row['identity']['text'] for row in out['items']] == ['change']
     assert stored(tmp_path) == [record_identity_of(item())] and settled_store(tmp_path) == []
@@ -1295,3 +1298,41 @@ def test_an_empty_loops_identity_belongs_to_one_handoff_write(tmp_path):
     [rewritten] = receipt_identities(tmp_path).values()
     assert rewritten == {**identity, 'produced_at': '2026-11-18T13:00:00Z'}
     assert report(tmp_path)['already_settled'] == []
+
+
+@pytest.mark.parametrize('produced_at, problem', [
+    ('2026-01-01T10:00:00', 'has a producing time that is not an ISO time with a timezone: "2026-01-01T10:00:00"'),
+    ('yesterday', 'has a producing time that is not an ISO time with a timezone: "yesterday"'),
+], ids=['naive', 'words'])
+def test_an_invalid_producing_time_is_named_apart_from_a_missing_one(tmp_path, produced_at, problem):
+    sources = setup(tmp_path, [item(), {**UNTYPED, 'produced_at': produced_at}])
+    old = sources / 'old.json'
+    old.write_text(json.dumps({'subject': {'session_id': 'old'}, 'resume': {'open_loops': [UNTYPED]}}))
+    assert run(tmp_path, 'inspect').returncode == 1
+    assert report(tmp_path)['errors'] == [
+        *(str(sources / name) + ': open_loops[1] ' + problem for name in ('claude.json', 'codex.json')),
+        str(old) + ': open_loops[0] has no producing time in the item or its handoff; a file time is not an identity']
+
+
+def test_a_loop_settled_during_a_run_is_already_settled_not_a_refused_judgment(tmp_path):
+    setup(tmp_path, [item(), EMPTY])
+    identity = {'session_id': 'carrier', 'produced_at': WRITTEN, 'type': 'empty_loop', 'text': 'open_loops[1]'}
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R2', 'read_status': 'ok'},
+          {'identity': identity, 'rule': 'R6', 'reason': REASON})
+    # The typed item's write settles the empty loop before the run reaches it.
+    writer_settles(tmp_path, None, drop_receipt(identity))
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    [row] = [row for row in out['items'] if row['identity'] == identity]
+    assert row['status'] == 'already_settled' and 'error' not in row
+
+
+def test_different_empty_loops_in_one_slot_of_same_time_handoffs_are_conflicting_copies(tmp_path):
+    sources = setup(tmp_path, [EMPTY])
+    data = json.loads((sources / 'codex.json').read_text())
+    data['resume']['open_loops'] = [{'owner': 'someone else'}]
+    (sources / 'codex.json').write_text(json.dumps(data))
+    assert run(tmp_path, 'inspect').returncode == 1
+    [error] = report(tmp_path)['errors']
+    assert error.startswith('conflicting carried copies of identity ') and 'written at the same time differ' in error

@@ -263,8 +263,10 @@ def discover(scope, config, now):
             for transcript in transcripts.get(session, []):
                 activity = max(activity, transcript.stat().st_mtime)
             idle = max(0, now.timestamp() - activity)
-            # An untyped or empty loop settled by its dropped receipt is never filed again.
-            items = [item for index, item in enumerate(carried_items(data, path))
+            # An untyped or empty loop settled by its dropped receipt is never filed again; the
+            # handoff's report row counts the loops skipped so.
+            carried = carried_items(data, path)
+            items = [item for index, item in enumerate(carried)
                      if handoff.receipt_key(handoff.loop_receipt_identity(item['item'], data, index)) not in settled]
             occurrences = Counter(identity_key(item['identity']) for item in items)
             for item in items:
@@ -272,7 +274,7 @@ def discover(scope, config, now):
             result['candidates'].append({'path': str(path), 'directory': directory or 'unknown directory',
                 'session_id': session or path.stem, 'activity_at': activity, 'idle_seconds': idle,
                 'abandoned': idle > config['idle_days'] * 86400,
-                'items': items, 'handoff': data, 'source_snapshot': source_snapshot, 'warnings': warnings})
+                'items': items, 'settled_loops': len(carried) - len(items), 'handoff': data, 'source_snapshot': source_snapshot, 'warnings': warnings})
         except (OSError, ValueError, TypeError, AttributeError) as exc:
             result['errors'].append({'path': str(path), 'reason': str(exc)})
     return result
@@ -606,7 +608,8 @@ def build_report(discovery, decisions, plan, ask, checks, interactive, started, 
         section[key].append({'path': candidate['path'], 'outcome': 'dry run' if archive else 'kept',
             'worktree_check': clean_check,
             'destination': str(Path(candidate['path']).parent / 'archive' / Path(candidate['path']).name),
-            'reason': 'all items would be filed or dropped' if archive else 'unfiled items, unbound ask, or uncommitted files'})
+            'reason': 'all items would be filed or dropped' if archive else 'unfiled items, unbound ask, or uncommitted files',
+            **settled_loops(candidate)})
     protected = worktree_protection(discovery, report, checks)
     for candidate in discovery['candidates']:
         if not candidate['abandoned']:
@@ -631,6 +634,11 @@ def build_report(discovery, decisions, plan, ask, checks, interactive, started, 
     report['nothing_to_do'] = not report['directories'] and not report['errors']
     report['ended_at'] = datetime.now(timezone.utc).isoformat()
     return report
+
+
+def settled_loops(candidate):
+    """How many settled untyped or empty loops the sweep skipped in this handoff, when any."""
+    return {'settled_loops': candidate['settled_loops']} if candidate.get('settled_loops') else {}
 
 
 def pending_path():
@@ -1447,7 +1455,7 @@ def finish_act(report, discovery, ask, path, save, send_ask):
                         all(r['outcome'] in ('written', 'already_written', 'dropped') for r in outcomes) and
                         all(r['outcome'] in ('written', 'already_written') for r in asks))
             row = dict(path=source, outcome='kept', worktree_check=live_check,
-                       reason='unfiled items, asks, or uncommitted files')
+                       reason='unfiled items, asks, or uncommitted files', **settled_loops(candidate))
             unpushed = [r for r in outcomes if r['outcome'] == 'not pushed']
             if unpushed:
                 row['reason'] = 'lesson commits not pushed: ' + '; '.join(

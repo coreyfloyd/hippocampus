@@ -1441,7 +1441,10 @@ def test_untyped_and_empty_loops_settled_by_a_dropped_receipt_are_never_swept(sa
     _, data = report(sandbox)
     section = data['directories'][str(sandbox[0])]
     assert section['filing_outcomes'] == []
-    assert [row['outcome'] for row in section['handoffs_archived']] == ['dry run']
+    # The report says how many settled loops the sweep skipped, so the archive is never silent.
+    assert [(row['outcome'], row['settled_loops']) for row in section['handoffs_archived']] == [('dry run', 2)]
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert [candidate['settled_loops'] for candidate in swept['candidates']] == [2]
 
 
 

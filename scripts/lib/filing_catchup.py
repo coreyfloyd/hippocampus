@@ -224,11 +224,13 @@ def unstable_identity(item, data, index):
         return None
     if empty:
         return EMPTY_WITHOUT_IDENTITY
-    session, _ = handoff.handoff_producer(data)
-    session = item.get('session_id') or session
+    session, written_at = handoff.handoff_producer(data)
+    session, produced = item.get('session_id') or session, item.get('produced_at') or written_at
     if not isinstance(session, str) or not session.strip():
         return 'has no producing session in the item or its handoff; a file name is not an identity'
-    return 'has no producing time in the item or its handoff; a file time is not an identity'
+    if produced is None or (isinstance(produced, str) and not produced.strip()):
+        return 'has no producing time in the item or its handoff; a file time is not an identity'
+    return 'has a producing time that is not an ISO time with a timezone: ' + json.dumps(produced)
 
 
 def written_before(data, cutoff):
@@ -477,8 +479,6 @@ def run(args):
             outcome['error'] = 'conflicting carried copies; no write attempted'
         elif args.command == 'run' and key in by_identity and not store_failed:
             try:
-                if source.get('receipt_identity'):
-                    raise ValueError(LOOP_JUDGMENT)
                 # Re-read the store: the carry step may have settled this identity since.
                 fresh = settlement_receipts(store)
                 add_unique(report, 'errors', fresh['errors'])
@@ -499,6 +499,9 @@ def run(args):
                     if (problems or actual is None or actual.get('conflicts')
                             or actual['item'] != source['item']):
                         raise ValueError('eligible source item changed before filing; retry')
+                    if source.get('receipt_identity'):
+                        # Refused only while still unsettled: a loop settled meanwhile is already_settled above.
+                        raise ValueError(LOOP_JUDGMENT)
                     outcome.update(status='uncertain', error='write pending')
                     save(report_path, report)
                     attempted.add(key)
