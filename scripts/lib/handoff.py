@@ -1068,6 +1068,11 @@ def receipt_key(identity: Any) -> tuple[str, ...] | None:
     return key if key[2] in ITEM_TYPES and key[2] != "artifact" else None
 
 
+def settlement_key(row: Any) -> tuple[str, ...] | None:
+    """The identity a store row settles: any object whose identity is a valid receipt key."""
+    return receipt_key(row.get("identity")) if isinstance(row, Mapping) else None
+
+
 _STORE_CACHE: dict[str, tuple[tuple[int, int, int], frozenset]] = {}
 
 
@@ -1082,7 +1087,7 @@ def settled_identities() -> set[tuple[str, ...]]:
     cached = _STORE_CACHE.get(path)
     if not cached or cached[0] != version:
         cached = (version, frozenset(key for row in _ledger_records(path)
-                                     for key in [receipt_key(row.get("identity"))] if key))
+                                     for key in [settlement_key(row)] if key))
         _STORE_CACHE[path] = cached
     return set(cached[1])
 

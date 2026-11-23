@@ -441,17 +441,109 @@ def test_receipt_for_another_type_does_not_settle(tmp_path):
     assert out['unfiled_before_cutoff'] == 1 and out['already_settled'] == []
 
 
-@pytest.mark.parametrize('bad', ['{not json', '[]', json.dumps({'identity': {'session_id': 'producer'}}),
-    json.dumps({'identity': {'session_id': 'producer', 'produced_at': item()['produced_at'], 'type': 'progress',
-                             'text': 'change'}, 'disposition': 'keep', 'reason': 'not terminal',
-                'destination': None, 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler'})])
-def test_invalid_settled_store_line_is_an_error_and_settles_nothing(tmp_path, bad):
-    settled = item()
-    setup(tmp_path, [settled])
-    store_path = tmp_path / 'ledger/settled-identities.jsonl'
-    store_path.parent.mkdir()
-    store_path.write_text(bad + '\n')
+def receipt(x, **changes):
+    return {'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'], 'type': x['type'],
+                         'text': x['context']}, 'disposition': 'filed', 'reason': 'filed by a wrap',
+            'destination': 'tickets:1', 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'settler', **changes}
+
+
+def store_path(tmp_path):
+    path = tmp_path / 'ledger/settled-identities.jsonl'
+    path.parent.mkdir(exist_ok=True)
+    return path
+
+
+@pytest.mark.parametrize('bad', ['{not json', '[]', json.dumps({'identity': {'session_id': 'producer'}})])
+def test_invalid_middle_line_is_one_error_settles_nothing_and_blocks_writes(tmp_path, bad):
+    target = item()
+    setup(tmp_path, [target])
+    # The bad line sits before a valid receipt for another item; the item itself has none.
+    store_path(tmp_path).write_text(bad + '\n' + json.dumps(receipt(item('other'))) + '\n')
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['already_settled'] == [] and out['unfiled_before_cutoff'] == 1
+    assert [error for error in out['errors'] if 'line 1' in error] == out['errors'] and len(out['errors']) == 1
     assert run(tmp_path).returncode == 1
     out = report(tmp_path)
-    assert out['already_settled'] == [] and not out['ready_for_durable_filing']
-    assert any('line 1' in error for error in out['errors'])
+    assert len(out['errors']) == 1 and not out['ready_for_durable_filing']
+    assert [row['error'] for row in out['items']] == ['settled store unreadable; no write attempted']
+    assert not (tmp_path / 'store.json').exists()
+
+
+def test_unreadable_store_is_an_error_and_blocks_writes(tmp_path):
+    setup(tmp_path, [item()])
+    store_path(tmp_path).mkdir()
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert len(out['errors']) == 1 and 'unreadable' in out['errors'][0]
+    assert out['items'][0]['status'] == 'pending' and not (tmp_path / 'store.json').exists()
+
+
+def test_torn_final_line_is_a_warning_and_settles_nothing(tmp_path):
+    settled, open_item = item('settled'), item('open')
+    setup(tmp_path, [settled, open_item])
+    store_path(tmp_path).write_text(json.dumps(receipt(settled)) + '\n' + json.dumps(receipt(open_item))[:40])
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and len(out['warnings']) == 1 and 'line 2' in out['warnings'][0]
+    assert [row['identity']['text'] for row in out['already_settled']] == ['settled']
+    assert [row['identity'] for row in json.loads((tmp_path / 'store.json').read_text())] == [record_identity(open_item)]
+
+
+def test_receipt_failing_strict_checks_still_settles_like_the_carry_step(tmp_path):
+    settled = item()
+    setup(tmp_path, [settled])
+    store_path(tmp_path).write_text(json.dumps(receipt(settled, disposition='keep', extra=1)) + '\n')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and len(out['warnings']) == 1 and 'line 1' in out['warnings'][0]
+    assert out['already_settled'][0]['disposition'] == 'keep' and out['items'] == []
+    assert not (tmp_path / 'store.json').exists()
+
+
+def test_receipt_text_with_unicode_line_separators_matches(tmp_path):
+    settled = item('first\u2028second\u0085third')
+    setup(tmp_path, [settled])
+    store_path(tmp_path).write_text(json.dumps(receipt(settled), ensure_ascii=False) + '\n', encoding='utf-8')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['warnings'] == [] and len(out['already_settled']) == 1
+    assert not (tmp_path / 'store.json').exists()
+
+
+def test_receipt_wins_over_conflicting_copies_and_ignores_its_judgment(tmp_path):
+    settled = item()
+    sources = setup(tmp_path, [settled])
+    path = sources / 'codex.json'
+    data = json.loads(path.read_text())
+    data['resume']['open_loops'][0]['record_kind'] = 'documents'
+    path.write_text(json.dumps(data))
+    store_path(tmp_path).write_text(json.dumps(receipt(settled)) + '\n')
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing'] and len(out['already_settled']) == 1
+    assert out['ignored_decisions'] == [{'identity': record_identity(settled),
+                                         'reason': 'identity already settled; judgment not used'}]
+    assert not (tmp_path / 'store.json').exists()
+
+
+def test_receipt_written_during_run_settles_at_recount(tmp_path):
+    filed, settled_later = item('filed'), item('later')
+    setup(tmp_path, [filed, settled_later])
+    decisions = json.loads((tmp_path / 'decisions.json').read_text())
+    (tmp_path / 'decisions.json').write_text(json.dumps(decisions[:1]))
+    # The writer stands in for a concurrent carry step settling the other identity.
+    (tmp_path / 'store.py').rename(tmp_path / 'store_orig.py')
+    (tmp_path / 'store.py').write_text('import runpy\nfrom pathlib import Path\n'
+        'here = Path(__file__).parent\n'
+        'with (here / "ledger/settled-identities.jsonl").open("a") as handle:\n'
+        '    handle.write(' + repr(json.dumps(receipt(settled_later)) + '\n') + ')\n'
+        'runpy.run_path(str(here / "store_orig.py"), run_name="__main__")\n')
+    store_path(tmp_path)
+    assert run(tmp_path).returncode == 0, report(tmp_path)
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['unfiled_before_cutoff'] == 0
+    assert [row['identity']['text'] for row in out['already_settled']] == ['later']
+    statuses = {row['identity']['text']: row for row in out['items']}
+    assert statuses['filed']['status'] == 'filed'
+    assert statuses['later']['status'] == 'already_settled' and 'error' not in statuses['later']

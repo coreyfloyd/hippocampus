@@ -54,8 +54,10 @@ python3 scripts/lib/durable_checkpoint.py --session-id <running-session> \
 
 Each catch-up report lists under `already_settled` the identities that have a receipt in
 the settled-identity store, read from `HANDOFF_LEDGER_DIR`, else from the parent of the
-catch-up's `--store`; it never files or counts them as unfiled, and an invalid store line
-is a report error ([catch-up pass](docs/filing-catchup.md)).
+catch-up's `--store`, settled by the carry step's rule (`handoff.settlement_key`); it never
+files or counts them as unfiled. An unreadable store or an unparseable or identity-less
+line is a report error that stops every `run` write; a torn final line or a settling row
+failing other receipt checks is a `warnings` entry ([catch-up pass](docs/filing-catchup.md)).
 
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or

@@ -29,13 +29,23 @@ the cutoff, settled or not.
 
 Catch-up reads the settled-identity store the carry step reads:
 `settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory
-of `--store`. An identity whose producing session, time, type and text have a
-settlement receipt is never filed and never counted in `unfiled_before_cutoff`;
-the report lists it under `already_settled` with its identity, type, and the
-receipt's `disposition` and `settled_at`. The recount reads the store again, so a
-receipt written during the run also settles its identity. An unreadable store, or
-a line that is not valid JSON or not a valid receipt, is a report error naming the
-line; it settles nothing and blocks readiness.
+of `--store`, and settles by the same rule: a row settles the identity (producing
+session, time, type and text) named by its valid `identity`. A settled identity is
+never filed and never counted in `unfiled_before_cutoff`, and its receipt wins over
+conflicting carried copies. The report lists it under `already_settled` with its
+identity, type, and the receipt's `disposition` and `settled_at`; a filing judgment
+supplied for it is listed under `ignored_decisions`. The recount reads the store
+again: an identity a receipt written during the run settles is added to
+`already_settled`, and its row in `items`, unless this run filed it, gets
+`status: "already_settled"` and no error.
+
+An unreadable store, an unparseable line, or a row with no valid identity is a
+report error naming the line: it settles nothing, blocks readiness, and in `run`
+stops every write, leaving each item pending with `settled store unreadable; no
+write attempted`. Two cases are `warnings`, which never block readiness: a torn
+final line with no trailing newline, which the store's writer tolerates, and a row
+with a valid identity that fails another receipt check, which still settles as it
+does for the carry step.
 
 A decisions file is an array with one object per identity:
 
