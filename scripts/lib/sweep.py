@@ -99,19 +99,40 @@ def timestamp(value):
 
 def item_identity(item, data, path):
     """Legacy provenance falls back to its source, never to its item position."""
-    subject = data.get('subject', {})
+    subject = data.get('subject')
+    subject = subject if isinstance(subject, dict) else {}
     return {'session_id': item.get('session_id') or subject.get('session_id') or data.get('session_id') or path.stem,
             'produced_at': item.get('produced_at') or data.get('written_at') or
                            datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
             'text': item.get('context', '')}
 
 
-def carried_items(loops, data, path):
-    """Every open loop is a carried item, typed or not, with its source's fallback identity.
+NULL_LOOPS = 'resume.open_loops is null; read as no carried items'
 
-    The sweep and the catch-up pass both read handoffs through this one function, so they
-    agree on what an item is and how it is identified.
+
+def null_loops_as_empty(data):
+    """An existing handoff's null ``open_loops`` read as an empty list, and whether it was null.
+
+    The sweep and the catch-up pass both read existing handoffs this way; lint still
+    refuses a null list when a handoff is written.
     """
+    resume = data.get('resume') if isinstance(data, dict) else None
+    if isinstance(resume, dict) and 'open_loops' in resume and resume['open_loops'] is None:
+        return {**data, 'resume': {**resume, 'open_loops': []}}, True
+    return data, False
+
+
+def carried_items(data, path):
+    """Every open loop is a carried item, typed or not, with the sweep's fallback identity.
+
+    The sweep and the catch-up pass both list items through this function.
+    """
+    resume = data.get('resume')
+    if not isinstance(resume, dict):
+        raise ValueError('missing/invalid resume block')
+    loops = resume.get('open_loops', [])
+    if not isinstance(loops, list):
+        raise ValueError('resume.open_loops must be an array')
     if not all(isinstance(item, dict) for item in loops):
         raise ValueError('carried item must be an object')
     return [{'item': item, 'identity': item_identity(item, data, path)} for item in loops]
@@ -215,7 +236,10 @@ def discover(scope, config, now):
                         if isinstance(stored_repo, str) and stored_repo else None)
                     if not ((repo and source_repo == repo) or (not repo and directory == scoped)):
                         continue
+            data, null_loops = null_loops_as_empty(data)
             errors, warnings = handoff.lint_data(data)
+            if null_loops:
+                warnings.append(NULL_LOOPS)
             blocking = []
             for error in errors:
                 if any(re.fullmatch(pattern, error) for pattern in WARN_ONLY_LINT):
@@ -237,7 +261,7 @@ def discover(scope, config, now):
             for transcript in transcripts.get(session, []):
                 activity = max(activity, transcript.stat().st_mtime)
             idle = max(0, now.timestamp() - activity)
-            items = carried_items(data.get('resume', {}).get('open_loops', []), data, path)
+            items = carried_items(data, path)
             occurrences = Counter(identity_key(item['identity']) for item in items)
             for item in items:
                 item['identity_occurrences'] = occurrences[identity_key(item['identity'])]

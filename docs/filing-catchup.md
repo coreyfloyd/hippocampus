@@ -27,15 +27,24 @@ The inspect report lists unique items with immutable `identity`, original item,
 and every source path. `unique_items` counts every carried identity older than
 the cutoff, settled or not.
 
-Catch-up reads open loops exactly as the sweep does, so readiness covers what
-the sweep would find. Every loop is an item, whatever its `type`, including an
-untyped `{"what": ..., "owner": ..., "disposition": ...}` loop. Its identity
-falls back from the item's own session and time to its handoff's `subject` and
-`written_at`, then to the file's name and modification time. An item with an
-empty `context` has empty identity text. A null `resume.open_loops` (old
-handoffs) is read as no carried items; for a handoff older than the cutoff it
-adds one `warnings` entry naming the file. Any other non-array `open_loops` is
-an inventory error.
+Catch-up lists open loops with the sweep's own reader (`sweep.carried_items`):
+every loop is an item, whatever its `type`. Both read a null
+`resume.open_loops` in an existing handoff as no items, with a warning; catch-up
+names the file only when its `written_at` is not after the cutoff. Any other
+non-array `open_loops` is an inventory error. Writers still refuse a null list.
+
+Catch-up then requires an identity it can keep stable and file, and reports an
+inventory error naming the file and `open_loops` index for any loop without one.
+The error blocks readiness; the handoff's other items are still filed.
+
+- A loop with no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`,
+  cannot be filed.
+- A typed item (a session-item `type`) needs its own `session_id` and
+  `produced_at`, because the carry step settles it by its own fields.
+- Any other loop takes a missing session from its handoff's `subject.session_id`
+  and a missing time from its `written_at`. The sweep falls back further, to the
+  file's name and modification time; catch-up never does, so touching or copying
+  a file never changes an identity or the cutoff decision.
 
 Catch-up reads the settled-identity store the carry step reads:
 `settled-identities.jsonl` in `HANDOFF_LEDGER_DIR`, else in the parent directory

@@ -6,7 +6,9 @@ Sweep finds abandoned sessions and writes one sweep report. Invoke
 command. A directory includes every handoff for its repository, across sibling
 worktrees. Outside a repository, only that exact directory matches. `all`
 includes the whole local handoff store, including legacy handoffs without a
-subject (reported under `unknown directory`). Archives are not scanned.
+subject (reported under `unknown directory`). Archives are not scanned. An
+existing handoff whose `resume.open_loops` is null is read as carrying no items,
+with a warning, as the catch-up pass reads it.
 
 A session is abandoned only when its newest handoff or transcript write is
 strictly older than the idle threshold. Both Claude Code transcripts and Codex

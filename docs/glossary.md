@@ -220,9 +220,10 @@ cutoff, before periodic durable filing starts. It preserves source handoffs,
 deduplicates by producing session, time and text, and reports each destination
 with its receipt. An item the settled-identity store already settles, read as the
 carry step reads it, is reported as already settled, never filed or counted as
-unfiled. It reads open loops as the sweep does: every loop, typed or not, is an
-item, identified by its own session and time, else its handoff's, else the file's
-name and modification time. Warnings never block: store lines the carry step skips,
-and a null `open_loops` in a handoff older than the cutoff. Only an unreadable store
-stops its writes. A recount with any unfiled item or inventory error blocks
-cutover. Every node must provide its own successful report for the same cutoff.
+unfiled. Like the sweep, it counts every open loop, typed or not, as an item. An
+item's identity is its own session and time, else its handoff's; a typed item needs
+its own, and a loop with no context or no such identity is an inventory error.
+Warnings never block: store lines the carry step skips, and a null `open_loops`.
+Only an unreadable store stops its writes. A recount with any unfiled item or
+inventory error blocks cutover. Every node must provide its own successful report
+for the same cutoff.
