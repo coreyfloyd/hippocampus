@@ -824,7 +824,7 @@ def test_conflicting_copies_inventory_and_file_as_the_newest_handoffs_copy(tmp_p
     [row] = out['items']
     assert row['status'] == 'filed' and row['item'] == newer
     assert row['superseded_copies'] == [{'source': str(sources / 'claude.json'), 'written_at': WRITTEN,
-        'item': {**item(), 'anchor': {'ticket': 'example/repo#1'}}, 'difference': 'proposal or item content differs'}]
+        'item': {**item(), 'anchor': {'ticket': 'example/repo#1'}}, 'difference': 'differs in anchor, choices'}]
     assert [write['item'] for write in json.loads((tmp_path / 'store.json').read_text())] == [newer]
 
 
@@ -957,7 +957,7 @@ def test_a_drop_passes_the_wraps_checks_for_its_rule(tmp_path):
     ({'ticket': '   '}, 'R5', 'stays unfiled'),
     ({'ticket': {}}, 'R5', 'stays unfiled'),
     ({'ticket': '   '}, 'R2', 'stays unfiled'),
-    ({'ticket': 'example/repo#1'}, 'R5', 'never a new ticket (R5)'),
+    ({'ticket': 'example/repo#1'}, 'R5', 'only as anchored R2 comments on their ticket, never R5'),
 ])
 def test_a_commitment_files_only_as_a_comment_on_its_ticket(tmp_path, anchor, rule, refusal):
     loop = commitment(anchor=anchor)
@@ -986,6 +986,8 @@ def test_a_dropped_item_changed_before_the_recount_is_reported(tmp_path):
     assert rows['dropped']['status'] == 'dropped' and 'content changed' in rows['dropped']['recount_error']
     assert rows['filed']['status'] == 'filed' and 'recount_error' not in rows['filed']
     assert out['unfiled_before_cutoff'] == 1 and not out['ready_for_durable_filing']
+    # The report agrees: the identity is not also listed as settled.
+    assert [row['identity']['text'] for row in out['already_settled']] == []
 
 
 @pytest.mark.parametrize('same_handoff', [True, False])
@@ -1002,3 +1004,60 @@ def test_artifacts_sharing_an_identity_are_never_dropped(tmp_path, same_handoff)
     out = report(tmp_path)
     assert 'artifacts of one session and produced_at have different locations' in str(out['errors'])
     assert out['items'][0]['status'] == 'pending' and settled_store(tmp_path) == []
+
+
+@pytest.mark.parametrize('anchor', [None, {'ticket': 'example/repo#1'}])
+@pytest.mark.parametrize('rule,extra', [
+    ('R3', {'choices': ['approve', 'defer']}),
+    ('R7', {}),
+    ('R2', {'record_kind': 'projects', 'session_summary': 'Worked.'}),
+    ('R5', {}),
+    ('R2', {'scheduled': True}),
+])
+def test_a_commitment_never_files_except_as_an_anchored_ticket_comment(tmp_path, anchor, rule, extra):
+    scheduled = extra.pop('scheduled', False)
+    loop = commitment(**({'anchor': anchor} if anchor else {}), **({'time': '09:00'} if scheduled else {}))
+    setup(tmp_path, [loop])
+    profile = json.loads((tmp_path / 'profile.json').read_text())
+    for kind in ('projects', 'documents', 'scheduled_jobs'):
+        profile['record_writes'][kind] = profile['record_writes']['tickets']
+    (tmp_path / 'profile.json').write_text(json.dumps(profile))
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': rule, 'read_status': 'ok',
+                     'priority': 'P2', 'priority_reason': 'Follow-up work.', **extra})
+    if anchor and rule == 'R2' and not scheduled:
+        # The one allowed filing: an R2 comment through tickets on the anchor.
+        assert run(tmp_path).returncode == 0
+        assert report(tmp_path)['items'][0]['destination'].startswith('tickets:')
+        return
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    expected = 'only as anchored R2 comments' if anchor else 'without a ticket anchor stays unfiled'
+    assert expected in (row.get('reason') or '') + (row.get('error') or '')
+    assert not (tmp_path / 'store.json').exists()
+
+
+@pytest.mark.parametrize('malformed', ['older', 'newest'])
+def test_a_malformed_anchor_is_a_conflict_never_superseded_or_filed(tmp_path, malformed):
+    bad, good = {**item(), 'anchor': 'T-1'}, {**item(), 'anchor': {'ticket': 'example/repo#2'}}
+    setup(tmp_path, [good])
+    older, newest = (bad, good) if malformed == 'older' else (good, bad)
+    copies_in(tmp_path, ('claude.json', WRITTEN, [older]), ('codex.json', NEWER, [newest]))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert 'anchor that is not an object' in str(out['errors'])
+    assert 'superseded_copies' not in out['items'][0] and not (tmp_path / 'store.json').exists()
+
+
+def test_each_older_copy_is_compared_with_the_newest_copy_alone(tmp_path):
+    newest = item()
+    first, second = ({**item(), 'anchor': {'ticket': 'example/repo#' + n}} for n in ('1', '2'))
+    setup(tmp_path, [newest])
+    copies_in(tmp_path, ('claude.json', WRITTEN, [first, second]), ('codex.json', NEWER, [newest]))
+    recording_store(tmp_path)
+    assert run(tmp_path).returncode == 0
+    [row] = report(tmp_path)['items']
+    # The newest copy's anchor (none) is filed; both older anchors are listed, neither merged in.
+    assert row['item'] == newest
+    assert [(copy['item'], copy['difference']) for copy in row['superseded_copies']] == [
+        (first, 'differs in anchor'), (second, 'differs in anchor')]
+    assert [write['item'] for write in json.loads((tmp_path / 'store.json').read_text())] == [newest]

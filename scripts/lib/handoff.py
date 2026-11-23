@@ -1120,11 +1120,13 @@ _UNKNOWN: Any = object()
 def may_carry(item: Any, store: set[tuple[str, ...]], identity: Any = _UNKNOWN) -> bool:
     """Whether a carry path may restore the item: no settlement receipt and not terminal.
 
-    Items without a carry identity keep their own rules. A caller that already computed
-    the item's session-item identity passes it.
+    An artifact keeps its own ledger status, so only a receipt stops it. Items without a
+    carry identity keep their own rules. A caller that already computed the item's
+    session-item identity passes it.
     """
-    if identity is _UNKNOWN or (identity is None and isinstance(item, Mapping) and item.get("type") == "artifact"):
-        identity = carry_identity(item)
+    if isinstance(item, Mapping) and item.get("type") == "artifact":
+        return carry_identity(item) not in store
+    identity = session_item_identity(item) if identity is _UNKNOWN else identity
     return identity is None or (identity not in store and terminal_disposition(item) is None)
 
 

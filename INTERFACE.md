@@ -68,7 +68,7 @@ older ones are listed under `superseded_copies`; a difference in type or other f
 or an unordered conflict, stays an inventory error. A `progress`, `open_loop` or `artifact`
 item may be dropped with a reason, which writes a `dropped` settlement receipt that the store
 must then hold; any other type is filed, never dropped. A commitment files only as a comment
-on its ticket anchor; without one it stays pending with its reason.
+on its ticket anchor, under no other rule or binding; without one it stays pending with its reason.
 
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or

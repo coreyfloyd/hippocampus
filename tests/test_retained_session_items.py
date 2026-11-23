@@ -307,6 +307,15 @@ def test_an_unsettled_copy_in_the_same_write_keeps_the_item_open(tmp_path, tool)
 
 
 @pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('terminal', [{'status': 'recorded'}, {'status': 'done'}])
+def test_an_artifact_is_stopped_only_by_a_receipt_never_by_its_own_status(tmp_path, tool, terminal):
+    artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
+                'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z', **terminal}
+    written = checkpoint(tmp_path, 'A', tool, resume={'open_loops': [artifact]})
+    assert artifact in written['resume']['open_loops']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
 def test_an_artifact_gets_no_receipt(tmp_path, tool):
     artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
                 'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z'}

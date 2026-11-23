@@ -80,7 +80,8 @@ def store_warnings(read, settled):
 def settled_row(row, receipts):
     """One entry per carry identity among the copies, when every one has a receipt, else none.
 
-    Superseded copies count too: each copy's own carry identity needs its own receipt.
+    One receipt per carry identity settles all of that identity's copies, superseded ones
+    included; copies of different types (an inventory conflict) need one receipt per type.
     """
     keys = sorted({tuple(copy['item'].get(field) for field in handoff.SESSION_ITEM_IDENTITY)
                    for copy in row['copies']}, key=repr)
@@ -121,6 +122,12 @@ def merge_copies(first, second):
 SUPERSEDABLE = ('status', 'recorded', 'anchor', 'choices', 'ask_text')
 
 
+def differing_fields(newer, older):
+    """The fields two copies disagree on, settlement hints aside; a missing field differs from any value."""
+    return sorted(key for key in set(newer) | set(older)
+                  if key not in ('status', 'recorded') and newer.get(key, older) != older.get(key, newer))
+
+
 def filing_difference(newer, older):
     """Why ``older`` cannot be superseded by ``newer``, else None."""
     if newer.get('type') == older.get('type') == 'artifact' and newer.get('location') != older.get('location'):
@@ -128,22 +135,26 @@ def filing_difference(newer, older):
                 'drop or settle either by their shared identity')
     if newer.get('type') != older.get('type'):
         return 'copies differ in type (' + str(older.get('type')) + ', then ' + str(newer.get('type')) + ')'
-    fields = sorted(key for key in set(newer) | set(older)
-                    if key not in SUPERSEDABLE and newer.get(key, older) != older.get(key, newer))
+    fields = [key for key in differing_fields(newer, older) if key not in SUPERSEDABLE]
     return 'copies differ in filing content: ' + ', '.join(fields) if fields else None
 
 
 def resolve_copies(row):
     """Merge an identity's copies; where they conflict, the copy from the newest handoff wins.
 
-    Copies are ordered by their handoff's ``written_at`` (content, never file metadata). An
-    older copy that does not merge into the newest one is kept under ``superseded_copies``
-    with its source and the difference, but only when it agrees with the newest copy on type
-    and on every field that decides filing (``filing_difference``); it may differ only in its
-    anchor and proposal text. Any other difference stays a conflict, as does a conflict that
-    cannot be ordered (a handoff without a valid ``written_at``, or conflicting copies written
-    at the same time). So a filed type is never superseded by a droppable one.
+    Copies are ordered by their handoff's ``written_at`` (content, never file metadata). Each
+    older copy is compared with the newest copy alone: one that differs from it is kept under
+    ``superseded_copies`` with its source and the differing fields, but only when it agrees
+    with the newest copy on type and on every field that decides filing (``filing_difference``);
+    it may differ only in its anchor and proposal text. The newest copy's anchor is the one
+    filed: an older anchor never merges into it. Any other difference stays a conflict, as does
+    a conflict that cannot be ordered (a handoff without a valid ``written_at``, or conflicting
+    copies written at the same time), and any copy whose anchor is not an object. So a filed
+    type is never superseded by a droppable one, and a malformed anchor is never filed.
     """
+    if any('anchor' in copy['item'] and not isinstance(copy['item']['anchor'], dict) for copy in row['copies']):
+        row['conflicts'] = ['a copy has an anchor that is not an object; it is never filed or superseded']
+        return
     item = row['copies'][0]['item']
     try:
         for copy in row['copies'][1:]:
@@ -167,15 +178,15 @@ def resolve_copies(row):
             return
     superseded = []
     for copy in ordered[len(newest):]:
-        try:
-            item = merge_copies(item, copy['item'])
-        except ValueError as error:
-            problem = filing_difference(item, copy['item'])
-            if problem:
-                row['conflicts'] = [problem]
-                return
-            superseded.append(dict(source=copy['source'], written_at=copy['written_at_text'],
-                                   item=copy['item'], difference=str(error)))
+        fields = differing_fields(item, copy['item'])
+        if not fields:
+            continue
+        problem = filing_difference(item, copy['item'])
+        if problem:
+            row['conflicts'] = [problem]
+            return
+        superseded.append(dict(source=copy['source'], written_at=copy['written_at_text'],
+                               item=copy['item'], difference='differs in ' + ', '.join(fields)))
     row.update(item=item, superseded_copies=superseded)
 
 
@@ -333,8 +344,12 @@ def ticket_anchor(item):
     return ticket if isinstance(ticket, str) and ticket.strip() else None
 
 
-def file_item(source, decision, plan, ask):
-    """Use wrap's filing safeguards, but never read or settle a session ledger."""
+def file_item(source, decision, plan, ask, anchored_commitments=False):
+    """Use wrap's filing safeguards, but never read or settle a session ledger.
+
+    ``anchored_commitments`` is catch-up's rule: a commitment files only as an R2 comment
+    through ``tickets`` on its ticket anchor. Durable checkpoint asks keep the wrap's routes.
+    """
     item = source['item']
     row = {**decision, 'index': 0}
     # A run judgment without status requests catch-up filing. Explicit deferred
@@ -349,11 +364,12 @@ def file_item(source, decision, plan, ask):
     single = {'subject': source['subject'], 'resume': {'open_loops': [item]}}
     checked = checklist.file_items(plan, single, [validation], ask, execute_writes=False)['filing']['items'][0]
     kind = checked.get('binding')
-    if item.get('type') == 'commitment' and kind == 'tickets':
+    if anchored_commitments and item.get('type') == 'commitment' and not (
+            kind == 'tickets' and checked.get('rule') == 'R2' and ticket_anchor(item)):
         if not ticket_anchor(item):
             return {**checked, 'status': 'pending', 'reason': UNANCHORED_COMMITMENT}
-        if checked.get('rule') == 'R5':
-            raise ValueError('an anchored commitment files as an R2 comment on its ticket, never a new ticket (R5)')
+        raise ValueError('commitments file only as anchored R2 comments on their ticket, never '
+                         + str(checked.get('rule')) + ' to ' + str(kind))
     if status != 'filed' and not (requested and kind == 'ask'):
         return {**checked, 'status': status}
     approval_pending = kind == 'ask' and checked.get('ask_status') == 'filed'
@@ -465,7 +481,7 @@ def run(args):
                     judgment = by_identity[key]
                     result = (drop_item(source, judgment, plan, ask, store, args.node)
                               if judgment.get('rule') in ('R1', 'R6')
-                              else file_item(source, judgment, plan, ask))
+                              else file_item(source, judgment, plan, ask, anchored_commitments=True))
                     outcome.pop('error', None)
                     outcome.update(result)
             except (ValueError, OSError, TypeError, KeyError) as error:
@@ -505,7 +521,10 @@ def run(args):
                 confirmed.add(key)
             else:
                 if row['status'] == 'dropped':
-                    confirmed.discard(key)  # The drop never saw the current copies.
+                    # The drop never saw the current copies, so its receipt does not settle them.
+                    confirmed.discard(key)
+                    report['already_settled'] = [entry for entry in report['already_settled']
+                                                 if sweep.identity_key(entry['identity']) != key]
                 row['recount_error'] = 'eligible content changed; receipt does not settle current copies'
     for key in set(current) - set(items):
         report['items'].append(dict(current[key], status='pending',
