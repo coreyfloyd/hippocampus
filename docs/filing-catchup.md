@@ -91,11 +91,12 @@ receipt still governs completion. Native ask delivery is not a capture receipt.
 ```
 
 Supply the shared filing rules' judgment and read evidence; a missing judgment
-remains unfiled. New tickets require `priority` and `priority_reason`. Catch-up
-never creates a ticket (`R5`) for a commitment without `anchor.ticket`: that
-commitment stays pending, with a `reason` saying so, until the maintainer sets a
-rule, and nothing is written. An anchored commitment files as a ticket comment
-(`R2`). Project
+remains unfiled. New tickets require `priority` and `priority_reason`. A
+commitment files only as a ticket comment (`R2`) on its `anchor.ticket`, which
+must be a non-empty string. Without one, catch-up never files it to tickets under
+any rule: it stays pending, with a `reason` saying so, until the maintainer sets a
+rule. An anchored commitment judged `R5` fails, because it is never a new ticket.
+Neither writes anything. Project
 writes require `session_summary`, and accept `close_outcomes` and
 `touched_projects`. Decision documents require the existing explicit user
 approval, author/source and configured folder safeguards. Agent operational
@@ -112,33 +113,45 @@ never writes; an uncertain write retries by lookup, including after interruption
 No supplied receipt alone bypasses the writer.
 
 A drop judgment uses the wrap's drop rules, `R1` or `R6`, with no status or
-`status: "dropped"`, and a non-empty `reason`. Only `progress`, `open_loop` and
+`status: "dropped"`, and a non-empty `reason`; it passes the same checks as at a
+wrap, so an `R1` drop needs `read_status: "ok"` unless it is `information_only`. Only `progress`, `open_loop` and
 `artifact` items may be dropped. Knowledge, lessons, decisions, commitments and
 untyped loops are filed, never dropped: their drop judgment fails with an error
 saying so and writes nothing, and a drop without a reason fails the same way. A
 drop writes one settlement receipt (`disposition: "dropped"`, the reason,
 `destination: null`, `settled_by: "filing-catchup:<node>"`) through the carry
 step's writer into the settled-identity store catch-up reads, so no later
-checkpoint or pickup restores the item, an artifact included. The run report
+checkpoint or pickup restores the item, an artifact included. The drop counts
+only when the store then settles the identity as this drop; if another receipt
+settled it first, the row fails with an error naming that receipt's disposition.
+The run report
 keeps the dropped row with `status: "dropped"`, its `reason`, the `receipt`, the
 item and every source, so the item can be recovered; a later report lists the
 identity under `already_settled`. A recorded drop counts as settled for readiness.
+The recount compares a dropped row with the current copies, read without
+receipts, as it does a filed row: changed content gives a `recount_error` and
+leaves the identity unfiled.
 
 Copies of one producing identity may differ in `status` and `recorded` hints,
 which never prove settlement. Nonconflicting `anchor` fields are combined so a
 later ticket or project reference reaches the writer. All original copies and
-source paths remain in the report. When copies differ in other content
-(proposal text, choices, author, type, record kind, or a missing versus present
-field) or name different anchor destinations, the copy from the newest handoff
-wins: copies are ordered by each handoff's own `written_at`, never by a file's
-name or time. That copy is inventoried and filed, older copies that agree with
-it still enrich its anchor, and every older copy that conflicts is listed under
-the row's `superseded_copies` with its `source`, `written_at`, `item` and the
-`difference`. A superseded copy needs no receipt of its own for the identity to
-count as settled. When the conflict cannot be ordered, because a handoff has no
-valid `written_at` or the conflicting copies share the newest `written_at`, it
-stays an inventory error and blocks that identity before any write; retry keeps
-the same refusal and never selects the first proposal.
+source paths remain in the report. When copies differ only in their anchor
+destinations or proposal text (`choices`, `ask_text`), the copy from the newest
+handoff wins: copies are ordered by each handoff's own `written_at`, never by a
+file's name or time. That copy is inventoried and filed, older copies that agree
+with it still enrich its anchor, and every older copy that conflicts is listed
+under the row's `superseded_copies` with its `source`, `written_at`, `item` and
+the `difference`. Each copy, superseded or not, still needs its own receipt for
+the identity to count as settled. Copies that differ in `type` or any other
+field that decides filing (author, record kind, decision record, location, or a
+missing versus present field) stay an inventory error, so a filed type is never
+superseded by a droppable one. Two artifacts of one session and `produced_at`
+with different locations share an identity, so catch-up neither drops nor
+settles either and reports an error saying so. A conflict also stays an error
+when it cannot be ordered, because a handoff has no valid `written_at` or the
+conflicting copies share the newest `written_at`. An error blocks that identity
+before any write; retry keeps the same refusal and never selects the first
+proposal.
 
 Exit 0 requires `ready_for_durable_filing: true`: every older identity has a
 confirmed destination for its eligible content or a recorded drop, and there are

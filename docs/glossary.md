@@ -227,8 +227,10 @@ Warnings never block: store lines the carry step skips, and a null `open_loops`.
 Only an unreadable store stops its writes. Knowledge, lessons, decisions and
 commitments are filed, never dropped; a progress, open loop or artifact item may
 be dropped with a reason, which writes a settlement receipt and keeps the item in
-the report. Where copies of one identity conflict, the copy from the handoff
-written last wins and the older ones are kept in the report as superseded copies.
-A commitment without a ticket anchor is never made a new ticket; it stays unfiled. A recount with any unfiled item or
+the report. Where copies of one identity differ only in anchor or proposal text,
+the copy from the handoff written last wins and the older ones are kept in the
+report as superseded copies; copies that differ in type or other filing content
+stay an error. A commitment files only as a comment on its ticket anchor; without
+one it stays unfiled. A recount with any unfiled item or
 inventory error blocks cutover. Every node must provide its own successful report
 for the same cutoff.

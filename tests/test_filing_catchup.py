@@ -798,7 +798,7 @@ def recording_store(tmp_path):
 
 def conflicting(tmp_path, newer_written_at, older_written_at=WRITTEN):
     older = item()
-    newer = {**item(), 'anchor': {'ticket': 'example/repo#2'}, 'detail': 'the newer text'}
+    newer = {**item(), 'anchor': {'ticket': 'example/repo#2'}, 'choices': ['approve the newer text', 'defer']}
     sources = setup(tmp_path, [{**older, 'anchor': {'ticket': 'example/repo#1'}}])
     for name, loop, written in (('claude.json', {**older, 'anchor': {'ticket': 'example/repo#1'}}, older_written_at),
                                 ('codex.json', newer, newer_written_at)):
@@ -860,7 +860,7 @@ def test_an_unanchored_commitment_is_never_made_a_new_ticket(tmp_path):
     assert run(tmp_path).returncode == 1
     out = report(tmp_path)
     [row] = out['items']
-    assert row['status'] == 'pending' and 'never creates a ticket (R5)' in row['reason']
+    assert row['status'] == 'pending' and 'never creates a ticket' in row['reason']
     assert out['unfiled_before_cutoff'] == 1 and not (tmp_path / 'store.json').exists()
 
 
@@ -870,3 +870,135 @@ def test_an_anchored_commitment_files_as_a_ticket_comment(tmp_path):
     assert run(tmp_path).returncode == 0
     [row] = report(tmp_path)['items']
     assert row['status'] == 'filed' and row['destination'].startswith('tickets:')
+
+
+def copies_in(tmp_path, *handoffs):
+    """Rewrite the ``setup`` handoffs: each is (name, written_at, loops)."""
+    for name, written, loops in handoffs:
+        path = tmp_path / 'sources' / name
+        data = json.loads(path.read_text())
+        data.update(written_at=written)
+        data['resume']['open_loops'] = loops
+        path.write_text(json.dumps(data))
+
+
+NEWER = '2026-11-18T13:00:00Z'
+
+
+@pytest.mark.parametrize('settled', [(), ('progress',), ('progress', 'commitment')])
+def test_a_newer_copy_of_another_type_never_supersedes_a_filed_type(tmp_path, settled):
+    older, newer = {**item(), 'type': 'commitment'}, item()
+    setup(tmp_path, [older])
+    copies_in(tmp_path, ('claude.json', WRITTEN, [older]), ('codex.json', NEWER, [newer]))
+    judge(tmp_path, {'identity': carrier_identity(newer), 'rule': 'R6', 'reason': REASON})
+    store_path(tmp_path).write_text(''.join(json.dumps(receipt({**newer, 'type': kind})) + '\n' for kind in settled))
+    assert run(tmp_path).returncode == (0 if len(settled) == 2 else 1)
+    out = report(tmp_path)
+    if len(settled) == 2:
+        # Each copy's own receipt settles it; nothing was superseded or dropped.
+        assert out['errors'] == [] and sorted(row['type'] for row in out['already_settled']) == list(sorted(settled))
+    else:
+        assert 'copies differ in type (commitment, then progress)' in str(out['errors'])
+        assert out['items'][0]['status'] == 'pending' and 'superseded_copies' not in out['items'][0]
+        assert len(settled_store(tmp_path)) == len(settled)
+
+
+def test_supersession_is_by_copy_and_every_copy_still_needs_its_receipt(tmp_path):
+    old = {**item(), 'choices': ['approve the old text', 'defer']}
+    new = {**item(), 'choices': ['approve the new text', 'defer']}
+    setup(tmp_path, [old])
+    # The older handoff lists the identity twice: once as the newer copy says, once superseded.
+    copies_in(tmp_path, ('claude.json', WRITTEN, [new, old]), ('codex.json', NEWER, [new]))
+    assert run(tmp_path, 'inspect').returncode == 1
+    [row] = report(tmp_path)['items']
+    assert report(tmp_path)['errors'] == [] and row['item'] == new
+    assert [(copy['source'], copy['item']) for copy in row['superseded_copies']] == [
+        (str(tmp_path / 'sources/claude.json'), old)]
+    store_path(tmp_path).write_text(json.dumps(receipt(new)) + '\n')
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert out['items'] == [] and [row['type'] for row in out['already_settled']] == ['progress']
+
+
+def drop_directly(tmp_path, monkeypatch, decision):
+    import checklist
+    import filing_catchup
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path / 'ledger'))
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
+    profile = checklist.load_profile(tmp_path / 'profile.json')
+    source = {'item': item(disposition='carry'), 'subject': {'session_id': 'carrier'}}
+    return filing_catchup.drop_item(source, decision, checklist.compose([profile]), checklist.ask_binding(profile),
+                                    tmp_path / 'sources', 'fixture-node')
+
+
+def test_a_drop_counts_only_when_the_store_settles_it_as_that_drop(tmp_path, monkeypatch):
+    decision = {'rule': 'R6', 'reason': REASON}
+    # Another writer settled the identity first, after catch-up's re-read.
+    store_path(tmp_path).write_text(json.dumps(receipt(item(disposition='carry'))) + '\n')
+    with pytest.raises(ValueError, match='another receipt .disposition filed. settled this identity first'):
+        drop_directly(tmp_path, monkeypatch, decision)
+    assert len(settled_store(tmp_path)) == 1
+    # A retry of the same drop finds its own receipt.
+    store_path(tmp_path).unlink()
+    first = drop_directly(tmp_path, monkeypatch, decision)
+    assert drop_directly(tmp_path, monkeypatch, decision)['receipt'] == first['receipt']
+    assert len(settled_store(tmp_path)) == 1
+
+
+def test_a_drop_passes_the_wraps_checks_for_its_rule(tmp_path):
+    setup(tmp_path, [item()])
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R1', 'reason': REASON})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert row['status'] == 'read failed' and settled_store(tmp_path) == []
+
+
+@pytest.mark.parametrize('anchor,rule,refusal', [
+    ({'ticket': '   '}, 'R5', 'stays unfiled'),
+    ({'ticket': {}}, 'R5', 'stays unfiled'),
+    ({'ticket': '   '}, 'R2', 'stays unfiled'),
+    ({'ticket': 'example/repo#1'}, 'R5', 'never a new ticket (R5)'),
+])
+def test_a_commitment_files_only_as_a_comment_on_its_ticket(tmp_path, anchor, rule, refusal):
+    loop = commitment(anchor=anchor)
+    setup(tmp_path, [loop])
+    judge(tmp_path, {'identity': carrier_identity(loop), 'rule': rule, 'read_status': 'ok',
+                     'priority': 'P2', 'priority_reason': 'Follow-up work.'})
+    assert run(tmp_path).returncode == 1
+    [row] = report(tmp_path)['items']
+    assert refusal in (row.get('reason') or '') + (row.get('error') or '')
+    assert row['status'] in ('pending', 'failed') and not (tmp_path / 'store.json').exists()
+
+
+def test_a_dropped_item_changed_before_the_recount_is_reported(tmp_path):
+    dropped, filed = item('dropped', disposition='carry'), item('filed')
+    sources = setup(tmp_path, [dropped, filed])
+    judge(tmp_path, {'identity': carrier_identity(dropped), 'rule': 'R6', 'reason': REASON},
+          {'identity': carrier_identity(filed), 'rule': 'R2', 'read_status': 'ok'})
+    # The second item's writer stands in for a concurrent checkpoint rewriting the first item.
+    script = tmp_path / 'store.py'
+    change = ''.join(f"d = json.loads(Path({str(p)!r}).read_text()); d['resume']['open_loops'][0]['detail'] = 'new'; "
+                     f"Path({str(p)!r}).write_text(json.dumps(d)); " for p in sorted(sources.iterdir()))
+    script.write_text(script.read_text().replace('data.append(receipt);', change + 'data.append(receipt);'))
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    rows = {row['identity']['text']: row for row in out['items']}
+    assert rows['dropped']['status'] == 'dropped' and 'content changed' in rows['dropped']['recount_error']
+    assert rows['filed']['status'] == 'filed' and 'recount_error' not in rows['filed']
+    assert out['unfiled_before_cutoff'] == 1 and not out['ready_for_durable_filing']
+
+
+@pytest.mark.parametrize('same_handoff', [True, False])
+def test_artifacts_sharing_an_identity_are_never_dropped(tmp_path, same_handoff):
+    first = {**item('Published artifact'), 'type': 'artifact', 'disposition': 'remove', 'location': 'https://example.com/a'}
+    second = {**first, 'location': 'https://example.com/b'}
+    setup(tmp_path, [first])
+    if same_handoff:
+        copies_in(tmp_path, ('claude.json', WRITTEN, [first, second]), ('codex.json', WRITTEN, [first]))
+    else:
+        copies_in(tmp_path, ('claude.json', WRITTEN, [first]), ('codex.json', NEWER, [second]))
+    judge(tmp_path, {'identity': carrier_identity(first), 'rule': 'R6', 'reason': REASON})
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert 'artifacts of one session and produced_at have different locations' in str(out['errors'])
+    assert out['items'][0]['status'] == 'pending' and settled_store(tmp_path) == []

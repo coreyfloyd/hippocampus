@@ -78,13 +78,12 @@ def store_warnings(read, settled):
 
 
 def settled_row(row, receipts):
-    """One entry per carry identity among the current copies, when every one has a receipt, else none.
+    """One entry per carry identity among the copies, when every one has a receipt, else none.
 
-    A superseded copy (``resolve_copies``) is not current: the newer copy replaced it.
+    Superseded copies count too: each copy's own carry identity needs its own receipt.
     """
-    superseded = [copy['source'] for copy in row.get('superseded_copies', [])]
     keys = sorted({tuple(copy['item'].get(field) for field in handoff.SESSION_ITEM_IDENTITY)
-                   for copy in row['copies'] if copy['source'] not in superseded}, key=repr)
+                   for copy in row['copies']}, key=repr)
     if not all(key in receipts for key in keys):
         return []
     return [dict(identity=row['identity'], type=key[2], disposition=receipts[key].get('disposition'),
@@ -117,13 +116,33 @@ def merge_copies(first, second):
     return left
 
 
+# The fields a newer copy may change: its anchor and its proposal text. Every other field,
+# the type included, decides how the item is filed, so copies differing there conflict.
+SUPERSEDABLE = ('status', 'recorded', 'anchor', 'choices', 'ask_text')
+
+
+def filing_difference(newer, older):
+    """Why ``older`` cannot be superseded by ``newer``, else None."""
+    if newer.get('type') == older.get('type') == 'artifact' and newer.get('location') != older.get('location'):
+        return ('artifacts of one session and produced_at have different locations; catch-up cannot '
+                'drop or settle either by their shared identity')
+    if newer.get('type') != older.get('type'):
+        return 'copies differ in type (' + str(older.get('type')) + ', then ' + str(newer.get('type')) + ')'
+    fields = sorted(key for key in set(newer) | set(older)
+                    if key not in SUPERSEDABLE and newer.get(key, older) != older.get(key, newer))
+    return 'copies differ in filing content: ' + ', '.join(fields) if fields else None
+
+
 def resolve_copies(row):
     """Merge an identity's copies; where they conflict, the copy from the newest handoff wins.
 
-    Copies are ordered by their handoff's ``written_at`` (content, never file metadata). Every
-    older copy that does not merge into the newest one is kept under ``superseded_copies`` with
-    its source and the difference. When the conflict cannot be ordered (a handoff without a
-    valid ``written_at``, or conflicting copies written at the same time) it stays a conflict.
+    Copies are ordered by their handoff's ``written_at`` (content, never file metadata). An
+    older copy that does not merge into the newest one is kept under ``superseded_copies``
+    with its source and the difference, but only when it agrees with the newest copy on type
+    and on every field that decides filing (``filing_difference``); it may differ only in its
+    anchor and proposal text. Any other difference stays a conflict, as does a conflict that
+    cannot be ordered (a handoff without a valid ``written_at``, or conflicting copies written
+    at the same time). So a filed type is never superseded by a droppable one.
     """
     item = row['copies'][0]['item']
     try:
@@ -139,17 +158,22 @@ def resolve_copies(row):
     ordered = sorted(row['copies'], key=lambda copy: (-copy['written_at'], copy['source']))
     newest = [copy for copy in ordered if copy['written_at'] == ordered[0]['written_at']]
     item = newest[0]['item']
-    try:
-        for copy in newest[1:]:
+    for copy in newest[1:]:
+        try:
             item = merge_copies(item, copy['item'])
-    except ValueError as error:
-        row['conflicts'] = ['copies written at the same time differ: ' + str(error)]
-        return
+        except ValueError as error:
+            row['conflicts'] = ['copies written at the same time differ: '
+                                + (filing_difference(item, copy['item']) or str(error))]
+            return
     superseded = []
     for copy in ordered[len(newest):]:
         try:
             item = merge_copies(item, copy['item'])
         except ValueError as error:
+            problem = filing_difference(item, copy['item'])
+            if problem:
+                row['conflicts'] = [problem]
+                return
             superseded.append(dict(source=copy['source'], written_at=copy['written_at_text'],
                                    item=copy['item'], difference=str(error)))
     row.update(item=item, superseded_copies=superseded)
@@ -262,14 +286,16 @@ def save(path, report):
 
 DROPPABLE = ('progress', 'open_loop', 'artifact')
 UNANCHORED_COMMITMENT = ('a commitment without a ticket anchor stays unfiled: catch-up never creates '
-                         'a ticket (R5) for it until the maintainer sets a rule')
+                         'a ticket for it until the maintainer sets a rule')
 
 
-def drop_item(source, decision, store, node):
+def drop_item(source, decision, plan, ask, store, node):
     """Settle a droppable item with a ``dropped`` receipt, so the carry step stops carrying it.
 
     Knowledge, lessons, decisions and commitments are filed, never dropped; every drop needs
-    a reason. The receipt goes through the carry step's own writer into the store catch-up reads.
+    a reason and passes the wrap's checks for its rule. The receipt goes through the carry
+    step's own writer into the store catch-up reads, and the drop counts only when the store
+    then settles the identity with this drop.
     """
     item = source['item']
     if decision.get('status', 'filed') not in ('filed', 'dropped'):
@@ -280,12 +306,31 @@ def drop_item(source, decision, store, node):
     reason = decision.get('reason')
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError('a drop requires a non-empty reason')
+    single = {'subject': source['subject'], 'resume': {'open_loops': [item]}}
+    checked = checklist.file_items(plan, single, [{**decision, 'status': 'dropped', 'index': 0}], ask,
+                                   execute_writes=False)['filing']['items'][0]
+    if checked['status'] != 'dropped':
+        return {**checked, 'status': checked['status']}
     receipt = handoff.settlement_receipt(item, 'filing-catchup:' + node, 'dropped', reason)
     if not receipt:
         raise ValueError('item has no carry identity to settle')
-    handoff.write_settlement_receipts([receipt], handoff.settled_store_path(str(store)))
+    path = handoff.settled_store_path(str(store))
+    if not handoff.write_settlement_receipts([receipt], path)['written']:
+        key = handoff.receipt_key(receipt['identity'])
+        found = settlement_receipts(store)['receipts'].get(key, {})
+        if (found.get('disposition'), found.get('reason')) != ('dropped', receipt['reason']):
+            raise ValueError('another receipt (disposition ' + str(found.get('disposition'))
+                             + ') settled this identity first; the drop was not recorded')
+        receipt = found
     return dict(status='dropped', rule=decision['rule'], reason=receipt['reason'], destination=None,
                 receipt=receipt)
+
+
+def ticket_anchor(item):
+    """The item's ticket anchor when it is a non-empty string, else None."""
+    anchor = item.get('anchor')
+    ticket = anchor.get('ticket') if isinstance(anchor, dict) else None
+    return ticket if isinstance(ticket, str) and ticket.strip() else None
 
 
 def file_item(source, decision, plan, ask):
@@ -304,10 +349,11 @@ def file_item(source, decision, plan, ask):
     single = {'subject': source['subject'], 'resume': {'open_loops': [item]}}
     checked = checklist.file_items(plan, single, [validation], ask, execute_writes=False)['filing']['items'][0]
     kind = checked.get('binding')
-    anchor = item.get('anchor')
-    if (item.get('type') == 'commitment' and checked.get('rule') == 'R5' and kind == 'tickets'
-            and not (isinstance(anchor, dict) and anchor.get('ticket'))):
-        return {**checked, 'status': 'pending', 'reason': UNANCHORED_COMMITMENT}
+    if item.get('type') == 'commitment' and kind == 'tickets':
+        if not ticket_anchor(item):
+            return {**checked, 'status': 'pending', 'reason': UNANCHORED_COMMITMENT}
+        if checked.get('rule') == 'R5':
+            raise ValueError('an anchored commitment files as an R2 comment on its ticket, never a new ticket (R5)')
     if status != 'filed' and not (requested and kind == 'ask'):
         return {**checked, 'status': status}
     approval_pending = kind == 'ask' and checked.get('ask_status') == 'filed'
@@ -417,7 +463,8 @@ def run(args):
                     save(report_path, report)
                     attempted.add(key)
                     judgment = by_identity[key]
-                    result = (drop_item(source, judgment, store, args.node) if judgment.get('rule') in ('R1', 'R6')
+                    result = (drop_item(source, judgment, plan, ask, store, args.node)
+                              if judgment.get('rule') in ('R1', 'R6')
                               else file_item(source, judgment, plan, ask))
                     outcome.pop('error', None)
                     outcome.update(result)
@@ -438,6 +485,9 @@ def run(args):
     # A receipt the carry step wrote during the run settles the identity for both.
     confirmed = {sweep.identity_key(row['identity']) for row in settled}
     add_settled(report, settled)
+    # A drop's receipt settles its identity, so compare dropped rows with the copies as read without receipts.
+    unsettled = (inventory(store, args.cutoff, {})[0]
+                 if any(row['status'] == 'dropped' for row in report['items']) else {})
     for row in report['items']:
         key = sweep.identity_key(row['identity'])
         actual = current.get(key)
@@ -448,10 +498,14 @@ def run(args):
             else:
                 row.pop('error', None)
                 row['status'] = 'already_settled'
-        elif row['status'] == 'filed':
+        elif row['status'] == 'filed' or (row['status'] == 'dropped' and key in confirmed):
+            if row['status'] == 'dropped':
+                actual = unsettled.get(key)
             if actual is None or (not actual.get('conflicts') and actual['item'] == items[key]['item']):
                 confirmed.add(key)
             else:
+                if row['status'] == 'dropped':
+                    confirmed.discard(key)  # The drop never saw the current copies.
                 row['recount_error'] = 'eligible content changed; receipt does not settle current copies'
     for key in set(current) - set(items):
         report['items'].append(dict(current[key], status='pending',

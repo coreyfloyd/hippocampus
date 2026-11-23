@@ -62,12 +62,13 @@ Catch-up lists open loops with the sweep's reader (`sweep.carried_items`), so ev
 typed or not, is an item, and both read a null `resume.open_loops` as no items with a
 warning. Catch-up reports an inventory error for a loop with no `context`, a typed item
 without its own `session_id` and `produced_at`, and any loop whose session or time would
-come from the file's name or modification time. Where copies of one identity conflict, the
-copy from the handoff with the newest `written_at` is filed and older ones are listed under
-`superseded_copies`; an unordered conflict stays an inventory error. A `progress`,
-`open_loop` or `artifact` item may be dropped with a reason, which writes a `dropped`
-settlement receipt; any other type is filed, never dropped. A commitment without a ticket
-anchor is never made a new ticket and stays pending with its reason.
+come from the file's name or modification time. Where copies of one identity differ only in
+anchor or proposal text, the copy from the handoff with the newest `written_at` is filed and
+older ones are listed under `superseded_copies`; a difference in type or other filing content,
+or an unordered conflict, stays an inventory error. A `progress`, `open_loop` or `artifact`
+item may be dropped with a reason, which writes a `dropped` settlement receipt that the store
+must then hold; any other type is filed, never dropped. A commitment files only as a comment
+on its ticket anchor; without one it stays pending with its reason.
 
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or
