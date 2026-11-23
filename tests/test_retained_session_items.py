@@ -109,9 +109,9 @@ def test_the_stop_skeleton_keeps_the_lesson_and_adds_no_history(tmp_path, tool):
     assert skeleton['resume']['session_history'] == first['resume']['session_history']
 
 
-def wrap_filing(tmp_path, session, tool, outcome):
+def wrap_filing(tmp_path, session, tool, *outcomes):
     filing = tmp_path / 'filing.json'
-    filing.write_text(json.dumps([outcome]))
+    filing.write_text(json.dumps(list(outcomes)))
     result = command(tmp_path, session, 'scripts/lib/checklist.py', 'file',
                      '--handoff', tmp_path / f'{session}.json', '--filing', filing, tool=tool)
     assert result.returncode == 0, result.stderr
@@ -196,3 +196,352 @@ def test_the_successors_wrap_plan_gives_the_lessons_step_every_unsettled_lesson(
     assert lessons(plan['handoff']) == [lesson(), own]
     step = next(step for step in plan['steps'] if step['id'] == 'lessons')
     assert [entry['item'] for entry in step.get('carried_items', [])] == [lesson(), own]
+
+
+# The settled-identity store: a settled item is never carried again by any session on the machine.
+
+TERMINAL = ['captured', 'dropped', 'filed', 'applied', 'recorded', 'done']
+
+
+def pickup(tmp_path, successor, source, tool):
+    result = command(tmp_path, successor, 'skills/pickup/scripts/pickup.py', '--handoff',
+                     tmp_path / f'{source}.json', tool=tool)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert 'error' not in json.loads(result.stdout)
+
+
+def receipt(item, disposition='dropped', reason='Already written in its destination.', **changes):
+    return {'identity': {'session_id': item['session_id'], 'produced_at': item['produced_at'],
+                         'type': item['type'], 'text': item['context']},
+            'disposition': disposition, 'reason': reason, 'destination': None,
+            'settled_at': '2026-11-22T12:00:00+00:00', 'settled_by': 'catch-up', **changes}
+
+
+def settle_identity(tmp_path, rows, tool, name='receipts.jsonl'):
+    path = tmp_path / name
+    path.write_text(''.join(row if isinstance(row, str) else json.dumps(row) + '\n' for row in rows))
+    result = command(tmp_path, 'catch-up', 'scripts/lib/handoff.py', 'settle-identity',
+                     '--receipts', path, tool=tool)
+    return result.returncode, json.loads(result.stdout)
+
+
+def store(tmp_path):
+    path = tmp_path / 'ledger/settled-identities.jsonl'
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def drop_at_wrap(tmp_path, session, item, tool):
+    loops = handoff(tmp_path, session)['resume']['open_loops']
+    # The wrap drops this item and keeps every other one.
+    wrap_filing(tmp_path, session, tool, *(
+        {'index': index, 'rule': 'R6', 'status': 'dropped', 'reason': 'Already in AGENTS.md.'} if loop == item
+        else {'index': index, 'rule': 'R4', 'status': 'declined', 'reason': 'The user wants to discuss it first.'}
+        for index, loop in enumerate(loops)))
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_predecessor_never_restores_an_item_its_successor_settled(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    pickup(tmp_path, 'B', 'A', tool)
+    checkpoint(tmp_path, 'B', tool)
+    drop_at_wrap(tmp_path, 'B', lesson(), tool)
+    assert lessons(checkpoint(tmp_path, 'A', tool)) == []
+    # Neither the predecessor's agent re-supplying it nor its ledger brings it back.
+    assert lessons(checkpoint(tmp_path, 'A', tool, items=[lesson()])) == []
+    assert lessons(checkpoint(tmp_path, 'A', tool, resume={'open_loops': [lesson()]})) == []
+    assert lessons(checkpoint(tmp_path, 'B', tool)) == []
+    assert [row['settled_by'] for row in store(tmp_path)] == ['B']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('field', ['disposition', 'status'])
+@pytest.mark.parametrize('value', TERMINAL)
+def test_an_item_with_a_terminal_disposition_is_never_carried_and_says_so(tmp_path, tool, field, value):
+    settled = lesson(**{field: value})
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', tool=tool, payload={
+                         'resume': {'headline': 'Work', 'next_action': 'Continue', 'open_loops': [],
+                                    'session_summary': 'Worked in A.'},
+                         'spawned_processes': [], 'session_items': [settled]})
+    assert result.returncode == 0, result.stderr
+    assert 'Closed 1 carried item whose disposition or status was terminal' in result.stdout
+    assert lessons(handoff(tmp_path, 'A')) == []
+    row, = store(tmp_path)
+    assert (row['disposition'], row['settled_by']) == (value, 'A')
+    assert row['reason'] == f"carried with {field} '{value}'; no filing step in this session settled it"
+    assert lessons(checkpoint(tmp_path, 'A', tool, resume={'open_loops': [settled]})) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_pickup_closes_and_reports_a_carried_terminal_item(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool)
+    settled = lesson(disposition='done')
+    data = handoff(tmp_path, 'A')
+    data['resume']['open_loops'].append(settled)
+    (tmp_path / 'A.json').write_text(json.dumps(data))
+    result = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', tmp_path / 'A.json', tool=tool)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)['terminal_closed'] == 1
+    assert lessons(checkpoint(tmp_path, 'B', tool)) == []
+    row, = store(tmp_path)
+    assert (row['disposition'], row['settled_by']) == ('done', 'B')
+    assert row['reason'] == "carried with disposition 'done'; no filing step in this session settled it"
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_receipt_closes_only_the_item_of_its_type(tmp_path, tool):
+    commitment = lesson(type='commitment')
+    checkpoint(tmp_path, 'A', tool, items=[lesson(), commitment])
+    assert settle_identity(tmp_path, [receipt(lesson())], tool)[0] == 0
+    data = checkpoint(tmp_path, 'A', tool)
+    assert lessons(data) == [] and commitment in data['resume']['open_loops']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_unsettled_copy_in_the_same_write_keeps_the_item_open(tmp_path, tool):
+    first = checkpoint(tmp_path, 'A', tool, items=[lesson(), lesson(recorded=True)])
+    assert lessons(first) == [lesson()] and store(tmp_path) == []
+    # A recorded copy alone settles it, and that write's handoff no longer carries it.
+    assert lessons(checkpoint(tmp_path, 'A', tool, items=[lesson(recorded=True)])) == []
+    assert [row['disposition'] for row in store(tmp_path)] == ['recorded']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_artifact_gets_no_receipt(tmp_path, tool):
+    artifact = {'type': 'artifact', 'context': 'Published artifact', 'location': 'https://example.com/a',
+                'disposition': 'keep', 'session_id': 'A', 'produced_at': '2026-11-05T12:00:00Z'}
+    checkpoint(tmp_path, 'A', tool, resume={'open_loops': [artifact]})
+    wrap_filing(tmp_path, 'A', tool, {'index': 0, 'rule': 'R6', 'status': 'dropped', 'reason': 'Removed.'})
+    assert store(tmp_path) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_receipt_from_settle_identity_closes_the_item_for_every_session(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    assert settle_identity(tmp_path, [receipt(lesson())], tool) == (0, {'written': 1, 'skipped': 0, 'invalid': []})
+    assert lessons(checkpoint(tmp_path, 'A', tool)) == []
+    pickup(tmp_path, 'B', 'A', tool)
+    assert lessons(checkpoint(tmp_path, 'B', tool)) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_wrap_settlement_closes_the_item_for_a_later_pickup_in_another_session(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    stale = handoff(tmp_path, 'A')
+    drop_at_wrap(tmp_path, 'A', lesson(), tool)
+    (tmp_path / 'A.json').write_text(json.dumps(stale))  # A later reader finds the older handoff.
+    pickup(tmp_path, 'C', 'A', tool)
+    assert lessons(checkpoint(tmp_path, 'C', tool)) == []
+    assert [(row['disposition'], row['settled_by'], row['identity']['type'])
+            for row in store(tmp_path)] == [('dropped', 'A', 'lesson')]
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_chain_of_seven_handoffs_never_brings_a_settled_item_back(tmp_path, tool):
+    sessions = [f'S{n}' for n in range(7)]
+    items = [lesson('S0', context=f'Lesson {n}: run the affected tests before reporting.') for n in range(7)]
+    checkpoint(tmp_path, 'S0', tool, items=items)
+    settled = []
+    for link, (previous, session) in enumerate(zip(sessions, sessions[1:]), 1):
+        pickup(tmp_path, session, previous, tool)
+        checkpoint(tmp_path, session, tool)
+        item = items[link - 1]
+        # Each link settles one item a different way.
+        if link % 3 == 1:
+            drop_at_wrap(tmp_path, session, item, tool)
+        elif link % 3 == 2:
+            assert settle_identity(tmp_path, [receipt(item)], tool)[0] == 0
+        else:
+            checkpoint(tmp_path, session, tool, items=[dict(item, disposition='filed')])
+        settled.append(item)
+        for earlier in sessions[:link + 1]:
+            carried = lessons(checkpoint(tmp_path, earlier, tool))
+            assert not [item for item in settled if item in carried], (link, earlier)
+    assert lessons(handoff(tmp_path, 'S6')) == [items[6]]
+    assert len(store(tmp_path)) == 6
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_settle_identity_retry_is_idempotent(tmp_path, tool):
+    rows = [receipt(lesson(context=f'Lesson {n}.')) for n in range(3)]
+    assert settle_identity(tmp_path, rows, tool) == (0, {'written': 3, 'skipped': 0, 'invalid': []})
+    assert settle_identity(tmp_path, rows, tool) == (0, {'written': 0, 'skipped': 3, 'invalid': []})
+    assert len(store(tmp_path)) == 3
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('bad', [
+    'not json\n',
+    receipt(lesson(), reason=' '),
+    receipt(lesson(), reason='two\nlines'),
+    receipt(lesson(), disposition='carry'),
+    receipt(lesson(), settled_at='2026-11-22T12:00:00'),
+    receipt(lesson(produced_at='2026-11-05T12:00:00')),
+    receipt(lesson(type='artifact')),
+    {**receipt(lesson()), 'identity': {k: v for k, v in receipt(lesson())['identity'].items() if k != 'type'}},
+    receipt(lesson(), settled_by=''),
+    receipt(lesson(), destination=3),
+    {k: v for k, v in receipt(lesson()).items() if k != 'reason'},
+])
+def test_settle_identity_refuses_an_invalid_row_by_line_number(tmp_path, tool, bad):
+    good = [receipt(lesson(context='First.')), receipt(lesson(context='Third.'))]
+    code, summary = settle_identity(tmp_path, [good[0], bad, good[1]], tool)
+    assert code == 1
+    assert summary['written'] == 2 and [row['line'] for row in summary['invalid']] == [2]
+    assert [row['identity']['text'] for row in store(tmp_path)] == ['First.', 'Third.']
+
+
+def test_concurrent_settle_identity_appends_do_not_interleave(tmp_path):
+    batches = [[receipt(lesson(context=f'Writer {w} lesson {n}. ' + 'x' * 400)) for n in range(40)]
+               for w in range(8)]
+    shared = receipt(lesson(context='Every writer settles this one.'))
+    env = os.environ | {'HANDOFF_LEDGER_DIR': str(tmp_path / 'ledger'),
+                        'HIPPOCAMPUS_CONFIG': str(tmp_path / 'config.json')}
+    processes = []
+    for w, batch in enumerate(batches):
+        path = tmp_path / f'batch-{w}.jsonl'
+        path.write_text(''.join(json.dumps(row) + '\n' for row in [shared, *batch]))
+        processes.append(subprocess.Popen([sys.executable, str(ROOT / 'scripts/lib/handoff.py'),
+                                           'settle-identity', '--receipts', str(path)],
+                                          env=env, stdout=subprocess.PIPE, text=True))
+    summaries = [json.loads(process.communicate()[0]) for process in processes]
+    assert all(process.returncode == 0 for process in processes)
+    assert sum(summary['written'] for summary in summaries) == 8 * 40 + 1
+    texts = [row['identity']['text'] for row in store(tmp_path)]
+    assert sorted(texts) == sorted([shared['identity']['text'], *(row['identity']['text']
+                                                                   for batch in batches for row in batch)])
+
+
+def test_a_torn_last_row_never_swallows_the_next_receipt(tmp_path):
+    path = tmp_path / 'ledger/settled-identities.jsonl'
+    path.parent.mkdir()
+    path.write_text(json.dumps(receipt(lesson(context='First.'))) + '\n{"identity": {"sess')
+    assert settle_identity(tmp_path, [receipt(lesson(context='Second.'))], 'codex') == (
+        0, {'written': 1, 'skipped': 0, 'invalid': []})
+    lines = path.read_text().splitlines()
+    assert json.loads(lines[-1])['identity']['text'] == 'Second.'
+    assert lessons(checkpoint(tmp_path, 'A', 'codex', items=[lesson(context='Second.')])) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+@pytest.mark.parametrize('slot, disposition', [('lessons', 'applied'), ('knowledge', 'captured')])
+def test_settle_records_the_slots_disposition_once_the_handoff_is_saved(tmp_path, tool, slot, disposition):
+    item = lesson() if slot == 'lessons' else lesson(type='knowledge')
+    checkpoint(tmp_path, 'A', tool, items=[item])
+    receipts = tmp_path / 'acks.json'
+    receipts.write_text(json.dumps({slot: [0]}))
+    settled = command(tmp_path, 'A', 'scripts/lib/checklist.py', 'settle', '--handoff', tmp_path / 'A.json',
+                      '--receipts', receipts, tool=tool)
+    assert settled.returncode == 0, settled.stderr
+    assert store(tmp_path) == []  # Nothing is closed machine-wide before the handoff is saved.
+    payload = json.loads(settled.stdout)
+    saved = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                    '--session-id', 'A', tool=tool, payload=dict(payload, spawned_processes=[]))
+    assert saved.returncode == 0, saved.stderr
+    assert [(row['disposition'], row['identity']['type']) for row in store(tmp_path)] == [(disposition, item['type'])]
+    assert item not in handoff(tmp_path, 'A')['resume']['open_loops']
+
+
+# Second review round.
+
+def in_process(tmp_path, monkeypatch):
+    import importlib.util
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path / 'ledger'))
+    monkeypatch.setenv('HANDOFF_PATH', str(tmp_path / 'A.json'))
+    monkeypatch.setenv('CLAUDE_CODE_ENTRYPOINT', 'cli')
+    spec = importlib.util.spec_from_file_location('handoff_under_test', ROOT / 'scripts/lib/handoff.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def continuation(**changes):
+    return {'resume': {'headline': 'Work', 'next_action': 'Continue', 'open_loops': [],
+                       'session_summary': 'Worked in A.'}, 'spawned_processes': [], **changes}
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_terminal_copy_beside_an_unchanged_copy_never_settles_the_retained_item(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    assert lessons(checkpoint(tmp_path, 'A', tool, items=[lesson(status='done'), lesson()])) == [lesson()]
+    assert lessons(checkpoint(tmp_path, 'A', tool)) == [lesson()]
+    assert store(tmp_path) == []
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_a_checkpoint_that_fails_lint_still_records_the_receipts_of_what_it_dropped(tmp_path, tool):
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', tool=tool,
+                     payload=continuation(spawned_processes='not a list', session_items=[lesson(status='done')]))
+    assert result.returncode != 0
+    assert lessons(handoff(tmp_path, 'A')) == []
+    assert [row['disposition'] for row in store(tmp_path)] == ['done']
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_item_already_settled_is_not_closed_or_reported_again(tmp_path, tool):
+    def run():
+        result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                         '--session-id', 'A', tool=tool,
+                         payload=continuation(session_items=[lesson(status='done')]))
+        assert result.returncode == 0, result.stderr
+        return result.stdout
+    assert 'Closed 1 carried item' in run()
+    assert 'Closed' not in run()
+    assert len(store(tmp_path)) == 1
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_pickup_retried_after_a_failed_store_write_records_its_receipts(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool)
+    data = handoff(tmp_path, 'A')
+    data['resume']['open_loops'].append(lesson(disposition='filed'))
+    (tmp_path / 'A.json').write_text(json.dumps(data))
+    blocker = tmp_path / 'ledger/settled-identities.jsonl'
+    blocker.mkdir(parents=True)  # The store cannot be written.
+    failed = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', tmp_path / 'A.json', tool=tool)
+    assert json.loads(failed.stdout).get('error') == 'chain_copy_failed'
+    blocker.rmdir()
+    retried = command(tmp_path, 'B', 'skills/pickup/scripts/pickup.py', '--handoff', tmp_path / 'A.json', tool=tool)
+    assert retried.returncode == 0, retried.stderr + retried.stdout
+    assert json.loads(retried.stdout)['terminal_closed'] == 1
+    assert [(row['disposition'], row['settled_by']) for row in store(tmp_path)] == [('filed', 'B')]
+    assert lessons(checkpoint(tmp_path, 'B', tool)) == []
+
+
+def test_settle_session_items_settles_only_the_ledger_by_default(tmp_path, monkeypatch):
+    module = in_process(tmp_path, monkeypatch)
+    module.retain_session_items([lesson()], 'A')
+    module.settle_session_items([lesson()], 'A')
+    assert module.retained_session_items('A') == [] and store(tmp_path) == []
+    module.settle_session_items([lesson(context='Other.')], 'A', settlement=('dropped', 'Not needed.'))
+    assert [row['identity']['text'] for row in store(tmp_path)] == ['Other.']
+
+
+def test_a_checkpoint_parses_the_store_once(tmp_path, monkeypatch):
+    module = in_process(tmp_path, monkeypatch)
+    module.write_settlement_receipts([receipt(lesson(context='Earlier.'))])
+    module._STORE_CACHE.clear()
+    reads = []
+    original = module._ledger_records
+    monkeypatch.setattr(module, '_ledger_records', lambda path: (
+        reads.append(path) if path == module.settled_store_path() else None) or original(path))
+    payload = continuation(session_items=[lesson(), lesson(context='Second.', status='done')])
+    assert module.checkpoint(payload, str(tmp_path), 'A', 'checkpoint').exit_code == 0
+    assert len(reads) == 1
+    assert len(store(tmp_path)) == 2
+
+
+@pytest.mark.parametrize('tool', TOOLS)
+def test_an_item_the_wrap_keeps_is_written_even_after_an_earlier_receipt(tmp_path, tool):
+    checkpoint(tmp_path, 'A', tool, items=[lesson()])
+    assert settle_identity(tmp_path, [receipt(lesson())], tool)[0] == 0
+    data = handoff(tmp_path, 'A')
+    data['resume']['open_loops'] = [lesson()]
+    (tmp_path / 'A.json').write_text(json.dumps(data))
+    kept = wrap_filing(tmp_path, 'A', tool, {'index': 0, 'rule': 'R4', 'status': 'declined',
+                                              'reason': 'The user wants to discuss it first.'})
+    result = command(tmp_path, 'A', 'scripts/lib/handoff.py', 'checkpoint', '--cwd', tmp_path,
+                     '--session-id', 'A', '--trigger', 'wrap', tool=tool, payload=kept)
+    assert result.returncode == 0, result.stderr
+    assert lessons(handoff(tmp_path, 'A')) == [lesson()]

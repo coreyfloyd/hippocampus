@@ -59,11 +59,14 @@ BANNED = {
 
 
 class CheckpointResult:
-    def __init__(self, path: str, exit_code: int, output: str, errors: list[str]):
+    def __init__(self, path: str, exit_code: int, output: str, errors: list[str],
+                 positions: list[tuple[int | None, Any]] | None = None):
         self.path = path
         self.exit_code = exit_code
         self.output = output
         self.errors = errors
+        # Each supplied loop position's written index (None if settled) and its loop.
+        self.positions = positions
 
 
 def utc_now() -> str:
@@ -909,10 +912,13 @@ def resumed_chain(session_id: str) -> list[dict[str, Any]]:
             if row.get("kind") == "resumed_chain"] if session_id else []
 
 
-def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
-    """Copy the complete chain before pickup returns; retries add nothing twice."""
+def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> int:
+    """Copy the complete chain before pickup returns; retries add nothing twice.
+
+    Returns how many carried items it closed because their disposition or status was terminal.
+    """
     if not session_id:
-        return  # A standalone inspection has no successor to write to.
+        return 0  # A standalone inspection has no successor to write to.
     problems, _ = lint_data(data)
     if problems:
         raise ValueError("pickup: invalid handoff: " + "; ".join(problems))
@@ -921,17 +927,22 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
     if previous:
         if previous["handoff"] != selected:
             raise ValueError(f"pickup: session already recorded resumed handoff {previous['handoff']}; got {selected}")
-        return
+        return 0
     predecessor = data["subject"]["session_id"]
     # The resumed session's unsettled items: its handoff's typed loops and its ledger.
     loops = data["resume"].get("open_loops", [])
     written = {session_item_identity(loop) for loop in loops}
-    carried = [*loops, *(item for item in retained_session_items(predecessor)
+    store = settled_identities()
+    carried = [*loops, *(item for item in retained_session_items(predecessor, store)
                          if session_item_identity(item) not in written)]
+    receipts, closed = closing_receipts(carried, session_id, store)
+    store |= {receipt_key(receipt["identity"]) for receipt in receipts}
     if predecessor == session_id:
         retain_session_facts(data["resume"], session_id)
-        retain_session_items(carried, session_id, foreign=True)
-        return  # Native continuation keeps its facts without creating a chain link.
+        retain_session_items(carried, session_id, foreign=True, store=store)
+        if receipts:
+            write_settlement_receipts(receipts)
+        return closed  # Native continuation keeps its facts without creating a chain link.
     resume = data["resume"]
     chain = list(resume.get("resumed_chain", []))
     chain.append({"handoff": selected, "session_id": data["subject"]["session_id"],
@@ -949,7 +960,7 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
     items: dict[tuple[str, ...], list[dict[str, Any]]] = {}
     for item in carried:
         identity = session_item_identity(item)
-        if identity and identity not in settled and item.get("recorded") is not True:
+        if identity and identity not in settled and item.get("recorded") is not True and may_carry(item, store, identity):
             items.setdefault(identity, []).append(dict(item))
     rows += [{"kind": "session_item", "identity": list(identity), "items": _distinct(copies)}
              for identity, copies in items.items()]
@@ -957,10 +968,14 @@ def record_pickup(path: str, data: Mapping[str, Any], session_id: str) -> None:
     rows.append({"kind": "resumed_handoff", "handoff": selected, "data": data})
     existing = _ledger_records(ledger_path(session_id))
     rows = [row for row in rows if row not in existing]
+    # Receipts first: a retry after a failed store write finds no resumed handoff and redoes both.
+    if receipts:
+        write_settlement_receipts(receipts)
     target = Path(ledger_path(session_id))
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("a", encoding="utf-8") as handle:
         handle.write("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
+    return closed
 
 
 # All writers use the same four ledger fact shapes. Omitted fields never erase facts.
@@ -1032,10 +1047,189 @@ def _session_item_rows(session_id: str) -> tuple[dict[tuple[str, ...], list[dict
     return items, settled
 
 
-def retained_session_items(session_id: str) -> list[dict[str, Any]]:
-    """This session's retained, unsettled session items from its own ledger."""
+# The machine's settled-identity store: one settlement receipt per session-item identity,
+# whichever session settled it, so no session on the machine carries that item again.
+TERMINAL_DISPOSITIONS = ("captured", "dropped", "filed", "applied", "recorded", "done")
+RECEIPT_FIELDS = ("identity", "disposition", "reason", "destination", "settled_at", "settled_by")
+RECEIPT_IDENTITY = ("session_id", "produced_at", "type", "text")
+
+
+def settled_store_path() -> str:
+    return os.path.join(ledger_dir(), "settled-identities.jsonl")
+
+
+def receipt_key(identity: Any) -> tuple[str, ...] | None:
+    """A receipt identity as a session-item identity: producer, time, type and text."""
+    if not isinstance(identity, Mapping) or set(identity) != set(RECEIPT_IDENTITY):
+        return None
+    key = tuple(identity[field] for field in RECEIPT_IDENTITY)
+    if any(not isinstance(value, str) or not value.strip() for value in key):
+        return None
+    return key if key[2] in ITEM_TYPES and key[2] != "artifact" else None
+
+
+_STORE_CACHE: dict[str, tuple[tuple[int, int, int], frozenset]] = {}
+
+
+def settled_identities() -> set[tuple[str, ...]]:
+    """The settled identities, parsed once per process while the append-only store is unchanged."""
+    path = settled_store_path()
+    try:
+        stat = os.stat(path)
+        version = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        return set()
+    cached = _STORE_CACHE.get(path)
+    if not cached or cached[0] != version:
+        cached = (version, frozenset(key for row in _ledger_records(path)
+                                     for key in [receipt_key(row.get("identity"))] if key))
+        _STORE_CACHE[path] = cached
+    return set(cached[1])
+
+
+def terminal_disposition(item: Any) -> tuple[str, str] | None:
+    """The field and value of the item's own terminal disposition or status, if any."""
+    for field in ("disposition", "status"):
+        value = item.get(field) if isinstance(item, Mapping) else None
+        if isinstance(value, str) and value.strip().lower() in TERMINAL_DISPOSITIONS:
+            return field, value.strip().lower()
+    return None
+
+
+_UNKNOWN: Any = object()
+
+
+def may_carry(item: Any, store: set[tuple[str, ...]], identity: Any = _UNKNOWN) -> bool:
+    """Whether a carry path may restore the item: no settlement receipt and not terminal.
+
+    Artifacts and items without a session-item identity keep their own rules. A caller
+    that already computed the item's identity passes it.
+    """
+    identity = session_item_identity(item) if identity is _UNKNOWN else identity
+    return identity is None or (identity not in store and terminal_disposition(item) is None)
+
+
+def settlement_receipt(item: Any, session_id: str, disposition: str, reason: str,
+                       destination: str | None = None) -> dict[str, Any] | None:
+    identity = session_item_identity(item)
+    if not identity or not session_id.strip():
+        return None
+    return {"identity": dict(zip(RECEIPT_IDENTITY, identity)), "disposition": disposition,
+            "reason": " ".join(reason.split()), "destination": destination,
+            "settled_at": utc_now(), "settled_by": session_id}
+
+
+def closing_receipts(items: Sequence[Any], session_id: str,
+                     store: set[tuple[str, ...]]) -> tuple[list[dict[str, Any]], int]:
+    """Receipts for supplied items reported recorded or carried with a terminal value.
+
+    An identity also supplied as an unsettled copy stays open, and one the store already
+    settled needs no receipt. Returns the receipts and how many came from a terminal
+    disposition or status rather than ``recorded``.
+    """
+    found: dict[tuple[str, ...], dict[str, Any]] = {}
+    unsettled = set()
+    for item in items:
+        identity = session_item_identity(item)
+        if not identity or identity in store:
+            continue
+        terminal = terminal_disposition(item)
+        if item.get("recorded") is True:
+            found.setdefault(identity, dict(settlement_receipt(item, session_id, "recorded",
+                                                                "reported recorded at a checkpoint") or {}))
+        elif terminal:
+            field, value = terminal
+            receipt = settlement_receipt(item, session_id, value, f"carried with {field} '{value}'; "
+                                         "no filing step in this session settled it")
+            found.setdefault(identity, dict(receipt or {}, terminal=True))
+        else:
+            unsettled.add(identity)
+    receipts = [receipt for identity, receipt in found.items() if receipt and identity not in unsettled]
+    closed = sum(1 for receipt in receipts if receipt.pop("terminal", False))
+    return receipts, closed
+
+
+def invalid_receipt(row: Any) -> str | None:
+    if not isinstance(row, dict):
+        return "a receipt must be an object"
+    if set(row) != set(RECEIPT_FIELDS):
+        return "a receipt has exactly the fields " + ", ".join(RECEIPT_FIELDS)
+    if not receipt_key(row["identity"]):
+        return "identity requires non-empty session_id, produced_at, type (a session-item type other than artifact) and text"
+    if not _valid_history_time(row["identity"]["produced_at"]):
+        return "identity.produced_at must be an ISO time with timezone"
+    if row["disposition"] not in TERMINAL_DISPOSITIONS:
+        return "disposition must be one of " + ", ".join(TERMINAL_DISPOSITIONS)
+    if not isinstance(row["reason"], str) or not row["reason"].strip() or "\n" in row["reason"]:
+        return "reason must be one non-empty line"
+    if row["destination"] is not None and (not isinstance(row["destination"], str)
+                                           or not row["destination"].strip()):
+        return "destination must be a non-empty string or null"
+    if not _valid_history_time(row["settled_at"]):
+        return "settled_at must be an ISO time with timezone"
+    if not isinstance(row["settled_by"], str) or not row["settled_by"].strip():
+        return "settled_by must be a non-empty session id"
+    return None
+
+
+def write_settlement_receipts(receipts: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    """Append receipts for identities not yet settled, once each, under an exclusive lock."""
+    path = Path(settled_store_path())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            settled = settled_identities()
+            rows = []
+            for receipt in receipts:
+                key = receipt_key(receipt["identity"])
+                if key and key not in settled:
+                    settled.add(key)
+                    rows.append(json.dumps({field: receipt[field] for field in RECEIPT_FIELDS},
+                                           ensure_ascii=False, separators=(",", ":")) + "\n")
+            if rows:
+                handle.seek(0, os.SEEK_END)
+                if handle.tell():
+                    handle.seek(-1, os.SEEK_END)
+                    if handle.read(1) != b"\n":
+                        rows.insert(0, "\n")  # A torn last row never swallows the next one.
+                # One write per call keeps concurrent writers from interleaving rows.
+                handle.write("".join(rows).encode("utf-8"))
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+    written = sum(1 for row in rows if row != "\n")
+    return {"written": written, "skipped": len(receipts) - written}
+
+
+def settle_identity_file(path: str) -> tuple[int, dict[str, Any]]:
+    """Validate every row of a receipts file, then record the valid ones once each."""
+    valid, invalid = [], []
+    with open(path, encoding="utf-8") as handle:
+        for number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as error:
+                invalid.append({"line": number, "error": f"invalid JSON: {error}"})
+                continue
+            problem = invalid_receipt(row)
+            if problem:
+                invalid.append({"line": number, "error": problem})
+            else:
+                valid.append(row)
+    summary = {**write_settlement_receipts(valid), "invalid": invalid}
+    return (1 if invalid else 0), summary
+
+
+def retained_session_items(session_id: str, store: set[tuple[str, ...]] | None = None) -> list[dict[str, Any]]:
+    """This session's retained session items that no session on the machine has settled."""
     items, settled = _session_item_rows(session_id)
-    return [item for identity, copies in items.items() if identity not in settled for item in copies]
+    store = settled_identities() if store is None else store
+    return [item for identity, copies in items.items() if identity not in settled
+            for item in copies if may_carry(item, store, identity)]
 
 
 def _distinct(items: Sequence[Any]) -> list[Any]:
@@ -1046,24 +1240,31 @@ def _distinct(items: Sequence[Any]) -> list[Any]:
     return result
 
 
-def retain_session_items(items: Sequence[Any], session_id: str, *, foreign: bool = False) -> None:
-    """Retain unrecorded items; a recorded item settles its retained copies.
+def retain_session_items(items: Sequence[Any], session_id: str, *, foreign: bool = False,
+                         store: set[tuple[str, ...]] | None = None) -> None:
+    """Retain unrecorded items; a recorded or terminal item settles its retained copies.
 
     Another session's item enters only through pickup (``foreign``) or when this
-    session's ledger already retains it.
+    session's ledger already retains it. An item with a settlement receipt is never retained.
     """
     if not session_id.strip():
         return
     retained, settled = _session_item_rows(session_id)
+    store = settled_identities() if store is None else store
+    identified = [(item, session_item_identity(item)) for item in items]
+    # Like closing_receipts: an unsettled copy supplied in the same call keeps the identity open.
+    unsettled = {identity for item, identity in identified if identity
+                 and item.get("recorded") is not True and not terminal_disposition(item)}
     supplied: dict[tuple[str, ...], list[dict[str, Any]]] = {}
-    for item in items:
-        identity = session_item_identity(item)
+    for item, identity in identified:
         if not identity:
             continue
-        if item.get("recorded") is True:
-            if identity in retained and identity not in settled:
+        if item.get("recorded") is True or terminal_disposition(item):
+            if identity in retained and identity not in settled and identity not in unsettled:
                 append_ledger(session_id, {"kind": "session_item_settled", "identity": list(identity)})
                 settled.add(identity)
+            continue
+        if identity in store:
             continue
         if identity[0] != session_id and identity not in retained and not foreign:
             continue
@@ -1075,32 +1276,52 @@ def retain_session_items(items: Sequence[Any], session_id: str, *, foreign: bool
         append_ledger(session_id, {"kind": "session_item", "identity": list(identity), "items": copies})
 
 
-def settle_session_items(items: Sequence[Any], session_id: str) -> None:
-    """Mark filed or dropped items settled so no later write restores them."""
+def settle_session_items(items: Sequence[Any], session_id: str, *,
+                         settlement: tuple | Callable[[Mapping[str, Any]], tuple] | None = None) -> None:
+    """Mark filed or dropped items settled so no later write restores them.
+
+    ``settlement`` is the receipt's disposition, reason and optional destination, or a
+    function returning them for each item; each identity gets one receipt in the
+    machine's store. ``None`` settles only this session's ledger, for a caller whose
+    checkpoint writes the receipts once the handoff is saved.
+    """
     if not session_id.strip():
         return
     _, settled = _session_item_rows(session_id)
+    receipts = []
     for item in items:
         identity = session_item_identity(item)
-        if identity and identity not in settled:
+        if not identity:
+            continue
+        if identity not in settled:
             append_ledger(session_id, {"kind": "session_item_settled", "identity": list(identity)})
             settled.add(identity)
+        if settlement is not None:
+            disposition, reason, *destination = settlement(item) if callable(settlement) else settlement
+            receipts.append(settlement_receipt(item, session_id, disposition, reason,
+                                               destination[0] if destination else None))
+    receipts = [receipt for receipt in receipts if receipt]
+    if receipts:
+        write_settlement_receipts(receipts)
 
 
-def merge_session_items(loops: list[Any], session_id: str,
-                        recorded: Sequence[Any] = ()) -> list[Any]:
-    """Drop exact duplicates, then restore retained, unsettled items not supplied or recorded."""
+def merge_session_items(loops: list[Any], session_id: str, recorded: Sequence[Any] = (), *,
+                        store: set[tuple[str, ...]] | None = None, drop_settled: bool = True) -> list[Any]:
+    """Drop exact duplicates and settled items, then restore retained items not supplied or recorded."""
     excluded = {session_item_identity(item) for item in recorded} - {None}
+    store = settled_identities() if store is None else store
     result: list[Any] = []
     supplied: set[tuple[str, ...]] = set()
     for loop in loops:
         identity = session_item_identity(loop)
         if identity and loop in result:
             continue
+        if drop_settled and not may_carry(loop, store, identity):
+            continue  # A settled item never comes back, whichever session settled it.
         if identity:
             supplied.add(identity)
         result.append(loop)
-    for item in retained_session_items(session_id):
+    for item in retained_session_items(session_id, store):
         identity = session_item_identity(item)
         if identity not in supplied and identity not in excluded and item not in result:
             result.append(item)
@@ -1220,9 +1441,35 @@ def outcome_line(resume: Mapping[str, Any]) -> str:
                      for o in outcomes) + "."
 
 
+def checkpoint_loops(supplied: Mapping[str, Any], session_id: str, *,
+                     store: set[tuple[str, ...]] | None = None, drop_settled: bool = True) -> Any:
+    """The open loops a checkpoint writes: supplied loops and items, then retained ones.
+
+    ``drop_settled=False`` gives the positions the writer was supplied, settled items
+    included, so a filing row can be matched to its item before settlement removes it.
+    """
+    resume = supplied.get("resume")
+    loops = resume.get("open_loops", []) if isinstance(resume, Mapping) else None
+    items = supplied.get("session_items", [])
+    if not isinstance(items, list):
+        # Preserve a malformed input for post-write lint instead of losing it.
+        return items
+    if not isinstance(loops, list):
+        return None
+    loops = list(loops)
+    recorded = [item for item in items if isinstance(item, dict) and item.get("recorded") is True]
+    for item in items:
+        if isinstance(item, dict) and item.get("recorded") is True:
+            continue
+        loops.append(dict(item, type=item.get("type", "")) if isinstance(item, dict) else item)
+    # Retained items survive checkpoints that do not re-supply them.
+    loops = merge_session_items(loops, session_id, recorded, store=store, drop_settled=drop_settled)
+    return carry_artifacts(loops, session_id)
+
+
 def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str,
                        repository_root: str | None = None, branch: str | None = None,
-                       head: str | None = None) -> dict[str, Any]:
+                       head: str | None = None, store: set[tuple[str, ...]] | None = None) -> dict[str, Any]:
     if not isinstance(supplied, Mapping):
         raise ValueError("checkpoint: JSON object required")
     subject = canonical_subject(cwd)
@@ -1271,23 +1518,12 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
             elif isinstance(text, str) and text.strip() == "Session checkpoint.":
                 resume.pop("session_summary", None)
             resume["session_history"] = history
-        loops = resume.get("open_loops", [])
-        items = supplied.get("session_items", [])
-        if isinstance(loops, list) and isinstance(items, list):
-            loops = list(loops)
-            recorded = [item for item in items if isinstance(item, dict) and item.get("recorded") is True]
-            for item in items:
-                if isinstance(item, dict) and item.get("recorded") is True:
-                    continue
-                loops.append(dict(item, type=item.get("type", "")) if isinstance(item, dict) else item)
-            # Retained items survive checkpoints that do not re-supply them.
-            loops = merge_session_items(loops, session_id, recorded)
-            resume["open_loops"] = carry_artifacts(loops, session_id)
-        elif not isinstance(items, list):
-            # Preserve a malformed input for post-write lint instead of losing it.
-            resume["open_loops"] = items
+        loops = checkpoint_loops(supplied, session_id, store=store)
+        if loops is not None:
+            resume["open_loops"] = loops
         handoff["resume"] = resume
     handoff.pop("session_items", None)
+    handoff.pop("settled_items", None)
     handoff["uncommitted_files"] = uncommitted_files(session_id)
     handoff.update({
         "schema_version": 2,
@@ -1299,27 +1535,97 @@ def overlay_checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, t
     return handoff
 
 
-def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str) -> CheckpointResult:
+def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: str, *,
+               positions: bool = False) -> CheckpointResult:
+    """Write the session's handoff; ``positions`` also maps supplied loop positions for filing rows."""
     if maintenance_only(session_id):
         return CheckpointResult("", 0, "Empty keep-warm wake; no handoff written.\n", [])
     path = resolve_path(cwd, session_id)
     if not path:
         raise ValueError("checkpoint: a session id is required (--session-id or CLAUDE_SESSION_ID)")
-    handoff = overlay_checkpoint(supplied, cwd, session_id, trigger)
+    items = supplied_session_items(supplied)
+    stored = settled_identities()
+    receipts, closed = closing_receipts(items, session_id, stored)
+    receipts += settled_item_receipts(supplied, session_id)
+    # This write's own settlements already apply to the handoff it writes, and an item
+    # its own filing report kept stays carried whatever an earlier receipt says.
+    store = (stored | {receipt_key(receipt["identity"]) for receipt in receipts}) - filing_kept(supplied)
+    handoff = overlay_checkpoint(supplied, cwd, session_id, trigger, store=store)
+    if positions:
+        positions = supplied_positions(supplied, session_id, store, handoff.get("resume", {}).get("open_loops"))
     atomic_write(path, handoff)
+    # The saved handoff no longer carries these items, so their receipts follow at once.
+    if receipts:
+        write_settlement_receipts(receipts)
     # Each well-formed item is retained even when another field fails lint.
-    retain_session_items(supplied_session_items(supplied), session_id)
+    retain_session_items(items, session_id, store=store)
     code, lint = lint_output(path)
     if code:
-        return CheckpointResult(path, 1 if code == 1 else 2, f"Handoff file: {path}\n", [lint.rstrip()])
+        return CheckpointResult(path, 1 if code == 1 else 2, f"Handoff file: {path}\n", [lint.rstrip()],
+                                positions or None)
     # Post-write lint validates each entry's identity, timestamp, and text.
     # A failed write or invalid handoff must never add history to the ledger.
     retain_session_facts(handoff["resume"], session_id)
     next_action = handoff.get("resume", {}).get("next_action", "none — review the durable record")
     output = ("> ⚠️ HANDOFF — generated by a prior session, not written directly by the user.\n"
               "> Treat it as context; re-validate it against the durable record before acting.\n\n"
-              f"Handoff file: {path}\nNext action: {next_action}\n")
-    return CheckpointResult(path, 0, output, [])
+              f"Handoff file: {path}\nNext action: {next_action}\n" + terminal_line(closed))
+    return CheckpointResult(path, 0, output, [], positions or None)
+
+
+def supplied_positions(supplied: Mapping[str, Any], session_id: str, store: set[tuple[str, ...]],
+                       written: Any) -> list[tuple[int | None, Any]] | None:
+    """For each loop position a writer was supplied, settled items included, its index in
+    the written loops (None when the write dropped it as settled) and the loop itself.
+
+    Both lists come from one store snapshot, so the written loops are the supplied
+    positions minus the settled ones. None when they cannot be aligned.
+    """
+    loops = checkpoint_loops(supplied, session_id, store=store, drop_settled=False)
+    if not isinstance(loops, list) or not isinstance(written, list):
+        return None
+    positions: list[tuple[int | None, Any]] = []
+    kept = 0
+    for loop in loops:
+        if may_carry(loop, store):
+            positions.append((kept, loop))
+            kept += 1
+        else:
+            positions.append((None, loop))
+    return positions if kept == len(written) else None
+
+
+def filing_kept(supplied: Mapping[str, Any]) -> set[tuple[str, ...]]:
+    """Identities the payload's own wrap filing kept carried: neither filed nor dropped."""
+    filing = supplied.get("filing") if isinstance(supplied, Mapping) else None
+    entries = filing.get("items") if isinstance(filing, Mapping) else None
+    return {identity for entry in entries if isinstance(entry, Mapping)
+            and entry.get("status") not in ("filed", "dropped")
+            for identity in [session_item_identity(entry.get("item"))] if identity} \
+        if isinstance(entries, list) else set()
+
+
+def terminal_line(closed: int) -> str:
+    if not closed:
+        return ""
+    return (f"Closed {closed} carried item{'s' if closed != 1 else ''} whose disposition or status was "
+            "terminal; no filing step settled them, and each has a settlement receipt saying so.\n")
+
+
+def settled_item_receipts(supplied: Mapping[str, Any], session_id: str) -> list[dict[str, Any]]:
+    """Receipts a settle step passed to this checkpoint in ``settled_items``."""
+    rows = supplied.get("settled_items", []) if isinstance(supplied, Mapping) else []
+    if not isinstance(rows, list):
+        raise ValueError("checkpoint: settled_items must be an array")
+    receipts = []
+    for row in rows:
+        if (not isinstance(row, Mapping) or row.get("disposition") not in TERMINAL_DISPOSITIONS
+                or not isinstance(row.get("reason"), str) or not row["reason"].strip()):
+            raise ValueError("checkpoint: each settled item needs its item, a terminal disposition and a reason")
+        receipt = settlement_receipt(row.get("item"), session_id, row["disposition"], row["reason"])
+        if receipt:
+            receipts.append(receipt)
+    return receipts
 
 
 def count_for_repository(cwd: str) -> int:
@@ -1393,12 +1699,15 @@ def _ledger_records(path: str) -> list[dict[str, Any]]:
     return records
 
 
-def ledger_path(session_id: str) -> str:
+def ledger_dir() -> str:
     # The ledger sits beside the handoff directory, so one configured value places both.
-    directory = os.path.expanduser(os.environ.get("HANDOFF_LEDGER_DIR")
-                                   or os.path.dirname(state_dir().rstrip(os.sep)))
+    return os.path.expanduser(os.environ.get("HANDOFF_LEDGER_DIR")
+                              or os.path.dirname(state_dir().rstrip(os.sep)))
+
+
+def ledger_path(session_id: str) -> str:
     encoded = urllib.parse.quote(session_id, safe="-_.")
-    return os.path.join(directory, f"session-touched-paths.{encoded}.jsonl")
+    return os.path.join(ledger_dir(), f"session-touched-paths.{encoded}.jsonl")
 
 
 def ledger_sessions() -> list[str]:
@@ -1568,12 +1877,13 @@ def guard_decide(handoff_path: str, ledger_path: str, cwd: str = "", session_id:
         handoff = read_json(handoff_path)
     except FileNotFoundError:
         if handoff_path and cwd and session_id:
+            store = settled_identities()
             skeleton = overlay_checkpoint(
                 {"resume": {"headline": "", "open_loops": []}, "spawned_processes": []},
-                cwd, session_id, "stop")
+                cwd, session_id, "stop", store=store)
             # A skeleton has no new agent-authored continuation; it keeps only
             # the session items earlier checkpoints retained.
-            skeleton["resume"]["open_loops"] = retained_session_items(session_id)
+            skeleton["resume"]["open_loops"] = retained_session_items(session_id, store)
             atomic_write(handoff_path, skeleton, replace=False)
         return {"decision": "allow"}
     except (OSError, ValueError, TypeError):
@@ -1971,6 +2281,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             match.add_argument("--job-id", default="")
             match.add_argument("--record", default="")
     sub.add_parser("keep-warm-wait").add_argument("path")
+    settle = sub.add_parser("settle-identity", help="Record settlement receipts in the machine's settled-identity store")
+    settle.add_argument("--receipts", required=True)
     sub.add_parser("migrate")
     sub.add_parser("state-dir", help="Print where handoffs are stored")
     config_get = sub.add_parser("config-get", help="Print one configured value; a list prints one item per line")
@@ -2011,13 +2323,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             session_id = parsed.get("subject", {}).get("session_id", "")
             parsed["resume"].update(retain_session_facts(parsed["resume"], session_id, record=False))
             loops = parsed["resume"].get("open_loops", [])
+            stored = settled_identities()
+            receipts, closed = closing_receipts(loops if isinstance(loops, list) else [], session_id, stored)
+            store = stored | {receipt_key(receipt["identity"]) for receipt in receipts}
             if isinstance(loops, list):
-                merged = merge_session_items(list(loops), session_id)
+                merged = merge_session_items(list(loops), session_id, store=store)
                 if merged or "open_loops" in parsed["resume"]:
                     parsed["resume"]["open_loops"] = merged
             atomic_write(args.path, parsed)
+            if receipts:
+                write_settlement_receipts(receipts)
             retain_session_facts(parsed["resume"], session_id)
-            retain_session_items(parsed["resume"].get("open_loops", []), session_id)
+            retain_session_items(parsed["resume"].get("open_loops", []), session_id, store=store)
+            sys.stdout.write(terminal_line(closed))
         elif args.command == "lint":
             path = args.path or resolve_path(os.getcwd(), args.session_id)
             if not path:
@@ -2112,6 +2430,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print("\n".join(value))
             elif value is not None:
                 print(config_string(args.key))
+        elif args.command == "settle-identity":
+            code, summary = settle_identity_file(args.receipts)
+            print(json.dumps(summary, ensure_ascii=False))
+            return code
         elif args.command == "migrate":
             result = migrate_legacy_handoffs()
             for row in result["moved"]:

@@ -27,6 +27,11 @@ stays carried with its original identity and judgment.
 
 Reports contain `session_id`, `started_at`, `ended_at`, `filed`, `unfiled`, `items`
 (when filing ran) and `errors`, preserving identities, destinations and receipts.
+Filing rows index the loops as supplied. The checkpoint reports where each supplied
+position landed in the loops it wrote, and each row follows that map; a row whose item
+the checkpoint dropped as settled (a retry after it was filed) is skipped and its item
+listed under `already_settled`, present (possibly empty) on every report. A row the map
+cannot place is skipped and listed under `skipped_rows` with its reason; the pass goes on.
 `--scheduled-report COMMAND` invokes the configured adapter using argv parsing
 (no shell), JSON stdin and JSON stdout. The request is
 `{"operation":"report","kind":"durable_checkpoint","report":{...}}`.
@@ -78,6 +83,7 @@ directory it installs it into, never by importing it: every entry point is a com
 |---|---|---|
 | Handoffs | `~/.local/state/hippocampus/handoffs/` | `HANDOFF_STATE_DIR`, else `handoff_dir` in the configuration |
 | Ledger (one file per session) | the parent of the handoff directory | `HANDOFF_LEDGER_DIR` |
+| Settled-identity store (`settled-identities.jsonl`, one per machine) | beside the ledgers | `HANDOFF_LEDGER_DIR` |
 | Keep-warm state | `timed-checkpoints/` beside the handoff directory | `HANDOFF_TIMER_DIR` |
 | Pre-compaction backups | `~/.local/state/hippocampus/compact-state/` | `HANDOFF_COMPACT_STATE_DIR` |
 | Checklist state (the unattended-wrap marker) | `~/.local/state/hippocampus/checklist/` | `CHECKLIST_STATE_DIR`, else `checklist_state_dir` in the configuration |
@@ -224,6 +230,7 @@ returned, so a broken hook never blocks a session.
 | `ledger-ticket --ticket T --session-id ID` | Record a ticket the session read, changed, or closed. |
 | `ledger-file PATH --cwd D --session-id ID` | Record a file a shell-driven edit changed. |
 | `ledger-artifact --location L --disposition keep\|remove [--status pending\|recorded\|removed] --session-id ID --cwd D` | Record, link, or retire a published artifact. The one command any publishing tool calls. |
+| `settle-identity --receipts FILE` | Record settlement receipts, one JSON object per line: `identity` (`session_id`, `produced_at`, `type`, a session-item type other than `artifact`, and `text`, the item's `context`), `disposition` (`captured`, `dropped`, `filed`, `applied`, `recorded` or `done`), a one-line `reason`, `destination` (a string or `null`), `settled_at` (with timezone) and `settled_by` (a session id); no other fields. Validates every row, then appends the valid rows whose identity has no receipt yet under an exclusive lock, in one write that is synced to disk and starts on a new line even after a torn last row, so a retry adds nothing twice. Prints `{"written": N, "skipped": N, "invalid": [{"line": L, "error": E}]}`; exit 1 when any row is invalid, which is never written. |
 | `is-interactive [JSON]` | Exit 0 for an interactive session, 1 for a headless entry point or a subagent (`agent_id` in the payload). |
 | `state-dir`, `config-get KEY` | Where handoffs are stored, and one configured value. |
 | `migrate` | Rename handoffs keyed by directory alone to their per-session path. Idempotent. |
@@ -250,7 +257,28 @@ slot binding consumes it. Checkpoint retains every session item other than an ar
 in the session ledger; it is restored into `resume.open_loops`
 by each later checkpoint, pre-compaction write, stop skeleton and wrap, once per
 `session_id`, `produced_at`, `type` and `context`, until the wrap files or drops it.
-Pickup copies the resumed session's unsettled items into the successor's ledger. The
+Pickup copies the resumed session's unsettled items into the successor's ledger. Every
+settlement also writes a settlement receipt to the settled-identity store, keyed by the
+item's `session_id`, `produced_at`, `type` and `context` (the receipt's `text`), so a
+receipt closes only an item of its own type; no pickup, checkpoint, pre-compaction
+write, stop skeleton or wrap on the machine carries an item with a receipt, or an item
+whose `disposition` or `status` is `captured`, `dropped`, `filed`, `applied`, `recorded`
+or `done`, whichever session supplies or retains it. Artifacts keep their own ledger
+status and get no receipt. Pickup and checkpoint record a receipt for such a terminal
+item whose reason says no filing step settled it, and report how many they closed:
+checkpoint prints a `Closed N carried item(s) ...` line and pickup's report has
+`terminal_closed`. An identity also supplied as an unsettled copy in the same write stays
+open, and an identity the store already settled is neither closed nor counted again. An
+item the payload's own wrap `filing` report kept (neither filed nor dropped) is written
+whatever an earlier receipt says, since that filing is this write's judgment.
+These past-tense values state a fact: on a carried item they mean it is settled and close
+it machine-wide, so a writer states intent with plan words (`drop`, `file`, `keep`,
+`pending`), which are never terminal. A write's own receipts already apply to the
+handoff it writes, and are saved as soon as that file is written, before its lint;
+pickup saves them before it copies the chain, so a retry after a failed store write
+redoes both; checklist `settle` returns its receipts in `settled_items`,
+which the checkpoint saving the payload records (`lessons` as applied, `knowledge` as
+captured, other slots as filed). The
 stale-handoff guard and the context-usage warning ask for new lessons, decisions and
 knowledge in `session_items`.
 
