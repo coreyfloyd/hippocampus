@@ -1300,3 +1300,14 @@ def test_failed_handoff_write_does_not_persist_history(tmp_path, trigger):
     retried = checkpoint_cli(tmp_path, valid_payload(), trigger)
     assert retried.returncode == 0, retried.stderr
     assert len(json.loads(path.read_text())["resume"]["session_history"]) == 1
+
+
+@pytest.mark.parametrize("field", ["session_id", "produced_at"])
+def test_lint_refuses_typed_session_item_without_producing_session_or_time(field):
+    handoff = load_module()
+    loop = {"type": "commitment", "context": "Ship it", "disposition": "file",
+            "session_id": "producer", "produced_at": "2026-11-18T12:00:00Z"}
+    del loop[field]
+    problems, _ = handoff.lint_data({"schema_version": 1, "written_at": "2026-11-18T12:00:00Z",
+                                     "resume": {"headline": "x", "open_loops": [loop]}})
+    assert f"open_loops[0].{field} must be a non-empty string" in problems

@@ -23,7 +23,7 @@ def setup(tmp_path, items, mode='ok'):
     profile = {'name': 'fixture', 'record_writes': {'tickets': store(tmp_path, mode)}}
     (tmp_path / 'profile.json').write_text(json.dumps(profile))
     decisions = [{'identity': {'session_id': x['session_id'], 'produced_at': x['produced_at'],
-                              'text': x['context']}, 'rule': 'R2', 'read_status': 'ok'} for x in items]
+                              'text': x['context']}, 'rule': 'R2', 'read_status': 'ok'} for x in items if 'type' in x]
     (tmp_path / 'decisions.json').write_text(json.dumps(decisions))
     return sources
 
@@ -68,7 +68,7 @@ def test_lost_receipt_keeps_unfiled_then_retry_looks_up(tmp_path):
     assert len(json.loads((tmp_path / 'store.json').read_text())) == 1
 
 
-@pytest.mark.parametrize('problem', ['missing-store', 'invalid-json', 'missing-identity', 'missing-decision'])
+@pytest.mark.parametrize('problem', ['missing-store', 'invalid-json', 'non-array-loops', 'missing-decision'])
 def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
     sources = setup(tmp_path, [item()])
     if problem == 'missing-store':
@@ -76,8 +76,8 @@ def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
         sources.rmdir()
     elif problem == 'invalid-json':
         (sources / 'broken.json').write_text('{')
-    elif problem == 'missing-identity':
-        (sources / 'broken.json').write_text(json.dumps({'resume': {'open_loops': [{'context': 'unknown'}]}}))
+    elif problem == 'non-array-loops':
+        (sources / 'broken.json').write_text(json.dumps({'resume': {'open_loops': 'unknown'}}))
     else:
         (tmp_path / 'decisions.json').write_text('[]')
     assert run(tmp_path).returncode == 1
@@ -604,3 +604,39 @@ def test_attempted_write_keeps_its_failure_when_settled_meanwhile(tmp_path):
     assert row['status'] == 'failed' and row['error']
     assert row['recount_note'] == 'identity now settled by a receipt; this run attempted a write'
     assert [entry['identity']['text'] for entry in out['already_settled']] == ['change']
+
+
+def test_untyped_open_loops_are_not_session_items(tmp_path):
+    untyped = {'what': 'Watch the deploy', 'owner': 'agent', 'disposition': 'check after merge'}
+    setup(tmp_path, [item(), untyped, {'context': 'Test module seam', 'disposition': 'file if needed'}])
+    assert run(tmp_path, 'inspect').returncode == 1
+    inspected = report(tmp_path)
+    assert inspected['errors'] == [] and inspected['warnings'] == []
+    assert inspected['unique_items'] == inspected['unfiled_before_cutoff'] == 1
+    assert [row['item']['context'] for row in inspected['items']] == ['change']
+    assert run(tmp_path).returncode == 0
+    assert report(tmp_path)['ready_for_durable_filing']
+
+
+def test_null_open_loops_carry_nothing_and_are_a_warning(tmp_path):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    old.write_text(json.dumps({'schema_version': 2, 'subject': {'session_id': 'old'},
+                               'written_at': '2026-11-16T12:00:00Z', 'resume': {'open_loops': None}}))
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    assert out['warnings'] == [str(old) + ': resume.open_loops is null; read as no carried items']
+    assert str(old) in out['sources']
+
+
+def test_typed_item_without_producing_session_or_time_is_a_warning(tmp_path):
+    sources = setup(tmp_path, [item()])
+    old = sources / 'old.json'
+    orphan = {'type': 'commitment', 'context': 'unknown', 'disposition': 'file'}
+    old.write_text(json.dumps({'resume': {'open_loops': [{'context': 'note', 'disposition': 'keep'}, orphan]}}))
+    assert run(tmp_path).returncode == 0
+    out = report(tmp_path)
+    assert out['errors'] == [] and out['ready_for_durable_filing']
+    assert out['warnings'] == [str(old) + ': open_loops[1] lacks producing session or time; not filed']
+    assert [row['item']['context'] for row in out['items']] == ['change']

@@ -116,27 +116,37 @@ def merge_copies(first, second):
 def inventory(store, cutoff, receipts, paths=None):
     """Read both providers' handoffs without consulting sessions or knowledge.
 
-    Returns the open items, the identities ``receipts`` already settle, source snapshots
-    and errors.
+    Returns the open items, the identities ``receipts`` already settle, source snapshots,
+    errors and warnings. An open loop with no ``type`` is not a session item and is
+    skipped. A null ``open_loops`` and a typed item with no producing session or time
+    carry nothing to file, so each is a warning naming its file, never an error.
     """
-    items, sources, errors = {}, {}, []
+    items, sources, errors, warnings = {}, {}, [], []
     if store.is_symlink() or not store.is_dir():
-        return items, [], sources, ['handoff store must be an existing regular directory']
+        return items, [], sources, ['handoff store must be an existing regular directory'], warnings
     for path in sorted(store.glob('*.json') if paths is None else map(Path, paths)):
         try:
             raw, snapshot = sweep.read_handoff_source(path)
             data = json.loads(raw)
-            loops = data.get('resume', {}).get('open_loops')
+            resume = data.get('resume', {})
+            loops = resume.get('open_loops')
+            if loops is None and 'open_loops' in resume:
+                warnings.append(str(path) + ': resume.open_loops is null; read as no carried items')
+                loops = []
             if not isinstance(loops, list):
                 raise ValueError('resume.open_loops must be an array')
             sources[str(path)] = snapshot
-            for original in loops:
+            for index, original in enumerate(loops):
                 if not isinstance(original, dict):
                     raise ValueError('carried item must be an object')
+                if 'type' not in original:
+                    continue
                 subject = data.get('subject') or {}
                 if (not (original.get('session_id') or subject.get('session_id') or data.get('session_id'))
                         or not (original.get('produced_at') or data.get('written_at'))):
-                    raise ValueError('carried item lacks producing session or time')
+                    warnings.append(str(path) + ': open_loops[' + str(index) + '] lacks producing session '
+                                    'or time; not filed')
+                    continue
                 identity = sweep.item_identity(original, data, path)
                 item = {**original, 'session_id': identity['session_id'],
                         'produced_at': identity['produced_at']}
@@ -164,7 +174,7 @@ def inventory(store, cutoff, receipts, paths=None):
         else:
             errors += ['conflicting carried copies of identity ' + key + ': ' + conflict
                        for conflict in row.get('conflicts', [])]
-    return items, settled, sources, errors
+    return items, settled, sources, errors, warnings
 
 
 def save(path, report):
@@ -264,9 +274,10 @@ def run(args):
     report = dict(node=args.node, cutoff=args.cutoff, started_at=datetime.now(timezone.utc).isoformat(),
                   mode=args.command, items=[], errors=[], warnings=[], ready_for_durable_filing=False)
     read = settlement_receipts(store)
-    items, settled, sources, problems = inventory(store, args.cutoff, read['receipts'])
+    items, settled, sources, problems, notes = inventory(store, args.cutoff, read['receipts'])
     settled_ids = {sweep.identity_key(row['identity']): row['identity'] for row in settled}
-    report.update(errors=read['errors'] + problems, warnings=store_warnings(read, settled), sources=sources,
+    report.update(errors=read['errors'] + problems, warnings=store_warnings(read, settled) + notes,
+                  sources=sources,
                   unique_items=len(items) + len(settled_ids), unfiled_before_cutoff=len(items),
                   already_settled=[], ignored_decisions=[
                       dict(identity=identity, reason='identity already settled; judgment not used')
@@ -288,7 +299,7 @@ def run(args):
                 if store_failed:
                     raise ValueError(UNREADABLE)
                 # Check the eligible content, not checkpoint timestamps/newer work.
-                refreshed, now_settled, _, problems = inventory(store, args.cutoff, fresh['receipts'],
+                refreshed, now_settled, _, problems, _ = inventory(store, args.cutoff, fresh['receipts'],
                                                                 source['sources'])
                 mine = [row for row in now_settled if sweep.identity_key(row['identity']) == key]
                 if mine:
@@ -317,9 +328,9 @@ def run(args):
             outcome['error'] = UNREADABLE
         save(report_path, report)
     read = settlement_receipts(store)
-    current, settled, snapshots, problems = inventory(store, args.cutoff, read['receipts'])
+    current, settled, snapshots, problems, notes = inventory(store, args.cutoff, read['receipts'])
     add_unique(report, 'errors', read['errors'] + problems)
-    add_unique(report, 'warnings', store_warnings(read, settled))
+    add_unique(report, 'warnings', store_warnings(read, settled) + notes)
     report['recount_sources'] = snapshots
     # A receipt the carry step wrote during the run settles the identity for both.
     confirmed = {sweep.identity_key(row['identity']) for row in settled}
