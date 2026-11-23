@@ -212,14 +212,16 @@ def unstable_identity(item, data):
     by its own fields alone, as the carry step settles it (``handoff.session_item_identity``).
     An empty loop is named by its handoff and position (``handoff.loop_receipt_identity``).
     """
-    if not isinstance(item.get('context'), str) or not item['context'].strip():
-        if handoff_time(data) is None or not handoff.loop_receipt_identity(item, data, 0):
-            return EMPTY_WITHOUT_IDENTITY
-        return None
-    if item.get('type') in handoff.ITEM_TYPES:
+    empty = not isinstance(item.get('context'), str) or not item['context'].strip()
+    if handoff.is_typed(item):
+        if empty:
+            return 'is a typed item with no context; it cannot be filed (see #285 for writers)'
         if not (item.get('session_id') and item.get('produced_at')):
             return 'is a typed item without its own session_id and produced_at; the carry step cannot settle it'
         return None
+    if empty:
+        session, _ = handoff.handoff_producer(data)
+        return EMPTY_WITHOUT_IDENTITY if handoff_time(data) is None or not session else None
     subject = data.get('subject')
     subject = subject if isinstance(subject, dict) else {}
     if not (item.get('session_id') or subject.get('session_id') or data.get('session_id')):
@@ -265,8 +267,9 @@ def inventory(store, cutoff, receipts, paths=None):
                 identity = carried['identity']
                 loop = handoff.loop_receipt_identity(carried['item'], data, index)
                 if loop:
-                    # An untyped or empty loop: its receipt names this identity and a reserved type.
-                    identity = {field: loop[field] for field in ('session_id', 'produced_at', 'text')}
+                    # An untyped or empty loop is identified by its receipt identity, whose reserved
+                    # type keeps an empty loop and an untyped loop of the same text apart.
+                    identity = loop
                 item = {**carried['item'], 'session_id': identity['session_id'],
                         'produced_at': identity['produced_at']}
                 if sweep.timestamp(identity['produced_at']) >= sweep.timestamp(cutoff):
@@ -422,8 +425,8 @@ def file_item(source, decision, plan, ask, anchored_commitments=False):
 
 
 UNREADABLE = 'settled store unreadable; no write attempted'
-EMPTY_LOOP_JUDGMENT = ('an empty loop is never filed or dropped by a run; settle its receipt_identity '
-                       'with a dropped receipt through handoff.py settle-identity')
+LOOP_JUDGMENT = ('an untyped or empty loop is never filed or dropped by a run; settle its receipt_identity '
+                 'with a dropped receipt through handoff.py settle-identity')
 
 
 def add_unique(report, name, entries):
@@ -474,8 +477,8 @@ def run(args):
             outcome['error'] = 'conflicting carried copies; no write attempted'
         elif args.command == 'run' and key in by_identity and not store_failed:
             try:
-                if source.get('receipt_identity', {}).get('type') == handoff.EMPTY_LOOP:
-                    raise ValueError(EMPTY_LOOP_JUDGMENT)
+                if source.get('receipt_identity'):
+                    raise ValueError(LOOP_JUDGMENT)
                 # Re-read the store: the carry step may have settled this identity since.
                 fresh = settlement_receipts(store)
                 add_unique(report, 'errors', fresh['errors'])

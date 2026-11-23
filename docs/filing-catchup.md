@@ -37,12 +37,13 @@ Catch-up then requires an identity it can keep stable, and reports an
 inventory error naming the file and `open_loops` index for any loop without one.
 The error blocks readiness; the handoff's other items are still filed.
 
-- An empty loop (no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`)
+- An empty loop (no `type` and no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`)
   is named by its handoff's own fields: its session (`subject.session_id`, else
   `session_id`), its valid `written_at`, and its position, as the text
   `open_loops[N]`. A handoff without that session or time leaves it an error.
-- A typed item (a session-item `type`) needs its own `session_id` and
-  `produced_at`, because the carry step settles it by its own fields.
+- A typed item (a session-item `type`) needs a `context` and its own `session_id`
+  and `produced_at`, because the carry step settles it by its own fields; a typed
+  item without context is an error, never an empty loop.
 - Any other loop takes a missing session from its handoff's `subject.session_id`
   and a missing time from its `written_at`. The sweep falls back further, to the
   file's name and modification time; catch-up never does, so touching or copying
@@ -138,16 +139,19 @@ receipts, as it does a filed row: changed content gives a `recount_error` and
 leaves the identity unfiled, and the identity is removed from `already_settled`.
 
 Untyped and empty loops are never filed: each is dropped with a recorded reason.
-Inspect gives such a row a `receipt_identity`: its identity plus a reserved
-`type`, `untyped_loop` for a loop with context but no session-item type, or
-`empty_loop` for a loop without context. Settle it with a receipt naming that
+Such a row's `identity`, repeated as its `receipt_identity`, adds a reserved
+`type`: `untyped_loop` for a loop with context but no session-item type, or
+`empty_loop` for an untyped loop without context, so an empty loop and an
+untyped loop of the same text are never one row. Settle it with a receipt naming that
 identity, `disposition: "dropped"` and the reason, through
 `handoff.py settle-identity --receipts FILE`, the carry step's own writer and
 store; any other disposition is refused as invalid, and a store row with another
 disposition settles nothing. The next report lists the loop under `already_settled`
-with the receipt's `reason`. The sweep never files a loop so settled, and no
-checkpoint keeps an untyped loop carrying its own `session_id` and `produced_at`
-once its receipt exists. A run judgment for an empty loop fails, saying so.
+with the receipt's `reason`. The sweep never files a loop so settled. A checkpoint
+does not carry it again: one carrying its own `session_id` and `produced_at` is
+matched by them, and one named by its handoff is matched by its content and its
+position in the writer's previous handoff or the handoff it picked up, where the
+receipt settles it. A run judgment for an untyped or empty loop fails, saying so.
 
 Copies of one producing identity may differ in `status` and `recorded` hints,
 which never prove settlement. When copies otherwise agree, nonconflicting

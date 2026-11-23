@@ -62,11 +62,14 @@ Catch-up lists open loops with the sweep's reader (`sweep.carried_items`), so ev
 typed or not, is an item, and both read a null `resume.open_loops` as no items with a
 warning. Catch-up reports an inventory error for a typed item without its own `session_id`
 and `produced_at`, and any loop whose session or time would come from the file's name or
-modification time. An empty loop (no `context`) is named by its handoff's session,
-`written_at` and position (`open_loops[N]`). Untyped and empty loops are never filed: inspect
-gives each a `receipt_identity` with the reserved type `untyped_loop` or `empty_loop`, and
-only a `dropped` receipt with a reason, recorded through `settle-identity`, settles it; the
-report then lists it under `already_settled` with that reason, and the sweep never files it. Where copies of one identity differ only in
+modification time, or a typed item with no `context`. An empty loop (no `type` and no
+`context`) is named by its handoff's session,
+`written_at` and position (`open_loops[N]`). Untyped and empty loops are never filed, and a run
+judgment for one fails: inspect gives each an `identity` and `receipt_identity` with the reserved
+type `untyped_loop` or `empty_loop`, and only a `dropped` receipt with a reason, recorded through
+`settle-identity`, settles it; the report then lists it under `already_settled` with that reason,
+the sweep never files it, and no checkpoint carries it again from the writer's previous or
+picked-up handoff. Where copies of one identity differ only in
 anchor or proposal text, the copy from the handoff with the newest `written_at` is filed and
 older ones are listed under `superseded_copies`; a difference in type or other filing content,
 or an unordered conflict, stays an inventory error. A `progress`, `open_loop` or `artifact`

@@ -1403,7 +1403,9 @@ def test_catch_up_and_sweep_read_the_same_items_and_identities(sandbox):
     key = lambda identity: json.dumps(identity, sort_keys=True)
     sweep_ids = {key(item['identity']) for candidate in swept['candidates'] for item in candidate['items']}
     assert len(sweep_ids) == 2
-    assert {key(row['identity']) for row in caught['items']} == sweep_ids
+    # Catch-up adds an untyped loop's reserved receipt type; session, time and text agree.
+    assert {key({k: v for k, v in row['identity'].items() if k != 'type'}) for row in caught['items']} == sweep_ids
+    assert sorted(row['identity'].get('type', '') for row in caught['items']) == ['', 'untyped_loop']
 
 
 def test_catch_up_and_sweep_both_read_null_open_loops_as_empty_with_a_warning(sandbox):

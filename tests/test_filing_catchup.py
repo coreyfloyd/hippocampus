@@ -633,15 +633,19 @@ def record_identity_of(x):
     {'type': '', 'context': 'Empty type', 'disposition': 'file'},
     {'type': None, 'context': 'Null type', 'disposition': 'file'},
 ], ids=['untyped', 'empty-type', 'null-type'])
-def test_untyped_loop_with_context_files_under_its_handoffs_identity_and_reaches_ready(tmp_path, loop):
+@pytest.mark.parametrize('rule', ['R2', 'R3', 'R6'])
+def test_a_run_judgment_never_files_or_drops_an_untyped_loop(tmp_path, loop, rule):
     setup(tmp_path, [item(), loop])
-    assert run(tmp_path).returncode == 0, report(tmp_path)
+    identity = {**carrier_identity(loop), 'type': 'untyped_loop'}
+    judge(tmp_path, {'identity': carrier_identity(item()), 'rule': 'R2', 'read_status': 'ok'},
+          {'identity': identity, 'rule': rule, 'reason': REASON, 'read_status': 'ok', 'destination': 'tickets'})
+    assert run(tmp_path).returncode == 1
     out = report(tmp_path)
-    assert out['errors'] == [] and out['ready_for_durable_filing']
-    assert carrier_identity(loop) in [row['identity'] for row in out['items']]
-    assert len(stored(tmp_path)) == 2
-    assert run(tmp_path).returncode == 0
-    assert len(stored(tmp_path)) == 2
+    assert out['errors'] == [] and not out['ready_for_durable_filing']
+    [row] = [row for row in out['items'] if row['identity'] == identity]
+    assert row['status'] == 'failed' and 'settle-identity' in row['error']
+    # Only the typed item is filed; the untyped loop stays unfiled until a dropped receipt settles it.
+    assert stored(tmp_path) == [record_identity_of(item())] and settled_store(tmp_path) == []
 
 
 @pytest.mark.parametrize('loop, problem', [
@@ -768,9 +772,9 @@ def test_a_reasoned_drop_writes_one_receipt_and_no_carry_step_restores_it(tmp_pa
     assert len(settled_store(tmp_path)) == 1
 
 
-@pytest.mark.parametrize('kind', ['knowledge', 'lesson', 'decision', 'commitment', None])
+@pytest.mark.parametrize('kind', ['knowledge', 'lesson', 'decision', 'commitment'])
 def test_a_drop_of_a_filed_type_is_refused_and_writes_nothing(tmp_path, kind):
-    loop = {**item(), 'type': kind} if kind else {k: v for k, v in item().items() if k != 'type'}
+    loop = {**item(), 'type': kind}
     setup(tmp_path, [loop])
     judge(tmp_path, {'identity': carrier_identity(loop), 'rule': 'R1', 'reason': REASON})
     assert run(tmp_path).returncode == 1
@@ -1083,9 +1087,9 @@ def settle_identity(tmp_path, *receipts):
     return result.returncode, json.loads(result.stdout)
 
 
-def receipt_identities(tmp_path):
+def receipt_identities(tmp_path, cutoff=CUTOFF):
     """The receipt identity inspect reports for each unfiled row, by its text."""
-    assert run(tmp_path, 'inspect').returncode == 1
+    assert run(tmp_path, 'inspect', cutoff=cutoff).returncode == 1
     return {row['identity']['text']: row.get('receipt_identity') for row in report(tmp_path)['items']}
 
 
@@ -1169,7 +1173,7 @@ def test_each_drop_keeps_its_reason_in_the_receipt_and_the_report(tmp_path):
     assert run(tmp_path).returncode == 0
     rows = report(tmp_path)['already_settled']
     assert sorted(rows, key=lambda row: row['type']) == [
-        {'identity': {key: identity[key] for key in ('session_id', 'produced_at', 'text')}, 'type': identity['type'],
+        {'identity': identity, 'type': identity['type'],
          'disposition': 'dropped', 'reason': REASON, 'settled_at': '2026-11-20T12:00:00Z'}
         for identity in sorted(identities, key=lambda identity: identity['type'])]
 
@@ -1192,9 +1196,72 @@ def test_an_empty_loop_without_its_handoffs_session_or_time_stays_a_loop_error(t
 def test_a_run_judgment_never_files_or_drops_an_empty_loop(tmp_path, rule):
     setup(tmp_path, [EMPTY])
     [identity] = receipt_identities(tmp_path).values()
-    judge(tmp_path, {'identity': {key: identity[key] for key in ('session_id', 'produced_at', 'text')},
-                     'rule': rule, 'reason': REASON, 'read_status': 'ok'})
+    judge(tmp_path, {'identity': identity, 'rule': rule, 'reason': REASON, 'read_status': 'ok'})
     assert run(tmp_path).returncode == 1
     [row] = report(tmp_path)['items']
     assert row['status'] == 'failed' and 'settle-identity' in row['error']
     assert settled_store(tmp_path) == [] and stored(tmp_path) == []
+
+
+def test_a_typed_item_without_context_stays_a_loop_error_whatever_the_store_holds(tmp_path):
+    commitment = {'type': 'commitment', 'session_id': 'S', 'produced_at': '2026-11-03T12:00:00Z',
+                  'anchor': {'ticket': 'example/repo#1'}, 'disposition': 'file'}
+    sources = setup(tmp_path, [item(), commitment])
+    # Even a dropped receipt naming it as an empty loop never settles a typed item.
+    forged = {'session_id': 'carrier', 'produced_at': WRITTEN, 'type': 'empty_loop', 'text': 'open_loops[1]'}
+    assert settle_identity(tmp_path, drop_receipt(forged))[0] == 0
+    assert run(tmp_path).returncode == 1
+    out = report(tmp_path)
+    assert out['errors'] == [str(sources / name) + ': open_loops[1] is a typed item with no context; it cannot '
+                             'be filed (see #285 for writers)' for name in ('claude.json', 'codex.json')]
+    assert out['already_settled'] == [] and not out['ready_for_durable_filing']
+
+
+@pytest.mark.parametrize('tool', carry.TOOLS)
+def test_a_settled_loop_named_by_its_handoff_is_not_carried_by_checkpoint_or_pickup(tmp_path, tool):
+    loop = {'context': 'Legacy note', 'disposition': 'keep'}
+    written = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
+    (tmp_path / 'sources').mkdir()
+    stale = (tmp_path / 'A.json').read_text()
+    (tmp_path / 'sources/A.json').write_text(stale)
+    (tmp_path / 'stale.json').write_text(stale)
+    (tmp_path / 'profile.json').write_text(json.dumps({'name': 'fixture'}))
+    judge(tmp_path)
+    identity = receipt_identities(tmp_path, '2099-01-01T00:00:00Z')['Legacy note']
+    assert identity == {'session_id': 'A', 'produced_at': written['written_at'], 'type': 'untyped_loop',
+                        'text': 'Legacy note'}
+    assert settle_identity(tmp_path, drop_receipt(identity))[0] == 0
+    # The writer re-supplying the loop from its own previous handoff no longer carries it.
+    again = carry.checkpoint(tmp_path, 'A', tool, resume={'open_loops': [loop]})
+    assert loop not in again['resume']['open_loops']
+    # A successor that picked up the stale handoff does not carry it either.
+    carry.pickup(tmp_path, 'B', 'stale', tool)
+    resumed = carry.checkpoint(tmp_path, 'B', tool, resume={'open_loops': [loop]})
+    assert loop not in resumed['resume']['open_loops']
+    # Content that is not settled in either handoff is still carried.
+    other = {'context': 'New note', 'disposition': 'keep'}
+    assert other in carry.checkpoint(tmp_path, 'B', tool, resume={'open_loops': [loop, other]})['resume']['open_loops']
+
+
+def test_the_receipt_writer_never_counts_a_loop_receipt_that_is_not_dropped(tmp_path):
+    sys.path.insert(0, str(ROOT / 'scripts/lib'))
+    import handoff
+    identity = {'session_id': 'S', 'produced_at': WRITTEN, 'type': 'untyped_loop', 'text': 'Legacy note'}
+    path = str(tmp_path / 'settled-identities.jsonl')
+    assert handoff.write_settlement_receipts([drop_receipt(identity, 'filed')], path) == {'written': 0, 'skipped': 1}
+    assert handoff.write_settlement_receipts([drop_receipt(identity)], path) == {'written': 1, 'skipped': 0}
+
+
+def test_an_empty_loop_and_an_untyped_loop_of_the_same_text_never_share_a_row(tmp_path):
+    setup(tmp_path, [EMPTY, {'context': 'open_loops[0]', 'disposition': 'keep'}])
+    judge(tmp_path)
+    assert run(tmp_path, 'inspect').returncode == 1
+    rows = report(tmp_path)['items']
+    assert sorted(row['identity']['type'] for row in rows) == ['empty_loop', 'untyped_loop']
+    assert all(len(row['copies']) == 2 and 'conflicts' not in row for row in rows)
+    [empty] = [row['receipt_identity'] for row in rows if row['identity']['type'] == 'empty_loop']
+    assert settle_identity(tmp_path, drop_receipt(empty))[0] == 0
+    assert run(tmp_path, 'inspect').returncode == 1
+    out = report(tmp_path)
+    assert [row['identity']['type'] for row in out['items']] == ['untyped_loop']
+    assert [row['type'] for row in out['already_settled']] == ['empty_loop']

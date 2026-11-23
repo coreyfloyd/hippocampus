@@ -1087,23 +1087,60 @@ def loop_receipt_identity(item: Any, handoff: Any = None, position: int | None =
     and the carry step all key these loops here; without a handoff only an untyped loop that
     carries its own session and time has one.
     """
-    if not isinstance(item, Mapping):
-        return None
-    data = handoff if isinstance(handoff, Mapping) else {}
-    subject = data.get("subject") if isinstance(data.get("subject"), Mapping) else {}
-    session = subject.get("session_id") or data.get("session_id")
+    if not isinstance(item, Mapping) or is_typed(item):
+        return None  # A typed item is filed by its own identity; without context it is a loop error.
+    session, written_at = handoff_producer(handoff)
     context = item.get("context")
     if not isinstance(context, str) or not context.strip():
         if position is None:
             return None
-        key = (session, data.get("written_at"), EMPTY_LOOP, f"open_loops[{position}]")
-    elif isinstance(item.get("type"), str) and item["type"] in ITEM_TYPES:
-        return None
+        key = (session, written_at, EMPTY_LOOP, f"open_loops[{position}]")
     else:
-        key = (item.get("session_id") or session, item.get("produced_at") or data.get("written_at"),
-               UNTYPED_LOOP, context)
+        key = (item.get("session_id") or session, item.get("produced_at") or written_at, UNTYPED_LOOP, context)
     identity = dict(zip(RECEIPT_IDENTITY, key))
     return identity if receipt_key(identity) else None
+
+
+def is_typed(item: Mapping[str, Any]) -> bool:
+    return isinstance(item.get("type"), str) and item["type"] in ITEM_TYPES
+
+
+def handoff_producer(handoff: Any) -> tuple[Any, Any]:
+    """A handoff's own session (``subject.session_id``, else ``session_id``) and ``written_at``."""
+    data = handoff if isinstance(handoff, Mapping) else {}
+    subject = data.get("subject") if isinstance(data.get("subject"), Mapping) else {}
+    return subject.get("session_id") or data.get("session_id"), data.get("written_at")
+
+
+SETTLED_LOOP = "settled_loop_content"
+
+
+def loop_content_key(loop: Any) -> tuple[str, str]:
+    return (SETTLED_LOOP, json.dumps(loop, sort_keys=True, ensure_ascii=False))
+
+
+def carry_store(stored: set[tuple[str, ...]], session_id: str, path: str) -> set[tuple[str, ...]]:
+    """The store a handoff write carries by, plus the content of settled untyped and empty loops.
+
+    A writer receives a legacy loop without the handoff that named it. The handoffs it can
+    have come from are this session's previous handoff at ``path`` and the handoff it resumed;
+    a loop that a dropped receipt settles there, by handoff and position as catch-up and the
+    sweep name it, is not carried again. Content that is also open there stays carried.
+    """
+    handoffs = [(resumed_handoff(session_id) or {}).get("data")]
+    try:
+        handoffs.append(read_json(path))
+    except (OSError, ValueError):
+        pass
+    settled, open_ = set(), set()
+    for data in handoffs:
+        resume = data.get("resume") if isinstance(data, Mapping) else None
+        loops = resume.get("open_loops") if isinstance(resume, Mapping) else None
+        for index, loop in enumerate(loops if isinstance(loops, list) else []):
+            identity = loop_receipt_identity(loop, data, index)
+            if identity:
+                (settled if receipt_key(identity) in stored else open_).add(loop_content_key(loop))
+    return stored | (settled - open_)
 
 
 def carry_identity(item: Any) -> tuple[str, ...] | None:
@@ -1169,9 +1206,10 @@ def may_carry(item: Any, store: set[tuple[str, ...]], identity: Any = _UNKNOWN) 
     """
     if isinstance(item, Mapping) and item.get("type") == "artifact":
         return carry_identity(item) not in store
-    loop = loop_receipt_identity(item)
-    if loop:
-        return receipt_key(loop) not in store
+    if isinstance(item, Mapping) and not is_typed(item):
+        loop = loop_receipt_identity(item)
+        if (loop and receipt_key(loop) in store) or loop_content_key(item) in store:
+            return False
     identity = session_item_identity(item) if identity is _UNKNOWN else identity
     return identity is None or (identity not in store and terminal_disposition(item) is None)
 
@@ -1256,7 +1294,7 @@ def write_settlement_receipts(receipts: Sequence[Mapping[str, Any]],
             settled = settled_identities(str(path))
             rows = []
             for receipt in receipts:
-                key = receipt_key(receipt["identity"])
+                key = settlement_key(receipt)
                 if key and key not in settled:
                     settled.add(key)
                     rows.append(json.dumps({field: receipt[field] for field in RECEIPT_FIELDS},
@@ -1627,7 +1665,8 @@ def checkpoint(supplied: Mapping[str, Any], cwd: str, session_id: str, trigger: 
     receipts += settled_item_receipts(supplied, session_id)
     # This write's own settlements already apply to the handoff it writes, and an item
     # its own filing report kept stays carried whatever an earlier receipt says.
-    store = (stored | {receipt_key(receipt["identity"]) for receipt in receipts}) - filing_kept(supplied)
+    store = (carry_store(stored, session_id, path) | {receipt_key(receipt["identity"]) for receipt in receipts}) \
+        - filing_kept(supplied)
     handoff = overlay_checkpoint(supplied, cwd, session_id, trigger, store=store)
     if positions:
         positions = supplied_positions(supplied, session_id, store, handoff.get("resume", {}).get("open_loops"))
@@ -2403,7 +2442,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             loops = parsed["resume"].get("open_loops", [])
             stored = settled_identities()
             receipts, closed = closing_receipts(loops if isinstance(loops, list) else [], session_id, stored)
-            store = stored | {receipt_key(receipt["identity"]) for receipt in receipts}
+            store = carry_store(stored, session_id, args.path) | {receipt_key(receipt["identity"]) for receipt in receipts}
             if isinstance(loops, list):
                 merged = merge_session_items(list(loops), session_id, store=store)
                 if merged or "open_loops" in parsed["resume"]:
