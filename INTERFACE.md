@@ -1101,7 +1101,11 @@ the record-write protocol. The item names `entry`, `author`, `author_role`, and
 supplies none. A writer that cannot place the scope answers `failed` with an `ask`
 (`text`, `choices`, the request's `identity` and `item`). The module keeps the item
 and adds the ask, owned as configured, to the filing report's `asks`; the agent
-files it through the ask binding. Without the user, a proposal uses the owned R3 ask.
+files it through the ask binding; durable checkpoint and catch-up deliver it through
+the ask writer. The carried item keeps it as `writer_ask`, so a later wrap does not
+raise it again. Without the user, a proposal uses the owned R3 ask: `file` and
+`record` with `--unattended`, or for a session in unattended mode, refuse to write a
+user decision and raise that ask.
 The documents record write refuses every decision item and names the decisions kind.
 Any other decision item is the user's: routed to another kind, such as an R2 ticket
 comment, it still needs `answer: "approve"` and `approval_source`. A profile's retired

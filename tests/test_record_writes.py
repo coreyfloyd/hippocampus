@@ -13,13 +13,20 @@ sys.path.insert(0, str(ROOT / 'scripts/lib'))
 import record_write
 
 
-def run(tmp_path, operation, profile, payload, rows):
+def run(tmp_path, operation, profile, payload, rows, *extra):
     for name, value in [('profile', profile), ('input', payload), ('rows', rows)]:
         (tmp_path / (name + '.json')).write_text(json.dumps(value))
+    # Session mode and configuration come from the test's own directory, never the live ones.
+    env = dict(os.environ, HANDOFF_LEDGER_DIR=str(tmp_path), CHECKLIST_STATE_DIR=str(tmp_path / 'checklist-state'),
+               HIPPOCAMPUS_CONFIG=str(tmp_path / 'no-config.json'))
+    # A Codex run carries no Claude Code entry point.
+    if env.get('HIPPOCAMPUS_HARNESS') == 'codex':
+        env.pop('CLAUDE_CODE_ENTRYPOINT', None)
+    else:
+        env['CLAUDE_CODE_ENTRYPOINT'] = 'cli'
     return subprocess.run([sys.executable, str(CLI), operation, '--user-profile',
         str(tmp_path / 'profile.json'), '--handoff', str(tmp_path / 'input.json'),
-        '--filing', str(tmp_path / 'rows.json')], capture_output=True, text=True,
-        env=dict(os.environ, CLAUDE_CODE_ENTRYPOINT='cli', HANDOFF_LEDGER_DIR=str(tmp_path)))
+        '--filing', str(tmp_path / 'rows.json'), *extra], capture_output=True, text=True, env=env)
 
 
 def store(tmp_path, mode='ok', name='store'):

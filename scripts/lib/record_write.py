@@ -51,12 +51,14 @@ def _scope(value: Any) -> bool:
 
 
 def ticket_anchor(item: Mapping[str, Any]) -> str | None:
+    """The item's ticket, from its anchor or its top-level ``ticket``, as the filing pass reads it."""
     anchor = item.get('anchor')
-    if anchor is None:
-        return None
-    if not isinstance(anchor, Mapping):
+    if anchor is not None and not isinstance(anchor, Mapping):
         raise ValueError('anchor must be an object')
-    return anchor['ticket'] if _text(anchor.get('ticket')) else None
+    for ticket in ((anchor or {}).get('ticket'), item.get('ticket')):
+        if _text(ticket):
+            return ticket
+    return None
 
 
 def user_decision(item: Mapping[str, Any]) -> bool:
@@ -170,6 +172,8 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
             *, context: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """A failed lookup blocks writes. Missing write acknowledgement is uncertain."""
     output = copy.deepcopy(dict(row))
+    # The writer's earlier ask rides on the carried item; it is not part of the record.
+    item = {k: v for k, v in item.items() if k != 'writer_ask'}
     phase = 'lookup'
     try:
         key = identity(item)

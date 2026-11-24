@@ -165,12 +165,16 @@ With the user present, obtain explicit approval of each proposal. Its R7 row car
 `answer: "approve"` and nonempty `approval_source` pointing to the user's approval;
 the module sends it through the `decisions` record write with its identity lookup.
 The writer chooses the folder from the scope; never name one. When it answers
-`failed` with an `ask` (a scope it cannot place), the item stays carried and the
-filing report holds that ask: run the ask binding with it, collect its receipt and
-refile under the user's answer. Missing approval, binding or receipt keeps the item.
+`failed` with an `ask` (a scope it cannot place), the row is `pending`, the carried
+item keeps that ask as `writer_ask`, and the filing report holds it once: run the ask
+binding with it and refile under the user's answer. Durable checkpoint and catch-up
+deliver it through the ask writer themselves. Missing approval, binding or receipt keeps the item.
 The documents record write refuses every decision and names the decisions kind.
 
-Without the user, use R3 with approve/decline choices. Invoke the ask binding with
+Without the user, use R3 with approve/decline choices. `file` and `record` take
+`--unattended`, and also read it from the session (unattended mode or a pending
+unattended wrap); then any user-decision row that would write fails, the module
+raises the R3 ask payload, and nothing is written. Invoke the ask binding with
 the full proposal and the original identity; collect its saved-owner receipt. The
 configured ask owner owes the user that approval, and nothing is written. A later
 session files the approved proposal under R7 with its unchanged identity and
@@ -181,7 +185,7 @@ An agent decision tied to no ticket is an agent decision log entry: `entry:
 "agent_log"`, `author` (the agent), `author_role: "agent"`, and `decision_record` with `scope`, `text` and
 `why`. File it under R7 without approval. An agent decision tied to a ticket stays
 an R2 comment on that ticket through the tickets record write; the decisions kind
-refuses an item with `anchor.ticket`. Any decision not marked as the agent's is the
+refuses an item with `anchor.ticket` or a top-level `ticket`. Any decision not marked as the agent's is the
 user's and needs approval on every kind, including a ticket comment.
 
 A change log entry has `record_kind: "logs"`, `author`, and `change_log` with
