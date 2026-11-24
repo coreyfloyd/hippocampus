@@ -470,6 +470,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result.pop("lesson_outcomes", None)
     result.pop("lesson_asks", None)
     result.pop("new_skill_asks", None)
+    result.pop("new_skill_ask_errors", None)
     result.pop("knowledge_outcomes", None)
     result.pop("knowledge_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
@@ -1406,11 +1407,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not args.lessons:
                     raise ValueError("apply-lessons requires --lessons")
                 output = lessons.apply(handoff, json.loads(args.lessons.read_text()), module, session_id)
-                # A new-skill lesson, carried or found this wrap, waits for the user's yes in an ask.
-                items = [*output.get("resume", {}).get("open_loops", []),
-                         *(item for item in output.get("session_items", []) if item.get("recorded") is not True)]
-                output["new_skill_asks"] = [ask_payload(item, output.get("subject", {}), ask)
-                                            for item in items if item.get("type") == "lesson" and item.get("new_skill")]
+                # A new-skill lesson this call asked about waits for the user's yes in an ask. The
+                # outcomes are recorded already, so a payload that cannot be built is reported, not raised.
+                output["new_skill_asks"], output["new_skill_ask_errors"] = [], []
+                for item in output.pop("new_skill_asked"):
+                    try:
+                        output["new_skill_asks"].append(ask_payload(item, output.get("subject", {}), ask))
+                    except ValueError as error:
+                        output["new_skill_ask_errors"].append({"context": item.get("context"), "error": str(error)})
             else:
                 persist = next(step for step in plan if step["id"] == "persist").get("binding")
                 rows = lessons.deliver(module, session_id, bool(persist), lessons.routing_rules())

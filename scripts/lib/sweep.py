@@ -582,7 +582,7 @@ def build_report(discovery, decisions, plan, ask, checks, interactive, started, 
             binding = row.get('binding')
             if auto_apply and binding in APPLY_OPERATIONS and row['outcome'] == 'carried':
                 if auto_apply[binding] == 'apply':
-                    plan_apply(section, row, candidate['session_id'], indexes[binding])
+                    plan_apply(section, row, candidate['session_id'], indexes[binding], candidate['directory'], ask)
                 else:
                     row['reason'] = auto_apply['reason']
             if binding == 'ask':
@@ -783,7 +783,10 @@ def recorded_outcome(row, session, index):
 def settle_lesson(row, outcome):
     """Copy a lesson's outcome onto its row. A commit stays `applied` until it is delivered."""
     if outcome['status'] == 'asked':
-        row.update(receipt=outcome.get('receipt') or 'ask delivered', destination='ask', outcome='already_written')
+        if outcome.get('ask_delivered'):
+            row.update(receipt=outcome.get('receipt') or 'ask delivered', destination='ask', outcome='already_written')
+        else:
+            row.update(outcome='carried', reason='New-skill lesson: its ask is not delivered yet')
         return
     row['applied_kind'] = 'lesson'
     if outcome['status'] == 'dropped':
@@ -817,7 +820,27 @@ def settle_prior(row, outcome):
         row['reason'] = 'Already settled; its ledger holds the receipt'
 
 
-def plan_apply(section, row, session, index):
+def recorded_ask(section, row, found, directory, ask):
+    """A new-skill lesson already asked about raises its recorded ask again, with no new assessment."""
+    item = ledger_item(row)
+    found = next(((ledger, outcome) for ledger, outcome in found
+                  if outcome['status'] == 'asked' and isinstance(outcome.get('choices'), list)), None)
+    if found is None:
+        return False
+    try:
+        payload = checklist.ask_payload(checklist.lessons.asking(item, found[1]['choices']),
+                                        {'session_id': found[0], 'working_directory': directory}, ask)
+    except ValueError:
+        return False  # An ask that cannot be rebuilt goes back to the agent's assessment.
+    row['ledger_session'] = found[0]
+    row.update(binding='ask', destination='ask', outcome='dry run' if ask else 'unbound', settles='lesson',
+               reason='New-skill lesson: its recorded ask is raised again until delivered',
+               ask=dict(payload, identity=row['identity']), item_kind='lesson')
+    section['asks_raised'].append(row)
+    return True
+
+
+def plan_apply(section, row, session, index, directory, ask):
     """Mark what act mode would apply, unless a ledger already settles it."""
     row.update(item_kind=ITEM_TYPES[row['binding']], handoff_session=session)
     try:
@@ -828,6 +851,9 @@ def plan_apply(section, row, session, index):
         row['ledger_session'], prior = recorded_outcome(row, session, index)
     except Exception as exc:
         row.update(outcome='failed', error=error_text(exc))
+        return
+    if not prior and row['item_kind'] == 'lesson' and recorded_ask(
+            section, row, index['found'].get(handoff.session_item_identity(ledger_item(row)), []), directory, ask):
         return
     if prior:
         settle_prior(row, prior)

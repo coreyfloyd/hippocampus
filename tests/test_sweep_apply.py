@@ -970,3 +970,28 @@ def test_carried_new_skill_lesson_becomes_an_ask_and_no_applied_lesson(sandbox, 
     assert [raised['ask']['text'] for raised in section(sandbox, run)['asks_raised']] == [proposal]
     assert git(checkout, 'rev-parse', 'HEAD') == head and git(checkout, 'status', '--porcelain') == ''
     assert archived(sandbox, PRODUCER)
+
+
+def test_undelivered_new_skill_ask_is_raised_again_without_a_new_assessment(sandbox, tool):
+    proposal = 'New skill release-check: four ordered steps done by hand; nearest skill release-signing differs.'
+    choices = ['create the skill', 'decline']
+    path = source(sandbox, PRODUCER, loops=[lesson(proposal)])
+    configure(sandbox)
+    row = {'recommend': 'apply', 'new_skill': True, 'choices': choices}
+    run, _ = finish(sandbox, start(sandbox, ask=False), agent(row))
+    assert section(sandbox, run)['asks_raised'][0]['outcome'] == 'unbound' and path.exists()
+    run, rounds = finish(sandbox, start(sandbox), agent())
+    assert [[work['operation'] for work in group] for group in rounds[:1]] == [['ask']]
+    ask, = rounds[0]
+    assert ask['choices'] == choices and ask['ask']['text'] == proposal
+    assert archived(sandbox, PRODUCER)
+
+
+def test_undelivered_new_skill_outcome_reports_no_delivered_ask(sandbox, monkeypatch):
+    module = in_process(sandbox, monkeypatch)
+    row = {'item': lesson(), 'identity': {}}
+    module.settle_lesson(row, {'identity': ['x'], 'status': 'asked'})
+    assert row.get('receipt') != 'ask delivered' and row['outcome'] not in ('written', 'already_written')
+    delivered = {'item': lesson(), 'identity': {}}
+    module.settle_lesson(delivered, {'identity': ['x'], 'status': 'asked', 'ask_delivered': True, 'receipt': 'r-1'})
+    assert delivered['receipt'] == 'r-1' and delivered['outcome'] == 'already_written'

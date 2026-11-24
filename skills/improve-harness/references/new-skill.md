@@ -40,10 +40,14 @@ the target and evidence, and `choices` (for example `create the skill`, `edit
 
 With `plan` returning `auto_apply.lessons: apply`, give the row `new_skill: true`
 and its `choices`; it needs no `target`, `edits` or `change`. `apply-lessons` never
-writes it: its outcome is `asked`, the item stays carried, and `new_skill_asks`
-holds its ask. Send each one to the ask binding through an R4 row with
-`destination: "ask"` and its choices, as for a fact about the user; the lesson stays
-carried until the user answers. A sweep in act mode does the same.
+writes it: a row recommending `apply` makes its outcome `asked`, the item stays
+carried, and `new_skill_asks` holds the asks raised by that call
+(`new_skill_ask_errors` names any it could not build). Send each ask to the ask
+binding through an R4 row with `destination: "ask"` and its choices, as for a fact
+about the user; the lesson stays carried until the user answers. A `skip` row drops
+it with its reason, `dictated` or not. An item marked `approved: true` is never asked
+again. A sweep in act mode does the same, and raises an undelivered ask again from
+its recorded outcome.
 
 ## After the yes
 
@@ -59,7 +63,8 @@ Tell the creator where to write: the skill-source location the lesson routing na
 so the new skill lands where the user's skills are committed. When the routing names
 none, tell the creator to ask the user for the location.
 
-When the running tool has no skill creator, apply nothing: keep the proposal
-carried with the user's yes recorded in its `context`, and report the install line
-from the table.
+Record the user's yes as `approved: true` on the carried item. Never rewrite its
+`context`: that is part of the item's identity, so a changed one would be asked again.
+When the running tool has no skill creator, apply nothing: keep the approved
+proposal carried and report the install line from the table.
 The lesson leaves the handoff only when the creator reports the skill written.
