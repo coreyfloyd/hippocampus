@@ -29,10 +29,11 @@ lookup and delivery; it is not a receipt. Plain pending, dropped, failed,
 uncertain, and read-failed ask judgments never authorize delivery. A row marked
 filed must already have an actual receipt for the item's producing identity and
 configured owner. Do not mark a deferred item filed to make a writer run.
-Use the [record](../record/SKILL.md) decision-document contract: only user decisions,
-explicitly approved, may reach the configured document folder. Without the user,
-deliver the full proposal as an R3 ask to the configured durable agent. Promises
-become asks. Agent operational choices remain separate audit material.
+Run decision capture under the [record](../record/SKILL.md) decision-record contract:
+only user decisions, explicitly approved, file through the decisions record write.
+Without the user, deliver the full proposal as an R3 ask to the configured durable
+agent. Promises become asks. Agent decisions tied to no ticket file as agent
+decision log entries; one tied to a ticket stays a comment on it.
 Run knowledge-capture and improve-harness through their usual approval routes;
 keep native items until actual capture/application receipts arrive. An ask receipt
 proves delivery, not native capture. Run the persist binding under its existing

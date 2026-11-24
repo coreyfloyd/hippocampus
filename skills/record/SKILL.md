@@ -1,6 +1,6 @@
 ---
 name: record
-description: "Run the package record step mid-session or during checklist, filing session items through per-kind record writes."
+description: "Run the package record step mid-session or during checklist, filing session items through per-kind record writes. Also use when the user says 'capture decisions'."
 ---
 
 # Record
@@ -19,7 +19,8 @@ wrap, compaction, or resume. Missing identity fields fail the write and keep it.
 
 Choose the rule, read evidence, priority where needed, and destination kind.
 `record_kind` on an item or filing row is one of `tickets`, `projects`,
-`documents`, `scheduled_jobs`; R7 defaults to documents, R2/R5 to tickets.
+`documents`, `scheduled_jobs`, `decisions`, `logs`; R7 defaults to decisions for a
+decision item and to documents otherwise, R2/R5 to tickets.
 Commitments with `time`, `scheduled_at`, `due_at`, or `recurrence` use
 scheduled_jobs when bound, otherwise tickets. Unapproved user decisions go to ask;
 R1 and R6 still drop with a reason; knowledge and lessons keep their native steps.
@@ -145,50 +146,46 @@ next field.
 
 ## Decision records
 
-Checklist always finds and suggests user decision records; checkpoint does so
-when requested with `durable`. Do not turn agent operational choices into these
-documents. A decision item retains `type: "decision"`, unchanged `session_id`,
-`produced_at`, and `context`, plus `author`, `author_role: "user"`, and `location`
-(the source of the user's decision). Its `decision_record` object holds nonempty
-`title`, `scope`, and full `text`. Show the proposal and destination before approval.
-The decision itself does not approve a document. Auto-apply never approves it.
+Decision capture finds every user decision in the conversation and carried items
+and suggests one decision record per decision. Checklist always runs it; checkpoint
+runs it with `durable`. When the user says "capture decisions", run this record
+step for decision items only: the same finding and approval, then `record`, now.
 
-The user checklist profile can configure:
+A user decision item keeps `type: "decision"` and its unchanged `session_id`,
+`produced_at` and `context`, plus `entry: "record"`, `author`, `author_role: "user"`,
+and `location` (the
+source of the user's decision). Its `decision_record` holds `scope` (exactly one of
+`{"area": ...}`, `{"repository": "owner/repo"}`, `{"project": slug}`), `title`,
+`text` (what was decided), `options` (text array, may be empty) and `why`;
+optionally `date`, `rule_link` (link the rule's home, never copy the rule) and
+`supersedes` (the earlier record's number). Show the proposal and its scope before
+approval. The decision itself does not approve the record. Auto-apply never approves it.
 
-```json
-"decision_records": {
-  "default_folder": "operator/decisions",
-  "scope_folders": {"product": "product/decisions"}
-}
-```
+With the user present, obtain explicit approval of each proposal. Its R7 row carries
+`answer: "approve"` and nonempty `approval_source` pointing to the user's approval;
+the module sends it through the `decisions` record write with its identity lookup.
+The writer chooses the folder from the scope; never name one. When it answers
+`failed` with an `ask` (a scope it cannot place), the item stays carried and the
+filing report holds that ask: run the ask binding with it, collect its receipt and
+refile under the user's answer. Missing approval, binding or receipt keeps the item.
+The documents record write refuses every decision and names the decisions kind.
 
-The optional scope table maps exact scopes to folders; unknown scopes and an
-absent table use `default_folder`. Repository profiles cannot set these routes.
-No built-in path or knowledge-root read supplies a missing route. The documents
-writer resolves these configured folder references using the user's document
-service; the package never creates documents directly.
+Without the user, use R3 with approve/decline choices. Invoke the ask binding with
+the full proposal and the original identity; collect its saved-owner receipt. The
+configured ask owner owes the user that approval, and nothing is written. A later
+session files the approved proposal under R7 with its unchanged identity and
+approval source. A decline drops it under R6 with a reason. An unbound or failed
+ask keeps the whole proposal carried.
 
-With the user present, suggest each record and obtain explicit approval. Its R7
-filing row carries `answer: "approve"` and nonempty `approval_source` pointing to
-the user's approval. The module adds `record_kind: "documents"` and the configured
-`folder` to the filing request. A caller-supplied folder cannot override routing.
-The documents lookup/write receives the complete proposal and approval, and its
-receipt must confirm `folder` exactly as well as the unchanged identity and actual
-`destination`. A missing approval, route, or folder receipt keeps the item and
-reports failure. Retry only through identity lookup; never replace a dated record.
+An agent decision tied to no ticket is an agent decision log entry: `entry:
+"agent_log"`, `author` (the agent), `author_role: "agent"`, and `decision_record` with `scope`, `text` and
+`why`. File it under R7 without approval. An agent decision tied to a ticket stays
+an R2 comment on that ticket through the tickets record write; the decisions kind
+refuses an item with `anchor.ticket`. Any decision not marked as the agent's is the
+user's and needs approval on every kind, including a ticket comment.
 
-Without the user, use R3 with approve/decline choices. Invoke the ask binding,
-passing the full proposal and configured folder along with the original identity;
-collect its actual saved-owner receipt. The configured ask owner owes the user
-that approval. An ask receipt confirms delivery, never document creation. A later
-session uses the approved proposal's unchanged identity and approval source to
-write through R7. A decline drops the proposal under R6 with a reason and writes
-nothing. An unbound or failed ask keeps the whole proposal carried. This contract
-is identical in Claude Code and Codex and preserves the existing ask path pending
-real cutover proofs.
+A change log entry has `record_kind: "logs"`, `author`, and `change_log` with
+`scope`, `subject` and `text` (optional `date`, `links`, `subject_link`). It files
+under R7 through the `logs` record write without approval.
 
-Decision-document safeguards follow the filing route: R7 decision documents and
-any decision routed to the documents writer require the approval contract above.
-R4 with `destination: "ask"` retains its ask route and owner proof; R2/R5 ticket
-rows retain their ticket route, successful-read requirements, and identity receipts.
-A decision proposal on an ask or ticket never authorizes document creation.
+This contract is identical in Claude Code and Codex.

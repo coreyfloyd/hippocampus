@@ -80,7 +80,7 @@ then runs the five-step **spine** in order:
 5. Write and validate the handoff (`handoff`).
 
 Your user profile names optional `record_writes` commands for tickets, projects,
-documents, and scheduled jobs. The package record step applies the filing rules,
+documents, scheduled jobs, decisions, and change logs. The package record step applies the filing rules,
 looks up each unchanged item identity before writing, and requires a matching
 receipt to save it. Run `record` on its own mid-session or through checklist.
 Commitments follow these same filing rules; timed or recurring commitments use
@@ -618,7 +618,7 @@ profile loader and composer. [Validated profile input](examples/profile.md).
 ```text
 JSON object, or one checklist-profile JSON fence in Markdown
 ├── name                              # non-empty profile name
-├── record_writes                     # user profile only: optional tickets, projects, documents, scheduled_jobs commands
+├── record_writes                     # user profile only: optional tickets, projects, documents, scheduled_jobs, decisions, logs commands
 │   └── <kind>: command                # executable argv array or shell-quoted string; null/omitted is unbound
 ├── bindings                          # user profile only: bind persist
 │   └── <slot>: command, consumes[], instructions (optional)
@@ -793,15 +793,15 @@ the handoff and recorded file edits newer than it.
 
 ## User decision records
 
-Checklist suggests a document for each user decision. Request checkpoint with
-`durable` to do the same without wrapping. Approval of the proposed document is
-separate from making the decision. Without you present, the complete proposal
-becomes an ask for your configured durable agent; no document is written.
-Agent operational choices stay separate audit material.
+Checklist suggests a decision record for each user decision. Request checkpoint
+with `durable`, or say "capture decisions", to do the same without wrapping.
+Approval of the proposed record is separate from making the decision. Without you
+present, the complete proposal becomes an ask for your configured durable agent;
+nothing is written. An agent decision tied to no ticket goes to the scope's agent
+decision log without approval; one tied to a ticket stays a comment on it.
 
-Configure `decision_records.default_folder` in your user checklist profile, with
-optional `decision_records.scope_folders` mapping scopes to folders. Approved
-records use your `record_writes.documents` command and its identity lookup;
-missing routes, approvals, bindings, or receipts keep the item carried. The writer
-must return a receipt confirming the configured folder and actual destination.
+Approved records use your `record_writes.decisions` command and its identity
+lookup. That writer chooses the folder from the record's scope; a scope it cannot
+place comes back as an ask. Missing approvals, bindings, or receipts keep the item
+carried. The documents record write refuses decisions.
 See the [record contract](../skills/record/SKILL.md#decision-records) for fields.

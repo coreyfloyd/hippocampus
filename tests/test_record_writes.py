@@ -22,12 +22,14 @@ def run(tmp_path, operation, profile, payload, rows):
         env=dict(os.environ, CLAUDE_CODE_ENTRYPOINT='cli', HANDOFF_LEDGER_DIR=str(tmp_path)))
 
 
-def store(tmp_path, mode='ok'):
-    script = tmp_path / 'store.py'
+def store(tmp_path, mode='ok', name='store'):
+    """A stub writer; every request it receives is appended to ``<name>.requests.jsonl``."""
+    script = tmp_path / (name + '.py')
     script.write_text('''import json, sys
 from pathlib import Path
 p = Path(__file__).with_suffix('.json')
 r = json.load(sys.stdin)
+with Path(__file__).with_suffix('.requests.jsonl').open('a') as log: log.write(json.dumps(r) + '\\n')
 data = json.loads(p.read_text()) if p.exists() else []
 if r['operation'] == 'lookup':
     if MODE == 'badlookup':
@@ -37,13 +39,21 @@ if r['operation'] == 'lookup':
 else:
     if MODE == 'failed':
         print(json.dumps({'status': 'failed', 'error': 'store refused'})); sys.exit(1)
+    if MODE in ('ask', 'badask'):
+        ask = {'text': 'Which folder holds this scope?', 'identity': r['identity'], 'item': r['item']}
+        if MODE == 'ask': ask['choices'] = ['add a scope row', 'decline']
+        print(json.dumps({'status': 'failed', 'error': 'no scope row matches', 'ask': ask})); sys.exit(1)
     receipt = {'identity': r['identity'], 'destination': r['kind'] + ':' + str(len(data))}
-    if 'folder' in r['filing']: receipt['folder'] = r['filing']['folder']
     data.append(receipt); p.write_text(json.dumps(data))
     if MODE == 'lost': sys.exit()
     print(json.dumps({'status': 'saved', 'receipt': receipt}))
 '''.replace("MODE", repr(mode)))
     return {'command': [sys.executable, str(script)]}
+
+
+def requests(tmp_path, name='store'):
+    path = tmp_path / (name + '.requests.jsonl')
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
 
 def item(text='change', **extra):
