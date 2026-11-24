@@ -33,14 +33,17 @@ every loop is an item, whatever its `type`. Both read a null
 names the file only when its `written_at` is not after the cutoff. Any other
 non-array `open_loops` is an inventory error. Writers still refuse a null list.
 
-Catch-up then requires an identity it can keep stable and file, and reports an
+Catch-up then requires an identity it can keep stable, and reports an
 inventory error naming the file and `open_loops` index for any loop without one.
 The error blocks readiness; the handoff's other items are still filed.
 
-- A loop with no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`,
-  cannot be filed.
-- A typed item (a session-item `type`) needs its own `session_id` and
-  `produced_at`, because the carry step settles it by its own fields.
+- An empty loop (no `type` and no `context`, such as `{"what": ..., "owner": ..., "disposition": ...}`)
+  is named by its handoff's own fields: its session (`subject.session_id`, else
+  `session_id`), its valid `written_at`, and its position, as the text
+  `open_loops[N]`. A handoff without that session or time leaves it an error.
+- A typed item (a session-item `type`) needs a `context` and its own `session_id`
+  and `produced_at`, because the carry step settles it by its own fields; a typed
+  item without context is an error, never an empty loop.
 - Any other loop takes a missing session from its handoff's `subject.session_id`
   and a missing time from its `written_at`. The sweep falls back further, to the
   file's name and modification time; catch-up never does, so touching or copying
@@ -54,7 +57,7 @@ never filed and never counted in `unfiled_before_cutoff`, and its receipt wins o
 conflicting carried copies. Copies of one session, time and text with different
 types are settled only when every type has a receipt. The report lists one
 `already_settled` entry per settled type, with the identity, type, and the
-receipt's `disposition` and `settled_at`; a filing judgment supplied for a settled
+receipt's `disposition` and `settled_at`, and for a drop its `reason`; a filing judgment supplied for a settled
 identity is listed under `ignored_decisions`.
 
 `run` reads the store again before each write and skips an identity settled by
@@ -117,9 +120,10 @@ No supplied receipt alone bypasses the writer.
 A drop judgment uses the wrap's drop rules, `R1` or `R6`, with no status or
 `status: "dropped"`, and a non-empty `reason`; it passes the same checks as at a
 wrap, so an `R1` drop needs `read_status: "ok"` unless it is `information_only`. Only `progress`, `open_loop` and
-`artifact` items may be dropped. Knowledge, lessons, decisions, commitments and
-untyped loops are filed, never dropped: their drop judgment fails with an error
-saying so and writes nothing, and a drop without a reason fails the same way. A
+`artifact` items may be dropped. Knowledge, lessons, decisions and commitments
+are filed, never dropped, and an untyped or empty loop is dropped only by a
+receipt (below): a run's drop judgment for any of them fails with an error and
+writes nothing, and a drop without a reason fails the same way. A
 drop writes one settlement receipt (`disposition: "dropped"`, the reason,
 `destination: null`, `settled_by: "filing-catchup:<node>"`) through the carry
 step's writer into the settled-identity store catch-up reads, so no later
@@ -133,6 +137,41 @@ identity under `already_settled`. A recorded drop counts as settled for readines
 The recount compares a dropped row with the current copies, read without
 receipts, as it does a filed row: changed content gives a `recount_error` and
 leaves the identity unfiled, and the identity is removed from `already_settled`.
+
+Untyped and empty loops are never filed: each is dropped with a recorded reason.
+Such a row's `identity`, repeated as its `receipt_identity`, adds a reserved
+`type`: `untyped_loop` for a loop with context but no session-item type, or
+`empty_loop` for an untyped loop without context, so an empty loop and an
+untyped loop of the same text are never one row. Settle it with a receipt naming that
+identity, `disposition: "dropped"` and the reason, through
+`handoff.py settle-identity --receipts FILE`, the carry step's own writer and
+store; any other disposition is refused as invalid, and a store row with another
+disposition settles nothing. The next report lists the loop under `already_settled`
+with the receipt's `reason`. The sweep never files a loop so settled, reading the
+settled-identity store beside its handoff store; the handoff's report row gives the
+number it skipped as `settled_loops`. A run reads the store again before each write:
+a loop settled by then is `already_settled`, and a run judgment for a loop still
+unsettled fails, saying so. The sweep's own legacy path is unchanged: a loop in a
+handoff without a valid `written_at` has no receipt identity, so the sweep keeps
+filing it under its fallback identity while catch-up reports it as a loop error.
+
+The session and time that name such a loop must be non-blank strings, and the
+time an ISO time with a timezone, exactly as a valid receipt requires. An untyped
+or empty loop without them has no receipt identity and is a loop error, never
+filed by its handoff's other identity. The error says whether the producing time
+is missing or present but not an ISO time with a timezone.
+
+Three limits follow from naming a loop by its handoff. An empty loop's identity
+names a slot, its position in one handoff write, not its content: a rewrite gives
+it a new `written_at`, and a move gives it a new position, so a new identity that
+the earlier drop does not settle. Two different empty loops in the same slot of
+handoffs with the same session and `written_at` share one identity and are
+reported as conflicting copies. And the carry step skips a dropped loop only when
+the loop carries its own `session_id` and `produced_at`; an untyped loop named by
+its handoff, and every empty loop, are left to the carry step unchanged, since a
+live session that writes the loop again writes it in a handoff after the cutoff.
+None of this reaches catch-up, which reads only handoffs written before the
+cutoff, whose sessions no longer write them.
 
 Copies of one producing identity may differ in `status` and `recorded` hints,
 which never prove settlement. When copies otherwise agree, nonconflicting

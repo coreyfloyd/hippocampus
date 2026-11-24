@@ -1403,7 +1403,9 @@ def test_catch_up_and_sweep_read_the_same_items_and_identities(sandbox):
     key = lambda identity: json.dumps(identity, sort_keys=True)
     sweep_ids = {key(item['identity']) for candidate in swept['candidates'] for item in candidate['items']}
     assert len(sweep_ids) == 2
-    assert {key(row['identity']) for row in caught['items']} == sweep_ids
+    # Catch-up adds an untyped loop's reserved receipt type; session, time and text agree.
+    assert {key({k: v for k, v in row['identity'].items() if k != 'type'}) for row in caught['items']} == sweep_ids
+    assert sorted(row['identity'].get('type', '') for row in caught['items']) == ['', 'untyped_loop']
 
 
 def test_catch_up_and_sweep_both_read_null_open_loops_as_empty_with_a_warning(sandbox):
@@ -1420,3 +1422,59 @@ def test_catch_up_and_sweep_both_read_null_open_loops_as_empty_with_a_warning(sa
     assert 'resume.open_loops is null; read as no carried items' in candidate['warnings']
     assert caught['warnings'] == [str(path) + ': resume.open_loops is null; read as no carried items']
     assert path.read_bytes() == before
+
+
+def test_untyped_and_empty_loops_settled_by_a_dropped_receipt_are_never_swept(sandbox):
+    loops = [{'context': 'Optional observation', 'disposition': 'consider'}, {'owner': 'agent'}]
+    source(sandbox, loops=loops)
+    _, data = report(sandbox)
+    assert len(data['directories'][str(sandbox[0])]['filing_outcomes']) == 2
+    # The receipts catch-up names: the handoff's session and written_at, then the context or the position.
+    written_at = json.loads(FIXTURE.read_text())['written_at']
+    receipts = [{'identity': {'session_id': 'source', 'produced_at': written_at, 'type': kind, 'text': text},
+                 'disposition': 'dropped', 'reason': 'Superseded by the migration ticket.', 'destination': None,
+                 'settled_at': '2026-11-20T12:00:00Z', 'settled_by': 'maintainer'}
+                for kind, text in (('untyped_loop', 'Optional observation'), ('empty_loop', 'open_loops[1]'))]
+    store = Path(sandbox[3].get('HANDOFF_LEDGER_DIR') or sandbox[1].parent) / 'settled-identities.jsonl'
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(''.join(json.dumps(row) + '\n' for row in receipts))
+    _, data = report(sandbox)
+    section = data['directories'][str(sandbox[0])]
+    assert section['filing_outcomes'] == []
+    # The report says how many settled loops the sweep skipped, so the archive is never silent.
+    assert [(row['outcome'], row['settled_loops']) for row in section['handoffs_archived']] == [('dry run', 2)]
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert [candidate['settled_loops'] for candidate in swept['candidates']] == [2]
+
+
+
+@pytest.mark.parametrize('field, value', [('subject', '   '), ('written_at', 'yesterday')],
+                         ids=['blank-session', 'bad-time'])
+def test_a_handoff_without_a_valid_session_or_time_is_an_error_never_a_settled_skip(sandbox, field, value):
+    path = source(sandbox, loops=[{'owner': 'agent'}])
+    data = json.loads(path.read_text())
+    if field == 'subject':
+        data['subject']['session_id'] = value
+    else:
+        data['written_at'] = value
+    path.write_text(json.dumps(data))
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert swept['candidates'] == [] and [error['path'] for error in swept['errors']] == [str(path)]
+
+
+@pytest.mark.parametrize('field, value', [('session_id', '   '), ('session_id', 5), ('produced_at', '   '),
+                                          ('produced_at', 'yesterday')],
+                         ids=['blank-session', 'number-session', 'blank-time', 'bad-time'])
+def test_an_untyped_loop_without_a_valid_receipt_identity_is_never_skipped_as_settled(sandbox, field, value):
+    loop = {'context': 'Optional observation', 'disposition': 'consider', field: value}
+    source(sandbox, loops=[loop])
+    # A store row naming the loop's own fields as they are settles nothing: they are not a valid identity.
+    identity = {'session_id': 'source', 'produced_at': json.loads(FIXTURE.read_text())['written_at'],
+                'type': 'untyped_loop', 'text': 'Optional observation', field: value}
+    store = Path(sandbox[3].get('HANDOFF_LEDGER_DIR') or sandbox[1].parent) / 'settled-identities.jsonl'
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(json.dumps({'identity': identity, 'disposition': 'dropped', 'reason': 'Superseded.',
+                                 'destination': None, 'settled_at': '2026-11-20T12:00:00Z',
+                                 'settled_by': 'maintainer'}) + '\n')
+    swept = json.loads(command(sandbox, 'inspect', '--scope', 'all').stdout)
+    assert [item['item'] for candidate in swept['candidates'] for item in candidate['items']] == [loop]
