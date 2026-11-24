@@ -103,9 +103,9 @@ sets a rule. An anchored commitment judged any other way fails with an error
 saying commitments file only as anchored R2 comments. Neither writes anything.
 Durable checkpoint asks keep the wrap's routes. Project
 writes require `session_summary`, and accept `close_outcomes` and
-`touched_projects`. Decision documents require the existing explicit user
-approval, author/source and configured folder safeguards. Agent operational
-choices remain audit material. Route items needing approval through `R3` with
+`touched_projects`. A decision record requires explicit user approval and its
+author and source, and files through the decisions record write; an agent decision
+tied to no ticket files there as an agent decision log entry. Route items needing approval through `R3` with
 full proposal text and `choices`; configure `ask.owner_agent` first. Native
 lesson/knowledge work without a capture receipt remains unfiled: route an
 approval proposal to the ask owner rather than claiming capture.

@@ -234,6 +234,8 @@ existing command or declining it:
 | `projects` | Project status and history. |
 | `documents` | Document changes and artifact locations. |
 | `scheduled_jobs` | Scheduled work and recurring commitments. |
+| `decisions` | Approved user decision records and agent decision log entries. |
+| `logs` | Change log entries. |
 
 Prepare `record_writes` entries as `{"command": "<actual command>"}` or
 `{"command": ["<executable>", "<argument>"]}`, without `consumes`. Use only
@@ -335,7 +337,7 @@ python3 <setup-directory>/scripts/profile.py --user-present \
 ```
 
 `--bindings` accepts only `persist`. `--record-writes` merges only the named
-kinds (`tickets`, `projects`, `documents`, `scheduled_jobs`); JSON `null` unbinds
+kinds (`tickets`, `projects`, `documents`, `scheduled_jobs`, `decisions`, `logs`); JSON `null` unbinds
 one kind. Omit the option to preserve all existing record writes. Omit `--ask` to preserve its
 current value; an explicit JSON `null` removes it. Invalid ask objects are refused
 without changing the profile. Legacy native binding blocks are refused with

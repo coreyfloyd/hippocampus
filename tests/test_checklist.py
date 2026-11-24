@@ -435,7 +435,7 @@ class ChecklistTests(unittest.TestCase):
         plan = self.engine.compose([profile])
         source = self.handoff()
         source["subject"]["working_directory"] = "/work"
-        # This row tests generic document filing; decision documents require approval.
+        # This row tests generic document filing; decisions file through the decisions kind.
         source["resume"]["open_loops"][2]["type"] = "progress"
         original = copy.deepcopy(source)
         rows = [dict(index=i, rule=rule, status=status, reason="optional observation" if rule == "R6" else "saved",

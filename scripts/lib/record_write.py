@@ -9,16 +9,25 @@ from typing import Any, Mapping
 
 
 class Rejected(ValueError):
-    """The store explicitly rejected the operation."""
+    """The store explicitly rejected the operation, optionally returning an ask for the user."""
+
+    def __init__(self, message: str, ask: Any = None):
+        super().__init__(message)
+        self.ask = ask
 
 
-KINDS = ('tickets', 'projects', 'documents', 'scheduled_jobs')
+KINDS = ('tickets', 'projects', 'documents', 'scheduled_jobs', 'decisions', 'logs')
+SCOPES = ('area', 'repository', 'project')
+DOCUMENTS_REFUSAL = ("the documents record write refuses a decision; "
+                     "file it through the decisions record write (kind 'decisions')")
+TICKET_DECISION = ("an agent decision tied to a ticket stays a comment on that ticket "
+                   "through the tickets record write (R2)")
 
 
 def bindings(profile: Mapping[str, Any]) -> dict[str, Any]:
     value = profile.get('record_writes', {})
     if not isinstance(value, Mapping) or set(value) - set(KINDS):
-        raise ValueError('record_writes must map tickets, projects, documents, or scheduled_jobs to commands')
+        raise ValueError('record_writes must map ' + ', '.join(KINDS) + ' to commands')
     for kind, binding in value.items():
         if binding is None:
             continue
@@ -32,45 +41,53 @@ def bindings(profile: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(dict(value))
 
 
-def decision_routes(profile: Mapping[str, Any]) -> dict[str, Any] | None:
-    value = profile.get('decision_records')
-    if value is None:
-        return None
-    if (not isinstance(value, Mapping) or set(value) - {'default_folder', 'scope_folders'}
-            or not isinstance(value.get('default_folder'), str) or not value['default_folder'].strip()):
-        raise ValueError('decision_records requires default_folder and optional scope_folders')
-    scopes = value.get('scope_folders', {})
-    if not isinstance(scopes, Mapping) or not all(
-            isinstance(k, str) and k.strip() and isinstance(v, str) and v.strip()
-            for k, v in scopes.items()):
-        raise ValueError('decision_records.scope_folders must map scopes to folders')
-    return copy.deepcopy(dict(value))
+def _text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
-def decision_document(item: Mapping[str, Any], row: Mapping[str, Any], kind: str | None) -> bool:
-    """Document safeguards follow the filing route, not every decision item."""
-    return item.get('type') == 'decision' and (row.get('rule') == 'R7' or kind == 'documents')
+def _scope(value: Any) -> bool:
+    return (isinstance(value, Mapping) and len(value) == 1 and set(value) <= set(SCOPES)
+            and all(_text(v) for v in value.values()))
 
 
-def decision_filing(item: Mapping[str, Any], row: Mapping[str, Any],
-                    routes: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Only a user's approved proposal may reach the documents writer."""
-    proposal = item.get('decision_record')
-    if item.get('author_role') != 'user' or not all(
-            isinstance(item.get(k), str) and item[k].strip() for k in ('author', 'location')):
-        raise ValueError('decision record requires a user author and source location')
-    if not isinstance(proposal, Mapping) or not all(
-            isinstance(proposal.get(k), str) and proposal[k].strip() for k in ('title', 'scope', 'text')):
-        raise ValueError('decision record requires title, scope, and text')
-    if (row.get('rule') != 'R7' or row.get('answer') != 'approve'
-            or not isinstance(row.get('approval_source'), str) or not row['approval_source'].strip()):
-        raise ValueError('decision record requires explicit user approval and its source')
-    if row.get('record_kind', 'documents') != 'documents' or item.get('record_kind', 'documents') != 'documents':
-        raise ValueError('decision records must use documents')
-    if not routes:
-        raise ValueError('decision record has no configured default folder')
-    folder = routes.get('scope_folders', {}).get(proposal['scope'], routes['default_folder'])
-    return {**copy.deepcopy(dict(row)), 'record_kind': 'documents', 'folder': folder}
+def decision_request(item: Mapping[str, Any], row: Mapping[str, Any]) -> None:
+    """A user's decision files only with explicit approval; an agent's only when no ticket holds it."""
+    entry, proposal = item.get('entry'), item.get('decision_record')
+    if entry not in ('record', 'agent_log') or not _text(item.get('author')):
+        raise ValueError("a decision requires entry 'record' or 'agent_log' and its author")
+    if not isinstance(proposal, Mapping) or not _scope(proposal.get('scope')):
+        raise ValueError('decision_record.scope must name exactly one of ' + ', '.join(SCOPES))
+    if not (_text(proposal.get('text')) and _text(proposal.get('why'))):
+        raise ValueError('decision_record requires text and why')
+    if entry == 'agent_log':
+        if _text((item.get('anchor') or {}).get('ticket')):
+            raise ValueError(TICKET_DECISION)
+        return
+    options = proposal.get('options')
+    if (not _text(item.get('location')) or not _text(proposal.get('title'))
+            or not isinstance(options, list) or not all(_text(o) for o in options)):
+        raise ValueError('a decision record requires title, options, and the source location')
+    if row.get('answer') != 'approve' or not _text(row.get('approval_source')):
+        raise ValueError('a decision record requires explicit user approval and its source')
+
+
+def change_log_request(item: Mapping[str, Any]) -> None:
+    entry = item.get('change_log')
+    if (not _text(item.get('author')) or not isinstance(entry, Mapping) or not _scope(entry.get('scope'))
+            or not _text(entry.get('subject')) or not _text(entry.get('text'))):
+        raise ValueError('a change log entry requires its author and change_log scope, subject and text')
+
+
+def check_request(kind: str, item: Mapping[str, Any], row: Mapping[str, Any]) -> None:
+    """Refuse a request its kind cannot file, before any lookup."""
+    if kind == 'documents' and item.get('type') == 'decision':
+        raise Rejected(DOCUMENTS_REFUSAL)
+    if kind == 'decisions':
+        if item.get('type') != 'decision':
+            raise ValueError('the decisions record write files only decision items')
+        decision_request(item, row)
+    if kind == 'logs':
+        change_log_request(item)
 
 
 def identity(item: Mapping[str, Any]) -> dict[str, str]:
@@ -86,7 +103,8 @@ def kind_for(rule: str, item: Mapping[str, Any], row: Mapping[str, Any], writes:
         if any(item.get(k) for k in ('time', 'recurrence', 'scheduled_at', 'due_at')) and writes.get('scheduled_jobs'):
             return 'scheduled_jobs'
         return 'tickets'
-    kind = row.get('record_kind', item.get('record_kind', 'documents' if rule == 'R7' else 'tickets'))
+    default = ('decisions' if item.get('type') == 'decision' else 'documents') if rule == 'R7' else 'tickets'
+    kind = row.get('record_kind', item.get('record_kind', default))
     if kind not in KINDS:
         raise ValueError(f'unknown record write kind {kind!r}')
     return kind
@@ -106,20 +124,18 @@ def invoke(binding: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, 
     if not isinstance(response, dict):
         raise ValueError('response must be an object')
     if response.get('status') == 'failed':
-        raise Rejected(response.get('error') or result.stderr.strip() or 'record write failed')
+        raise Rejected(response.get('error') or result.stderr.strip() or 'record write failed',
+                       response.get('ask'))
     if result.returncode:
         raise ValueError(result.stderr.strip() or f'command exited {result.returncode}')
     return response
 
 
-def receipt(response: Mapping[str, Any], expected: Mapping[str, Any],
-            *, folder: str | None = None) -> dict[str, Any]:
+def receipt(response: Mapping[str, Any], expected: Mapping[str, Any]) -> dict[str, Any]:
     value = response.get('receipt')
     if (not isinstance(value, dict) or value.get('identity') != expected or
             not isinstance(value.get('destination'), str) or not value['destination'].strip()):
         raise ValueError('missing or malformed receipt for item identity')
-    if folder is not None and value.get('folder') != folder:
-        raise ValueError('decision receipt does not confirm the configured folder')
     return value
 
 
@@ -130,15 +146,15 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
     phase = 'lookup'
     try:
         key = identity(item)
+        check_request(kind, item, row)
         request = {'operation': 'lookup', 'kind': kind, 'identity': key, 'item': item, 'filing': row}
         if context is not None:
             request.update(context)
-        folder = row.get('folder') if decision_document(item, row, kind) else None
         found = invoke(binding, request)
         if kind == 'tickets' and 'tickets' in found:
             output['tickets'] = found['tickets']
         if found.get('status') == 'found':
-            saved = receipt(found, key, folder=folder)
+            saved = receipt(found, key)
         elif found == {'status': 'not_found'}:
             phase = 'write'
             response = invoke(binding, {**request, 'operation': 'write'})
@@ -146,7 +162,7 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
                 output['tickets'] = response['tickets']
             if response.get('status') != 'saved':
                 raise ValueError('write ended without a usable receipt')
-            saved = receipt(response, key, folder=folder)
+            saved = receipt(response, key)
         else:
             raise ValueError('malformed lookup: expected found receipt or not_found')
         output.update(status='filed', receipt=saved, destination=saved['destination'])
@@ -154,6 +170,9 @@ def execute(binding: Mapping[str, Any], kind: str, item: Mapping[str, Any], row:
     except ValueError as error:
         output.update(status='failed' if phase == 'lookup' or isinstance(error, Rejected) else 'uncertain',
                       error=f'{phase}: {error}')
+        if isinstance(error, Rejected) and isinstance(error.ask, Mapping):
+            # The writer matched no destination: its ask goes to the user; nothing is guessed.
+            output['writer_ask'] = copy.deepcopy(dict(error.ask))
     return output
 
 
