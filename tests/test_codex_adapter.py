@@ -796,7 +796,8 @@ def test_codex_session_anchored_agent_decision_stays_a_ticket_comment(sandbox):
     assert sent == {'tickets': ['lookup', 'write']}
 
 
-def test_unattended_codex_session_turns_a_decision_into_one_owned_ask(sandbox, monkeypatch):
+def codex_unattended(sandbox, monkeypatch):
+    """Put the captured Codex session in unattended mode through the configured state module."""
     home, _ = sandbox
     modes = home / 'modes'; modes.mkdir()
     (modes / 'captured-session').write_text(json.dumps({'session_id': 'captured-session', 'mode': 'afk',
@@ -805,15 +806,35 @@ def test_unattended_codex_session_turns_a_decision_into_one_owned_ask(sandbox, m
     Path(os.environ['HIPPOCAMPUS_CONFIG']).write_text(json.dumps({'unattended': {
         'state_module': str(ROOT/'tests/support/unattended_state.py'),
         'completion_command': 'finish-work', 'completed_by': ['complete']}}))
+
+
+CODEX_ASK = {'command': '/fixture-ask', 'owner_agent': 'durable-agent'}
+
+
+def test_unattended_codex_session_turns_a_decision_into_one_owned_ask(sandbox, monkeypatch):
+    codex_unattended(sandbox, monkeypatch)
     filing = {**row(rule='R3'), 'status': 'filed', 'destination': 'ask:1', 'choices': ['approve', 'decline'],
               'receipt': {'owner_agent': 'durable-agent'}}
-    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [filing],
-                                ask={'command': '/fixture-ask', 'owner_agent': 'durable-agent'})
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [filing], ask=CODEX_ASK)
     assert result.returncode == 0, result.stderr
     asks = [a for group in json.loads(result.stdout)['filing']['asks'].values() for a in group]
     assert len(asks) == 1
     assert asks[0]['owner_agent'] == 'durable-agent'
     assert asks[0]['session_id'] == 'captured-session'
+    assert sent == {}
+
+
+def test_unattended_codex_session_refuses_an_approved_decision_without_the_flag(sandbox, monkeypatch):
+    # The Codex session's own unattended mode is enough; no --unattended flag is passed.
+    codex_unattended(sandbox, monkeypatch)
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [approved()], ask=CODEX_ASK)
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    saved = out['filing']['items'][0]
+    assert saved['status'] == 'failed' and 'unattended' in saved['error']
+    asks = [a for group in out['filing']['asks'].values() for a in group]
+    assert len(asks) == 1 and asks[0]['owner_agent'] == 'durable-agent'
+    assert out['resume']['open_loops'] == [codex_decision()]
     assert sent == {}
 
 
