@@ -953,3 +953,20 @@ def test_a_stale_routing_variable_names_the_step_that_clears_it(sandbox, tool):
     assert 'unset HIPPOCAMPUS_ROUTING' in reason and str(missing) in reason and 'does not exist' in reason
     assert run['auto_apply']['lessons'] == run['auto_apply']['knowledge'] == 'failed'
     assert lesson_path.exists() and not missing.exists()
+
+
+def test_carried_new_skill_lesson_becomes_an_ask_and_no_applied_lesson(sandbox, tool):
+    checkout, _, _ = clone_pair(sandbox[0])
+    head = git(checkout, 'rev-parse', 'HEAD')
+    proposal = 'New skill release-check: four ordered steps done by hand; nearest skill release-signing differs.'
+    choices = ['create the skill', 'decline']
+    source(sandbox, PRODUCER, loops=[lesson(proposal, new_skill=True, choices=choices)])
+    configure(sandbox)
+    row = {'recommend': 'apply', 'new_skill': True, 'evidence': 'The handoff carries the proposal.'}
+    run, rounds = finish(sandbox, start(sandbox), agent(row))
+    ask, = rounds[1]
+    assert ask['operation'] == 'ask' and ask['choices'] == choices and ask['ask']['text'] == proposal
+    assert not section(sandbox, run)['lessons_applied'] and not section(sandbox, run)['lessons_not_pushed']
+    assert [raised['ask']['text'] for raised in section(sandbox, run)['asks_raised']] == [proposal]
+    assert git(checkout, 'rev-parse', 'HEAD') == head and git(checkout, 'status', '--porcelain') == ''
+    assert archived(sandbox, PRODUCER)

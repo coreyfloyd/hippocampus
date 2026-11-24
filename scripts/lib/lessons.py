@@ -23,6 +23,7 @@ from typing import Any, Mapping, Sequence
 SETTING = "auto_apply"
 RETIRED_SETTING = "auto_apply_lessons"
 OUTCOME = "lesson_outcome"
+STATUSES = ("applied", "dropped", "failed", "asked")
 NOT_PUSHED = "committed, not pushed"
 PULL_REQUEST = "pull request"
 DELIVERED_REFS = "refs/hippocampus/delivered/"
@@ -193,7 +194,7 @@ def outcomes(module: Any, session_id: str) -> list[dict[str, Any]]:
         identity = outcome.get("identity")
         if (not isinstance(identity, list) or not identity
                 or not all(isinstance(part, str) for part in identity)
-                or outcome.get("status") not in ("applied", "dropped", "failed")):
+                or outcome.get("status") not in STATUSES):
             continue
         latest[tuple(identity)] = outcome
     return list(latest.values())
@@ -204,7 +205,7 @@ def _record(module: Any, session_id: str, outcome: Mapping[str, Any]) -> None:
 
 
 def report_section(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    section: dict[str, list[dict[str, Any]]] = {"applied": [], "dropped": [], "failed": []}
+    section: dict[str, list[dict[str, Any]]] = {status: [] for status in STATUSES}
     for row in rows:
         section[row["status"]].append({key: value for key, value in row.items()
                                        if key not in ("identity", "status", "edits") and value is not None})
@@ -388,6 +389,20 @@ def _apply_one(row: Mapping[str, Any]) -> dict[str, Any]:
     return {**outcome, **committed, "checkout": str(checkout), "branch": _text(branch), "delivery": None}
 
 
+def new_skill(row: Mapping[str, Any], item: Mapping[str, Any]) -> bool:
+    """A new-skill lesson: its row or its carried item says `new_skill: true`."""
+    return row.get("new_skill") is True or item.get("new_skill") is True
+
+
+def _choices(row: Mapping[str, Any], item: Mapping[str, Any]) -> Any:
+    return row["choices"] if "choices" in row else item.get("choices")
+
+
+def _asking(item: Mapping[str, Any], choices: Sequence[str]) -> dict[str, Any]:
+    """A new-skill lesson stays carried, whole, with the choices its ask offers the user."""
+    return {**copy.deepcopy(dict(item)), "new_skill": True, "choices": list(choices)}
+
+
 def _with_ask(item: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
     """Mark a carried lesson as applied, so no later wrap or successor applies it again.
 
@@ -403,6 +418,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
 
     `rows` index the filing pass's list: open loops, then unrecorded session items.
     Lessons with no row stay carried. A lesson already applied is never applied again.
+    A new-skill lesson is never applied: it is `asked`, and stays carried with its choices.
     """
     if not session_id:
         raise ValueError("apply-lessons requires a session id")
@@ -422,7 +438,13 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             raise ValueError(f"lessons: index {index!r} does not name a lesson item")
         if row.get("recommend") not in ("apply", "skip"):
             raise ValueError(f"lessons: row {index}: recommend must be apply or skip")
-        if row["recommend"] == "skip" and not row.get("dictated"):
+        if new_skill(row, items[index]) and (row["recommend"] == "apply" or row.get("dictated")):
+            # A new skill is never written here: the user's yes comes first, through an ask.
+            choices = _choices(row, items[index])
+            if (not isinstance(choices, list) or not choices
+                    or not all(isinstance(choice, str) and choice.strip() for choice in choices)):
+                raise ValueError(f"lessons: row {index}: a new-skill lesson requires the user's choices")
+        elif row["recommend"] == "skip" and not row.get("dictated"):
             if not isinstance(row.get("reason"), str) or not row["reason"].strip():
                 raise ValueError(f"lessons: row {index}: a skipped lesson requires its reason")
         else:
@@ -448,6 +470,9 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             dropped.append(item)
         if item.get("applied"):
             continue
+        if prior and prior["status"] == "asked":
+            annotated[row["index"]] = _asking(item, _choices(row, item))
+            continue
         if prior and prior["status"] != "failed":
             if prior.get("ask"):
                 annotated[row["index"]] = _with_ask(item, prior)
@@ -455,7 +480,11 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 removed.append(item)
             continue
         outcome: dict[str, Any] = {"identity": list(identity), "evidence": row.get("evidence")}
-        if row["recommend"] == "skip" and not row.get("dictated"):
+        if new_skill(row, item) and (row["recommend"] == "apply" or row.get("dictated")):
+            outcome.update(status="asked", new_skill=True, change=row.get("change") or item["context"],
+                           target=row.get("target"))
+            annotated[row["index"]] = _asking(item, _choices(row, item))
+        elif row["recommend"] == "skip" and not row.get("dictated"):
             outcome.update(status="dropped", target=row.get("target"), change=row.get("change") or item["context"],
                            reason=row["reason"])
             removed.append(item)

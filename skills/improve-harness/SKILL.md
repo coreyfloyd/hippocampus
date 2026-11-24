@@ -232,6 +232,7 @@ Legitimate motivations:
 - **A contradiction** — two rules, or a rule and reality, conflict and this session had to resolve it.
 - **A trigger miss** — a skill should have fired (or fired wrongly) for what the user asked.
 - **A memory that failed verification** — a recalled or newly written fact that no longer holds.
+- **A process done by hand** — this session worked through a multi-step procedure no skill covers (source (f)).
 
 If you can't cite the moment, don't propose the edit. "This could be clearer" with no incident behind it is not grounds. A rule the user dictates is its own grounding.
 
@@ -255,7 +256,8 @@ Include the full proposed text or diff, target file and section, and grounding
 evidence, plus the user's complete choices in `choices`. Keep the full proposal
 and choices at any length through checkpoint, compaction, pickup, and wrap.
 A memory move includes the memory file, target, proposed text,
-grounding, and deletion of the original as one proposal.
+grounding, and deletion of the original as one proposal. A new-skill lesson carries
+its six parts and `new_skill: true`.
 
 A lesson routing's configured durable sink overrides this default: file the full
 proposal there, including tickets when explicitly configured, and report its
@@ -275,7 +277,9 @@ reaches only sessions that resume the handoff, not unrelated future sessions.
 The auto-apply setting, `auto_apply` in the knowledge profile, is off by default. With
 it on, a wrap does not show the lesson table and wait; `apply-lessons` writes the lessons.
 The setting decides, not whether the user is present. Over-limit and duplicate
-rows are not lessons to apply: record them as in Over-limit records.
+rows are not lessons to apply: record them as in Over-limit records. A new-skill
+lesson is never applied: its row has `new_skill: true` and `choices`, and it comes
+back `asked`, still carried, with its ask in `new_skill_asks` (`references/new-skill.md`).
 
 The lesson routing can forbid this with the line `lesson-policy: propose`; it wins, and the
 report says lessons were carried because the knowledge profile sets it. The module reads
@@ -337,7 +341,7 @@ Scan the conversation once for the motivations above. Cover:
 
 **(c) Skills that should have fired but didn't.** The available-skills list has been in your context all session; check the work you actually did against it. Signals, strongest first: the user pointed you at a skill mid-task ("why didn't you use /<skill>?") — ground truth; you reinvented a workflow a skill already encodes; a skill's domain matched but its "when to use" phrasing didn't match how the task arose.
 
-When (c) holds and the skill genuinely applied, the fix is almost always a **description / triggering edit** — broaden or sharpen the when-to-use so it fires next time on that phrasing. Stay grounded: flag a skill only when you can point at the work *in this conversation* it was built for. Distinguish **correctly didn't fire** (leave it alone) from **trigger missed** (fix the description). If work recurred and *no* skill exists, that is "extract a new skill", out of scope here.
+When (c) holds and the skill genuinely applied, the fix is almost always a **description / triggering edit** — broaden or sharpen the when-to-use so it fires next time on that phrasing. Stay grounded: flag a skill only when you can point at the work *in this conversation* it was built for. Distinguish **correctly didn't fire** (leave it alone) from **trigger missed** (fix the description). When *no* skill covers the work, see (f).
 
 **(d) Agent definitions dispatched this session.** If a subagent misbehaved because its *definition* was wrong — stale path, missing constraint, an instruction that produced the wrong behavior — same grounded-edit pattern applied to that agent's definition file. An agent never dispatched this session is out of scope.
 
@@ -360,6 +364,12 @@ In both modes and under either policy, mechanically cross-check any index:
 every memory file gets one index line, every line points at an existing file.
 Fix orphan and dangling index entries without asking; this index check may list
 the store, but does not broaden the memory-content review.
+
+**(f) Repeatable processes done by hand.** A process this session carried out in
+three or more ordered steps, likely to recur, that no available skill covers, is a
+**new-skill lesson**. Read `references/new-skill.md` for what counts, the six parts
+every row holds (no draft skill text), and the handoff to the running tool's skill
+creator. Work a skill covers is a (c) trigger edit; a shorter procedure is a rule or gotcha.
 
 ### 2. Place each candidate
 
@@ -407,7 +417,8 @@ One table for all surfaces. Grounding gets a candidate INTO the table; impact de
 
 ### 6. Apply
 
-After approval (HITL) — surgical edits only. Don't reflow unrelated content; match each file's existing heading style. Keep any memory index in step with memory files added, changed, or removed.
+After approval (HITL) — surgical edits only. An approved new-skill lesson goes to the
+running tool's skill creator, never written here (`references/new-skill.md`). Don't reflow unrelated content; match each file's existing heading style. Keep any memory index in step with memory files added, changed, or removed.
 
 ### 7. Leave commits to the persist step
 
@@ -430,6 +441,7 @@ Recommend: apply <rows> · skip <rows> — <one line why the skips are not worth
 [HITL, after approval]
 Applied:
 - <target> (<repo>): <one-line change>
+New skills: <name> → skill creator at <location | ask the user> | carried, no skill creator: <install line>
 Repositories now dirty: <list>
 
 [AFK]

@@ -278,7 +278,9 @@ run `apply-lessons`; `complete` writes and commits it:
 ```
 
 A `skip` row names its `reason` and is dropped. `dictated` and `always_loaded`
-mean what they mean at a wrap.
+mean what they mean at a wrap. A new-skill lesson's row has `new_skill: true` and
+`choices`, as improve-harness's `references/new-skill.md` says; `complete` writes
+nothing for it and raises its ask.
 
 For `apply_knowledge`, follow knowledge-capture's Auto-apply section for the item
 before calling `complete`, and return its row without `index`. Do not run

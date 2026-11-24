@@ -1,0 +1,65 @@
+# New-skill lessons
+
+A new-skill lesson proposes a skill for a process this session carried out by
+hand. It is a lesson like any other, placed on the skills rung, with one
+difference: no skill is created without the user's yes, whatever the mode or the
+auto-apply setting.
+
+## What counts
+
+- Three or more ordered steps, carried out in this session, by the user or the
+  agent. A shorter procedure is a rule or a skill gotcha.
+- Likely to recur. One occurrence is enough when the row says why it will recur;
+  cite earlier handoffs or tickets only when this session already read them.
+- No available skill covers it. Compare it with the running tool's skill catalog,
+  as source (c) does. When a skill covers the work, the row is a description or
+  trigger edit to that skill, never a new skill.
+
+Earlier sessions are not mined for processes; only this conversation grounds a row.
+
+## The proposal
+
+Every new-skill row, presented or carried, holds all of these and no draft skill text:
+
+1. **Process**: what was done, in a few words.
+2. **Steps observed**: the ordered steps as carried out in this session.
+3. **Why it recurs**: the reason, with any earlier handoff or ticket the session read.
+4. **Name**: the proposed skill name.
+5. **Trigger**: when it should fire, in the words a description would use.
+6. **Nearest skill**: the closest skill in the running tool's catalog, by its real
+   name, and why it is not that one.
+
+Its placement column reads `new skill`. Its target is the location the lesson
+routing names for the user's skill sources, or `ask the user` without one.
+
+A carried `lesson` item holds the whole proposal in `context`, `new_skill: true`,
+the target and evidence, and `choices` (for example `create the skill`, `edit
+<nearest skill> instead`, `decline`). A later interactive run presents it unchanged.
+
+## Auto-apply
+
+With `plan` returning `auto_apply.lessons: apply`, give the row `new_skill: true`
+and its `choices`; it needs no `target`, `edits` or `change`. `apply-lessons` never
+writes it: its outcome is `asked`, the item stays carried, and `new_skill_asks`
+holds its ask. Send each one to the ask binding through an R4 row with
+`destination: "ask"` and its choices, as for a fact about the user; the lesson stays
+carried until the user answers. A sweep in act mode does the same.
+
+## After the yes
+
+improve-harness writes no skill text. Hand the proposal, unchanged, to the
+running tool's built-in skill creator, which drafts, tests and tunes the skill:
+
+| Tool | Skill creator | When it is missing |
+|---|---|---|
+| Claude Code | the `skill-creator` plugin from the `claude-plugins-official` marketplace | `claude plugin install skill-creator@claude-plugins-official` |
+| Codex | the bundled `skill-creator` system skill | it ships with the Codex CLI; update the CLI to restore it |
+
+Tell the creator where to write: the skill-source location the lesson routing names,
+so the new skill lands where the user's skills are committed. When the routing names
+none, tell the creator to ask the user for the location.
+
+When the running tool has no skill creator, apply nothing: keep the proposal
+carried with the user's yes recorded in its `context`, and report the install line
+from the table.
+The lesson leaves the handoff only when the creator reports the skill written.

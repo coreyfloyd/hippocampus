@@ -189,7 +189,9 @@ With the auto-apply setting on (`plan` returns `auto_apply`), the lessons step
 applies instead of waiting, in attended and unattended runs alike: follow
 improve-harness's Auto-apply section. When `auto_apply.lessons` is `propose`, the
 lesson routing forbids applying: run this step as if the setting were off, including
-the over-limit and duplicate-rule blocks, which are not recorded.
+the over-limit and duplicate-rule blocks, which are not recorded. Each
+`new_skill_asks` payload from `apply-lessons` goes to the ask binding through an R4 row
+with `destination: "ask"` and its choices; the new-skill lesson stays carried until the user answers.
 
 Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,
