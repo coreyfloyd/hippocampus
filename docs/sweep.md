@@ -213,7 +213,8 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
 - In act mode, each lesson the agent recommends is written and committed, one commit
   each, and each recommended skip is dropped. Wiki captures and retained sources and
   outputs under the knowledge root are checked and recorded. A fact about the user
-  becomes an ordinary ask and is never saved by the sweep.
+  becomes an ordinary ask and is never saved by the sweep. So does a new-skill lesson: no
+  skill is created without the user's yes, and the report lists its ask, not an applied lesson.
 - Each item's receipt names its commit, or its destination when it has none. A handoff
   is archived once every item has a receipt, a drop or a delivered ask.
 - Lesson commits go through the persist binding before the run ends, with the wrap's

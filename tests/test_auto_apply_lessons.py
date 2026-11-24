@@ -1033,3 +1033,96 @@ def test_the_routing_variable_refusal_names_the_unset_step(tmp_path, tool, targe
                        '--lessons', wrap.save('rows.json', []))
     assert applied.returncode == 1 and 'unset HIPPOCAMPUS_ROUTING' in applied.stderr
     assert exported.exists() == (target == 'present')
+
+
+PROPOSAL = ('New skill release-check: the four-step release check (bump the version, regenerate the '
+            'metadata, run the quick checks, tag) was done by hand twice. Nearest skill: release-signing, '
+            'which signs checksums and runs none of these steps.')
+CHOICES = ['create the skill', 'edit release-signing instead', 'decline']
+
+
+def test_new_skill_lesson_is_asked_and_never_written_even_with_auto_apply_on(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    head = git(checkout, 'rev-parse', 'HEAD')
+    skill = checkout / 'skills/release-check/SKILL.md'
+    new = {'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES, 'target': str(skill),
+           'evidence': 'The release check was run by hand twice this session.'}
+    data = wrap.apply([], [new], session_items=[lesson(PROPOSAL)])
+    [outcome] = data['lesson_outcomes']
+    assert outcome['status'] == 'asked' and outcome.get('commit') is None
+    [carried] = data['session_items']
+    assert carried['context'] == PROPOSAL and carried['new_skill'] is True and carried['choices'] == CHOICES
+    [ask] = data['new_skill_asks']
+    assert ask['text'] == PROPOSAL and ask['choices'] == CHOICES
+    assert not skill.exists() and git(checkout, 'rev-parse', 'HEAD') == head
+    assert git(checkout, 'status', '--porcelain') == ''
+    again = wrap.apply([data['session_items'][0]], [{**new, 'choices': CHOICES}])
+    assert again['resume']['open_loops'][0]['choices'] == CHOICES and not skill.exists()
+    assert git(checkout, 'rev-parse', 'HEAD') == head
+
+
+def test_new_skill_lesson_without_choices_is_refused(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    result = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson(PROPOSAL)])),
+                      '--lessons', wrap.save('lessons.json', [{'index': 0, 'recommend': 'apply', 'new_skill': True}]))
+    assert result.returncode == 1 and "requires the user's choices" in result.stderr
+
+
+def asked_once(wrap):
+    """A new-skill lesson asked in an earlier call, as the carried item the next call reads."""
+    new = {'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}
+    data = wrap.apply([lesson(PROPOSAL)], [new])
+    assert data['lesson_outcomes'][0]['status'] == 'asked'
+    return data['resume']['open_loops'][0]
+
+
+def test_carried_new_skill_lesson_without_a_row_or_choices_does_not_fail_the_call(tmp_path, tool):
+    checkout, _, _ = clone_pair(tmp_path)
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    unanswered = lesson(PROPOSAL, new_skill=True)
+    data = wrap.apply([lesson(), unanswered], [row(0, checkout / 'rules.md')])
+    assert [outcome['status'] for outcome in data['lesson_outcomes']] == ['applied']
+    assert data['new_skill_asks'] == [] and data['resume']['open_loops'] == [unanswered]
+
+
+def test_skip_after_a_new_skill_ask_drops_it_with_its_reason(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked_once(wrap)
+    data = wrap.apply([lesson(PROPOSAL)], [{'index': 0, 'recommend': 'skip', 'reason': 'The user declined'}])
+    assert data['resume']['open_loops'] == [] and data['new_skill_asks'] == []
+    assert data['lesson_outcomes'][-1]['status'] == 'dropped'
+    assert data['lesson_outcomes'][-1]['reason'] == 'The user declined'
+
+
+def test_asked_new_skill_lesson_without_choices_is_refused_not_crashed(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked_once(wrap)
+    result = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson(PROPOSAL)])),
+                      '--lessons', wrap.save('lessons.json', [{'index': 0, 'recommend': 'apply'}]))
+    assert result.returncode == 1 and "requires the user's choices" in result.stderr
+    assert 'TypeError' not in result.stderr
+
+
+def test_approved_new_skill_lesson_is_kept_and_not_asked_again(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    approved = {**asked_once(wrap), 'approved': True}
+    data = wrap.apply([approved], [{'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}])
+    assert data['new_skill_asks'] == [] and data['resume']['open_loops'] == [approved]
+    assert data['resume']['open_loops'][0]['context'] == PROPOSAL
+
+
+def test_dictated_skip_drops_a_new_skill_lesson(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([lesson(PROPOSAL, new_skill=True)],
+                      [{'index': 0, 'recommend': 'skip', 'dictated': True, 'new_skill': True,
+                        'reason': 'The user said to drop it'}])
+    assert data['resume']['open_loops'] == [] and data['new_skill_asks'] == []
+    assert data['lesson_outcomes'][0]['status'] == 'dropped'
