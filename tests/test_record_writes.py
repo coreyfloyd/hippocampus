@@ -39,10 +39,10 @@ if r['operation'] == 'lookup':
 else:
     if MODE == 'failed':
         print(json.dumps({'status': 'failed', 'error': 'store refused'})); sys.exit(1)
-    if MODE == 'ask':
-        print(json.dumps({'status': 'failed', 'error': 'no scope row matches', 'ask': {
-            'text': 'Which folder holds this scope?', 'choices': ['add a scope row', 'decline'],
-            'identity': r['identity'], 'item': r['item']}})); sys.exit(1)
+    if MODE in ('ask', 'badask'):
+        ask = {'text': 'Which folder holds this scope?', 'identity': r['identity'], 'item': r['item']}
+        if MODE == 'ask': ask['choices'] = ['add a scope row', 'decline']
+        print(json.dumps({'status': 'failed', 'error': 'no scope row matches', 'ask': ask})); sys.exit(1)
     receipt = {'identity': r['identity'], 'destination': r['kind'] + ':' + str(len(data))}
     data.append(receipt); p.write_text(json.dumps(data))
     if MODE == 'lost': sys.exit()

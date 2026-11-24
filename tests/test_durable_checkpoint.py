@@ -83,7 +83,7 @@ def test_all_carried_types_use_approval_routes_and_actual_receipts(tmp_path, pro
     items = [{**item(kind), 'type': kind, 'session_id': 'fixture',
               'disposition': 'File through fixture approval route', 'choices': ['approve', 'defer']}
              for kind in ('decision', 'commitment', 'lesson', 'knowledge')]
-    items[0].update(entry='record', author='Fixture user', location='fixture conversation',
+    items[0].update(entry='record', author='Fixture user', author_role='user', location='fixture conversation',
                     decision_record={'title': 'Fixture decision', 'scope': {'area': 'fixture'},
                                      'text': 'Full proposal', 'options': [], 'why': 'Fixture reason'})
     def profile(binding):
@@ -131,7 +131,7 @@ def test_invalid_checkpoint_still_has_a_failed_pass_report(tmp_path):
 
 def test_approved_user_decision_files_through_the_decisions_kind(tmp_path):
     decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
-        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user',
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user', 'author_role': 'user',
         'location': 'fixture conversation',
         'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'fixture'}, 'text': 'Full proposal',
                             'options': [], 'why': 'Fixture reason'}}
@@ -391,7 +391,7 @@ def test_deferred_new_ticket_and_approved_decision_do_not_write(tmp_path, provid
     row = dict(index=0, rule=rule, status=status, read_status='ok', reason='Deferred',
                priority='p2', priority_reason='Fixture priority', answer='approve', approval_source='User reply')
     if rule == 'R7':
-        source.update(type='decision', entry='record', author='Fixture user', location='Fixture chat',
+        source.update(type='decision', entry='record', author='Fixture user', author_role='user', location='Fixture chat',
                       decision_record=dict(title='Approved', scope={'area': 'fixture'}, text='Approved text',
                                            options=[], why='Fixture reason'))
     def profile(binding):

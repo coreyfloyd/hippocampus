@@ -50,25 +50,46 @@ def _scope(value: Any) -> bool:
             and all(_text(v) for v in value.values()))
 
 
+def ticket_anchor(item: Mapping[str, Any]) -> str | None:
+    anchor = item.get('anchor')
+    if anchor is None:
+        return None
+    if not isinstance(anchor, Mapping):
+        raise ValueError('anchor must be an object')
+    return anchor['ticket'] if _text(anchor.get('ticket')) else None
+
+
+def user_decision(item: Mapping[str, Any]) -> bool:
+    """Anything not plainly an agent's decision is treated as the user's and needs approval."""
+    return item.get('type') == 'decision' and not (
+        item.get('entry') == 'agent_log' and item.get('author_role') == 'agent')
+
+
+def require_approval(row: Mapping[str, Any]) -> None:
+    if row.get('answer') != 'approve' or not _text(row.get('approval_source')):
+        raise ValueError('a user decision requires explicit user approval and its source')
+
+
 def decision_request(item: Mapping[str, Any], row: Mapping[str, Any]) -> None:
     """A user's decision files only with explicit approval; an agent's only when no ticket holds it."""
     entry, proposal = item.get('entry'), item.get('decision_record')
-    if entry not in ('record', 'agent_log') or not _text(item.get('author')):
-        raise ValueError("a decision requires entry 'record' or 'agent_log' and its author")
+    roles = {'record': 'user', 'agent_log': 'agent'}
+    if entry not in roles or item.get('author_role') != roles[entry] or not _text(item.get('author')):
+        raise ValueError("a decision requires entry 'record' with author_role 'user', or "
+                         "'agent_log' with author_role 'agent', and its author")
     if not isinstance(proposal, Mapping) or not _scope(proposal.get('scope')):
         raise ValueError('decision_record.scope must name exactly one of ' + ', '.join(SCOPES))
     if not (_text(proposal.get('text')) and _text(proposal.get('why'))):
         raise ValueError('decision_record requires text and why')
     if entry == 'agent_log':
-        if _text((item.get('anchor') or {}).get('ticket')):
+        if ticket_anchor(item):
             raise ValueError(TICKET_DECISION)
         return
     options = proposal.get('options')
     if (not _text(item.get('location')) or not _text(proposal.get('title'))
             or not isinstance(options, list) or not all(_text(o) for o in options)):
         raise ValueError('a decision record requires title, options, and the source location')
-    if row.get('answer') != 'approve' or not _text(row.get('approval_source')):
-        raise ValueError('a decision record requires explicit user approval and its source')
+    require_approval(row)
 
 
 def change_log_request(item: Mapping[str, Any]) -> None:
@@ -82,6 +103,11 @@ def check_request(kind: str, item: Mapping[str, Any], row: Mapping[str, Any]) ->
     """Refuse a request its kind cannot file, before any lookup."""
     if kind == 'documents' and item.get('type') == 'decision':
         raise Rejected(DOCUMENTS_REFUSAL)
+    if kind != 'decisions' and user_decision(item):
+        # A user's decision reaches no other store, such as a ticket comment, unapproved.
+        require_approval(row)
+    if kind != 'logs' and 'change_log' in item:
+        raise ValueError("a change log entry files only through the logs record write (kind 'logs')")
     if kind == 'decisions':
         if item.get('type') != 'decision':
             raise ValueError('the decisions record write files only decision items')
@@ -103,7 +129,8 @@ def kind_for(rule: str, item: Mapping[str, Any], row: Mapping[str, Any], writes:
         if any(item.get(k) for k in ('time', 'recurrence', 'scheduled_at', 'due_at')) and writes.get('scheduled_jobs'):
             return 'scheduled_jobs'
         return 'tickets'
-    default = ('decisions' if item.get('type') == 'decision' else 'documents') if rule == 'R7' else 'tickets'
+    default = ('tickets' if rule != 'R7' else 'decisions' if item.get('type') == 'decision'
+               else 'logs' if 'change_log' in item else 'documents')
     kind = row.get('record_kind', item.get('record_kind', default))
     if kind not in KINDS:
         raise ValueError(f'unknown record write kind {kind!r}')

@@ -1085,13 +1085,14 @@ instruction to delete those blocks manually; no configuration is converted.
 ### Decision and change log record writes
 
 The `decisions` record write files a decision item (`type: "decision"`) through
-the record-write protocol. The item names `entry`, `author`, and `decision_record`:
+the record-write protocol. The item names `entry`, `author`, `author_role`, and
+`decision_record`:
 
-- `entry: "record"`: the user's decision. It also has `location` (its source), and
+- `entry: "record"` with `author_role: "user"`: the user's decision. It also has `location` (its source), and
   `decision_record` holds `scope`, `title`, `text`, `options` (an array of text,
   possibly empty), and `why`, with optional `date`, `rule_link` and `supersedes`.
   The R7 filing row requires `answer: "approve"` and nonempty `approval_source`.
-- `entry: "agent_log"`: an agent decision tied to no ticket. `decision_record`
+- `entry: "agent_log"` with `author_role: "agent"`: an agent decision tied to no ticket. `decision_record`
   holds `scope`, `text` and `why`; no approval is needed. An item with
   `anchor.ticket` is refused: it files under R2 through the tickets record write.
 
@@ -1102,8 +1103,12 @@ supplies none. A writer that cannot place the scope answers `failed` with an `as
 and adds the ask, owned as configured, to the filing report's `asks`; the agent
 files it through the ask binding. Without the user, a proposal uses the owned R3 ask.
 The documents record write refuses every decision item and names the decisions kind.
+Any other decision item is the user's: routed to another kind, such as an R2 ticket
+comment, it still needs `answer: "approve"` and `approval_source`. A profile's retired
+`decision_records` field is ignored with a warning.
 
 The `logs` record write files one change log entry: an item with
 `record_kind: "logs"`, `author`, and `change_log` holding `scope`, `subject` and
-`text`, with optional `date`, `links` and `subject_link`. It needs no approval.
+`text`, with optional `date`, `links` and `subject_link`. It needs no approval; R7
+defaults to `logs` for an item with `change_log`, and no other kind accepts one.
 Both kinds answer `lookup`, `write` and `reverse` with the shapes above.

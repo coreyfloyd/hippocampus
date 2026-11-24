@@ -152,7 +152,8 @@ runs it with `durable`. When the user says "capture decisions", run this record
 step for decision items only: the same finding and approval, then `record`, now.
 
 A user decision item keeps `type: "decision"` and its unchanged `session_id`,
-`produced_at` and `context`, plus `entry: "record"`, `author`, and `location` (the
+`produced_at` and `context`, plus `entry: "record"`, `author`, `author_role: "user"`,
+and `location` (the
 source of the user's decision). Its `decision_record` holds `scope` (exactly one of
 `{"area": ...}`, `{"repository": "owner/repo"}`, `{"project": slug}`), `title`,
 `text` (what was decided), `options` (text array, may be empty) and `why`;
@@ -177,10 +178,11 @@ approval source. A decline drops it under R6 with a reason. An unbound or failed
 ask keeps the whole proposal carried.
 
 An agent decision tied to no ticket is an agent decision log entry: `entry:
-"agent_log"`, `author` (the agent), and `decision_record` with `scope`, `text` and
+"agent_log"`, `author` (the agent), `author_role: "agent"`, and `decision_record` with `scope`, `text` and
 `why`. File it under R7 without approval. An agent decision tied to a ticket stays
 an R2 comment on that ticket through the tickets record write; the decisions kind
-refuses an item with `anchor.ticket`.
+refuses an item with `anchor.ticket`. Any decision not marked as the agent's is the
+user's and needs approval on every kind, including a ticket comment.
 
 A change log entry has `record_kind: "logs"`, `author`, and `change_log` with
 `scope`, `subject` and `text` (optional `date`, `links`, `subject_link`). It files

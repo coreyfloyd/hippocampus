@@ -200,6 +200,10 @@ def owned_ask(payload: Mapping[str, Any], binding: Mapping[str, str] | None) -> 
     return result
 
 
+RETIRED_DECISION_ROUTES = ("warning: decision_records is retired and ignored; the decisions record write "
+                           "chooses each folder from the decision's scope. Delete the field.")
+
+
 def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     """Merge user then repository additions; no profile can alter the spine."""
     bindings: dict[str, Any] = {"record": None, "persist": None, **copy.deepcopy(NATIVE)}
@@ -213,7 +217,10 @@ def compose(profiles: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         name = profile.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError("profile requires a name")
-        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "record_writes", "ask"})
+        if "decision_records" in profile:
+            print(f"{name}: {RETIRED_DECISION_ROUTES}", file=sys.stderr)
+        unknown = sorted(set(profile) - {"name", "bindings", "steps", "record_read", "record_writes", "ask",
+                                         "decision_records"})
         if unknown:
             steps = _removed_spine_steps(profile, unknown)
             if steps:
@@ -485,11 +492,13 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         result.setdefault("resume", {}).update(ticket_module.retain_session_facts(result.get("resume", {}), session_id))
     projects = ticket_module.project_references(result.get("resume", {}))
     for item in loops:
-        project = item.get("anchor", {}).get("project")
+        # A malformed anchor fails only its own item, in its record write.
+        anchor = item.get("anchor") if isinstance(item.get("anchor"), Mapping) else {}
+        project = anchor.get("project")
         if project and project not in projects:
             projects.append(project)
         if execute_writes and session_id:
-            ticket = item.get("anchor", {}).get("ticket") or item.get("ticket")
+            ticket = anchor.get("ticket") or item.get("ticket")
             if ticket:
                 ticket_module.record_ticket(session_id, ticket)
     if execute_writes and session_id:
@@ -655,9 +664,16 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 if writer_ask is not None:
                     try:
                         entry["ask"] = writer_ask_payload(item, writer_ask, handoff.get("subject", {}), ask)
-                        report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
                     except ValueError as error:
-                        report["failures"].append(f"{label}: {binding} writer ask unusable: {error}")
+                        row = {**row, "error": f"{row['error']}; writer ask unusable: {error}"}
+                        entry.update(row)
+                    else:
+                        report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
+                        row = {**row, "status": "pending", "reason": "awaiting the user's answer to the writer's ask"}
+                        entry.update(row)
+                        kept.append(copy.deepcopy(item))
+                        report["items"].append(entry)
+                        continue
                 if binding == "tickets" and "tickets" in row:
                     try:
                         result["resume"].update(ticket_module.record_ticket_states(
@@ -717,8 +733,14 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
 
 def carried_binding(item: Mapping[str, Any], writes: Mapping[str, Any]) -> str:
     """Where a carried item with no filing row is owed: an agent decision log entry needs no ask."""
+    if item.get("type") == "decision" and not record_write.user_decision(item):
+        try:
+            anchored = record_write.ticket_anchor(item)
+        except ValueError:
+            anchored = None
+        return record_write.kind_for("R2", item, {}, writes) if anchored else "decisions"
     if item.get("type") == "decision":
-        return "decisions" if item.get("entry") == "agent_log" else "ask"
+        return "ask"
     if item.get("type") in ("lesson", "knowledge"):
         return "lessons" if item["type"] == "lesson" else "knowledge"
     return record_write.kind_for("R2", item, {}, writes)
@@ -762,6 +784,9 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         binding = entry.get("binding") if entry else carried_binding(item, writes)
         if entry and entry.get("status") == "read failed":
             failures.append(f"{label}: read failed: {entry.get('error')}")
+        elif entry and entry.get("status") == "pending" and isinstance(entry.get("ask"), Mapping) \
+                and binding in record_write.KINDS:
+            warnings.append(f"{label}: kept until the user answers the {binding} writer's ask")
         elif entry and entry.get("native_step") in NATIVE and entry.get("ask_status") == "filed":
             warnings.append(f"{label}: ask delivered; native item kept pending in handoff")
         elif binding in NATIVE:

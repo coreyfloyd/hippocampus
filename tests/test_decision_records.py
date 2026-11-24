@@ -8,7 +8,8 @@ from test_record_writes import item, payload, requests, row, run, store
 
 def decision(**extra):
     return {**item('Use the agreed retention policy'),
-        'type': 'decision', 'entry': 'record', 'author': 'User', 'location': 'session message 3',
+        'type': 'decision', 'entry': 'record', 'author': 'User', 'author_role': 'user',
+        'location': 'session message 3',
         'decision_record': {'title': 'Retention policy', 'scope': {'project': 'fixture-project'},
                             'text': 'Retain dated records.', 'options': ['Retain', 'Expire'],
                             'why': 'Dated records answer later audits.'}, **extra}
@@ -16,7 +17,7 @@ def decision(**extra):
 
 def agent_decision(**extra):
     return {**item('Chose the stub writer for the fixture'),
-        'type': 'decision', 'entry': 'agent_log', 'author': 'agent',
+        'type': 'decision', 'entry': 'agent_log', 'author': 'agent', 'author_role': 'agent',
         'decision_record': {'scope': {'repository': 'example/fixture'},
                             'text': 'Use the stub writer.', 'why': 'No live store in tests.'}, **extra}
 
@@ -89,6 +90,7 @@ def test_documents_record_write_refuses_a_decision_and_names_the_decisions_kind(
     ({}, row(rule='R7')),
     ({}, approved(approval_source='')),
     ({'author': ''}, approved()),
+    ({'author_role': 'agent'}, approved()),
     ({'entry': 'note'}, approved()),
     ({'location': ''}, approved()),
     ({'decision_record': {}}, approved()),
@@ -148,11 +150,26 @@ def test_writer_ask_for_an_unmatched_scope_is_reported_and_the_decision_kept(tmp
     assert result.returncode == 1
     out = json.loads(result.stdout)
     saved = out['filing']['items'][0]
-    assert saved['status'] == 'failed'
+    assert saved['status'] == 'pending'
     assert saved['ask']['text'] == 'Which folder holds this scope?'
     assert saved['ask']['choices'] == ['add a scope row', 'decline']
     assert saved['ask']['owner_agent'] == 'durable-agent'
     assert saved['ask']['decision_record'] == decision()['decision_record']
+    assert out['resume']['open_loops'] == [decision()]
+    assert out['filing']['asks']
+    import checklist
+    failures, warnings = checklist.filing_check(checklist.compose([config]), out, config['ask'])
+    assert not failures
+    assert any('writer' in w for w in warnings)
+
+
+def test_writer_ask_without_choices_fails_and_names_the_unusable_ask(tmp_path):
+    result = run(tmp_path, 'record', profile(tmp_path, 'badask'), payload([decision()]), [approved()])
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    saved = out['filing']['items'][0]
+    assert saved['status'] == 'failed'
+    assert 'writer ask unusable' in saved['error']
     assert out['resume']['open_loops'] == [decision()]
 
 
@@ -236,3 +253,83 @@ def test_incomplete_change_log_entry_writes_nothing(tmp_path, change):
     result = run(tmp_path, 'record', profile(tmp_path), payload([change_log(**change)]), [row(rule='R7')])
     assert result.returncode == 1
     assert kinds_sent(tmp_path) == {}
+
+
+@pytest.mark.parametrize('change', [{'entry': 'agent_log'}, {'entry': 'agent_log', 'author_role': None}])
+def test_a_user_decision_marked_as_an_agent_log_entry_is_refused_without_approval(tmp_path, provider, change):
+    source = {k: v for k, v in decision(**change).items() if v is not None}
+    result = run(tmp_path, 'record', profile(tmp_path), payload([source]), [row(rule='R7')])
+    assert result.returncode == 1
+    assert json.loads(result.stdout)['resume']['open_loops'] == [source]
+    assert kinds_sent(tmp_path) == {}
+
+
+@pytest.mark.parametrize('source', [decision(), {k: v for k, v in decision().items()
+                                                 if k not in ('entry', 'author_role')}])
+def test_a_user_decision_reaches_a_ticket_comment_only_with_approval(tmp_path, provider, source):
+    refused = run(tmp_path, 'record', profile(tmp_path), payload([source]), [row(rule='R2')])
+    assert refused.returncode == 1
+    assert 'approval' in json.loads(refused.stdout)['filing']['items'][0]['error']
+    assert kinds_sent(tmp_path) == {}
+    filed = run(tmp_path, 'record', profile(tmp_path), payload([source]),
+                [row(rule='R2', answer='approve', approval_source='user message 5')])
+    assert filed.returncode == 0, filed.stderr
+    assert kinds_sent(tmp_path) == {'tickets': ['lookup', 'write']}
+
+
+def test_wrap_rechecks_approval_of_a_user_decision_filed_as_a_ticket_comment(tmp_path):
+    import checklist
+    import record_write
+    source = decision()
+    filing = row(rule='R2')
+    filing.update(item=source, status='filed', binding='tickets', destination='tickets:0',
+                  receipt={'identity': record_write.identity(source), 'destination': 'tickets:0'})
+    data = payload([])
+    data['resume']['next_action'] = 'Session finished.'
+    data['filing'] = {'items': [filing]}
+    failures, _ = checklist.filing_check(checklist.compose([profile(tmp_path)]), data)
+    assert any('approval' in f for f in failures)
+
+
+def test_a_carried_anchored_agent_decision_is_owed_to_the_tickets_record_write(tmp_path):
+    import checklist
+    source = agent_decision(anchor={'ticket': 'https://example.test/issues/7'})
+    data = payload([source])
+    data['filing'] = {'items': []}
+    failures, warnings = checklist.filing_check(
+        checklist.compose([profile(tmp_path, kinds=('decisions',))]), data)
+    assert not failures
+    assert any('missing tickets binding' in w for w in warnings)
+
+
+def test_a_malformed_anchor_fails_its_item_and_the_other_items_still_file(tmp_path):
+    bad = agent_decision(anchor='https://example.test/issues/7')
+    good = agent_decision(context='A second agent decision')
+    result = run(tmp_path, 'record', profile(tmp_path), payload([bad, good]),
+                 [row(0, rule='R7'), row(1, rule='R7')])
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    assert 'anchor' in out['filing']['items'][0]['error']
+    assert out['filing']['items'][1]['status'] == 'filed'
+    assert out['resume']['open_loops'] == [bad]
+
+
+def test_a_profile_with_the_retired_decision_routes_still_composes_with_a_warning(tmp_path):
+    config = profile(tmp_path)
+    config['decision_records'] = {'default_folder': 'operator/decisions'}
+    result = run(tmp_path, 'record', config, payload([decision()]), [approved()])
+    assert result.returncode == 0, result.stderr
+    assert 'decision_records is retired and ignored' in result.stderr
+    assert kinds_sent(tmp_path) == {'decisions': ['lookup', 'write']}
+
+
+def test_a_change_log_entry_defaults_to_the_logs_kind_and_is_refused_elsewhere(tmp_path):
+    source = {k: v for k, v in change_log().items() if k != 'record_kind'}
+    result = run(tmp_path, 'record', profile(tmp_path), payload([source]), [row(rule='R7')])
+    assert result.returncode == 0, result.stderr
+    assert kinds_sent(tmp_path) == {'logs': ['lookup', 'write']}
+    refused = run(tmp_path, 'record', profile(tmp_path), payload([change_log(context='Another change')]),
+                  [row(rule='R7', record_kind='documents')])
+    assert refused.returncode == 1
+    assert "'logs'" in json.loads(refused.stdout)['filing']['items'][0]['error']
+    assert 'documents' not in kinds_sent(tmp_path)
