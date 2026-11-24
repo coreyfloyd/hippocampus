@@ -147,6 +147,33 @@ def test_approved_user_decision_files_through_the_decisions_kind(tmp_path):
     assert json.loads((tmp_path / 'handoff.json').read_text())['resume']['open_loops'] == []
 
 
+def test_unplaceable_scope_asks_the_user_through_the_ask_writer(tmp_path):
+    import shlex
+    from test_record_writes import requests
+    decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user',
+        'author_role': 'user', 'location': 'fixture conversation',
+        'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'unplaced'}, 'text': 'Full proposal',
+                            'options': [], 'why': 'Fixture reason'}}
+    def profile(binding):
+        asks = store(tmp_path, 'ok', 'asks')
+        script = tmp_path / 'asks.py'
+        script.write_text(script.read_text().replace(
+            "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+        return {'name': 'fixture', 'record_writes': {'decisions': binding},
+                'ask': {'command': shlex.join(asks['command']), 'owner_agent': 'fixture-owner'}}
+    rows = [{'index': 0, 'rule': 'R7', 'status': 'pending', 'answer': 'approve',
+             'approval_source': 'Fixture user response'}]
+    result = invoke(tmp_path, 'codex', mode='ask', items=[decision], rows=rows, profile=profile)
+    assert result.returncode == 1
+    report = json.loads((tmp_path / 'report.json').read_text())
+    [entry] = report['items']
+    assert entry['status'] == 'pending' and entry['ask_status'] == 'filed'
+    assert entry['ask_receipt']['owner_agent'] == 'fixture-owner'
+    assert report['errors'] == []
+    assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
+
+
 def test_explicit_schedule_uses_only_configured_fixture_adapter(tmp_path):
     report = tmp_path / 'catchup.json'
     data = dict(node='fixture-node', cutoff='2026-11-19T12:00:00Z', mode='run',

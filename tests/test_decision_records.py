@@ -155,7 +155,7 @@ def test_writer_ask_for_an_unmatched_scope_is_reported_and_the_decision_kept(tmp
     assert saved['ask']['choices'] == ['add a scope row', 'decline']
     assert saved['ask']['owner_agent'] == 'durable-agent'
     assert saved['ask']['decision_record'] == decision()['decision_record']
-    assert out['resume']['open_loops'] == [decision()]
+    assert out['resume']['open_loops'] == [{**decision(), 'writer_ask': saved['ask']}]
     assert out['filing']['asks']
     import checklist
     failures, warnings = checklist.filing_check(checklist.compose([config]), out, config['ask'])
@@ -333,3 +333,93 @@ def test_a_change_log_entry_defaults_to_the_logs_kind_and_is_refused_elsewhere(t
     assert refused.returncode == 1
     assert "'logs'" in json.loads(refused.stdout)['filing']['items'][0]['error']
     assert 'documents' not in kinds_sent(tmp_path)
+
+
+def test_a_deferred_user_decision_row_keeps_its_own_outcome_not_an_approval_failure(tmp_path):
+    result = run(tmp_path, 'record', profile(tmp_path), payload([decision()]),
+                 [row(rule='R7', status='uncertain', error='writer timed out')])
+    assert result.returncode == 1
+    saved = json.loads(result.stdout)['filing']['items'][0]
+    assert saved['error'] == 'writer timed out'
+    assert 'approval' not in saved['error']
+    assert kinds_sent(tmp_path) == {}
+
+
+def test_an_agent_decision_with_a_top_level_ticket_is_refused_by_the_decisions_kind(tmp_path):
+    source = agent_decision(ticket='https://example.test/issues/7')
+    result = run(tmp_path, 'record', profile(tmp_path), payload([source]), [row(rule='R7')])
+    assert result.returncode == 1
+    assert 'tickets record write' in json.loads(result.stdout)['filing']['items'][0]['error']
+    assert kinds_sent(tmp_path) == {}
+
+
+def test_a_pending_writer_ask_is_kept_and_raised_once_across_wraps(tmp_path, monkeypatch):
+    import checklist
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path))
+    config = profile(tmp_path, 'ask')
+    config['ask'] = {'command': '/fixture-ask', 'owner_agent': 'durable-agent'}
+    first = json.loads(run(tmp_path, 'record', config, payload([decision()]), [approved()]).stdout)
+    assert len([a for group in first['filing']['asks'].values() for a in group]) == 1
+    [carried] = first['resume']['open_loops']
+    assert carried['writer_ask'] == first['filing']['items'][0]['ask']
+    line, not_saved, _ = checklist.saved_state(checklist.compose([config]), first, config['ask'])
+    assert "writer's ask" in line and not not_saved
+    second = json.loads(run(tmp_path, 'record', config, first, [approved()]).stdout)
+    assert second['filing']['asks'] == {}
+    assert second['resume']['open_loops'] == [carried]
+    assert all('writer_ask' not in r['item'] for r in requests(tmp_path, 'decisions'))
+
+
+def test_a_carried_change_log_entry_is_owed_to_the_logs_record_write(tmp_path):
+    import checklist
+    data = payload([change_log()])
+    data['filing'] = {'items': []}
+    failures, warnings = checklist.filing_check(
+        checklist.compose([profile(tmp_path, kinds=('decisions',))]), data)
+    assert not failures
+    assert any('missing logs binding' in w for w in warnings)
+
+
+def test_the_retired_record_binding_error_names_every_record_write_kind():
+    import checklist
+    import record_write
+    with pytest.raises(ValueError) as error:
+        checklist.reject_record_binding({'bindings': {'record': {'command': '/x'}}})
+    assert all(f'"{kind}"' in str(error.value) for kind in record_write.KINDS)
+
+
+def test_unattended_record_raises_an_ask_and_never_files_a_user_decision(tmp_path, provider):
+    config = profile(tmp_path)
+    config['ask'] = {'command': '/fixture-ask', 'owner_agent': 'durable-agent'}
+    result = run(tmp_path, 'record', config, payload([decision(), agent_decision()]),
+                 [approved(), row(1, rule='R7')], '--unattended')
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    saved = out['filing']['items'][0]
+    assert saved['status'] == 'failed' and 'unattended' in saved['error']
+    asks = [a for group in out['filing']['asks'].values() for a in group]
+    assert len(asks) == 1
+    assert asks[0]['choices'] == ['approve', 'decline']
+    assert asks[0]['owner_agent'] == 'durable-agent'
+    assert out['resume']['open_loops'] == [decision()]
+    # The agent's own log entry needs nobody's approval and still files.
+    assert [r['item']['entry'] for r in requests(tmp_path, 'decisions')] == ['agent_log', 'agent_log']
+
+
+def test_catch_up_delivers_the_writer_ask_for_an_unplaceable_scope(tmp_path, monkeypatch):
+    import checklist
+    import filing_catchup
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path))
+    asks = store(tmp_path, 'ok', 'asks')
+    script = tmp_path / 'asks.py'
+    script.write_text(script.read_text().replace(
+        "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+    config = profile(tmp_path, 'ask')
+    ask = {'command': asks['command'], 'owner_agent': 'durable-agent'}
+    plan = checklist.compose([config])
+    source = {'item': decision(), 'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)}}
+    outcome = filing_catchup.file_item(source, {k: v for k, v in approved().items() if k != 'index'}, plan, ask)
+    assert outcome['status'] == 'pending' and outcome['ask_status'] == 'filed'
+    assert outcome['ask_receipt']['owner_agent'] == 'durable-agent'
+    assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
+    assert requests(tmp_path, 'asks')[1]['item']['text'] == 'Which folder holds this scope?'
