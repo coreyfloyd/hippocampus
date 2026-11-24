@@ -104,7 +104,7 @@ does not apply.
   it would clean up worktrees and agents the slate still uses.
 - **After the whole slate**, once its completion command (the configured
   `unattended.completion_command`) succeeds, run this full checklist once with
-  `--unattended` on `plan`, `report`, and `wrap-check`.
+  `--unattended` on `plan`, `file`, `report`, and `wrap-check`.
 
 `python3 <checklist-module> wrap-cadence` reads a hook payload on stdin and
 prints which applies now: `none`, `checkpoint`, `unattended-checklist`, or

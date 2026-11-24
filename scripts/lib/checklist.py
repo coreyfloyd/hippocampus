@@ -99,9 +99,8 @@ def reject_native_bindings(profile: Mapping[str, Any], label: str, text: str = "
 
 def reject_record_binding(profile: Mapping[str, Any]) -> None:
     if isinstance(profile.get("bindings"), Mapping) and "record" in profile["bindings"]:
-        raise ValueError('retired bindings.record: use record_writes: '
-                         '{"tickets": {"command": "..."}, "projects": {"command": "..."}, '
-                         '"documents": {"command": "..."}, "scheduled_jobs": {"command": "..."}}')
+        raise ValueError("retired bindings.record: use record_writes: "
+                         + json.dumps({kind: {"command": "..."} for kind in record_write.KINDS}))
 
 
 def load_profile(path: Path) -> dict[str, Any]:
@@ -395,14 +394,38 @@ def ask_payload(item: Mapping[str, Any], subject: Mapping[str, Any],
     return owned_ask(ask, binding)
 
 
+WRITER_ASK_REASON = "awaiting the user's answer to the writer's ask"
+UNATTENDED_DECISION = ("unattended: a user decision is never filed without the user; "
+                       "it becomes an R3 ask with approve/decline choices")
+
+
 def writer_ask_payload(item: Mapping[str, Any], writer_ask: Mapping[str, Any], subject: Mapping[str, Any],
                       binding: Mapping[str, str] | None = None) -> dict[str, Any]:
     """A writer that matched no destination returns an ask; the item stays carried until it is answered."""
-    ask = ask_payload({**copy.deepcopy(dict(item)), "choices": copy.deepcopy(writer_ask.get("choices"))},
-                      subject, binding)
+    source = {k: copy.deepcopy(v) for k, v in item.items() if k != "writer_ask"}
+    ask = ask_payload({**source, "choices": copy.deepcopy(writer_ask.get("choices"))}, subject, binding)
     ask["text"] = writer_ask.get("text")
     validate_ask_payload(ask)
     return ask
+
+
+def settle_writer_ask(row: Mapping[str, Any], item: Mapping[str, Any], subject: Mapping[str, Any],
+                      binding: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Turn a record write's ``writer_ask`` into a pending row holding the owned ask.
+
+    Every path that runs a record write calls this, so an unplaceable scope always asks the user.
+    ``ask_raised`` is false when the carried item already holds this same ask.
+    """
+    row = copy.deepcopy(dict(row))
+    writer_ask = row.pop("writer_ask", None)
+    if writer_ask is None:
+        return row
+    try:
+        payload = writer_ask_payload(item, writer_ask, subject, binding)
+    except ValueError as error:
+        return {**row, "error": f"{row.get('error')}; writer ask unusable: {error}"}
+    return {**row, "status": "pending", "reason": WRITER_ASK_REASON, "ask": payload, "ask_source": "writer",
+            "ask_raised": item.get("writer_ask") != payload}
 
 
 def report_asks(handoff: Mapping[str, Any], problems: list[str],
@@ -454,7 +477,8 @@ def report_asks(handoff: Mapping[str, Any], problems: list[str],
 
 def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                outcomes: Sequence[Mapping[str, Any]], ask: Mapping[str, str] | None = None,
-               *, execute_writes: bool = True, reread_tickets: bool = False) -> dict[str, Any]:
+               *, execute_writes: bool = True, reread_tickets: bool = False,
+               unattended: bool = False) -> dict[str, Any]:
     """Apply filing judgments and execute record writes with identity lookup.
 
     The skill supplies one row per remaining loop and unrecorded current item.
@@ -571,7 +595,19 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
         if binding == "record":
             binding = record_write.kind_for(rule, item, row, writes)
             bindings.setdefault(binding, None)
-        if binding in record_write.KINDS:
+        if (unattended and binding in record_write.KINDS and status in ("pending", "filed")
+                and record_write.user_decision(item)):
+            # S4.2: without the user, the decision is raised as an ask and nothing is written.
+            source = {k: v for k, v in item.items() if k != "writer_ask"}
+            payload = ask_payload({**source, "choices": ["approve", "decline"]}, handoff.get("subject", {}), ask)
+            report["asks"].setdefault(payload["directory"] or "unknown directory", []).append(payload)
+            report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
+                                    "status": "failed", "error": UNATTENDED_DECISION, "ask": payload})
+            report["failures"].append(f"{item.get('context', str(item))}: {UNATTENDED_DECISION}")
+            kept.append(copy.deepcopy(item))
+            continue
+        if binding in record_write.KINDS and status in ("pending", "filed"):
+            # Only a row that will be written needs its approval now; a deferred row stays deferred.
             try:
                 record_write.check_request(binding, item, row)
             except ValueError as error:
@@ -659,21 +695,17 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                     row = {**row, "status": "pending", "error": project_error}
                 else:
                     row = record_write.execute(bindings[binding], binding, item, row, context=context)
-                writer_ask = row.pop("writer_ask", None)
+                row = settle_writer_ask(row, item, handoff.get("subject", {}), ask)
                 entry.update(row)
-                if writer_ask is not None:
-                    try:
-                        entry["ask"] = writer_ask_payload(item, writer_ask, handoff.get("subject", {}), ask)
-                    except ValueError as error:
-                        row = {**row, "error": f"{row['error']}; writer ask unusable: {error}"}
-                        entry.update(row)
-                    else:
-                        report["asks"].setdefault(entry["ask"]["directory"] or "unknown directory", []).append(entry["ask"])
-                        row = {**row, "status": "pending", "reason": "awaiting the user's answer to the writer's ask"}
-                        entry.update(row)
-                        kept.append(copy.deepcopy(item))
-                        report["items"].append(entry)
-                        continue
+                if row.get("ask_source") == "writer":
+                    if row["ask_raised"]:
+                        report["asks"].setdefault(row["ask"]["directory"] or "unknown directory", []).append(row["ask"])
+                    # The carried item keeps the ask, so the next wrap does not raise it again.
+                    item = {**item, "writer_ask": row["ask"]}
+                    entry["item"] = copy.deepcopy(item)
+                    kept.append(copy.deepcopy(item))
+                    report["items"].append(entry)
+                    continue
                 if binding == "tickets" and "tickets" in row:
                     try:
                         result["resume"].update(ticket_module.record_ticket_states(
@@ -733,14 +765,14 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
 
 def carried_binding(item: Mapping[str, Any], writes: Mapping[str, Any]) -> str:
     """Where a carried item with no filing row is owed: an agent decision log entry needs no ask."""
-    if item.get("type") == "decision" and not record_write.user_decision(item):
+    if item.get("type") == "decision" and record_write.user_decision(item):
+        return "ask"
+    if item.get("type") == "decision" or "change_log" in item:
         try:
-            anchored = record_write.ticket_anchor(item)
+            anchored = item.get("type") == "decision" and record_write.ticket_anchor(item)
         except ValueError:
             anchored = None
-        return record_write.kind_for("R2", item, {}, writes) if anchored else "decisions"
-    if item.get("type") == "decision":
-        return "ask"
+        return record_write.kind_for("R2" if anchored else "R7", item, {}, writes)
     if item.get("type") in ("lesson", "knowledge"):
         return "lessons" if item["type"] == "lesson" else "knowledge"
     return record_write.kind_for("R2", item, {}, writes)
@@ -784,8 +816,7 @@ def filing_check(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         binding = entry.get("binding") if entry else carried_binding(item, writes)
         if entry and entry.get("status") == "read failed":
             failures.append(f"{label}: read failed: {entry.get('error')}")
-        elif entry and entry.get("status") == "pending" and isinstance(entry.get("ask"), Mapping) \
-                and binding in record_write.KINDS:
+        elif entry and entry.get("status") == "pending" and entry.get("ask_source") == "writer":
             warnings.append(f"{label}: kept until the user answers the {binding} writer's ask")
         elif entry and entry.get("native_step") in NATIVE and entry.get("ask_status") == "filed":
             warnings.append(f"{label}: ask delivered; native item kept pending in handoff")
@@ -820,6 +851,8 @@ def saved_state(plan: Sequence[Mapping[str, Any]], data: Mapping[str, Any],
         elif binding == "ask" and (status == "filed" or row.get("ask_status") == "filed"):
             if not isinstance(row.get("destination"), str) or not row["destination"].strip():
                 not_saved.append(f"{label}: pending with no ask receipt")
+        elif status == "pending" and row.get("ask_source") == "writer":
+            kept.append(f"{label}: {WRITER_ASK_REASON}")
         elif status in ("failed", "uncertain", "read failed", "pending"):
             not_saved.append(f"{label}: {status}: {reason}")
         elif status == "filed":
@@ -1003,6 +1036,23 @@ def _unattended_marker(session_id: str) -> Path:
     return root / f"{re.sub(r'[^A-Za-z0-9_.-]', '_', session_id)}.unattended-wrap"
 
 
+def _session_state(session_id: str) -> dict[str, Any] | None:
+    """The configured state module's record for the session, or None."""
+    modes = _load_session_mode_module()
+    if modes is None:
+        return None
+    path = modes.state_path(session_id)
+    return modes.read_state(path, session_id) if path is not None and path.exists() else None
+
+
+def session_unattended(session_id: str | None) -> bool:
+    """True while nobody is present: mid-slate (mode afk) or awaiting the unattended wrap."""
+    if not session_id:
+        return False
+    state = _session_state(session_id)
+    return bool(state and state.get("mode") == "afk") or _unattended_marker(session_id).exists()
+
+
 def wrap_cadence(payload: Mapping[str, Any], entrypoint: str | None = None) -> str:
     """What finishing a unit of work calls for now.
 
@@ -1016,11 +1066,7 @@ def wrap_cadence(payload: Mapping[str, Any], entrypoint: str | None = None) -> s
     if session_kind(payload, entrypoint) != "interactive":
         return "none"
     session_id = str(payload.get("session_id") or "")
-    modes = _load_session_mode_module()
-    state = None
-    if modes is not None:
-        path = modes.state_path(session_id)
-        state = modes.read_state(path, session_id) if path is not None and path.exists() else None
+    state = _session_state(session_id)
     if state is not None and state.get("mode") == "afk":
         return "checkpoint"
     marker = _unattended_marker(session_id)
@@ -1330,7 +1376,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--written-handoff", type=Path, help="wrap-check: the handoff step 5 wrote")
     parser.add_argument("--record-at", help="wrap-check: time of the record's latest write or passing check")
     parser.add_argument("--unattended", action="store_true",
-                        help="plan/report/wrap-check: nobody is present to answer a step")
+                        help="plan/report/wrap-check/file/record: nobody is present to answer a step")
     parser.add_argument("--results", type=Path, help="report: the run's step results, in order")
     parser.add_argument("--session-id", help="plan: the current session, whose ledger gets the start marker")
     args = parser.parse_args(argv)
@@ -1476,8 +1522,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.operation in ("file", "record"):
             if not args.handoff or not args.filing:
                 raise ValueError("file requires --handoff and --filing")
+            subject_session = (handoff.get("subject") or {}).get("session_id") or session_id
             output = file_items(plan, handoff, json.loads(args.filing.read_text()), ask,
-                                reread_tickets=args.operation == "file")
+                                reread_tickets=args.operation == "file",
+                                unattended=args.unattended or session_unattended(subject_session))
         elif args.operation == "wrap-check":
             if not args.written_handoff:
                 raise ValueError("wrap-check requires --written-handoff")
