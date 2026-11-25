@@ -73,7 +73,7 @@ def payload(items):
 
 
 def row(index=0, rule='R2', **extra):
-    return dict(index=index, rule=rule, status='pending', read_status='ok', **extra)
+    return {'index': index, 'rule': rule, 'status': 'pending', 'read_status': 'ok', **extra}
 
 
 def test_routing_and_receipts_then_mid_session_wrap_writes_once(tmp_path):

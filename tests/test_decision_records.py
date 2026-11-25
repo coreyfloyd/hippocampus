@@ -34,7 +34,7 @@ def profile(tmp_path, mode='ok', kinds=('decisions', 'documents', 'tickets', 'lo
 
 
 def approved(**extra):
-    return row(rule='R7', answer='approve', approval_source='user message 5', **extra)
+    return row(**{'rule': 'R7', 'answer': 'approve', 'approval_source': 'user message 5', **extra})
 
 
 def kinds_sent(tmp_path):
@@ -418,7 +418,7 @@ def test_catch_up_delivers_the_writer_ask_for_an_unplaceable_scope(tmp_path, mon
     ask = {'command': asks['command'], 'owner_agent': 'durable-agent'}
     plan = checklist.compose([config])
     source = {'item': decision(), 'subject': {'session_id': 'producer', 'working_directory': str(tmp_path)}}
-    outcome = filing_catchup.file_item(source, {k: v for k, v in approved().items() if k != 'index'}, plan, ask)
+    outcome = filing_catchup.file_item(source, {k: v for k, v in approved().items() if k not in ('index', 'status')}, plan, ask)
     assert outcome['status'] == 'pending' and outcome['ask_status'] == 'filed'
     assert outcome['ask_receipt']['owner_agent'] == 'durable-agent'
     assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
