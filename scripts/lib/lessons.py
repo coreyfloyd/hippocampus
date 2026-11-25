@@ -396,12 +396,13 @@ def new_skill(row: Mapping[str, Any], item: Mapping[str, Any]) -> bool:
 
 # The new-skill ask's choice that approves creating the skill; any other answer drops the lesson.
 CREATE = "create the skill"
-NO_ASK = {"asked": False, "delivered": False, "approved": False, "handed_off": False, "choices": [], "outcome": None}
+NO_ASK = {"asked": False, "delivered": False, "approved": False, "handed_off": False, "answers": [], "choices": [],
+          "outcome": None}
 
 
 def ask_record(module: Any, identity: Sequence[str]) -> dict[str, Any]:
     """What every session's ledger records about one new-skill lesson's ask: whether it was raised,
-    delivered, answered yes and handed to the skill creator, and the choices it offered."""
+    delivered, answered yes and handed to the skill creator, the answers handed off, and its choices."""
     found = [outcome for session in module.ledger_sessions() for outcome in outcomes(module, session)
              if tuple(outcome["identity"]) == tuple(identity) and outcome["status"] == "asked"]
     if not found:
@@ -414,7 +415,9 @@ def ask_record(module: Any, identity: Sequence[str]) -> dict[str, Any]:
     # The fullest record, so a new row keeps its delivery and the user's yes.
     fullest = max(found, key=lambda outcome: (outcome.get("creator_handed_off") is True,
                                               outcome.get("approved") is True, outcome.get("ask_delivered") is True))
-    return {"asked": True, **flags, "choices": list(choices), "outcome": fullest}
+    handed = [outcome["answer"] for outcome in found
+              if outcome.get("creator_handed_off") is True and isinstance(outcome.get("answer"), str)]
+    return {"asked": True, **flags, "answers": handed, "choices": list(choices), "outcome": fullest}
 
 
 def _asks(row: Mapping[str, Any], item: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
@@ -564,12 +567,13 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                 row = {**row, "reason": row.get("reason") or f"the user answered {row['answer']!r}"}
             elif row.get("answer") == CREATE or (row["recommend"] == "apply" and record["approved"]):
                 # The yes, read from the ledger: carried without choices until a skip reports the skill
-                # written. Handed to the skill creator once, marked in the ledger; a new yes hands it again.
+                # written. Handed to the skill creator once, marked in the ledger with its answer; only an
+                # answer no hand-off recorded hands it again, so a repeated answer leaves it waiting.
                 annotated[row["index"]] = approve(item)
                 if identity in handed:
                     continue
                 handed.add(identity)
-                if row.get("answer") == CREATE or not record["handed_off"]:
+                if not record["handed_off"] or ("answer" in row and row["answer"] not in record["answers"]):
                     creators.append(row["index"])
                     _record(module, session_id, {**base, "status": "asked", "approved": True,
                                                  "creator_handed_off": True,

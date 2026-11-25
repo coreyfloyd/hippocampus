@@ -69,8 +69,9 @@ or as the sweep row's `skill_creator`; the ledger marks it handed off
 (`creator_handed_off`), so no later run hands it again. A hand-off is not a receipt:
 the lesson stays carried, and every later call lists it in `skill_creator_waiting`
 (a sweep row: `skill_creator_waiting: true`) with where the proposal is kept; report
-it as handed to the skill creator, waiting for the skill. To hand it off again, give
-its row a new `answer: "create the skill"`; give no `answer` otherwise. improve-harness
+it as handed to the skill creator, waiting for the skill. An `answer` the ledger already
+records with a hand-off leaves it waiting; only an answer no hand-off recorded hands it
+off again. improve-harness
 writes no skill text. Hand the proposal, unchanged, to the
 running tool's built-in skill creator, which drafts, tests and tunes the skill:
 

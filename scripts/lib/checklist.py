@@ -506,6 +506,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result.pop("new_skill_asks", None)
     result.pop("new_skill_ask_errors", None)
     result.pop("skill_creator_handoffs", None)
+    result.pop("skill_creator_waiting", None)
     result.pop("knowledge_outcomes", None)
     result.pop("knowledge_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
