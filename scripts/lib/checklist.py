@@ -471,6 +471,7 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
     result.pop("lesson_asks", None)
     result.pop("new_skill_asks", None)
     result.pop("new_skill_ask_errors", None)
+    result.pop("skill_creator_handoffs", None)
     result.pop("knowledge_outcomes", None)
     result.pop("knowledge_asks", None)
     report: dict[str, Any] = {"items": [], "warnings": [], "failures": [], "asks": {}}
@@ -676,6 +677,9 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                     entry.update(status="pending", ask_status="filed",
                                  reason="Ask delivered; awaiting native capture receipt")
                     kept.append(copy.deepcopy(item))
+                    if execute_writes and session_id and lesson_outcome and lesson_outcome["status"] == "asked":
+                        # A delivered new-skill ask stays open until the user answers; it is not raised again.
+                        lessons.deliver_ask(ticket_module, session_id, lesson_outcome, row.get("receipt"))
         report["items"].append(entry)
     refresh_tickets()
     report["items"].sort(key=lambda row: row["index"])

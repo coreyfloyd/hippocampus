@@ -280,7 +280,10 @@ run `apply-lessons`; `complete` writes and commits it:
 A `skip` row names its `reason` and is dropped. `dictated` and `always_loaded`
 mean what they mean at a wrap. A new-skill lesson's row has `new_skill: true` and
 `choices`, as improve-harness's `references/new-skill.md` says; `complete` writes
-nothing for it and raises its ask.
+nothing for it and raises its ask. Once delivered, the lesson comes back for
+assessment each run: give its row `answer` when the ask binding has the user's answer.
+A `skill_creator` on its result row is the proposal to hand to the skill creator,
+once: that hand-off settles the lesson.
 
 For `apply_knowledge`, follow knowledge-capture's Auto-apply section for the item
 before calling `complete`, and return its row without `index`. Do not run

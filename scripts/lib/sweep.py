@@ -714,12 +714,18 @@ def module_for(kind):
 STATUSES = {'lesson': checklist.lessons.STATUSES, 'knowledge': ('captured', 'asked', 'failed')}
 
 
+SKILL_CREATOR = 'skill creator'
+
+
 def is_settled(kind, outcome):
-    """An outcome no later run repeats; a fact about the user or a new-skill lesson settles when
-    its ask is delivered."""
+    """An outcome no later run repeats; a fact about the user settles when its ask is delivered.
+
+    A new-skill lesson stays carried after its ask is delivered, until the user's answer drops it
+    or its hand-off to the skill creator, which is its receipt.
+    """
     if kind == 'lesson':
         return outcome['status'] in ('applied', 'dropped') or (
-            outcome['status'] == 'asked' and bool(outcome.get('ask_delivered')))
+            outcome['status'] == 'asked' and outcome.get('creator_handed_off') is True)
     return outcome['status'] == 'captured' or bool(outcome.get('ask_delivered'))
 
 
@@ -783,10 +789,8 @@ def recorded_outcome(row, session, index):
 def settle_lesson(row, outcome):
     """Copy a lesson's outcome onto its row. A commit stays `applied` until it is delivered."""
     if outcome['status'] == 'asked':
-        if outcome.get('ask_delivered'):
-            row.update(receipt=outcome.get('receipt') or 'ask delivered', destination='ask', outcome='already_written')
-        else:
-            row.update(outcome='carried', reason='New-skill lesson: its ask is not delivered yet')
+        # Only a new-skill lesson handed to the skill creator settles while `asked`.
+        row.update(receipt=SKILL_CREATOR, destination=SKILL_CREATOR, outcome='already_written')
         return
     row['applied_kind'] = 'lesson'
     if outcome['status'] == 'dropped':
@@ -821,10 +825,13 @@ def settle_prior(row, outcome):
 
 
 def recorded_ask(section, row, found, directory, ask):
-    """A new-skill lesson already asked about raises its recorded ask again, with no new assessment."""
+    """A new-skill lesson whose ask is not delivered raises its recorded ask again, with no new
+    assessment. A delivered or answered one goes to the agent's assessment, which carries the answer."""
     item = ledger_item(row)
-    found = next(((ledger, outcome) for ledger, outcome in found
-                  if outcome['status'] == 'asked' and isinstance(outcome.get('choices'), list)), None)
+    asked = [(ledger, outcome) for ledger, outcome in found if outcome['status'] == 'asked']
+    if any(outcome.get('ask_delivered') or outcome.get('approved') for _, outcome in asked):
+        return False  # Delivered or answered in some ledger: never raised again.
+    found = next(((ledger, outcome) for ledger, outcome in asked if isinstance(outcome.get('choices'), list)), None)
     if found is None:
         return False
     try:
@@ -832,12 +839,20 @@ def recorded_ask(section, row, found, directory, ask):
                                         {'session_id': found[0], 'working_directory': directory}, ask)
     except ValueError:
         return False  # An ask that cannot be rebuilt goes back to the agent's assessment.
-    row['ledger_session'] = found[0]
-    row.update(binding='ask', destination='ask', outcome='dry run' if ask else 'unbound', settles='lesson',
-               reason='New-skill lesson: its recorded ask is raised again until delivered',
-               ask=dict(payload, identity=row['identity']), item_kind='lesson')
-    section['asks_raised'].append(row)
+    row.update(ledger_session=found[0], item_kind='lesson')
+    followup = dict(row, binding='ask', destination='ask', outcome='dry run' if ask else 'unbound',
+                    settles='lesson', directory=directory,
+                    reason='New-skill lesson: its recorded ask is raised again until delivered',
+                    ask=dict(payload, identity=row['identity']))
+    carry_new_skill(row)
+    section['asks_raised'].append(followup)
     return True
+
+
+def carry_new_skill(row):
+    """The lesson's filing row stays carried, so its handoff is kept, until the user answers."""
+    row.update(binding='ask', destination='ask', outcome='carried',
+               reason="New-skill lesson: carried until the user answers its ask")
 
 
 def plan_apply(section, row, session, index, directory, ask):
@@ -1004,12 +1019,27 @@ def apply_lesson(report, row, assessment):
     """Write one assessed lesson through the wrap's module."""
     item, payload = single_item(row)
     done = checklist.lessons.apply(payload, [dict(assessment, index=0)], handoff, row['ledger_session'])
-    outcome = required_outcome(item, done['lesson_outcomes'])
-    if outcome['status'] == 'asked':
+    if done['new_skill_asked']:
         raise_item_ask(report, row, done['resume']['open_loops'][0], 'lesson',
                        'New-skill lesson: no skill is created without the user')
+    elif done['skill_creator_handoffs']:
+        # The user said yes. Nobody waits on the creator in a sweep: the hand-off is the receipt.
+        row.update(outcome='written', receipt=SKILL_CREATOR, destination=SKILL_CREATOR,
+                   skill_creator=done['skill_creator_handoffs'][0],
+                   reason="New-skill lesson approved: hand the proposal to the running tool's skill creator")
+    elif new_skill_open(item, done):
+        carry_new_skill(row)
     else:
-        settle_lesson(row, outcome)
+        settle_lesson(row, required_outcome(item, done['lesson_outcomes']))
+
+
+def new_skill_open(item, done):
+    """A new-skill lesson whose delivered ask awaits the user's answer: still carried, unchanged,
+    with no outcome in this ledger or an `asked` one (a failed or always-loaded lesson is not)."""
+    outcome = outcome_for(item, done['lesson_outcomes'])
+    return (outcome is None or outcome['status'] == 'asked') and any(
+        handoff.session_item_identity(kept) == handoff.session_item_identity(item) and not kept.get('applied')
+        for kept in done['resume'].get('open_loops', []))
 
 
 def apply_knowledge(report, row, assessment, profile):
@@ -1068,8 +1098,11 @@ def raise_item_ask(report, row, item, settles, reason):
     followup.update(binding='ask', destination='ask', outcome='dry run' if report['ask_bound'] else 'unbound',
                     settles=settles, reason=reason,
                     ask=dict(ask, identity=row['identity']))
-    row.update(outcome='asked')
-    section['filing_outcomes'] = [followup if old is row else old for old in section['filing_outcomes']]
+    if settles == 'lesson':
+        carry_new_skill(row)  # Only the ask is delivered; the lesson waits for the answer.
+    else:
+        row.update(outcome='asked')
+        section['filing_outcomes'] = [followup if old is row else old for old in section['filing_outcomes']]
     section['asks_raised'].append(followup)
     journal_ask(report, followup)
 

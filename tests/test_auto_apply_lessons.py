@@ -1114,8 +1114,9 @@ def test_approved_new_skill_lesson_is_kept_and_not_asked_again(tmp_path, tool):
     wrap.plan()
     approved = {**asked_once(wrap), 'approved': True}
     data = wrap.apply([approved], [{'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}])
-    assert data['new_skill_asks'] == [] and data['resume']['open_loops'] == [approved]
-    assert data['resume']['open_loops'][0]['context'] == PROPOSAL
+    [kept] = data['resume']['open_loops']
+    assert data['new_skill_asks'] == [] and kept['approved'] is True and kept['context'] == PROPOSAL
+    assert data['skill_creator_handoffs'] == [kept]
 
 
 def test_dictated_skip_drops_a_new_skill_lesson(tmp_path, tool):
@@ -1126,3 +1127,93 @@ def test_dictated_skip_drops_a_new_skill_lesson(tmp_path, tool):
                         'reason': 'The user said to drop it'}])
     assert data['resume']['open_loops'] == [] and data['new_skill_asks'] == []
     assert data['lesson_outcomes'][0]['status'] == 'dropped'
+
+
+def test_answer_create_the_skill_approves_it_and_hands_the_proposal_to_the_skill_creator_once(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked = asked_once(wrap)
+    data = wrap.apply([asked], [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}])
+    [kept] = data['resume']['open_loops']
+    assert kept['approved'] is True and kept['context'] == PROPOSAL
+    assert data['skill_creator_handoffs'] == [kept] and data['new_skill_asks'] == []
+    later = wrap.apply([kept], [{'index': 0, 'recommend': 'apply'}])
+    assert later['new_skill_asks'] == [] and later['skill_creator_handoffs'] == []
+    assert later['resume']['open_loops'] == [kept]
+
+
+def test_an_answered_ask_is_carried_without_choices_so_no_report_lists_it_again(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([asked_once(wrap)], [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}])
+    [kept] = data['resume']['open_loops']
+    assert 'choices' not in kept and kept['approved'] is True
+
+
+def test_answer_decline_drops_the_lesson_with_that_reason(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([asked_once(wrap)], [{'index': 0, 'recommend': 'skip', 'answer': 'decline'}])
+    assert data['resume']['open_loops'] == [] and data['skill_creator_handoffs'] == []
+    assert data['lesson_outcomes'][-1]['status'] == 'dropped'
+    assert 'decline' in data['lesson_outcomes'][-1]['reason']
+
+
+def refused(wrap, items, rows):
+    return wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload(items)),
+                    '--lessons', wrap.save('lessons.json', rows))
+
+
+def test_an_answer_that_is_not_one_of_the_choices_is_refused(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    result = refused(wrap, [asked_once(wrap)], [{'index': 0, 'recommend': 'apply', 'answer': 'yes'}])
+    assert result.returncode == 1 and 'one of the ask' in result.stderr
+
+
+def test_an_answer_with_no_raised_ask_approves_nothing(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    result = refused(wrap, [lesson(PROPOSAL)], [{'index': 0, 'recommend': 'apply', 'new_skill': True,
+                                                 'choices': CHOICES, 'answer': 'create the skill'}])
+    assert result.returncode == 1 and 'ask raised first' in result.stderr
+    assert lessons_ledger(tmp_path) == []
+
+
+@pytest.mark.parametrize('recommend,answer', [('skip', 'create the skill'), ('apply', 'decline')])
+def test_a_recommendation_that_contradicts_the_answer_is_refused(tmp_path, tool, recommend, answer):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked = asked_once(wrap)
+    result = refused(wrap, [asked], [{'index': 0, 'recommend': recommend, 'answer': answer, 'reason': 'Duplicate'}])
+    assert result.returncode == 1 and 'contradicts the answer' in result.stderr
+
+
+def test_an_answer_in_another_session_reads_the_choices_its_ask_recorded(tmp_path, tool):
+    first = Wrap(tmp_path, tool)
+    first.plan()
+    asked_once(first)
+    successor = Wrap(tmp_path, tool, session='successor-session')
+    successor.plan()
+    data = successor.apply([lesson(PROPOSAL, new_skill=True)], [{'index': 0, 'recommend': 'apply',
+                                                                 'answer': 'create the skill'}])
+    assert [item['context'] for item in data['skill_creator_handoffs']] == [PROPOSAL]
+
+
+def lessons_ledger(tmp_path):
+    return [json.loads(line)['outcome'] for path in sorted((tmp_path / 'ledger').glob('*.jsonl'))
+            for line in path.read_text().splitlines() if json.loads(line).get('kind') == 'lesson_outcome'
+            and json.loads(line)['outcome'].get('approved')]
+
+
+def test_unanswered_new_skill_lesson_whose_ask_was_delivered_is_unchanged_and_not_asked_again(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    new = {'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}
+    data = wrap.apply([lesson(PROPOSAL)], [new])
+    [ask] = data['new_skill_asks']
+    filed = wrap.file(data, [{'index': 0, 'rule': 'R4', 'status': 'filed', 'destination': 'ask', 'choices': CHOICES}])
+    [carried] = filed['resume']['open_loops']
+    again = wrap.apply([carried], [new])
+    assert again['new_skill_asks'] == [] and again['skill_creator_handoffs'] == []
+    assert again['resume']['open_loops'] == [carried]
