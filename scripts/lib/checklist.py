@@ -599,7 +599,15 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 and record_write.user_decision(item)):
             # S4.2: without the user, the decision is raised as an ask and nothing is written.
             source = {k: v for k, v in item.items() if k != "writer_ask"}
-            payload = ask_payload({**source, "choices": ["approve", "decline"]}, handoff.get("subject", {}), ask)
+            try:
+                payload = ask_payload({**source, "choices": ["approve", "decline"]}, handoff.get("subject", {}), ask)
+            except (ValueError, KeyError, TypeError) as error:
+                # One unusable item is a failed row; the other items still file.
+                report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
+                                        "status": "failed", "error": f"{UNATTENDED_DECISION}; ask unusable: {error}"})
+                report["failures"].append(f"{item.get('context', str(item))}: ask unusable: {error}")
+                kept.append(copy.deepcopy(item))
+                continue
             report["asks"].setdefault(payload["directory"] or "unknown directory", []).append(payload)
             report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
                                     "status": "failed", "error": UNATTENDED_DECISION, "ask": payload})

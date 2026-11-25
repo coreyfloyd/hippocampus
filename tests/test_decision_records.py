@@ -439,3 +439,20 @@ def test_an_ask_about_a_change_log_entry_reaches_the_ask_writer(tmp_path, monkey
     assert result['status'] == 'filed', result.get('error')
     assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
     assert requests(tmp_path, 'asks')[1]['item']['change_log'] == change_log()['change_log']
+
+
+def test_unattended_decision_with_an_unusable_ask_fails_alone(tmp_path, provider):
+    config = profile(tmp_path)
+    config['ask'] = {'command': '/fixture-ask', 'owner_agent': 'durable-agent'}
+    # A user fact needs its ask_text; without it no ask can be built for this item.
+    unusable = decision(user_fact=True)
+    result = run(tmp_path, 'record', config, payload([unusable, agent_decision()]),
+                 [approved(), row(1, rule='R7')], '--unattended')
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    saved = out['filing']['items'][0]
+    assert saved['status'] == 'failed' and 'ask unusable' in saved['error']
+    assert out['filing']['asks'] == {}
+    assert out['resume']['open_loops'] == [unusable]
+    # The other item in the batch still files.
+    assert [r['item']['entry'] for r in requests(tmp_path, 'decisions')] == ['agent_log', 'agent_log']
