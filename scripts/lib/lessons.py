@@ -394,10 +394,6 @@ def new_skill(row: Mapping[str, Any], item: Mapping[str, Any]) -> bool:
     return row.get("new_skill") is True or item.get("new_skill") is True
 
 
-def _choices(row: Mapping[str, Any], item: Mapping[str, Any]) -> Any:
-    return row["choices"] if "choices" in row else item.get("choices")
-
-
 # The new-skill ask's choice that approves creating the skill; any other answer drops the lesson.
 CREATE = "create the skill"
 NO_ASK = {"asked": False, "delivered": False, "approved": False, "handed_off": False, "choices": [], "outcome": None}
@@ -421,30 +417,27 @@ def ask_record(module: Any, identity: Sequence[str]) -> dict[str, Any]:
     return {"asked": True, **flags, "choices": list(choices), "outcome": fullest}
 
 
-def _approved(item: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
-    """The user's yes, recorded from an answer, or `approved` on an item whose ask was raised."""
-    return record["approved"] or (item.get("approved") is True and record["asked"])
-
-
 def _asks(row: Mapping[str, Any], item: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
     """Whether this row raises the new-skill ask: only `apply` with no answer, never after the
     user's yes, and never while a delivered ask is still open.
 
     A skip, dictated or not, drops a new-skill lesson; an `approved` one waits for the skill creator.
     """
-    return (row["recommend"] == "apply" and "answer" not in row and not _approved(item, record)
+    return (row["recommend"] == "apply" and "answer" not in row and not record["approved"]
             and not record["delivered"] and (new_skill(row, item) or record["asked"]))
 
 
 def _offered(row: Mapping[str, Any], item: Mapping[str, Any], record: Mapping[str, Any]) -> list[Any]:
     """The choices the user answered from: the recorded ask's, else the row's or the item's."""
-    choices = record["choices"] or _choices(row, item)
+    choices = record["choices"] or (row["choices"] if "choices" in row else item.get("choices"))
     return list(choices) if isinstance(choices, list) else []
 
 
 def asking(item: Mapping[str, Any], choices: Sequence[str]) -> dict[str, Any]:
-    """A new-skill lesson stays carried, whole, with the choices its ask offers the user."""
-    return {**copy.deepcopy(dict(item)), "new_skill": True, "choices": list(choices)}
+    """A new-skill lesson stays carried, whole, with the choices its ask offers the user; an ask
+    is no yes, so it never carries `approved`."""
+    kept = {key: value for key, value in copy.deepcopy(dict(item)).items() if key != "approved"}
+    return {**kept, "new_skill": True, "choices": list(choices)}
 
 
 def approve(item: Mapping[str, Any]) -> dict[str, Any]:
@@ -476,9 +469,12 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     Lessons with no row stay carried. A lesson already applied is never applied again.
     A new-skill lesson is never applied: a row recommending `apply` makes it `asked`, carried with
     its choices, until the user answers; a delivered ask is not raised again. A row's `answer` is the
-    user's answer to that ask, one of its choices: `create the skill` sets `approved: true` and lists the
-    proposal in `skill_creator_handoffs`, as every later row for an approved lesson does; any other
-    answer drops it with that reason. A skip, dictated or not, drops it with its reason.
+    user's answer to that ask, one of its choices: `create the skill` records the yes in the ledger,
+    which alone approves it, and lists the proposal in `skill_creator_handoffs`; the ledger marks it
+    handed off (`creator_handed_off`). Once marked, it is never handed off again: it stays carried
+    and every later call lists it in `skill_creator_waiting`, until a `skip` reports the skill
+    written. A new `create the skill` answer hands it off once more. Any other answer drops it with
+    that reason. A skip, dictated or not, drops it with its reason.
     """
     if not session_id:
         raise ValueError("apply-lessons requires a session id")
@@ -523,7 +519,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
                                  f"{row['answer']!r}; that answer is recommend {expected!r}")
         elif skill and row["recommend"] == "apply":
             # A new skill is never written here: the user's yes comes first, through an ask.
-            choices = _choices(row, item)
+            choices = _offered(row, item, record)
             if _asks(row, item, record) and (not isinstance(choices, list) or not choices
                                             or not all(isinstance(c, str) and c.strip() for c in choices)):
                 raise ValueError(f"lessons: row {index}: a new-skill lesson requires the user's choices")
@@ -544,6 +540,8 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     annotated: dict[int, dict[str, Any]] = {}
     asked: list[int] = []
     creators: list[int] = []
+    waiting: list[int] = []
+    handed: set[tuple[str, ...]] = set()
     for row in sorted(rows, key=lambda row: row["index"]):
         item = items[row["index"]]
         identity = module.session_item_identity(item)
@@ -564,22 +562,28 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             if row.get("answer") is not None and row["answer"] != CREATE:
                 # Any answer but the yes drops it, below, with that reason.
                 row = {**row, "reason": row.get("reason") or f"the user answered {row['answer']!r}"}
-            elif row.get("answer") == CREATE or (row["recommend"] == "apply" and _approved(item, record)):
-                # The yes: carried without choices; handed to the skill creator once, marked in the ledger.
+            elif row.get("answer") == CREATE or (row["recommend"] == "apply" and record["approved"]):
+                # The yes, read from the ledger: carried without choices until a skip reports the skill
+                # written. Handed to the skill creator once, marked in the ledger; a new yes hands it again.
                 annotated[row["index"]] = approve(item)
-                if not record["handed_off"]:
+                if identity in handed:
+                    continue
+                handed.add(identity)
+                if row.get("answer") == CREATE or not record["handed_off"]:
                     creators.append(row["index"])
                     _record(module, session_id, {**base, "status": "asked", "approved": True,
                                                  "creator_handed_off": True,
                                                  **({"answer": row["answer"]} if "answer" in row else {})})
+                else:
+                    waiting.append(row["index"])
                 continue
             elif row["recommend"] == "apply":
                 if _asks(row, item, record):
-                    annotated[row["index"]] = asking(item, _choices(row, item))
+                    annotated[row["index"]] = asking(item, _offered(row, item, record))
                     asked.append(row["index"])
                     if not (prior and prior["status"] == "asked"):
                         _record(module, session_id, {**base, "status": "asked", "evidence": row.get("evidence"),
-                                                     "choices": list(_choices(row, item))})
+                                                     "choices": _offered(row, item, record)})
                 continue  # A delivered ask still open: unchanged until the user answers.
             # A skip drops it below, with its reason.
         elif prior and prior["status"] != "failed":
@@ -633,6 +637,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     result["new_skill_asked"] = [annotated[index] for index in asked]
     # Approved new-skill lessons: the agent hands each proposal, unchanged, to the skill creator.
     result["skill_creator_handoffs"] = [annotated[index] for index in creators]
+    # Approved lessons already handed off, waiting for the skill, and where each proposal is kept.
+    result["skill_creator_waiting"] = [{"proposal": annotated[index],
+                                        "kept_in": "resume.open_loops" if index < len(loops) else "session_items"}
+                                       for index in waiting]
     return result
 
 

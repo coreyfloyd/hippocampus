@@ -283,7 +283,9 @@ mean what they mean at a wrap. A new-skill lesson's row has `new_skill: true` an
 nothing for it and raises its ask. Once delivered, the lesson comes back for
 assessment each run: give its row `answer` when the ask binding has the user's answer.
 A `skill_creator` on its result row is the proposal to hand to the skill creator,
-once: that hand-off settles the lesson.
+once; later runs mark the row `skill_creator_waiting`. Give `answer` only for a new
+answer: `create the skill` again hands it off again. Once the skill is written, give
+its next row `skip` naming the written skill.
 
 For `apply_knowledge`, follow knowledge-capture's Auto-apply section for the item
 before calling `complete`, and return its row without `index`. Do not run
