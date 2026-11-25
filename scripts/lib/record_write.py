@@ -103,11 +103,13 @@ def change_log_request(item: Mapping[str, Any]) -> None:
 
 def check_request(kind: str, item: Mapping[str, Any], row: Mapping[str, Any]) -> None:
     """Refuse a request its kind cannot file, before any lookup."""
+    if kind == 'asks':
+        # An ask carries a copy of the item it asks the user about; no item rule applies to it.
+        return
     if kind == 'documents' and item.get('type') == 'decision':
         raise Rejected(DOCUMENTS_REFUSAL)
-    if kind not in ('decisions', 'asks') and user_decision(item):
+    if kind != 'decisions' and user_decision(item):
         # A user's decision reaches no other store, such as a ticket comment, unapproved.
-        # The ask writer is exempt: its ask is how the user's approval is requested.
         require_approval(row)
     if kind != 'logs' and 'change_log' in item:
         raise ValueError("a change log entry files only through the logs record write (kind 'logs')")

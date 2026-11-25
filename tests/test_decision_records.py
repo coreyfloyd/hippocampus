@@ -423,3 +423,19 @@ def test_catch_up_delivers_the_writer_ask_for_an_unplaceable_scope(tmp_path, mon
     assert outcome['ask_receipt']['owner_agent'] == 'durable-agent'
     assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
     assert requests(tmp_path, 'asks')[1]['item']['text'] == 'Which folder holds this scope?'
+
+
+def test_an_ask_about_a_change_log_entry_reaches_the_ask_writer(tmp_path, monkeypatch):
+    import filing_catchup
+    monkeypatch.setenv('HANDOFF_LEDGER_DIR', str(tmp_path))
+    asks = store(tmp_path, 'ok', 'asks')
+    script = tmp_path / 'asks.py'
+    script.write_text(script.read_text().replace(
+        "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+    ask = {'command': asks['command'], 'owner_agent': 'durable-agent'}
+    entry = {**change_log(), 'text': 'Which scope holds this change?', 'choices': ['add a scope row', 'decline'],
+             'directory': str(tmp_path), 'ticket': None, 'owner_agent': 'durable-agent'}
+    result = filing_catchup.deliver_ask(ask, entry, row(rule='R3'))
+    assert result['status'] == 'filed', result.get('error')
+    assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
+    assert requests(tmp_path, 'asks')[1]['item']['change_log'] == change_log()['change_log']
