@@ -450,6 +450,19 @@ def test_refused_direct_push_goes_to_its_own_branch_and_pull_request(tmp_path, t
     assert_pull_request_delivery(report, check, checkout, remote, log)
 
 
+def test_pull_request_command_named_through_home_opens_the_pull_request(tmp_path, tool):
+    checkout, remote, _ = clone_pair(tmp_path)
+    refuse_main(remote)
+    log, _ = pull_request_command(tmp_path)
+    (tmp_path / 'home/bin').mkdir(parents=True)
+    (tmp_path / 'open-request.sh').rename(tmp_path / 'home/bin/open-pr')
+    wrap = Wrap(tmp_path, tool, routing='lesson-pull-request-command: $HOME/bin/open-pr\n')
+    wrap.plan()
+    data = wrap.deliver(wrap.apply([lesson()], [row(0, checkout / 'rules.md')]))
+    report, check, _ = wrap.finish(wrap.file(data))
+    assert_pull_request_delivery(report, check, checkout, remote, log)
+
+
 def test_several_lessons_for_one_file_all_reach_the_pull_request(tmp_path, tool):
     checkout, remote, _ = clone_pair(tmp_path)
     refuse_main(remote)

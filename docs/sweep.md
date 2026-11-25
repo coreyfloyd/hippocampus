@@ -44,8 +44,8 @@ store itself follows `HANDOFF_STATE_DIR`, then `handoff_dir`, then the existing
 default. No handoff migration is performed.
 
 `open_session_checks` is a list of command strings, default none. Each command
-prints whitespace-separated session ids; the union is open. Commands use argv
-quoting without a shell and have the configured binding timeout. Nonzero exits,
+prints whitespace-separated session ids; the union is open. Commands run as
+binding commands (`INTERFACE.md` §6 Binding commands): no shell, with only a leading path prefix expanded, and have the configured binding timeout. Nonzero exits,
 timeouts, and commands that cannot start prevent every session in scope from
 counting as abandoned; the report names the command and error. Successful checks
 and their ids are recorded too. Checks must be read-only, including in watch-only.

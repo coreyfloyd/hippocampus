@@ -15,7 +15,6 @@ import os
 import re
 from pathlib import Path
 import socket
-import shlex
 import subprocess
 import sys
 import uuid
@@ -319,7 +318,7 @@ def open_session_checks(config, evidence):
     for command in config['open_session_checks']:
         row = {'command': command, 'session_ids': []}
         try:
-            done = subprocess.run(shlex.split(command), capture_output=True, text=True,
+            done = subprocess.run(checklist.record_write.argv(command), capture_output=True, text=True,
                                   timeout=config['binding_timeout_seconds'])
             if done.returncode:
                 raise ValueError(done.stderr.strip() or f'check exited {done.returncode}')

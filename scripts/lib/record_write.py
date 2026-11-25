@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import re
 import shlex
 import subprocess
 from typing import Any, Mapping
@@ -142,11 +144,34 @@ def kind_for(rule: str, item: Mapping[str, Any], row: Mapping[str, Any], writes:
     return kind
 
 
+PATH_PREFIX = re.compile(r'^(?:\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|~)(?=/|$)')
+
+
+def _expand_prefix(match: re.Match) -> str:
+    name = match.group(1) or match.group(2)
+    if name is None:
+        return os.path.expanduser('~')
+    return os.environ.get(name, match.group(0))
+
+
+def argv(command: str | list[str]) -> list[str]:
+    """A binding command as argv, run without a shell.
+
+    Only a token's leading `$NAME`, `${NAME}` or `~`, followed by `/` or ending the token, is
+    replaced, once; the rest of every token reaches the process unchanged. An unset variable
+    stays literal, so exec fails naming the token instead of an empty path.
+    """
+    tokens = shlex.split(command) if isinstance(command, str) else command
+    for token in tokens:
+        if not isinstance(token, str):
+            raise ValueError(f'command argument {token!r} is not a string')
+    return [PATH_PREFIX.sub(_expand_prefix, token, count=1) for token in tokens]
+
+
 def invoke(binding: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
-    command = binding['command']
-    argv = shlex.split(command) if isinstance(command, str) else command
     try:
-        result = subprocess.run(argv, input=json.dumps(request), text=True, capture_output=True, timeout=60)
+        result = subprocess.run(argv(binding['command']), input=json.dumps(request), text=True,
+                                capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(str(error)) from error
     try:

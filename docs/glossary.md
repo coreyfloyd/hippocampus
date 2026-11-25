@@ -123,6 +123,10 @@ _Avoid_: launch setup
 A named spine step that a checklist profile binds to a command. Only `persist` is a slot. Record is a package step that calls per-kind record writes. The ask binding is configurable but is not a spine step. A binding names the session-item types it consumes, including carried open loops of those types. An unbound slot carries its items forward in the handoff.
 _Avoid_: hook, plugin
 
+**Binding command**:
+A configured command the package runs itself, without a shell: a record write, the ask binding, the ticket read, a durable-checkpoint scheduled-report or scheduler adapter, a sweep open-session check, or the lesson pull-request command. Only a leading path prefix in an argument expands (`INTERFACE.md` §6 Binding commands). Persist and record-read bindings are run by the agent instead.
+_Avoid_: shell command
+
 **Native step**:
 A package-owned checklist step: knowledge capture runs knowledge-capture and lessons run improve-harness. They are not configurable slots. Lesson destinations remain configurable through the lesson routing. A carried item is removed only after its step returns a receipt.
 

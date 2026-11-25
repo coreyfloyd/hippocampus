@@ -238,7 +238,10 @@ existing command or declining it:
 | `logs` | Change log entries. |
 
 Prepare `record_writes` entries as `{"command": "<actual command>"}` or
-`{"command": ["<executable>", "<argument>"]}`, without `consumes`. Use only
+`{"command": ["<executable>", "<argument>"]}`, without `consumes`. The package
+runs record-write and ask commands without a shell, and only a leading path
+prefix expands (`INTERFACE.md` §6 Binding commands): `"$HOME/bin/writer"` works,
+but a pipe, glob or redirection does not. Use only
 commands the user actually has; explain missing capabilities without inventing
 commands. Each kind is optional. An unbound kind keeps its items in the handoff
 with a warning. Never offer the retired single `record` binding. If the existing
