@@ -582,13 +582,17 @@ The binding and validator contract below is identical for Claude Code and Codex.
 
 ### Record-write protocol
 
-**Binding commands.** The package runs a binding command it executes itself
-(record writes, the ask binding, the ticket read, `--scheduled-report`, `--adapter`
-and sweep `open_session_checks`) without a shell. A string is split with shell
-quoting; then, in each argument, `$VAR`, `${VAR}` and a leading `~` expand from the
-running environment. Nothing else expands: no pipes, globbing, redirection or
-command substitution. An unset variable stays literal, so the command fails with
-an error naming that argument.
+**Binding commands.** The package itself runs these commands, each without a shell:
+per-kind record writes, the ask binding (durable checkpoint and catch-up deliver
+requested asks), the ticket read, `--scheduled-report`, `--adapter`, sweep
+`open_session_checks`, and the knowledge profile's `lesson-pull-request-command`.
+A string is split with shell quoting. Then, in each argument, only a leading
+`$NAME`, `${NAME}` or `~` followed by `/` or ending the argument is replaced, once,
+from the running environment; its replacement is not expanded again. Everything else
+reaches the process unchanged: a `$` or `~` elsewhere in an argument, `~user`, pipes,
+globs, redirection and command substitution. An unset leading variable stays literal,
+so the command fails with an error naming that argument. Compatibility: before 0.16.5
+nothing expanded; now only that leading path prefix does.
 
 A per-kind record-write command receives one JSON
 request on stdin and returns one JSON response on stdout. `lookup` and `write`

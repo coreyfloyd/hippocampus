@@ -15,7 +15,6 @@ import os
 import sys
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import tempfile
 from typing import Any, Mapping, Sequence
@@ -32,6 +31,11 @@ GENERATED_MARK = b"<!-- hippocampus-rules: generated"
 INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md")
 REFUSED_DIRECT = re.compile(r"GH006|GH013|protected branch|pull request|merge request", re.IGNORECASE)
 REMOTE_MOVED = re.compile(r"non-fast-forward|fetch first")
+
+
+_record_spec = importlib.util.spec_from_file_location("lessons_record_write", Path(__file__).with_name("record_write.py"))
+record_write = importlib.util.module_from_spec(_record_spec)
+_record_spec.loader.exec_module(record_write)
 
 
 class UpgradeRequired(ValueError):
@@ -786,12 +790,12 @@ def _pull_requests(checkout: Path, remote: str, session_id: str, rows: Sequence[
                "lessons": [{"title": _message(row["change"]), "path": path, "commit": update["lesson_commit"]}
                            for (row, update), path in zip(delivered, paths)]}
     try:
-        opened = subprocess.run(shlex.split(command), cwd=str(checkout), input=json.dumps(request),
+        opened = subprocess.run(record_write.argv(command), cwd=str(checkout), input=json.dumps(request),
                                 capture_output=True, text=True, timeout=120)
         reference = opened.stdout.strip().splitlines()[-1] if opened.stdout.strip() else ""
         if opened.returncode or not reference:
             raise LessonError(opened.stderr.strip() or f"the command exited {opened.returncode} with no reference")
-    except (OSError, subprocess.SubprocessError, LessonError) as error:
+    except (OSError, ValueError, subprocess.SubprocessError, LessonError) as error:
         for _, update in delivered:
             update.update(delivery=NOT_PUSHED, error=f"pushed {lesson_branch}, but no pull request was opened: {error}")
         return updates

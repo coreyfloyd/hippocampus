@@ -1,7 +1,9 @@
-"""Package-executed binding commands expand `$VAR`, `${VAR}` and a leading `~`, without a shell."""
+"""Package-run binding commands expand only a leading `$NAME`, `${NAME}` or `~` path prefix, without a shell."""
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -63,10 +65,7 @@ def test_unset_variable_stays_literal_and_the_error_names_it(home):
 
 
 def test_no_shell_semantics_reach_the_process(home):
-    script = home / 'bin' / 'echo-args.sh'
-    script.parent.mkdir(parents=True)
-    script.write_text(f'#!{sys.executable}\nimport json, sys\nprint(json.dumps({{"status": "found", "argv": sys.argv[1:]}}))\n')
-    script.chmod(0o755)
+    echo_args(home)
     response = record_write.invoke({'command': "\"$HOME/bin/echo-args.sh\" 'a|b' '*'"}, {'operation': 'lookup'})
     assert response['argv'] == ['a|b', '*']
 
@@ -116,3 +115,45 @@ def test_sweep_open_session_checks_expand_home(home):
     result = sweep.open_session_checks(config, {'session_ids': [], 'method': 'fixture'})
     assert result['failed'] is False, result
     assert 'abc' in result['session_ids']
+
+
+def echo_args(home):
+    script = home / 'bin' / 'echo-args.sh'
+    script.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(f'#!{sys.executable}\nimport json, sys\nprint(json.dumps({{"status": "found", "argv": sys.argv[1:]}}))\n')
+    script.chmod(0o755)
+    return script
+
+
+@pytest.mark.parametrize('argument', ['printf %s "$HOME"', '$ENV.x', '~root/x', '~backup', '$HOME.bak', 'a/$HOME/b'])
+def test_only_a_leading_path_prefix_expands(home, monkeypatch, argument):
+    monkeypatch.setenv('ENV', 'set')
+    echo_args(home)
+    response = record_write.invoke({'command': ['$HOME/bin/echo-args.sh', argument]}, {'operation': 'lookup'})
+    assert response['argv'] == [argument]
+
+
+def test_sh_script_body_reaches_sh_with_its_variable_unexpanded(home):
+    assert record_write.argv(['sh', '-c', 'printf %s "$HOME"']) == ['sh', '-c', 'printf %s "$HOME"']
+    done = subprocess.run(record_write.argv(['sh', '-c', 'printf %s "$HOME"']), capture_output=True, text=True,
+                          env={**os.environ, 'HOME': str(home)})
+    assert done.stdout == str(home)
+
+
+def test_a_variable_whose_value_starts_with_tilde_expands_once(home, monkeypatch):
+    monkeypatch.setenv('X', '~/b')
+    assert record_write.argv(['$X/a']) == ['~/b/a']
+
+
+@pytest.mark.parametrize('token, expected', [('"$HOME/bin/ask.sh"', '{home}/bin/ask.sh'),
+                                             ('${HOME}/bin/x', '{home}/bin/x'), ('~/bin/x', '{home}/bin/x'),
+                                             ('~', '{home}'), ('$HOME', '{home}')])
+def test_leading_prefixes_expand(home, token, expected):
+    assert record_write.argv(token) == [expected.format(home=home)]
+
+
+def test_a_non_string_argument_is_a_value_error_naming_it(home):
+    with pytest.raises(ValueError, match='5'):
+        record_write.argv(['/bin/x', 5])
+    with pytest.raises(ValueError, match='5'):
+        record_write.invoke({'command': ['/bin/x', 5]}, {'operation': 'lookup'})

@@ -124,7 +124,7 @@ A named spine step that a checklist profile binds to a command. Only `persist` i
 _Avoid_: hook, plugin
 
 **Binding command**:
-A configured command the package runs itself: a record write, the ask binding, the ticket read, a durable-checkpoint scheduled-report or scheduler adapter, or a sweep open-session check. It runs without a shell; only `$VAR`, `${VAR}` and a leading `~` expand in each argument. Persist and record-read bindings are run by the agent instead.
+A configured command the package runs itself, without a shell: a record write, the ask binding, the ticket read, a durable-checkpoint scheduled-report or scheduler adapter, a sweep open-session check, or the lesson pull-request command. Only a leading path prefix in an argument expands (`INTERFACE.md` §6 Binding commands). Persist and record-read bindings are run by the agent instead.
 _Avoid_: shell command
 
 **Native step**:
