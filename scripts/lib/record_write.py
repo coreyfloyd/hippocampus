@@ -105,8 +105,9 @@ def check_request(kind: str, item: Mapping[str, Any], row: Mapping[str, Any]) ->
     """Refuse a request its kind cannot file, before any lookup."""
     if kind == 'documents' and item.get('type') == 'decision':
         raise Rejected(DOCUMENTS_REFUSAL)
-    if kind != 'decisions' and user_decision(item):
+    if kind not in ('decisions', 'asks') and user_decision(item):
         # A user's decision reaches no other store, such as a ticket comment, unapproved.
+        # The ask writer is exempt: its ask is how the user's approval is requested.
         require_approval(row)
     if kind != 'logs' and 'change_log' in item:
         raise ValueError("a change log entry files only through the logs record write (kind 'logs')")
