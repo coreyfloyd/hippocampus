@@ -215,8 +215,15 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
   outputs under the knowledge root are checked and recorded. A fact about the user
   becomes an ordinary ask and is never saved by the sweep. So does a new-skill lesson: no
   skill is created without the user's yes, and the report lists its ask, not an applied lesson.
+  A delivered new-skill ask does not settle the lesson: it stays carried, its handoff is
+  kept, and the ask is not raised again. Each later act run sends it to the agent's
+  assessment, whose row carries the user's answer from the ask binding once there is one,
+  as at a wrap: `create the skill` returns the lesson `carried` with `skill_creator`, the
+  proposal to hand to the running tool's skill creator; any other answer drops it. A
+  `skip` row drops it once the creator reports the skill written.
 - Each item's receipt names its commit, or its destination when it has none. A handoff
-  is archived once every item has a receipt, a drop or a delivered ask.
+  is archived once every item has a receipt, a drop or a delivered ask, apart from a
+  new-skill lesson's.
 - Lesson commits go through the persist binding before the run ends, with the wrap's
   single retry, once persist confirms. With persist unbound or unconfirmed, or a push that
   still fails, `lessons_not_pushed` says which commits were not pushed and why, and the

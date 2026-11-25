@@ -46,12 +46,21 @@ carried, and `new_skill_asks` holds the asks raised by that call
 binding through an R4 row with `destination: "ask"` and its choices, as for a fact
 about the user; the lesson stays carried until the user answers. A `skip` row drops
 it with its reason, `dictated` or not. An item marked `approved: true` is never asked
-again. A sweep in act mode does the same, and raises an undelivered ask again from
-its recorded outcome.
+again, and neither is an ask already delivered. A sweep in act mode does the same,
+raises an undelivered ask again from its recorded outcome, and keeps a lesson whose ask
+was delivered carried in its handoff until the user answers.
+
+## The user's answer
+
+Read the answer from the ask binding. Give the lesson's next row `answer`, the choice
+the user picked, at a wrap or in a sweep's assessment. `create the skill` records the
+yes as `approved: true`; any other answer drops the lesson with that reason. With no
+answer yet, the lesson stays carried and its delivered ask is not raised again.
 
 ## After the yes
 
-improve-harness writes no skill text. Hand the proposal, unchanged, to the
+Each approved lesson comes back in `skill_creator_handoffs` from `apply-lessons`, or
+as the sweep row's `skill_creator`. improve-harness writes no skill text. Hand the proposal, unchanged, to the
 running tool's built-in skill creator, which drafts, tests and tunes the skill:
 
 | Tool | Skill creator | When it is missing |
@@ -63,8 +72,9 @@ Tell the creator where to write: the skill-source location the lesson routing na
 so the new skill lands where the user's skills are committed. When the routing names
 none, tell the creator to ask the user for the location.
 
-Record the user's yes as `approved: true` on the carried item. Never rewrite its
-`context`: that is part of the item's identity, so a changed one would be asked again.
+Never rewrite the carried item's `context`: that is part of the item's identity, so a
+changed one would be asked again.
 When the running tool has no skill creator, apply nothing: keep the approved
 proposal carried and report the install line from the table.
-The lesson leaves the handoff only when the creator reports the skill written.
+The lesson leaves the handoff only when the creator reports the skill written: then
+its row is a `skip` naming the written skill.

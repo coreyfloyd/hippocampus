@@ -715,11 +715,13 @@ STATUSES = {'lesson': checklist.lessons.STATUSES, 'knowledge': ('captured', 'ask
 
 
 def is_settled(kind, outcome):
-    """An outcome no later run repeats; a fact about the user or a new-skill lesson settles when
-    its ask is delivered."""
+    """An outcome no later run repeats; a fact about the user settles when its ask is delivered.
+
+    A new-skill lesson stays carried after its ask is delivered, until the user's answer drops it
+    or the skill creator reports the skill written.
+    """
     if kind == 'lesson':
-        return outcome['status'] in ('applied', 'dropped') or (
-            outcome['status'] == 'asked' and bool(outcome.get('ask_delivered')))
+        return outcome['status'] in ('applied', 'dropped')
     return outcome['status'] == 'captured' or bool(outcome.get('ask_delivered'))
 
 
@@ -782,12 +784,6 @@ def recorded_outcome(row, session, index):
 
 def settle_lesson(row, outcome):
     """Copy a lesson's outcome onto its row. A commit stays `applied` until it is delivered."""
-    if outcome['status'] == 'asked':
-        if outcome.get('ask_delivered'):
-            row.update(receipt=outcome.get('receipt') or 'ask delivered', destination='ask', outcome='already_written')
-        else:
-            row.update(outcome='carried', reason='New-skill lesson: its ask is not delivered yet')
-        return
     row['applied_kind'] = 'lesson'
     if outcome['status'] == 'dropped':
         row.update(outcome='dropped', reason=outcome.get('reason'))
@@ -821,11 +817,12 @@ def settle_prior(row, outcome):
 
 
 def recorded_ask(section, row, found, directory, ask):
-    """A new-skill lesson already asked about raises its recorded ask again, with no new assessment."""
+    """A new-skill lesson whose ask is not delivered raises its recorded ask again, with no new
+    assessment. A delivered or answered one goes to the agent's assessment, which carries the answer."""
     item = ledger_item(row)
     found = next(((ledger, outcome) for ledger, outcome in found
                   if outcome['status'] == 'asked' and isinstance(outcome.get('choices'), list)), None)
-    if found is None:
+    if found is None or found[1].get('ask_delivered') or found[1].get('approved'):
         return False
     try:
         payload = checklist.ask_payload(checklist.lessons.asking(item, found[1]['choices']),
@@ -1005,9 +1002,15 @@ def apply_lesson(report, row, assessment):
     item, payload = single_item(row)
     done = checklist.lessons.apply(payload, [dict(assessment, index=0)], handoff, row['ledger_session'])
     outcome = required_outcome(item, done['lesson_outcomes'])
-    if outcome['status'] == 'asked':
+    if done['new_skill_asked']:
         raise_item_ask(report, row, done['resume']['open_loops'][0], 'lesson',
                        'New-skill lesson: no skill is created without the user')
+    elif done['skill_creator_handoffs']:
+        # The user said yes: the agent hands the proposal to the running tool's skill creator.
+        row.update(outcome='carried', skill_creator=done['skill_creator_handoffs'][0],
+                   reason="New-skill lesson approved: hand the proposal to the running tool's skill creator")
+    elif outcome['status'] == 'asked':
+        row.update(outcome='carried', reason="New-skill lesson: its delivered ask awaits the user's answer")
     else:
         settle_lesson(row, outcome)
 
@@ -1278,10 +1281,14 @@ def complete_act(config, run_id, results_path, evidence=None, knowledge_profile=
                 row.update(outcome='carried', reason=OPEN_SESSION + '; the sweep applies nothing from it')
             else:
                 apply_assessed(report, row, result, knowledge_profile)
-        if row['operation'] == 'ask':
-            settle_shared_asks(report, row)
         if row.get('settles') and row['outcome'] in ('written', 'already_written'):
             record_delivered_ask(row)
+            if row['settles'] == 'lesson' and row['ask'].get('new_skill'):
+                # The lesson stays carried, and every handoff sharing its ask kept, until the user answers.
+                row.update(ask_outcome=row['outcome'], ask_status='filed', outcome='carried',
+                           reason="Ask delivered; the new-skill lesson stays carried until the user answers")
+        if row['operation'] == 'ask':
+            settle_shared_asks(report, row)
         if row['operation'] == 'file_slot' and row['outcome'] == 'failed' and result.get('pending') is True:
             section = report['directories'][row['directory']]
             followup = slot_ask(row, row['directory'], report['ask_binding'])

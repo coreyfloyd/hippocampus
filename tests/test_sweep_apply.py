@@ -969,7 +969,7 @@ def test_carried_new_skill_lesson_becomes_an_ask_and_no_applied_lesson(sandbox, 
     assert not section(sandbox, run)['lessons_applied'] and not section(sandbox, run)['lessons_not_pushed']
     assert [raised['ask']['text'] for raised in section(sandbox, run)['asks_raised']] == [proposal]
     assert git(checkout, 'rev-parse', 'HEAD') == head and git(checkout, 'status', '--porcelain') == ''
-    assert archived(sandbox, PRODUCER)
+    assert not archived(sandbox, PRODUCER)
 
 
 def test_undelivered_new_skill_ask_is_raised_again_without_a_new_assessment(sandbox, tool):
@@ -984,14 +984,41 @@ def test_undelivered_new_skill_ask_is_raised_again_without_a_new_assessment(sand
     assert [[work['operation'] for work in group] for group in rounds[:1]] == [['ask']]
     ask, = rounds[0]
     assert ask['choices'] == choices and ask['ask']['text'] == proposal
+    assert not archived(sandbox, PRODUCER)
+
+
+def delivered_new_skill_ask(sandbox):
+    """A sweep that delivered a new-skill lesson's ask; the lesson stays carried in its handoff."""
+    proposal = 'New skill release-check: four ordered steps done by hand; nearest skill release-signing differs.'
+    path = source(sandbox, PRODUCER, loops=[lesson(proposal)])
+    configure(sandbox)
+    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'apply', 'new_skill': True,
+                                                    'choices': ['create the skill', 'decline']}))
+    assert section(sandbox, run)['asks_raised'][0]['ask_status'] == 'filed'
+    assert path.exists() and not archived(sandbox, PRODUCER)
+    return proposal
+
+
+def test_delivered_new_skill_ask_answered_create_the_skill_reaches_the_skill_creator(sandbox, tool):
+    proposal = delivered_new_skill_ask(sandbox)
+    run, rounds = finish(sandbox, start(sandbox), agent({'recommend': 'apply', 'answer': 'create the skill'}))
+    assert [work['operation'] for work in rounds[0]] == ['apply_lesson']
+    [row] = [row for row in section(sandbox, run)['filing_outcomes'] if row.get('item_kind') == 'lesson']
+    assert row['outcome'] == 'carried' and row['skill_creator']['context'] == proposal
+    assert row['skill_creator']['approved'] is True and not section(sandbox, run)['asks_raised']
+    assert not archived(sandbox, PRODUCER)
+
+
+def test_delivered_new_skill_ask_without_an_answer_is_not_raised_again(sandbox, tool):
+    delivered_new_skill_ask(sandbox)
+    run, rounds = finish(sandbox, start(sandbox), agent({'recommend': 'apply'}))
+    assert [work['operation'] for work in rounds[0]] == ['apply_lesson'] and not section(sandbox, run)['asks_raised']
+    assert not archived(sandbox, PRODUCER)
+
+
+def test_delivered_new_skill_ask_answered_decline_drops_the_lesson(sandbox, tool):
+    delivered_new_skill_ask(sandbox)
+    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'skip', 'answer': 'decline'}))
+    [row] = [row for row in section(sandbox, run)['filing_outcomes'] if row.get('item_kind') == 'lesson']
+    assert row['outcome'] == 'dropped' and 'decline' in row['reason']
     assert archived(sandbox, PRODUCER)
-
-
-def test_undelivered_new_skill_outcome_reports_no_delivered_ask(sandbox, monkeypatch):
-    module = in_process(sandbox, monkeypatch)
-    row = {'item': lesson(), 'identity': {}}
-    module.settle_lesson(row, {'identity': ['x'], 'status': 'asked'})
-    assert row.get('receipt') != 'ask delivered' and row['outcome'] not in ('written', 'already_written')
-    delivered = {'item': lesson(), 'identity': {}}
-    module.settle_lesson(delivered, {'identity': ['x'], 'status': 'asked', 'ask_delivered': True, 'receipt': 'r-1'})
-    assert delivered['receipt'] == 'r-1' and delivered['outcome'] == 'already_written'

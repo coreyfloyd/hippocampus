@@ -398,18 +398,47 @@ def _choices(row: Mapping[str, Any], item: Mapping[str, Any]) -> Any:
     return row["choices"] if "choices" in row else item.get("choices")
 
 
+# The new-skill ask's choice that approves creating the skill; any other answer drops the lesson.
+CREATE = "create the skill"
+
+
+def _approved(item: Mapping[str, Any], prior: Mapping[str, Any] | None) -> bool:
+    """The user's yes: `approved` on the carried item, or recorded in the ledger from an answer."""
+    return item.get("approved") is True or (prior or {}).get("approved") is True
+
+
 def _asks(row: Mapping[str, Any], item: Mapping[str, Any], prior: Mapping[str, Any] | None) -> bool:
-    """Whether this row raises the new-skill ask: only `apply`, and never after the user's yes.
+    """Whether this row raises the new-skill ask: only `apply` with no answer, never after the
+    user's yes, and never while a delivered ask is still open.
 
     A skip, dictated or not, drops a new-skill lesson; an `approved` one waits for the skill creator.
     """
-    return (row["recommend"] == "apply" and item.get("approved") is not True
+    return (row["recommend"] == "apply" and "answer" not in row and not _approved(item, prior)
+            and not (prior or {}).get("ask_delivered")
             and (new_skill(row, item) or (prior or {}).get("status") == "asked"))
+
+
+def _offered(row: Mapping[str, Any], item: Mapping[str, Any], prior: Mapping[str, Any] | None) -> list[Any]:
+    """The choices the user answered from: the row's, else the item's, else the recorded ask's."""
+    choices = _choices(row, item)
+    if not isinstance(choices, list) or not choices:
+        choices = (prior or {}).get("choices")
+    return choices if isinstance(choices, list) else []
 
 
 def asking(item: Mapping[str, Any], choices: Sequence[str]) -> dict[str, Any]:
     """A new-skill lesson stays carried, whole, with the choices its ask offers the user."""
     return {**copy.deepcopy(dict(item)), "new_skill": True, "choices": list(choices)}
+
+
+def approve(item: Mapping[str, Any], choices: Sequence[str]) -> dict[str, Any]:
+    """A new-skill lesson the user said yes to: kept carried for the skill creator, `context` unchanged."""
+    return {**asking(item, choices), "approved": True}
+
+
+def deliver_ask(module: Any, session_id: str, outcome: Mapping[str, Any], receipt: Any) -> None:
+    """Record a delivered new-skill ask beside its outcome, so the open ask is not raised again."""
+    _record(module, session_id, {**outcome, "ask_delivered": True, "receipt": receipt})
 
 
 def _with_ask(item: Mapping[str, Any], outcome: Mapping[str, Any]) -> dict[str, Any]:
@@ -428,8 +457,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     `rows` index the filing pass's list: open loops, then unrecorded session items.
     Lessons with no row stay carried. A lesson already applied is never applied again.
     A new-skill lesson is never applied: a row recommending `apply` makes it `asked`, carried with
-    its choices, until the user answers; `approved: true` on the item records a yes, so it is not asked
-    again. A skip, dictated or not, drops it with its reason.
+    its choices, until the user answers; a delivered ask is not raised again. A row's `answer` is the
+    user's answer to that ask, one of its choices: `create the skill` sets `approved: true` and lists the
+    proposal in `skill_creator_handoffs`, as every later row for an approved lesson does; any other
+    answer drops it with that reason. A skip, dictated or not, drops it with its reason.
     """
     if not session_id:
         raise ValueError("apply-lessons requires a session id")
@@ -457,7 +488,13 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             raise ValueError(f"lessons: row {index}: recommend must be apply or skip")
         item, prior = items[index], prior_of(items[index])
         skill = new_skill(row, item) or (prior or {}).get("status") == "asked"
-        if skill and row["recommend"] == "apply":
+        if "answer" in row:
+            offered = _offered(row, item, prior)
+            if not skill:
+                raise ValueError(f"lessons: row {index}: answer is the user's answer to a new-skill lesson's ask")
+            if not isinstance(row["answer"], str) or row["answer"] not in offered:
+                raise ValueError(f"lessons: row {index}: answer must be one of the ask's choices")
+        elif skill and row["recommend"] == "apply":
             # A new skill is never written here: the user's yes comes first, through an ask.
             choices = _choices(row, item)
             if _asks(row, item, prior) and (not isinstance(choices, list) or not choices
@@ -479,6 +516,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     dropped: list[Mapping[str, Any]] = []
     annotated: dict[int, dict[str, Any]] = {}
     asked: list[int] = []
+    creators: list[int] = []
     for row in sorted(rows, key=lambda row: row["index"]):
         item = items[row["index"]]
         identity = module.session_item_identity(item)
@@ -490,10 +528,29 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         if item.get("applied"):
             continue
         skill = new_skill(row, item) or (prior or {}).get("status") == "asked"
+        if "answer" in row and not (prior and prior["status"] in ("applied", "dropped")):
+            # The user's answer to the ask: a yes waits for the skill creator; anything else drops it.
+            offered = _offered(row, item, prior)
+            outcome = {**(prior or {}), "identity": list(identity), "new_skill": True, "answer": row["answer"],
+                       "change": row.get("change") or (prior or {}).get("change") or item["context"],
+                       "target": row.get("target") or (prior or {}).get("target"), "choices": list(offered)}
+            if row["answer"] == CREATE:
+                outcome.update(status="asked", approved=True)
+                annotated[row["index"]] = approve(item, offered)
+                creators.append(row["index"])
+            else:
+                outcome.update(status="dropped", reason=row.get("reason") or f"the user answered {row['answer']!r}")
+                removed.append(item)
+                dropped.append(item)
+            _record(module, session_id, outcome)
+            continue
         if prior and prior["status"] == "asked":
             if row["recommend"] == "apply":
-                # Asked again until the user answers; after a yes (`approved`), kept for the skill creator.
-                if _asks(row, item, prior):
+                # Asked again until delivered and answered; after a yes, kept for the skill creator.
+                if _approved(item, prior):
+                    annotated[row["index"]] = approve(item, _offered(row, item, prior))
+                    creators.append(row["index"])
+                elif _asks(row, item, prior):
                     annotated[row["index"]] = asking(item, _choices(row, item))
                     asked.append(row["index"])
                 continue
@@ -507,7 +564,10 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
         outcome: dict[str, Any] = {"identity": list(identity), "evidence": row.get("evidence")}
         if skill and row["recommend"] == "apply":
             if not _asks(row, item, prior):
-                continue  # Approved: nothing to record until the skill creator writes the skill.
+                # Approved: nothing to record until the skill creator writes the skill.
+                annotated[row["index"]] = approve(item, _offered(row, item, prior))
+                creators.append(row["index"])
+                continue
             annotated[row["index"]] = asking(item, _choices(row, item))
             asked.append(row["index"])
             outcome.update(status="asked", new_skill=True, change=row.get("change") or item["context"],
@@ -554,6 +614,8 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     result["lesson_outcomes"] = outcomes(module, session_id)
     # Only the lessons this call asked about: the caller builds their asks and removes the key.
     result["new_skill_asked"] = [annotated[index] for index in asked]
+    # Approved new-skill lessons: the agent hands each proposal, unchanged, to the skill creator.
+    result["skill_creator_handoffs"] = [annotated[index] for index in creators]
     return result
 
 

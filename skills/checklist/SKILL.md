@@ -192,6 +192,7 @@ lesson routing forbids applying: run this step as if the setting were off, inclu
 the over-limit and duplicate-rule blocks, which are not recorded. Each
 `new_skill_asks` payload from `apply-lessons` goes to the ask binding through an R4 row
 with `destination: "ask"` and its choices; the new-skill lesson stays carried until the user answers.
+Hand each `skill_creator_handoffs` proposal to the skill creator (improve-harness's `references/new-skill.md`).
 
 Both native steps continue to the next checklist step on failure or refusal.
 Remove an item only after an explicit receipt: the knowledge capture disposition, an applied capture,

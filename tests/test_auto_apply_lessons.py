@@ -1126,3 +1126,45 @@ def test_dictated_skip_drops_a_new_skill_lesson(tmp_path, tool):
                         'reason': 'The user said to drop it'}])
     assert data['resume']['open_loops'] == [] and data['new_skill_asks'] == []
     assert data['lesson_outcomes'][0]['status'] == 'dropped'
+
+
+def test_answer_create_the_skill_approves_it_and_hands_the_proposal_to_the_skill_creator(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked = asked_once(wrap)
+    data = wrap.apply([asked], [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}])
+    [kept] = data['resume']['open_loops']
+    assert kept['approved'] is True and kept['context'] == PROPOSAL
+    assert data['skill_creator_handoffs'] == [kept] and data['new_skill_asks'] == []
+    later = wrap.apply([asked], [{'index': 0, 'recommend': 'apply'}])
+    assert later['new_skill_asks'] == [] and later['skill_creator_handoffs'][0]['context'] == PROPOSAL
+
+
+def test_answer_decline_drops_the_lesson_with_that_reason(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    data = wrap.apply([asked_once(wrap)], [{'index': 0, 'recommend': 'skip', 'answer': 'decline'}])
+    assert data['resume']['open_loops'] == [] and data['skill_creator_handoffs'] == []
+    assert data['lesson_outcomes'][-1]['status'] == 'dropped'
+    assert 'decline' in data['lesson_outcomes'][-1]['reason']
+
+
+def test_an_answer_that_is_not_one_of_the_choices_is_refused(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    result = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([asked_once(wrap)])),
+                      '--lessons', wrap.save('lessons.json', [{'index': 0, 'recommend': 'apply', 'answer': 'yes'}]))
+    assert result.returncode == 1 and 'one of the ask' in result.stderr
+
+
+def test_unanswered_new_skill_lesson_whose_ask_was_delivered_is_unchanged_and_not_asked_again(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    new = {'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}
+    data = wrap.apply([lesson(PROPOSAL)], [new])
+    [ask] = data['new_skill_asks']
+    filed = wrap.file(data, [{'index': 0, 'rule': 'R4', 'status': 'filed', 'destination': 'ask', 'choices': CHOICES}])
+    [carried] = filed['resume']['open_loops']
+    again = wrap.apply([carried], [new])
+    assert again['new_skill_asks'] == [] and again['skill_creator_handoffs'] == []
+    assert again['resume']['open_loops'] == [carried]
