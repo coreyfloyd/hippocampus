@@ -717,8 +717,9 @@ STATUSES = {'lesson': checklist.lessons.STATUSES, 'knowledge': ('captured', 'ask
 def is_settled(kind, outcome):
     """An outcome no later run repeats; a fact about the user settles when its ask is delivered.
 
-    A new-skill lesson stays carried after its ask is delivered and after the user's yes, until
-    the user's answer or a skip reporting the skill written drops it.
+    A new-skill lesson stays carried after its ask is delivered, and after the user's yes and its
+    hand-off to the skill creator, until the user's answer or a skip reporting the skill written
+    drops it.
     """
     if kind == 'lesson':
         return outcome['status'] in ('applied', 'dropped')
@@ -784,6 +785,10 @@ def recorded_outcome(row, session, index):
 
 def settle_lesson(row, outcome):
     """Copy a lesson's outcome onto its row. A commit stays `applied` until it is delivered."""
+    if outcome['status'] == 'asked':
+        # A new-skill lesson is never written: it stays carried, its handoff kept.
+        carry_new_skill(row)
+        return
     row['applied_kind'] = 'lesson'
     if outcome['status'] == 'dropped':
         row.update(outcome='dropped', reason=outcome.get('reason'))
@@ -1014,19 +1019,21 @@ def apply_lesson(report, row, assessment):
     if done['new_skill_asked']:
         raise_item_ask(report, row, done['resume']['open_loops'][0], 'lesson',
                        'New-skill lesson: no skill is created without the user')
-    elif done['skill_creator_handoffs']:
-        # The user said yes. A hand-off is no receipt: the lesson stays carried in its handoff, and
-        # each later run hands it off again, until a skip reports the skill written.
+    elif done['skill_creator_handoffs'] or done['skill_creator_waiting']:
+        # The user said yes. A hand-off is no receipt: the lesson stays carried in its handoff until a
+        # skip reports the skill written, and is handed to the creator once, in one run at most.
         carry_new_skill(row)
-        key = handoff.session_item_identity(item)
-        first = next((other for other in report['work'] if other is not row and other.get('skill_creator')
-                      and handoff.session_item_identity(ledger_item(other)) == key), None)
-        if first is None:
+        key = list(handoff.session_item_identity(item))
+        handed = report.setdefault('skill_creator_handed', [])
+        if done['skill_creator_handoffs'] and key not in handed:
+            handed.append(key)
             row.update(skill_creator=done['skill_creator_handoffs'][0],
                        reason="New-skill lesson approved: hand the proposal to the running tool's skill creator; "
-                              "it stays carried in its handoff until a skill is reported written")
+                              'it stays carried in ' + row['source_handoff'] + ' until a skill is reported written')
         else:
-            row['reason'] = 'One hand-off per item: handed to the skill creator for ' + first['source_handoff']
+            row.update(skill_creator_waiting=True,
+                       reason='Handed to the skill creator, waiting for the skill; the proposal is kept in '
+                              + row['source_handoff'])
     elif new_skill_open(item, done):
         carry_new_skill(row)
     else:

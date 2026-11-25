@@ -1022,7 +1022,7 @@ def test_delivered_new_skill_ask_answered_create_the_skill_reaches_the_skill_cre
     assert row['skill_creator']['approved'] is True and not section(sandbox, run)['asks_raised']
 
 
-def test_an_approved_lesson_no_creator_acted_on_is_kept_and_handed_off_again(sandbox, tool):
+def test_a_handed_off_lesson_is_kept_reported_waiting_and_never_handed_again(sandbox, tool):
     delivered_new_skill_ask(sandbox)
     finish(sandbox, start(sandbox), agent({'recommend': 'apply', 'answer': 'create the skill'}))
     assert not archived(sandbox, PRODUCER)
@@ -1030,9 +1030,33 @@ def test_an_approved_lesson_no_creator_acted_on_is_kept_and_handed_off_again(san
     assert [work['operation'] for work in payload['work']] == ['apply_lesson']
     run, _ = finish(sandbox, payload, agent({'recommend': 'apply'}))
     row = lesson_row(sandbox, run)
-    assert row['outcome'] == 'carried' and row['skill_creator']['context'] == PROPOSAL
+    assert row['outcome'] == 'carried' and 'skill_creator' not in row and row['skill_creator_waiting'] is True
+    assert row['source_handoff'] in row['reason']
     assert [kept['path'] for kept in section(sandbox, run)['handoffs_kept']] == [row['source_handoff']]
     assert not archived(sandbox, PRODUCER)
+
+
+def test_a_lesson_handed_off_under_the_old_mark_is_waiting_not_handed_again(sandbox, tool):
+    source(sandbox, PRODUCER, loops=[lesson(PROPOSAL, new_skill=True, approved=True)])
+    configure(sandbox)
+    identity = [PRODUCER, lesson()['produced_at'], 'lesson', PROPOSAL]
+    seed_ledger(sandbox, PRODUCER, {'kind': 'lesson_outcome', 'outcome': {
+        'identity': identity, 'status': 'asked', 'new_skill': True, 'choices': CHOICES, 'approved': True,
+        'creator_handed_off': True}})
+    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'apply'}))
+    row = lesson_row(sandbox, run)
+    assert row['outcome'] == 'carried' and 'skill_creator' not in row and row['skill_creator_waiting'] is True
+    assert not archived(sandbox, PRODUCER)
+
+
+def test_an_asked_lesson_no_longer_carried_is_never_reported_written(sandbox, tool, monkeypatch):
+    delivered_new_skill_ask(sandbox)
+    payload = start(sandbox)
+    module = in_process(sandbox, monkeypatch)
+    monkeypatch.setattr(module, 'new_skill_open', lambda *_args: False)
+    run = complete_in_process(sandbox, module, payload, [agent({'recommend': 'apply'})(work) for work in payload['work']])
+    row = lesson_row(sandbox, run)
+    assert row['outcome'] == 'carried' and not archived(sandbox, PRODUCER)
 
 
 def test_a_skip_reporting_the_skill_written_archives_the_approved_lesson(sandbox, tool):
@@ -1054,6 +1078,18 @@ def test_one_run_hands_an_approved_lesson_to_the_skill_creator_once(sandbox, too
     rows = [row for row in section(sandbox, run)['filing_outcomes'] if row.get('item_kind') == 'lesson']
     assert len(rows) == 2 and {row['outcome'] for row in rows} == {'carried'}
     assert len([row for row in rows if row.get('skill_creator')]) == 1
+
+
+def test_one_run_hands_a_lesson_answered_in_two_handoffs_to_the_skill_creator_once(sandbox, tool):
+    source(sandbox, PRODUCER, loops=[lesson(PROPOSAL, new_skill=True)])
+    source(sandbox, 'successor', loops=[lesson(PROPOSAL, new_skill=True)])
+    configure(sandbox)
+    identity = [PRODUCER, lesson()['produced_at'], 'lesson', PROPOSAL]
+    seed_ledger(sandbox, PRODUCER, {'kind': 'lesson_outcome', 'outcome': {
+        'identity': identity, 'status': 'asked', 'new_skill': True, 'choices': CHOICES, 'ask_delivered': True}})
+    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'apply', 'answer': 'create the skill'}))
+    rows = [row for row in section(sandbox, run)['filing_outcomes'] if row.get('item_kind') == 'lesson']
+    assert len(rows) == 2 and len([row for row in rows if row.get('skill_creator')]) == 1
 
 
 def test_an_approved_lesson_recorded_in_another_ledger_reaches_the_skill_creator(sandbox, tool):

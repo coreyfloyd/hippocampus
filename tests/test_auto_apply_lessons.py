@@ -1099,16 +1099,6 @@ def test_skip_after_a_new_skill_ask_drops_it_with_its_reason(tmp_path, tool):
     assert data['lesson_outcomes'][-1]['reason'] == 'The user declined'
 
 
-def test_asked_new_skill_lesson_without_choices_is_refused_not_crashed(tmp_path, tool):
-    wrap = Wrap(tmp_path, tool)
-    wrap.plan()
-    asked_once(wrap)
-    result = wrap.run('apply-lessons', '--handoff', wrap.save('items.json', wrap.payload([lesson(PROPOSAL)])),
-                      '--lessons', wrap.save('lessons.json', [{'index': 0, 'recommend': 'apply'}]))
-    assert result.returncode == 1 and "requires the user's choices" in result.stderr
-    assert 'TypeError' not in result.stderr
-
-
 def test_approved_on_the_item_with_a_raised_ask_but_no_recorded_answer_is_not_handed_off(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
@@ -1116,7 +1106,18 @@ def test_approved_on_the_item_with_a_raised_ask_but_no_recorded_answer_is_not_ha
     data = wrap.apply([approved], [{'index': 0, 'recommend': 'apply', 'new_skill': True, 'choices': CHOICES}])
     assert data['skill_creator_handoffs'] == [] and lessons_ledger(tmp_path) == []
     [kept] = data['resume']['open_loops']
-    assert kept['context'] == PROPOSAL and kept['choices'] == CHOICES
+    assert kept['context'] == PROPOSAL and kept['choices'] == CHOICES and 'approved' not in kept
+
+
+def test_an_approved_item_without_choices_and_no_recorded_yes_is_asked_from_the_recorded_choices(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    asked = asked_once(wrap)
+    approved = {**{key: value for key, value in asked.items() if key != 'choices'}, 'approved': True}
+    data = wrap.apply([approved], [{'index': 0, 'recommend': 'apply'}])
+    assert data['skill_creator_handoffs'] == [] and lessons_ledger(tmp_path) == []
+    [kept] = data['resume']['open_loops']
+    assert kept['choices'] == CHOICES and 'approved' not in kept
 
 
 def test_dictated_skip_drops_a_new_skill_lesson(tmp_path, tool):
@@ -1139,7 +1140,7 @@ def test_answer_create_the_skill_approves_it_and_hands_the_proposal_to_the_skill
     assert data['skill_creator_handoffs'] == [kept] and data['new_skill_asks'] == []
 
 
-def test_a_hand_off_that_wrote_no_skill_is_offered_again_at_the_next_wrap(tmp_path, tool):
+def test_a_handed_off_lesson_is_reported_waiting_at_the_next_wrap_and_not_handed_again(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
     data = wrap.apply([asked_once(wrap)], [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}])
@@ -1147,8 +1148,18 @@ def test_a_hand_off_that_wrote_no_skill_is_offered_again_at_the_next_wrap(tmp_pa
     successor = Wrap(tmp_path, tool, session='successor-session')
     successor.plan()
     later = successor.apply([kept], [{'index': 0, 'recommend': 'apply'}])
-    assert later['new_skill_asks'] == [] and later['skill_creator_handoffs'] == [kept]
+    assert later['new_skill_asks'] == [] and later['skill_creator_handoffs'] == []
+    assert later['skill_creator_waiting'] == [{'proposal': kept, 'kept_in': 'resume.open_loops'}]
     assert later['resume']['open_loops'] == [kept]
+
+
+def test_a_new_create_the_skill_answer_hands_a_waiting_lesson_off_again(tmp_path, tool):
+    wrap = Wrap(tmp_path, tool)
+    wrap.plan()
+    answer = [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}]
+    [kept] = wrap.apply([asked_once(wrap)], answer)['resume']['open_loops']
+    again = wrap.apply([kept], answer)
+    assert again['skill_creator_handoffs'] == [kept] and again['skill_creator_waiting'] == []
 
 
 def test_one_call_hands_an_approved_lesson_to_the_skill_creator_once(tmp_path, tool):
@@ -1156,8 +1167,8 @@ def test_one_call_hands_an_approved_lesson_to_the_skill_creator_once(tmp_path, t
     wrap.plan()
     data = wrap.apply([asked_once(wrap)], [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}])
     [kept] = data['resume']['open_loops']
-    again = wrap.apply([kept], [{'index': 0, 'recommend': 'apply'}, {'index': 1, 'recommend': 'apply'}],
-                       session_items=[kept])
+    answer = {'recommend': 'apply', 'answer': 'create the skill'}
+    again = wrap.apply([kept], [{**answer, 'index': 0}, {**answer, 'index': 1}], session_items=[kept])
     assert again['skill_creator_handoffs'] == [kept]
 
 

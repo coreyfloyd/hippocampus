@@ -219,10 +219,13 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
   lesson's row stays carried, its handoff is kept, and an ask delivered or answered in any
   ledger is not raised again. Each later act run sends the lesson to the agent's
   assessment, whose row carries the user's answer from the ask binding once there is one,
-  as at a wrap: `create the skill` hands it off once per run, with `skill_creator` on its
-  row, the proposal to hand to the running tool's skill creator. A hand-off is not a
-  receipt: the lesson's row stays carried and its handoff kept, so each later run hands it
-  off again, until an assessment `skip` reports the skill written. Any other answer drops it.
+  as at a wrap: `create the skill` hands it off once, with `skill_creator` on its row, the
+  proposal to hand to the running tool's skill creator, and the ledger marks it
+  `creator_handed_off`. A hand-off is not a receipt: the lesson's row stays carried and its
+  handoff kept, and every later run reports it waiting for the skill
+  (`skill_creator_waiting`, its reason naming the handoff that keeps the proposal), never
+  handing it off again, until an assessment `skip` reports the skill written. A new
+  `create the skill` answer hands it off once more. Any other answer drops it.
 - Each item's receipt names its commit, or its destination when it has none. A handoff
   is archived once every item has a receipt, a drop or a delivered ask, apart from a
   new-skill lesson's.

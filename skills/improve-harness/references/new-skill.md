@@ -64,10 +64,14 @@ raised again.
 
 ## After the yes
 
-Each approved lesson comes back once per `apply-lessons` call or sweep run, in
-`skill_creator_handoffs` or as the sweep row's `skill_creator`, and again in every later
-call or run while it is carried: a hand-off is not a receipt. improve-harness writes no
-skill text. Hand the proposal, unchanged, to the
+Each approved lesson comes back once, in `skill_creator_handoffs` from `apply-lessons`
+or as the sweep row's `skill_creator`; the ledger marks it handed off
+(`creator_handed_off`), so no later run hands it again. A hand-off is not a receipt:
+the lesson stays carried, and every later call lists it in `skill_creator_waiting`
+(a sweep row: `skill_creator_waiting: true`) with where the proposal is kept; report
+it as handed to the skill creator, waiting for the skill. To hand it off again, give
+its row a new `answer: "create the skill"`; give no `answer` otherwise. improve-harness
+writes no skill text. Hand the proposal, unchanged, to the
 running tool's built-in skill creator, which drafts, tests and tunes the skill:
 
 | Tool | Skill creator | When it is missing |
