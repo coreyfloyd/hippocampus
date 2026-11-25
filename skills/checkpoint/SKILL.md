@@ -64,6 +64,17 @@ remains and Scheduled visibility is unproven. See the
 [scheduler contract](../../INTERFACE.md#durable-checkpoint-and-file-4h).
 Claude Code and Codex use this same command and skill; neither creates a timer.
 
+## Enable periodic durable checkpoints
+
+Only when the user explicitly asks to enable periodic durable filing for a running
+session, run the [enablement command](../../INTERFACE.md#durable-checkpoint-and-file-4h)
+with one `--required-node` and that node's current catch-up `run` report for every
+required node, and the configured scheduler adapter. Report the adapter's receipt
+(`job_key` and destination), or the refusal as printed: it names each node whose
+report blocks enablement and why. Produce missing or unready reports with the
+[catch-up pass](../../docs/filing-catchup.md) first. Never enable as a side effect
+of a checkpoint, wrap or catch-up. Claude Code and Codex use the same command.
+
 Supply the handoff's judgment-bearing fields: a one-line `resume.headline`, concrete
 `resume.next_action`, a real one-line `resume.session_summary` describing the work since this session's
 previous history entry,

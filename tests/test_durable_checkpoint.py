@@ -583,3 +583,80 @@ def test_unattended_decision_ask_reaches_the_ask_writer(tmp_path, monkeypatch, p
     assert write['item']['decision_record'] == decision['decision_record']
     assert requests(tmp_path) == []
     assert report['unfiled'] == [decision]
+
+
+CUTOFF = '2026-11-19T12:00:00Z'
+
+
+def catchup(node, cutoff=CUTOFF, **change):
+    report = dict(node=node, cutoff=cutoff, mode='run', ready_for_durable_filing=True,
+                  unfiled_before_cutoff=0, errors=[])
+    report.update(change)
+    return report
+
+
+def refusal(nodes, reports):
+    import durable_checkpoint
+    with pytest.raises(ValueError) as error:
+        durable_checkpoint.schedule_request('s1', '/fixture', nodes, reports)
+    return str(error.value)
+
+
+def test_refusal_names_the_inspect_only_node_and_not_the_ready_one():
+    message = refusal(['node-ready', 'node-inspect'], [catchup('node-ready'), catchup(
+        'node-inspect', mode='inspect', ready_for_durable_filing=False,
+        unfiled_before_cutoff=12, errors=['unreadable'])])
+    assert 'node-inspect' in message and 'inspect' in message.replace('node-inspect', '')
+    assert '12' in message
+    assert 'node-ready' not in message
+
+
+def test_refusal_names_every_failing_node_with_its_counts():
+    message = refusal(['node-ready', 'node-unfiled', 'node-errors'], [
+        catchup('node-ready'), catchup('node-unfiled', unfiled_before_cutoff=37),
+        catchup('node-errors', errors=['one', 'two', 'three', 'four'])])
+    assert 'node-unfiled' in message and '37' in message
+    assert 'node-errors' in message and '4' in message
+    assert 'node-ready' not in message
+
+
+def test_refusal_names_a_missing_node_and_mismatched_cutoffs():
+    message = refusal(['node-present', 'node-missing'], [catchup('node-present')])
+    assert 'node-missing' in message and 'node-present' not in message
+    other = '2026-11-20T12:00:00Z'
+    message = refusal(['node-first', 'node-second'],
+                      [catchup('node-first'), catchup('node-second', cutoff=other)])
+    assert CUTOFF in message and other in message
+
+
+def schedule_cli(tmp_path, nodes, reports):
+    adapter = tmp_path / 'scheduler.py'
+    adapter.write_text("import json,sys; from pathlib import Path; r=json.load(sys.stdin); "
+        "Path(__file__).with_suffix('.called').write_text(json.dumps(r)); "
+        "print(json.dumps({'status':'saved','receipt':{'job_key':'FILE-4H:s1','destination':'Scheduled'}}))")
+    command = [sys.executable, str(ROOT / 'scripts/lib/durable_checkpoint.py'),
+               '--session-id', 's1', '--cwd', str(tmp_path), '--adapter', f'{sys.executable} {adapter}']
+    for node in nodes:
+        command += ['--required-node', node]
+    for number, report in enumerate(reports):
+        path = tmp_path / f'catchup-{number}.json'
+        path.write_text(json.dumps(report))
+        command += ['--catchup-report', str(path)]
+    return subprocess.run(command, capture_output=True, text=True), adapter.with_suffix('.called')
+
+
+def test_cli_refusal_names_the_node_and_never_reaches_the_adapter(tmp_path):
+    result, marker = schedule_cli(tmp_path, ['node-inspect'], [catchup(
+        'node-inspect', mode='inspect', ready_for_durable_filing=False)])
+    assert result.returncode == 1
+    assert 'node-inspect' in result.stderr and 'Traceback' not in result.stderr
+    assert not marker.exists()
+
+
+def test_cli_enables_ready_nodes_through_the_adapter(tmp_path):
+    result, marker = schedule_cli(tmp_path, ['node-a', 'node-b'], [catchup('node-a'), catchup('node-b')])
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)['receipt']['job_key'] == 'FILE-4H:s1'
+    request = json.loads(marker.read_text())
+    assert request['operation'] == 'ensure_job' and request['job_key'] == 'FILE-4H:s1'
+    assert request['interval_seconds'] == 14400

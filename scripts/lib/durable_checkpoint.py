@@ -131,6 +131,26 @@ def run(module, supplied, args):
     return module.CheckpointResult(path, code, output + f'Durable filing report: {args.report}\n', report['errors'])
 
 
+def not_ready(report):
+    """Name each condition that keeps one node's catch-up report from enabling filing."""
+    problems = []
+    if report.get('mode') != 'run':
+        problems.append(f"mode {report.get('mode')!r}, not 'run'")
+    if report.get('ready_for_durable_filing') is not True:
+        problems.append(f"ready_for_durable_filing {report.get('ready_for_durable_filing')!r}")
+    unfiled = report.get('unfiled_before_cutoff')
+    if type(unfiled) is not int:
+        problems.append(f'unfiled_before_cutoff {unfiled!r}')
+    elif unfiled:
+        problems.append(f'{unfiled} unfiled before the cutoff')
+    errors = report.get('errors')
+    if not isinstance(errors, list):
+        problems.append(f'errors {errors!r}')
+    elif errors:
+        problems.append(f'{len(errors)} errors')
+    return problems
+
+
 def schedule_request(session_id, cwd, required_nodes, reports):
     """Require successful per-node catch-up before asking a scheduler to enable."""
     if (not isinstance(session_id, str) or not session_id.strip()
@@ -144,15 +164,19 @@ def schedule_request(session_id, cwd, required_nodes, reports):
         if not isinstance(report.get('node'), str) or not report['node'].strip():
             raise ValueError('catch-up report requires a node identifier')
         filing_catchup.sweep.timestamp(report.get('cutoff'))
-    if (len(reports) != len(required_nodes)
-            or {r.get('node') for r in reports} != set(required_nodes)
-            or len({r.get('cutoff') for r in reports}) != 1):
-        raise ValueError('each required node needs its own catch-up report for the same cutoff')
-    for report in reports:
-        if (report.get('mode') != 'run' or report.get('ready_for_durable_filing') is not True
-                or type(report.get('unfiled_before_cutoff')) is not int
-                or report['unfiled_before_cutoff'] != 0 or report.get('errors') != []):
-            raise ValueError('catch-up is not ready; periodic filing remains disabled')
+    failures = []
+    for node in required_nodes:
+        found = [r for r in reports if r['node'] == node]
+        problems = not_ready(found[0]) if len(found) == 1 else [
+            'no catch-up report' if not found else f'{len(found)} catch-up reports']
+        if problems:
+            failures.append(f"{node}: {', '.join(problems)}")
+    failures += [f"{node}: not a required node" for node in
+                 dict.fromkeys(r['node'] for r in reports) if node not in required_nodes]
+    if len({r['cutoff'] for r in reports}) > 1:
+        failures.append('cutoffs differ: ' + ', '.join(f"{r['node']} {r['cutoff']}" for r in reports))
+    if failures:
+        raise ValueError('catch-up is not ready; periodic filing remains disabled: ' + '; '.join(failures))
     return dict(operation='ensure_job', kind='durable_checkpoint',
                 job_key='FILE-4H:' + session_id, target_session=session_id,
                 working_directory=cwd, interval_seconds=4 * 60 * 60,
