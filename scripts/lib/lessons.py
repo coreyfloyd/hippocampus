@@ -400,30 +400,23 @@ def _choices(row: Mapping[str, Any], item: Mapping[str, Any]) -> Any:
 
 # The new-skill ask's choice that approves creating the skill; any other answer drops the lesson.
 CREATE = "create the skill"
-NO_ASK = {"asked": False, "delivered": False, "approved": False, "handed_off": False, "choices": [], "outcome": None}
+NO_ASK = {"asked": False, "delivered": False, "approved": False, "choices": [], "outcome": None}
 
 
 def ask_record(module: Any, identity: Sequence[str]) -> dict[str, Any]:
     """What every session's ledger records about one new-skill lesson's ask: whether it was raised,
-    delivered, answered yes and handed to the skill creator, and the choices it offered."""
+    delivered and answered yes, and the choices it offered."""
     found = [outcome for session in module.ledger_sessions() for outcome in outcomes(module, session)
              if tuple(outcome["identity"]) == tuple(identity) and outcome["status"] == "asked"]
     if not found:
         return dict(NO_ASK)
     flags = {key: any(outcome.get(field) is True for outcome in found)
-             for key, field in (("delivered", "ask_delivered"), ("approved", "approved"),
-                                ("handed_off", "creator_handed_off"))}
+             for key, field in (("delivered", "ask_delivered"), ("approved", "approved"))}
     choices = next((outcome["choices"] for outcome in found
                     if isinstance(outcome.get("choices"), list) and outcome["choices"]), [])
     # The fullest record, so a new row keeps its delivery and the user's yes.
-    fullest = max(found, key=lambda outcome: (outcome.get("creator_handed_off") is True,
-                                              outcome.get("approved") is True, outcome.get("ask_delivered") is True))
+    fullest = max(found, key=lambda outcome: (outcome.get("approved") is True, outcome.get("ask_delivered") is True))
     return {"asked": True, **flags, "choices": list(choices), "outcome": fullest}
-
-
-def _approved(item: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
-    """The user's yes, recorded from an answer, or `approved` on an item whose ask was raised."""
-    return record["approved"] or (item.get("approved") is True and record["asked"])
 
 
 def _asks(row: Mapping[str, Any], item: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
@@ -432,7 +425,7 @@ def _asks(row: Mapping[str, Any], item: Mapping[str, Any], record: Mapping[str, 
 
     A skip, dictated or not, drops a new-skill lesson; an `approved` one waits for the skill creator.
     """
-    return (row["recommend"] == "apply" and "answer" not in row and not _approved(item, record)
+    return (row["recommend"] == "apply" and "answer" not in row and not record["approved"]
             and not record["delivered"] and (new_skill(row, item) or record["asked"]))
 
 
@@ -476,9 +469,11 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     Lessons with no row stay carried. A lesson already applied is never applied again.
     A new-skill lesson is never applied: a row recommending `apply` makes it `asked`, carried with
     its choices, until the user answers; a delivered ask is not raised again. A row's `answer` is the
-    user's answer to that ask, one of its choices: `create the skill` sets `approved: true` and lists the
-    proposal in `skill_creator_handoffs`, as every later row for an approved lesson does; any other
-    answer drops it with that reason. A skip, dictated or not, drops it with its reason.
+    user's answer to that ask, one of its choices: `create the skill` records the yes in the ledger,
+    which alone approves it, and lists the proposal in `skill_creator_handoffs`, once per call. Every
+    later `apply` row lists it again, so a hand-off that wrote no skill is offered again; a `skip`
+    naming the written skill settles it. Any other answer drops it with that reason. A skip,
+    dictated or not, drops it with its reason.
     """
     if not session_id:
         raise ValueError("apply-lessons requires a session id")
@@ -544,6 +539,7 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
     annotated: dict[int, dict[str, Any]] = {}
     asked: list[int] = []
     creators: list[int] = []
+    handed: set[tuple[str, ...]] = set()
     for row in sorted(rows, key=lambda row: row["index"]):
         item = items[row["index"]]
         identity = module.session_item_identity(item)
@@ -564,14 +560,15 @@ def apply(handoff: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], module:
             if row.get("answer") is not None and row["answer"] != CREATE:
                 # Any answer but the yes drops it, below, with that reason.
                 row = {**row, "reason": row.get("reason") or f"the user answered {row['answer']!r}"}
-            elif row.get("answer") == CREATE or (row["recommend"] == "apply" and _approved(item, record)):
-                # The yes: carried without choices; handed to the skill creator once, marked in the ledger.
+            elif row.get("answer") == CREATE or (row["recommend"] == "apply" and record["approved"]):
+                # The yes, read from the ledger: carried without choices until a skip reports the skill
+                # written; handed to the skill creator once per call.
                 annotated[row["index"]] = approve(item)
-                if not record["handed_off"]:
+                if identity not in handed:
+                    handed.add(identity)
                     creators.append(row["index"])
-                    _record(module, session_id, {**base, "status": "asked", "approved": True,
-                                                 "creator_handed_off": True,
-                                                 **({"answer": row["answer"]} if "answer" in row else {})})
+                if not record["approved"]:
+                    _record(module, session_id, {**base, "status": "asked", "approved": True, "answer": row["answer"]})
                 continue
             elif row["recommend"] == "apply":
                 if _asks(row, item, record):
