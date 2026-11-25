@@ -147,7 +147,7 @@ def not_ready(report):
     if not isinstance(errors, list):
         problems.append(f'errors {errors!r}')
     elif errors:
-        problems.append(f'{len(errors)} errors')
+        problems.append(f"{len(errors)} error{'s' if len(errors) > 1 else ''}, first: {errors[0]}")
     return problems
 
 

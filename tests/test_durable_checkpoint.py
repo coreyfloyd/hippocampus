@@ -614,9 +614,9 @@ def test_refusal_names_the_inspect_only_node_and_not_the_ready_one():
 def test_refusal_names_every_failing_node_with_its_counts():
     message = refusal(['node-ready', 'node-unfiled', 'node-errors'], [
         catchup('node-ready'), catchup('node-unfiled', unfiled_before_cutoff=37),
-        catchup('node-errors', errors=['one', 'two', 'three', 'four'])])
+        catchup('node-errors', errors=['store unreadable', 'two', 'three', 'four'])])
     assert 'node-unfiled' in message and '37' in message
-    assert 'node-errors' in message and '4' in message
+    assert 'node-errors' in message and '4' in message and 'store unreadable' in message
     assert 'node-ready' not in message
 
 

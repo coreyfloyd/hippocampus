@@ -75,7 +75,8 @@ each node's report is ready. Then ask `checkpoint` to enable periodic durable
 checkpoints for the session; it runs the
 [enablement command](../INTERFACE.md#durable-checkpoint-and-file-4h) with every node's
 report and your scheduler adapter, and reports the receipt or names each node that
-blocks it. Until then, an empty schedule list is expected.
+blocks it. Periodic filing is on for that session once enablement returns a receipt
+with its `job_key` and destination.
 
 ### Finish a task with a profile bound
 

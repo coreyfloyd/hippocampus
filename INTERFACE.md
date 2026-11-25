@@ -80,7 +80,9 @@ on its ticket anchor, under no other rule or binding; without one it stays pendi
 
 Repeat required-node and catchup-report for all participating nodes. Enablement
 refuses missing nodes, different cutoffs, inventory errors, non-run reports or
-remaining old items. Supply current per-node recount reports; an older successful
+remaining old items. A refusal is one error naming every blocking required node and
+its condition, and any report from a node outside the required set; a node with a
+ready report is not named. Supply current per-node recount reports; an older successful
 report is not evidence of a current recount. Enablement is never an install,
 test or checkpoint side effect.
 
