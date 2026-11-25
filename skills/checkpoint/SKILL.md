@@ -143,3 +143,22 @@ requires the user's explicit `keep-warm on`; see the keep-warm skill. An empty
 keep-warm wake writes no handoff, including through context or staleness guards.
 The pre-compaction hook preserves real work directly from retained facts and git
 state; restore reads that handoff without scheduling anything.
+
+## Enable periodic durable checkpoints
+
+Only when the user explicitly asks to enable periodic durable filing for a running
+session, run `<durable_checkpoint.py>`: `../../scripts/lib/durable_checkpoint.py` relative to this
+skill's real installed directory. Supply one `--required-node` and that node's current
+catch-up `run` report for every required node:
+
+```bash
+python3 <durable_checkpoint.py> --session-id <running-session> --cwd <subject> \
+  --required-node <node> --catchup-report <node-report.json> \
+  --adapter '<configured-scheduler-adapter-command>'
+```
+
+Report the adapter's receipt (`job_key` and destination), or the refusal as printed:
+it names each node whose report blocks enablement and why. Produce missing or unready
+reports with the [catch-up pass](../../docs/filing-catchup.md) first. Never enable as
+a side effect of a checkpoint, wrap or catch-up. Claude Code and Codex use the same
+command; the [contract](../../INTERFACE.md#durable-checkpoint-and-file-4h) is in INTERFACE.md.

@@ -67,6 +67,17 @@ merge, or push. If the handoff fails lint, checkpoint still writes it and report
 the failure. After compaction the start hook restores the handoff as context;
 you check its pointers against the record before continuing.
 
+### Turn on periodic durable checkpoints
+
+Periodic durable filing is off until you turn it on for each running session. First
+run the [catch-up pass](filing-catchup.md) on every node: `inspect`, then `run`, until
+each node's report is ready. Then ask `checkpoint` to enable periodic durable
+checkpoints for the session; it runs the
+[enablement command](../INTERFACE.md#durable-checkpoint-and-file-4h) with every node's
+report and your scheduler adapter, and reports the receipt or names each node that
+blocks it. Periodic filing is on for that session once enablement returns a receipt
+with its `job_key` and destination.
+
 ### Finish a task with a profile bound
 
 A test run passes and the tool hook reminds you to wrap. Invoke `checklist`.
