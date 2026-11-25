@@ -31,7 +31,6 @@
           "command": "write-scheduled-jobs"
         }
       },
-      "decision_records": null,
       "carried_items": [
         {
           "index": 0,

@@ -398,18 +398,9 @@ def file_item(source, decision, plan, ask, anchored_commitments=False):
     if checked['status'] != 'filed' and not approval_pending:
         return {**checked, 'status': 'pending'}
     if kind == 'ask':
-        payload = checked['ask']
-        if not payload.get('owner_agent'):
-            raise ValueError('catch-up asks require a configured or carried durable agent owner')
-        # The ask writer uses the same lookup/write identity and receipt protocol.
-        result = record_write.execute(ask, 'asks', payload, checked)
-        if result['status'] == 'filed':
-            checklist.require_ask_receipt(ask, result.get('receipt'), payload)
-            if approval_pending:
-                result.update(status='pending', ask_status='filed',
-                              reason=checked['reason'])
-        else:
-            result.pop('ask_status', None)
+        result = deliver_ask(ask, checked['ask'], checked)
+        if result['status'] == 'filed' and approval_pending:
+            result.update(status='pending', ask_status='filed', reason=checked['reason'])
         return result
     if kind not in record_write.KINDS:
         raise ValueError('native item needs its capture receipt or an approval ask')
@@ -423,7 +414,38 @@ def file_item(source, decision, plan, ask, anchored_commitments=False):
             raise ValueError('project filing requires session_summary')
         context = {key: decision.get(key, []) for key in ('close_outcomes', 'touched_projects')}
         context['session_summary'] = summary
-    return record_write.execute(writes[kind], kind, item, checked, context=context)
+    result = checklist.settle_writer_ask(record_write.execute(writes[kind], kind, item, checked, context=context),
+                                         item, source['subject'], ask)
+    return deliver_raised_ask(ask, result)
+
+
+def deliver_ask(ask, payload, row):
+    """Deliver one owned ask through the ask writer's lookup/write identity and receipt protocol."""
+    if not payload.get('owner_agent'):
+        raise ValueError('catch-up asks require a configured or carried durable agent owner')
+    result = record_write.execute(ask, 'asks', payload, row)
+    if result['status'] == 'filed':
+        checklist.require_ask_receipt(ask, result.get('receipt'), payload)
+    else:
+        result.pop('ask_status', None)
+    return result
+
+
+def deliver_raised_ask(ask, row):
+    """An ask the filing pass raised reaches the user; the item stays carried on it.
+
+    A record writer raises one for an unplaceable scope, and an unattended pass
+    raises one for a user decision it cannot file without the user.
+    """
+    source = row.get('ask_source')
+    if source not in ('writer', 'unattended'):
+        return row
+    if not ask:
+        return {**row, 'error': f'no ask binding to deliver the {source} ask'}
+    delivered = deliver_ask(ask, row['ask'], row)
+    if delivered['status'] != 'filed':
+        return {**row, 'error': delivered.get('error') or f'{source} ask not delivered'}
+    return {**row, 'ask_status': 'filed', 'ask_receipt': delivered['receipt']}
 
 
 UNREADABLE = 'settled store unreadable; no write attempted'

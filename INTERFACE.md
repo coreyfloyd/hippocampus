@@ -11,8 +11,8 @@ carry-only. Durable mode takes explicit `--user-profile`, repeatable
 The running interactive agent executes normal checklist steps and native approval
 routes, then submits continuation JSON on stdin. The writer restores retained
 items, validates before external writes, looks up record and ask identities,
-and settles acknowledged items. Decision documents require user authorship,
-explicit approval and its source, and the configured folder. A lesson/knowledge
+and settles acknowledged items. Decision records require user authorship,
+explicit approval and its source, and file through the decisions record write. A lesson/knowledge
 ask stays carried until native capture/application succeeds. Exit 1 means unfiled
 items or errors; the report and handoff retain them for retry. No session is ended,
 worktree removed or timer armed by checkpoint.
@@ -1075,25 +1075,44 @@ retention remains a separate operation, off by default; see
 
 Checklist setup's `skills/hippocampus-set-up/scripts/profile.py` accepts only
 `persist` in `--bindings`. `--record-writes` accepts an object of changed
-`tickets`, `projects`, `documents` and `scheduled_jobs` commands, with JSON
+`tickets`, `projects`, `documents`, `scheduled_jobs`, `decisions` and `logs` commands, with JSON
 `null` unbinding an individual kind. Omission preserves existing record writes.
 Retired legacy record profiles are refused with the `record_writes` shape. `--ask` accepts the JSON command object or
 JSON `null` to unbind; omission preserves the existing ask. Legacy knowledge or
 lessons binding blocks are refused, with the source file's line numbers and the
 instruction to delete those blocks manually; no configuration is converted.
 
-### Decision document routing
+### Decision and change log record writes
 
-The user checklist profile's optional `decision_records` object requires a
-nonempty `default_folder` and optionally maps exact scopes to folder references
-in `scope_folders`. Repository profiles cannot supply it. No live knowledge
-source is read to discover routes.
+The `decisions` record write files a decision item (`type: "decision"`) through
+the record-write protocol. The item names `entry`, `author`, `author_role`, and
+`decision_record`:
 
-A decision document request uses the existing documents record-write protocol.
-The item has `author_role: "user"`, nonempty `author` and `location`, and
-`decision_record: {"title": "...", "scope": "...", "text": "..."}`. The R7 filing
-row requires `answer: "approve"` and nonempty `approval_source`; the module supplies
-its configured `folder`. The lookup and write receive the same immutable item
-identity, proposal, approval, and folder. Their receipt additionally confirms that
-exact `folder`. Missing proof retains the original item, including after an
-uncertain write. Unapproved proposals use the existing owned ask contract.
+- `entry: "record"` with `author_role: "user"`: the user's decision. It also has `location` (its source), and
+  `decision_record` holds `scope`, `title`, `text`, `options` (an array of text,
+  possibly empty), and `why`, with optional `date`, `rule_link` and `supersedes`.
+  The R7 filing row requires `answer: "approve"` and nonempty `approval_source`.
+- `entry: "agent_log"` with `author_role: "agent"`: an agent decision tied to no ticket. `decision_record`
+  holds `scope`, `text` and `why`; no approval is needed. An item with
+  `anchor.ticket` is refused: it files under R2 through the tickets record write.
+
+`scope` names exactly one of `{"area": "..."}`, `{"repository": "owner/repo"}` or
+`{"project": "slug"}`. The writer chooses the folder from the scope; the package
+supplies none. A writer that cannot place the scope answers `failed` with an `ask`
+(`text`, `choices`, the request's `identity` and `item`). The module keeps the item
+and adds the ask, owned as configured, to the filing report's `asks`; the agent
+files it through the ask binding; durable checkpoint and catch-up deliver it through
+the ask writer. The carried item keeps it as `writer_ask`, so a later wrap does not
+raise it again. Without the user, a proposal uses the owned R3 ask: `file` and
+`record` with `--unattended`, or for a session in unattended mode, refuse to write a
+user decision and raise that ask.
+The documents record write refuses every decision item and names the decisions kind.
+Any other decision item is the user's: routed to another kind, such as an R2 ticket
+comment, it still needs `answer: "approve"` and `approval_source`. A profile's retired
+`decision_records` field is ignored with a warning.
+
+The `logs` record write files one change log entry: an item with
+`record_kind: "logs"`, `author`, and `change_log` holding `scope`, `subject` and
+`text`, with optional `date`, `links` and `subject_link`. It needs no approval; R7
+defaults to `logs` for an item with `change_log`, and no other kind accepts one.
+Both kinds answer `lookup`, `write` and `reverse` with the shapes above.

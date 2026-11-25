@@ -99,7 +99,7 @@ def test_incomplete_inventory_or_judgment_blocks_cutover(tmp_path, problem):
 @pytest.mark.parametrize('item_type', ['decision', 'lesson', 'knowledge'])
 @pytest.mark.parametrize('judgment', ['omitted', 'filed', 'requested'])
 def test_approval_is_owned_ask_with_identity_receipt(tmp_path, item_type, judgment):
-    decision = item('Approve the decision document')
+    decision = item('Approve the decision record')
     decision['type'] = item_type
     sources = setup(tmp_path, [decision])
     before = {p: p.read_bytes() for p in sources.iterdir()}

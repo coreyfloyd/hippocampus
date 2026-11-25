@@ -83,8 +83,9 @@ def test_all_carried_types_use_approval_routes_and_actual_receipts(tmp_path, pro
     items = [{**item(kind), 'type': kind, 'session_id': 'fixture',
               'disposition': 'File through fixture approval route', 'choices': ['approve', 'defer']}
              for kind in ('decision', 'commitment', 'lesson', 'knowledge')]
-    items[0].update(author='Fixture user', author_role='user', location='fixture conversation',
-                    decision_record={'title': 'Fixture decision', 'scope': 'fixture', 'text': 'Full proposal'})
+    items[0].update(entry='record', author='Fixture user', author_role='user', location='fixture conversation',
+                    decision_record={'title': 'Fixture decision', 'scope': {'area': 'fixture'},
+                                     'text': 'Full proposal', 'options': [], 'why': 'Fixture reason'})
     def profile(binding):
         import shlex
         return {'name': 'fixture', 'ask': {'command': shlex.join(binding['command']), 'owner_agent': 'fixture-owner'}}
@@ -128,23 +129,49 @@ def test_invalid_checkpoint_still_has_a_failed_pass_report(tmp_path):
     assert report['unfiled']
 
 
-def test_approved_user_decision_uses_configured_document_folder(tmp_path):
+def test_approved_user_decision_files_through_the_decisions_kind(tmp_path):
     decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
-        'disposition': 'Write approved decision document', 'author': 'Fixture user',
-        'author_role': 'user', 'location': 'fixture conversation',
-        'decision_record': {'title': 'Fixture decision', 'scope': 'fixture', 'text': 'Full proposal'}}
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user', 'author_role': 'user',
+        'location': 'fixture conversation',
+        'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'fixture'}, 'text': 'Full proposal',
+                            'options': [], 'why': 'Fixture reason'}}
     def profile(binding):
-        return {'name': 'fixture', 'record_writes': {'documents': binding},
-                'decision_records': {'default_folder': 'decisions/default',
-                                     'scope_folders': {'fixture': 'decisions/fixture'}}}
+        return {'name': 'fixture', 'record_writes': {'decisions': binding}}
     rows = [{'index': 0, 'rule': 'R7', 'status': 'pending', 'answer': 'approve',
              'approval_source': 'Fixture user response'}]
     result = invoke(tmp_path, 'codex', items=[decision], rows=rows, profile=profile)
     assert result.returncode == 0, result.stderr
     receipt = json.loads((tmp_path / 'report.json').read_text())['filed'][0]['receipt']
-    assert receipt['folder'] == 'decisions/fixture'
+    assert receipt['destination'].startswith('decisions:')
     assert receipt['identity']['text'] == decision['context']
     assert json.loads((tmp_path / 'handoff.json').read_text())['resume']['open_loops'] == []
+
+
+def test_unplaceable_scope_asks_the_user_through_the_ask_writer(tmp_path):
+    import shlex
+    from test_record_writes import requests
+    decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user',
+        'author_role': 'user', 'location': 'fixture conversation',
+        'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'unplaced'}, 'text': 'Full proposal',
+                            'options': [], 'why': 'Fixture reason'}}
+    def profile(binding):
+        asks = store(tmp_path, 'ok', 'asks')
+        script = tmp_path / 'asks.py'
+        script.write_text(script.read_text().replace(
+            "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+        return {'name': 'fixture', 'record_writes': {'decisions': binding},
+                'ask': {'command': shlex.join(asks['command']), 'owner_agent': 'fixture-owner'}}
+    rows = [{'index': 0, 'rule': 'R7', 'status': 'pending', 'answer': 'approve',
+             'approval_source': 'Fixture user response'}]
+    result = invoke(tmp_path, 'codex', mode='ask', items=[decision], rows=rows, profile=profile)
+    assert result.returncode == 1
+    report = json.loads((tmp_path / 'report.json').read_text())
+    [entry] = report['items']
+    assert entry['status'] == 'pending' and entry['ask_status'] == 'filed'
+    assert entry['ask_receipt']['owner_agent'] == 'fixture-owner'
+    assert report['errors'] == []
+    assert [r['operation'] for r in requests(tmp_path, 'asks')] == ['lookup', 'write']
 
 
 def test_explicit_schedule_uses_only_configured_fixture_adapter(tmp_path):
@@ -386,16 +413,16 @@ def test_omitted_judgment_retains_original_without_effects(tmp_path, provider):
 @pytest.mark.parametrize('provider', ['claude', 'codex'])
 @pytest.mark.parametrize('rule', ['R5', 'R7'])
 @pytest.mark.parametrize('status', ['dropped', 'failed', 'uncertain'])
-def test_deferred_new_ticket_and_approved_document_do_not_write(tmp_path, provider, rule, status):
+def test_deferred_new_ticket_and_approved_decision_do_not_write(tmp_path, provider, rule, status):
     source = {**item('Deferred approved work'), 'session_id': 'fixture', 'disposition': 'Wait'}
     row = dict(index=0, rule=rule, status=status, read_status='ok', reason='Deferred',
                priority='p2', priority_reason='Fixture priority', answer='approve', approval_source='User reply')
     if rule == 'R7':
-        source.update(type='decision', author='Fixture user', author_role='user', location='Fixture chat',
-                      decision_record=dict(title='Approved', scope='fixture', text='Approved text'))
+        source.update(type='decision', entry='record', author='Fixture user', author_role='user', location='Fixture chat',
+                      decision_record=dict(title='Approved', scope={'area': 'fixture'}, text='Approved text',
+                                           options=[], why='Fixture reason'))
     def profile(binding):
-        return dict(name='fixture', record_writes={k: binding for k in ('tickets', 'documents')},
-                    decision_records={'default_folder': 'decisions'})
+        return dict(name='fixture', record_writes={k: binding for k in ('tickets', 'decisions')})
     assert invoke(tmp_path, provider, items=[source], rows=[row], profile=profile).returncode == 1
     assert not (tmp_path / 'store.json').exists()
     report = json.loads((tmp_path / 'report.json').read_text())
@@ -520,3 +547,39 @@ def test_an_item_settled_by_another_session_mid_pass_is_still_filed_from_the_wri
     assert report['errors'] == [] and report['already_settled'] == [] and 'skipped_rows' not in report
     assert [row['receipt']['identity']['text'] for row in report['filed']] == ['First to file', 'Settled elsewhere mid-pass']
     assert result.exit_code == 0
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+def test_unattended_decision_ask_reaches_the_ask_writer(tmp_path, monkeypatch, provider):
+    import shlex
+    from test_record_writes import requests
+    # A pending unattended wrap makes the session unattended without a state module.
+    state = tmp_path / 'checklist-state'
+    state.mkdir()
+    (state / 'fixture.unattended-wrap').write_text('')
+    monkeypatch.setenv('CHECKLIST_STATE_DIR', str(state))
+    decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user',
+        'author_role': 'user', 'location': 'fixture conversation',
+        'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'fixture'}, 'text': 'Full proposal',
+                            'options': [], 'why': 'Fixture reason'}}
+    def profile(binding):
+        asks = store(tmp_path, 'ok', 'asks')
+        script = tmp_path / 'asks.py'
+        script.write_text(script.read_text().replace(
+            "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+        return {'name': 'fixture', 'record_writes': {'decisions': binding},
+                'ask': {'command': shlex.join(asks['command']), 'owner_agent': 'fixture-owner'}}
+    rows = [{'index': 0, 'rule': 'R7', 'status': 'pending', 'answer': 'approve',
+             'approval_source': 'Fixture user response'}]
+    result = invoke(tmp_path, provider, items=[decision], rows=rows, profile=profile)
+    assert result.returncode == 1
+    report = json.loads((tmp_path / 'report.json').read_text())
+    [entry] = report['items']
+    assert entry['status'] == 'failed' and entry['ask_status'] == 'filed'
+    assert entry['ask_receipt']['owner_agent'] == 'fixture-owner'
+    [write] = [r for r in requests(tmp_path, 'asks') if r['operation'] == 'write']
+    assert write['item']['choices'] == ['approve', 'decline']
+    assert write['item']['decision_record'] == decision['decision_record']
+    assert requests(tmp_path) == []
+    assert report['unfiled'] == [decision]

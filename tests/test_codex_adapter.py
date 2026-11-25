@@ -739,3 +739,107 @@ def test_uninstall_finishes_when_runtime_copy_is_already_gone(sandbox, requires_
     assert not [p for p in (codex / 'skills').iterdir() if p.name != '.system']
     assert handoff.exists()
     assert cli(INSTALL, '--codex-home', codex, '--uninstall').returncode == 0
+
+
+# Decision capture in a captured Codex session: the record step runs under the
+# Codex thread identity, with no Claude Code environment, against fixture writers.
+from test_decision_records import agent_decision, approved, decision
+from test_record_writes import requests, row, store
+
+CODEX_DECISION_KINDS = ('decisions', 'documents', 'tickets', 'logs')
+
+
+def codex_record(sandbox, source, items, rows, ask=None):
+    home, work = sandbox
+    payload('PostToolUse', sandbox, source)
+    config = {'name': 'fixture', 'record_writes': {k: store(home, 'ok', k) for k in CODEX_DECISION_KINDS}}
+    if ask:
+        config['ask'] = ask
+    files = {'profile': config, 'items': {'subject': {'session_id': 'captured-session'},
+             'resume': {'session_summary': 'Captured the session decisions.', 'open_loops': items}}, 'rows': rows}
+    for name, value in files.items():
+        (home / (name + '.json')).write_text(json.dumps(value))
+    env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE_')}
+    env['CODEX_THREAD_ID'] = 'captured-session'
+    result = cli(ROOT/'scripts/lib/checklist.py', 'record', '--user-profile', home/'profile.json',
+                 '--handoff', home/'items.json', '--filing', home/'rows.json', cwd=work, env=env)
+    sent = {k: [r['operation'] for r in requests(home, k)] for k in CODEX_DECISION_KINDS if requests(home, k)}
+    return result, sent
+
+
+def codex_decision(**extra):
+    return decision(session_id='captured-session', **extra)
+
+
+def test_codex_session_files_an_approved_decision_through_the_decisions_kind_only(sandbox):
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [approved()])
+    assert result.returncode == 0, result.stderr
+    assert sent == {'decisions': ['lookup', 'write']}
+    out = json.loads(result.stdout)
+    assert out['filing']['items'][0]['binding'] == 'decisions'
+    assert requests(sandbox[0], 'decisions')[0]['identity']['session_id'] == 'captured-session'
+    assert not out['resume']['open_loops']
+
+
+def test_codex_session_decision_sent_to_documents_fails_naming_the_decisions_kind(sandbox):
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [approved(record_kind='documents')])
+    assert result.returncode == 1
+    saved = json.loads(result.stdout)['filing']['items'][0]
+    assert saved['status'] == 'failed' and "'decisions'" in saved['error']
+    assert sent == {}
+
+
+def test_codex_session_anchored_agent_decision_stays_a_ticket_comment(sandbox):
+    source = agent_decision(session_id='captured-session', anchor={'ticket': 'https://example.test/issues/7'})
+    result, sent = codex_record(sandbox, 'interactive', [source], [row(rule='R2')])
+    assert result.returncode == 0, result.stderr
+    assert sent == {'tickets': ['lookup', 'write']}
+
+
+def codex_unattended(sandbox, monkeypatch):
+    """Put the captured Codex session in unattended mode through the configured state module."""
+    home, _ = sandbox
+    modes = home / 'modes'; modes.mkdir()
+    (modes / 'captured-session').write_text(json.dumps({'session_id': 'captured-session', 'mode': 'afk',
+                                                        'updated_by': 'operator', 'updated_at': '2026-01-01T00:00:00Z'}))
+    monkeypatch.setenv('UNATTENDED_STATE_DIR', str(modes))
+    Path(os.environ['HIPPOCAMPUS_CONFIG']).write_text(json.dumps({'unattended': {
+        'state_module': str(ROOT/'tests/support/unattended_state.py'),
+        'completion_command': 'finish-work', 'completed_by': ['complete']}}))
+
+
+CODEX_ASK = {'command': '/fixture-ask', 'owner_agent': 'durable-agent'}
+
+
+def test_unattended_codex_session_turns_a_decision_into_one_owned_ask(sandbox, monkeypatch):
+    codex_unattended(sandbox, monkeypatch)
+    filing = {**row(rule='R3'), 'status': 'filed', 'destination': 'ask:1', 'choices': ['approve', 'decline'],
+              'receipt': {'owner_agent': 'durable-agent'}}
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [filing], ask=CODEX_ASK)
+    assert result.returncode == 0, result.stderr
+    asks = [a for group in json.loads(result.stdout)['filing']['asks'].values() for a in group]
+    assert len(asks) == 1
+    assert asks[0]['owner_agent'] == 'durable-agent'
+    assert asks[0]['session_id'] == 'captured-session'
+    assert sent == {}
+
+
+def test_unattended_codex_session_refuses_an_approved_decision_without_the_flag(sandbox, monkeypatch):
+    # The Codex session's own unattended mode is enough; no --unattended flag is passed.
+    codex_unattended(sandbox, monkeypatch)
+    result, sent = codex_record(sandbox, 'interactive', [codex_decision()], [approved()], ask=CODEX_ASK)
+    assert result.returncode == 1
+    out = json.loads(result.stdout)
+    saved = out['filing']['items'][0]
+    assert saved['status'] == 'failed' and 'unattended' in saved['error']
+    asks = [a for group in out['filing']['asks'].values() for a in group]
+    assert len(asks) == 1 and asks[0]['owner_agent'] == 'durable-agent'
+    assert out['resume']['open_loops'] == [codex_decision()]
+    assert sent == {}
+
+
+@pytest.mark.parametrize('source', ['headless', 'subagent'])
+def test_headless_codex_session_never_records_a_decision(sandbox, source):
+    result, sent = codex_record(sandbox, source, [codex_decision()], [approved()])
+    assert result.returncode != 0 and 'never runs' in result.stderr
+    assert sent == {}

@@ -13,21 +13,30 @@ sys.path.insert(0, str(ROOT / 'scripts/lib'))
 import record_write
 
 
-def run(tmp_path, operation, profile, payload, rows):
+def run(tmp_path, operation, profile, payload, rows, *extra):
     for name, value in [('profile', profile), ('input', payload), ('rows', rows)]:
         (tmp_path / (name + '.json')).write_text(json.dumps(value))
+    # Session mode and configuration come from the test's own directory, never the live ones.
+    env = dict(os.environ, HANDOFF_LEDGER_DIR=str(tmp_path), CHECKLIST_STATE_DIR=str(tmp_path / 'checklist-state'),
+               HIPPOCAMPUS_CONFIG=str(tmp_path / 'no-config.json'))
+    # A Codex run carries no Claude Code entry point.
+    if env.get('HIPPOCAMPUS_HARNESS') == 'codex':
+        env.pop('CLAUDE_CODE_ENTRYPOINT', None)
+    else:
+        env['CLAUDE_CODE_ENTRYPOINT'] = 'cli'
     return subprocess.run([sys.executable, str(CLI), operation, '--user-profile',
         str(tmp_path / 'profile.json'), '--handoff', str(tmp_path / 'input.json'),
-        '--filing', str(tmp_path / 'rows.json')], capture_output=True, text=True,
-        env=dict(os.environ, CLAUDE_CODE_ENTRYPOINT='cli', HANDOFF_LEDGER_DIR=str(tmp_path)))
+        '--filing', str(tmp_path / 'rows.json'), *extra], capture_output=True, text=True, env=env)
 
 
-def store(tmp_path, mode='ok'):
-    script = tmp_path / 'store.py'
+def store(tmp_path, mode='ok', name='store'):
+    """A stub writer; every request it receives is appended to ``<name>.requests.jsonl``."""
+    script = tmp_path / (name + '.py')
     script.write_text('''import json, sys
 from pathlib import Path
 p = Path(__file__).with_suffix('.json')
 r = json.load(sys.stdin)
+with Path(__file__).with_suffix('.requests.jsonl').open('a') as log: log.write(json.dumps(r) + '\\n')
 data = json.loads(p.read_text()) if p.exists() else []
 if r['operation'] == 'lookup':
     if MODE == 'badlookup':
@@ -37,13 +46,21 @@ if r['operation'] == 'lookup':
 else:
     if MODE == 'failed':
         print(json.dumps({'status': 'failed', 'error': 'store refused'})); sys.exit(1)
+    if MODE in ('ask', 'badask'):
+        ask = {'text': 'Which folder holds this scope?', 'identity': r['identity'], 'item': r['item']}
+        if MODE == 'ask': ask['choices'] = ['add a scope row', 'decline']
+        print(json.dumps({'status': 'failed', 'error': 'no scope row matches', 'ask': ask})); sys.exit(1)
     receipt = {'identity': r['identity'], 'destination': r['kind'] + ':' + str(len(data))}
-    if 'folder' in r['filing']: receipt['folder'] = r['filing']['folder']
     data.append(receipt); p.write_text(json.dumps(data))
     if MODE == 'lost': sys.exit()
     print(json.dumps({'status': 'saved', 'receipt': receipt}))
 '''.replace("MODE", repr(mode)))
     return {'command': [sys.executable, str(script)]}
+
+
+def requests(tmp_path, name='store'):
+    path = tmp_path / (name + '.requests.jsonl')
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
 
 def item(text='change', **extra):
@@ -56,7 +73,7 @@ def payload(items):
 
 
 def row(index=0, rule='R2', **extra):
-    return dict(index=index, rule=rule, status='pending', read_status='ok', **extra)
+    return {'index': index, 'rule': rule, 'status': 'pending', 'read_status': 'ok', **extra}
 
 
 def test_routing_and_receipts_then_mid_session_wrap_writes_once(tmp_path):

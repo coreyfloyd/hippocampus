@@ -40,7 +40,7 @@ all remote-tracking branches.
 
 Profiles with a `checklist-profile` JSON fence are composed by the standard-library
 module `scripts/lib/checklist.py`. The fence declares `name`, optional `bindings`,
-optional per-kind `record_writes` and `decision_records` folder routing (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>", "owner_agent": "<agent identifier>"}`. The ask
+optional per-kind `record_writes` (see the record skill), optional `steps`, and an optional `ask: {"command": "/<user-bound-skill>", "owner_agent": "<agent identifier>"}`. The ask
 binding is one user command, not a slot or a spine step. Repository profiles
 cannot bind it. A binding has a `command` and a list of item types it
 `consumes`; a step has a unique `id`, an `after` anchor, and `instructions` (or
@@ -104,7 +104,7 @@ does not apply.
   it would clean up worktrees and agents the slate still uses.
 - **After the whole slate**, once its completion command (the configured
   `unattended.completion_command`) succeeds, run this full checklist once with
-  `--unattended` on `plan`, `report`, and `wrap-check`.
+  `--unattended` on `plan`, `file`, `report`, and `wrap-check`.
 
 `python3 <checklist-module> wrap-cadence` reads a hook payload on stdin and
 prints which applies now: `none`, `checkpoint`, `unattended-checklist`, or
@@ -241,21 +241,19 @@ the first match decides. Rule numbers are names, not evaluation order.
 | R1 | Already on the ticket or document it names, or information only | Drop with the reason. |
 | R3 | Needs the user's decision, approval, or a destructive action | Ask, linking its ticket if any. Removing a clean, merged worktree and its local branch under the sweep's S6 rule is not destructive: its commits are in the pushed trunk. |
 | R4 | Lesson or knowledge | Pass to `lessons` or `knowledge`; unsaved native items stay carried until their step returns a receipt. |
-| R7 | Changes a project document (spec, design document, README) | Edit through the documents record write; a change to an approved spec becomes an ask. |
+| R7 | Changes a project document (spec, design document, README), or is an approved decision record, agent decision log entry tied to no ticket, or change log entry | Edit through the documents record write; a change to an approved spec becomes an ask. A decision files through the decisions record write and a change log entry through the logs record write. |
 | R2 | Names an open ticket | Comment through the tickets record write. |
 | R5 | Work with a stated outcome and no matching open ticket | New ticket through the tickets record write, with recommended priority and a one-line reason. |
 | R6 | Otherwise: optional suggestion, observation, idea with no outcome | Drop with the reason. |
 
-Find every user decision in the current conversation and carried items. Suggest one
-decision record per decision, showing its title, scope, full text, author, source,
-and configured folder. Only user decisions qualify; keep agent operational choices
-as separate audit material. Follow the record skill's decision-record contract.
-With the user present, ask for explicit approval of each proposed document. Without
-them, give each proposal an R3 ask with approve/decline choices through the configured
-ask binding and its owner. Do not infer approval from the decision itself or from
-auto-apply settings. Only an approved proposal uses R7 and the documents writer.
-Keep the existing decision ask path until the real attended and unattended proofs
-pass; fixture tests alone do not establish cutover.
+Run decision capture per the record skill's decision-record contract: suggest one
+decision record per user decision, showing its title, scope, text, options, why,
+author and source. With the user present, ask for explicit approval of each.
+Without them, give each proposal an R3 ask with approve/decline choices through the
+configured ask binding and its owner. Do not infer approval from the decision itself
+or from auto-apply settings. Only an approved proposal files under R7, through the
+decisions record write. File agent decisions tied to no ticket as agent decision log
+entries under R7; an agent decision tied to a ticket is an R2 comment on it.
 
 The agent makes the judgment, including R5 versus R6 and whether R7 needs
 approval. R1's already-recorded check, R2's open-ticket check and R5's matching
