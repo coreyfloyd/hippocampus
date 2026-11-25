@@ -215,12 +215,13 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
   outputs under the knowledge root are checked and recorded. A fact about the user
   becomes an ordinary ask and is never saved by the sweep. So does a new-skill lesson: no
   skill is created without the user's yes, and the report lists its ask, not an applied lesson.
-  A delivered new-skill ask does not settle the lesson: it stays carried, its handoff is
-  kept, and the ask is not raised again. Each later act run sends it to the agent's
+  A delivered new-skill ask does not settle the lesson: the ask's row is `written`, the
+  lesson's row stays carried, its handoff is kept, and an ask delivered or answered in any
+  ledger is not raised again. Each later act run sends the lesson to the agent's
   assessment, whose row carries the user's answer from the ask binding once there is one,
-  as at a wrap: `create the skill` returns the lesson `carried` with `skill_creator`, the
-  proposal to hand to the running tool's skill creator; any other answer drops it. A
-  `skip` row drops it once the creator reports the skill written.
+  as at a wrap: `create the skill` hands it off once, with `skill_creator` on its row, the
+  proposal to hand to the running tool's skill creator; that hand-off is its receipt, so
+  the handoff is archived and no later run hands it again. Any other answer drops it.
 - Each item's receipt names its commit, or its destination when it has none. A handoff
   is archived once every item has a receipt, a drop or a delivered ask, apart from a
   new-skill lesson's.
