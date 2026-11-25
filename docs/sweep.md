@@ -224,8 +224,9 @@ carrying lessons and knowledge forever. It uses the same rules as a wrap:
   `creator_handed_off`. A hand-off is not a receipt: the lesson's row stays carried and its
   handoff kept, and every later run reports it waiting for the skill
   (`skill_creator_waiting`, its reason naming the handoff that keeps the proposal), never
-  handing it off again, until an assessment `skip` reports the skill written. A new
-  `create the skill` answer hands it off once more. Any other answer drops it.
+  handing it off again, whatever answer the ask binding repeats, until an assessment
+  `skip` reports the skill written. Any other answer drops it; another hand-off takes a
+  new lesson, proposed by a later session, with its own ask.
 - Each item's receipt names its commit, or its destination when it has none. A handoff
   is archived once every item has a receipt, a drop or a delivered ask, apart from a
   new-skill lesson's.
