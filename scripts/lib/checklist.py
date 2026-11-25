@@ -610,7 +610,8 @@ def file_items(plan: Sequence[Mapping[str, Any]], handoff: Mapping[str, Any],
                 continue
             report["asks"].setdefault(payload["directory"] or "unknown directory", []).append(payload)
             report["items"].append({**copy.deepcopy(dict(row)), "item": copy.deepcopy(item), "binding": binding,
-                                    "status": "failed", "error": UNATTENDED_DECISION, "ask": payload})
+                                    "status": "failed", "error": UNATTENDED_DECISION, "ask": payload,
+                                    "ask_source": "unattended"})
             report["failures"].append(f"{item.get('context', str(item))}: {UNATTENDED_DECISION}")
             kept.append(copy.deepcopy(item))
             continue

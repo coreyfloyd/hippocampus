@@ -174,7 +174,8 @@ The documents record write refuses every decision and names the decisions kind.
 Without the user, use R3 with approve/decline choices. `file` and `record` take
 `--unattended`, and also read it from the session (unattended mode or a pending
 unattended wrap); then any user-decision row that would write fails, the module
-raises the R3 ask payload, and nothing is written. Invoke the ask binding with
+raises the R3 ask payload, and nothing is written. Durable checkpoint delivers
+that ask through the ask writer itself. Otherwise invoke the ask binding with
 the full proposal and the original identity; collect its saved-owner receipt. The
 configured ask owner owes the user that approval, and nothing is written. A later
 session files the approved proposal under R7 with its unchanged identity and

@@ -547,3 +547,39 @@ def test_an_item_settled_by_another_session_mid_pass_is_still_filed_from_the_wri
     assert report['errors'] == [] and report['already_settled'] == [] and 'skipped_rows' not in report
     assert [row['receipt']['identity']['text'] for row in report['filed']] == ['First to file', 'Settled elsewhere mid-pass']
     assert result.exit_code == 0
+
+
+@pytest.mark.parametrize('provider', ['claude', 'codex'])
+def test_unattended_decision_ask_reaches_the_ask_writer(tmp_path, monkeypatch, provider):
+    import shlex
+    from test_record_writes import requests
+    # A pending unattended wrap makes the session unattended without a state module.
+    state = tmp_path / 'checklist-state'
+    state.mkdir()
+    (state / 'fixture.unattended-wrap').write_text('')
+    monkeypatch.setenv('CHECKLIST_STATE_DIR', str(state))
+    decision = {**item('Approved fixture proposal'), 'type': 'decision', 'session_id': 'fixture',
+        'disposition': 'File approved decision record', 'entry': 'record', 'author': 'Fixture user',
+        'author_role': 'user', 'location': 'fixture conversation',
+        'decision_record': {'title': 'Fixture decision', 'scope': {'area': 'fixture'}, 'text': 'Full proposal',
+                            'options': [], 'why': 'Fixture reason'}}
+    def profile(binding):
+        asks = store(tmp_path, 'ok', 'asks')
+        script = tmp_path / 'asks.py'
+        script.write_text(script.read_text().replace(
+            "data.append(receipt);", "receipt['owner_agent'] = r['item'].get('owner_agent'); data.append(receipt);"))
+        return {'name': 'fixture', 'record_writes': {'decisions': binding},
+                'ask': {'command': shlex.join(asks['command']), 'owner_agent': 'fixture-owner'}}
+    rows = [{'index': 0, 'rule': 'R7', 'status': 'pending', 'answer': 'approve',
+             'approval_source': 'Fixture user response'}]
+    result = invoke(tmp_path, provider, items=[decision], rows=rows, profile=profile)
+    assert result.returncode == 1
+    report = json.loads((tmp_path / 'report.json').read_text())
+    [entry] = report['items']
+    assert entry['status'] == 'failed' and entry['ask_status'] == 'filed'
+    assert entry['ask_receipt']['owner_agent'] == 'fixture-owner'
+    [write] = [r for r in requests(tmp_path, 'asks') if r['operation'] == 'write']
+    assert write['item']['choices'] == ['approve', 'decline']
+    assert write['item']['decision_record'] == decision['decision_record']
+    assert requests(tmp_path) == []
+    assert report['unfiled'] == [decision]

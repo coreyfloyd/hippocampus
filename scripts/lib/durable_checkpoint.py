@@ -96,12 +96,12 @@ def run(module, supplied, args):
         filed = checklist.file_items(plan, data, rows, ask,
                                      unattended=checklist.session_unattended(args.session_id))
         for entry in filed['filing']['items']:
-            # The same delivery as catch-up: an unplaceable scope asks the user through the ask writer.
+            # The same delivery as catch-up: an ask the pass raised reaches the user through the ask writer.
             try:
-                entry.update(filing_catchup.deliver_writer_ask(ask, entry))
+                entry.update(filing_catchup.deliver_raised_ask(ask, entry))
             except (OSError, ValueError, TypeError, KeyError) as error:
-                entry['error'] = f'writer ask: {error}'
-            if entry.get('ask_source') == 'writer' and entry.get('ask_status') != 'filed':
+                entry['error'] = f"{entry.get('ask_source')} ask: {error}"
+            if entry.get('ask_source') and entry.get('ask_status') != 'filed':
                 report['errors'].append(f"{entry['item'].get('context')}: {entry.get('error')}")
         filed['resume']['next_action'] = continuation
         module.atomic_write(path, filed)

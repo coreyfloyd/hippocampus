@@ -416,7 +416,7 @@ def file_item(source, decision, plan, ask, anchored_commitments=False):
         context['session_summary'] = summary
     result = checklist.settle_writer_ask(record_write.execute(writes[kind], kind, item, checked, context=context),
                                          item, source['subject'], ask)
-    return deliver_writer_ask(ask, result)
+    return deliver_raised_ask(ask, result)
 
 
 def deliver_ask(ask, payload, row):
@@ -431,15 +431,20 @@ def deliver_ask(ask, payload, row):
     return result
 
 
-def deliver_writer_ask(ask, row):
-    """A record writer's ask for an unplaceable scope reaches the user; the item stays pending on it."""
-    if row.get('ask_source') != 'writer':
+def deliver_raised_ask(ask, row):
+    """An ask the filing pass raised reaches the user; the item stays carried on it.
+
+    A record writer raises one for an unplaceable scope, and an unattended pass
+    raises one for a user decision it cannot file without the user.
+    """
+    source = row.get('ask_source')
+    if source not in ('writer', 'unattended'):
         return row
     if not ask:
-        return {**row, 'error': 'no ask binding to deliver the writer ask'}
+        return {**row, 'error': f'no ask binding to deliver the {source} ask'}
     delivered = deliver_ask(ask, row['ask'], row)
     if delivered['status'] != 'filed':
-        return {**row, 'error': delivered.get('error') or 'writer ask not delivered'}
+        return {**row, 'error': delivered.get('error') or f'{source} ask not delivered'}
     return {**row, 'ask_status': 'filed', 'ask_receipt': delivered['receipt']}
 
 
