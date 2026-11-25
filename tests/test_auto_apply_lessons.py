@@ -1163,11 +1163,11 @@ def test_a_repeated_create_the_skill_answer_leaves_a_handed_off_lesson_waiting(t
     assert again['skill_creator_waiting'] == [{'proposal': kept, 'kept_in': 'resume.open_loops'}]
 
 
-def test_a_newly_recorded_create_the_skill_answer_hands_a_handed_off_lesson_again(tmp_path, tool):
+def test_a_hand_off_with_no_recorded_answer_is_never_handed_again_by_an_answer(tmp_path, tool):
     wrap = Wrap(tmp_path, tool)
     wrap.plan()
     asked_once(wrap)
-    # Handed off from a recorded yes that holds no answer: the user's answer is new to the ledger.
+    # A hand-off the ledger records with no answer: the user's yes was handed over already.
     identity = [SESSION, lesson()['produced_at'], 'lesson', PROPOSAL]
     with (tmp_path / 'ledger' / f'session-touched-paths.{SESSION}.jsonl').open('a') as handle:
         handle.write(json.dumps({'kind': 'lesson_outcome', 'outcome': {
@@ -1175,10 +1175,10 @@ def test_a_newly_recorded_create_the_skill_answer_hands_a_handed_off_lesson_agai
             'creator_handed_off': True}}) + '\n')
     kept = {**lesson(PROPOSAL), 'new_skill': True, 'approved': True}
     answer = [{'index': 0, 'recommend': 'apply', 'answer': 'create the skill'}]
-    again = wrap.apply([kept], answer)
-    assert again['skill_creator_handoffs'] == [kept] and again['skill_creator_waiting'] == []
-    repeated = wrap.apply([kept], answer)
-    assert repeated['skill_creator_handoffs'] == [] and len(repeated['skill_creator_waiting']) == 1
+    for _ in range(2):
+        again = wrap.apply([kept], answer)
+        assert again['skill_creator_handoffs'] == []
+        assert again['skill_creator_waiting'] == [{'proposal': kept, 'kept_in': 'resume.open_loops'}]
 
 
 def test_a_waiting_lesson_is_reported_by_apply_lessons_but_never_filed_or_written(tmp_path, tool):

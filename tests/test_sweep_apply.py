@@ -1045,14 +1045,15 @@ def test_the_same_create_the_skill_answer_in_two_runs_reaches_the_skill_creator_
     assert not archived(sandbox, PRODUCER)
 
 
-def test_a_lesson_handed_off_under_the_old_mark_is_waiting_not_handed_again(sandbox, tool):
+@pytest.mark.parametrize('answer', [{}, {'answer': 'create the skill'}])
+def test_a_hand_off_with_no_recorded_answer_is_waiting_not_handed_again(sandbox, tool, answer):
     source(sandbox, PRODUCER, loops=[lesson(PROPOSAL, new_skill=True, approved=True)])
     configure(sandbox)
     identity = [PRODUCER, lesson()['produced_at'], 'lesson', PROPOSAL]
     seed_ledger(sandbox, PRODUCER, {'kind': 'lesson_outcome', 'outcome': {
         'identity': identity, 'status': 'asked', 'new_skill': True, 'choices': CHOICES, 'approved': True,
         'creator_handed_off': True}})
-    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'apply'}))
+    run, _ = finish(sandbox, start(sandbox), agent({'recommend': 'apply', **answer}))
     row = lesson_row(sandbox, run)
     assert row['outcome'] == 'carried' and 'skill_creator' not in row and row['skill_creator_waiting'] is True
     assert not archived(sandbox, PRODUCER)

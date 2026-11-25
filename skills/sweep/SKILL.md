@@ -281,11 +281,11 @@ A `skip` row names its `reason` and is dropped. `dictated` and `always_loaded`
 mean what they mean at a wrap. A new-skill lesson's row has `new_skill: true` and
 `choices`, as improve-harness's `references/new-skill.md` says; `complete` writes
 nothing for it and raises its ask. Once delivered, the lesson comes back for
-assessment each run: give its row `answer` when the ask binding has the user's answer.
-A `skill_creator` on its result row is the proposal to hand to the skill creator,
-once; later runs mark the row `skill_creator_waiting`, even when the binding repeats
-the same answer. Once the skill is written, give
-its next row `skip` naming the written skill.
+assessment each run: give its row `answer` exactly as the ask binding has it, every
+run; `complete` decides whether it hands off. A `skill_creator` on its result row is
+the proposal to hand to the skill creator; a row marked `skill_creator_waiting` is
+reported waiting for the skill. Once the skill is written, give its next row `skip`
+naming the written skill.
 
 For `apply_knowledge`, follow knowledge-capture's Auto-apply section for the item
 before calling `complete`, and return its row without `index`. Do not run
