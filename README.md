@@ -60,7 +60,8 @@ task route you describe in set-up.
 - `checkpoint` writes the handoff now, mid-task. It never commits or pushes.
 - `checklist` wraps a finished task through five fixed steps: reconcile the
   record, capture knowledge, fold in lessons, persist, and write and validate
-  the handoff. A checklist profile binds the record and persist steps to your
+  the handoff. Decisions you approve, and decisions the agent made on its own,
+  are filed through their own record writes (`decisions` and `logs`). A checklist profile binds the record and persist steps to your
   own commands and can add steps, but cannot remove any.
 - `pickup` lists handoffs after a cold start, including ones from other
   worktrees of the same repository, and checks the one you choose against the
@@ -199,6 +200,12 @@ memory. It prefers the narrowest place that still loads when the lesson is
 needed. Interactive runs propose and wait; unattended runs carry the proposal
 forward. A `## Lesson routing` section in your knowledge profile can replace the
 default placement table.
+
+When a session repeated a process of three or more ordered steps that no
+installed skill covers, `improve-harness` proposes a new skill once, with its
+reason and no draft. Nothing is created until you answer "create the skill";
+the proposal then goes to your tool's own skill creator and stays carried until
+the skill is written.
 
 `slim-harness` reviews one instruction file with you: it finds duplicates and
 conflicts with neighboring files, asks before resolving them, and leaves its
