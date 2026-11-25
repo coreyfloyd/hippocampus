@@ -620,6 +620,7 @@ JSON object, or one checklist-profile JSON fence in Markdown
 ├── name                              # non-empty profile name
 ├── record_writes                     # user profile only: optional tickets, projects, documents, scheduled_jobs, decisions, logs commands
 │   └── <kind>: command                # executable argv array or shell-quoted string; null/omitted is unbound
+│                                      # runs without a shell; $VAR, ${VAR} and a leading ~ expand (INTERFACE.md §6 Binding commands)
 ├── bindings                          # user profile only: bind persist
 │   └── <slot>: command, consumes[], instructions (optional)
 │       # command to run; accepted session-item types; execution guidance

@@ -32,8 +32,8 @@ position landed in the loops it wrote, and each row follows that map; a row whos
 the checkpoint dropped as settled (a retry after it was filed) is skipped and its item
 listed under `already_settled`, present (possibly empty) on every report. A row the map
 cannot place is skipped and listed under `skipped_rows` with its reason; the pass goes on.
-`--scheduled-report COMMAND` invokes the configured adapter using argv parsing
-(no shell), JSON stdin and JSON stdout. The request is
+`--scheduled-report COMMAND` invokes the configured adapter as a binding command
+(§6 Binding commands), JSON stdin and JSON stdout. The request is
 `{"operation":"report","kind":"durable_checkpoint","report":{...}}`.
 Success requires `{"status":"saved","receipt":{"destination":"..."}}`.
 The adapter publishes filed and unfiled items on Scheduled, including failed
@@ -582,6 +582,14 @@ The binding and validator contract below is identical for Claude Code and Codex.
 
 ### Record-write protocol
 
+**Binding commands.** The package runs a binding command it executes itself
+(record writes, the ask binding, the ticket read, `--scheduled-report`, `--adapter`
+and sweep `open_session_checks`) without a shell. A string is split with shell
+quoting; then, in each argument, `$VAR`, `${VAR}` and a leading `~` expand from the
+running environment. Nothing else expands: no pipes, globbing, redirection or
+command substitution. An unset variable stays literal, so the command fails with
+an error naming that argument.
+
 A per-kind record-write command receives one JSON
 request on stdin and returns one JSON response on stdout. `lookup` and `write`
 carry the complete item and filing row with the unchanged identity. Before any
@@ -874,7 +882,9 @@ The shared command defaults to watch-only. `sweep.mode: "act"` enables planning
 when `run` receives `--decisions`. Without decisions it writes a watch-only
 inventory, even with act configured. The agent performs every profile binding
 call, following its `command` and `instructions` as during a checklist wrap.
-The agent executes record writes as described in `skills/record/SKILL.md`; the package never executes record-read, persist or ask bindings. Skill
+The agent executes record writes as described in `skills/record/SKILL.md`; the package never executes record-read or persist bindings.
+Durable checkpoint and catch-up execute the ask binding themselves for an ask whose
+delivery is requested, as a binding command (§6 Binding commands). Skill
 commands need no executable adapter or JSON stdin/stdout protocol.
 `--user-profile` overrides `CHECKLIST_USER_PROFILE`, then
 `$XDG_CONFIG_HOME/hippocampus/checklist-profile.md` (default `~/.config/hippocampus/checklist-profile.md`).

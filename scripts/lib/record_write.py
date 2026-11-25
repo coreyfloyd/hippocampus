@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shlex
 import subprocess
 from typing import Any, Mapping
@@ -142,11 +143,19 @@ def kind_for(rule: str, item: Mapping[str, Any], row: Mapping[str, Any], writes:
     return kind
 
 
+def argv(command: str | list[str]) -> list[str]:
+    """A binding command as argv, run without a shell: only `$VAR`, `${VAR}` and a leading `~` expand.
+
+    An unset variable stays literal, so exec fails naming the token instead of an empty path.
+    """
+    tokens = shlex.split(command) if isinstance(command, str) else command
+    return [os.path.expanduser(os.path.expandvars(token)) for token in tokens]
+
+
 def invoke(binding: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
-    command = binding['command']
-    argv = shlex.split(command) if isinstance(command, str) else command
     try:
-        result = subprocess.run(argv, input=json.dumps(request), text=True, capture_output=True, timeout=60)
+        result = subprocess.run(argv(binding['command']), input=json.dumps(request), text=True,
+                                capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(str(error)) from error
     try:
