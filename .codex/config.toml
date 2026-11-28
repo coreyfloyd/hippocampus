@@ -1,0 +1,127 @@
+# BEGIN generated scope settings (admin-panel rules sync); edit the scope profile, not this region
+[plugins."hippocampus"]
+enabled = true
+
+[plugins."whatsup"]
+enabled = true
+
+[[skills.config]]
+name = "hippocampus:knowledge-capture"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:meeting-capture"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:improve-harness"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:slim-harness"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:slim-unattended"
+enabled = false
+
+[[skills.config]]
+name = "harness-update"
+enabled = false
+
+[[skills.config]]
+name = "incident"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:wiki-compile"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:wiki-audit"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:vault-compile"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:vault-audit"
+enabled = false
+
+[[skills.config]]
+name = "hippocampus:research-to-wiki"
+enabled = false
+
+[[skills.config]]
+name = "obsidian-markdown"
+enabled = false
+
+[[skills.config]]
+name = "obsidian-cli"
+enabled = false
+
+[[skills.config]]
+name = "obsidian-bases"
+enabled = false
+
+[[skills.config]]
+name = "json-canvas"
+enabled = false
+
+[[skills.config]]
+name = "reminders"
+enabled = false
+
+[[skills.config]]
+name = "process-inbox"
+enabled = false
+
+[[skills.config]]
+name = "dev-build-sim-installed"
+enabled = false
+
+[[skills.config]]
+name = "dev-build-sim-ephemeral"
+enabled = false
+
+[[skills.config]]
+name = "dev-build-device"
+enabled = false
+
+[[skills.config]]
+name = "dev-build-mac"
+enabled = false
+
+[[skills.config]]
+name = "design-rubric"
+enabled = false
+
+[[skills.config]]
+name = "frontend-design:frontend-design"
+enabled = false
+
+[[skills.config]]
+name = "visual-qa"
+enabled = false
+
+[[skills.config]]
+name = "backend-rubric"
+enabled = false
+
+[[skills.config]]
+name = "release-signing"
+enabled = false
+
+[[skills.config]]
+name = "voice-compile"
+enabled = false
+
+[[skills.config]]
+name = "writing-capture"
+enabled = false
+
+[[skills.config]]
+name = "co-writing"
+enabled = false
+# END generated scope settings
