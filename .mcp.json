@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "code-review-graph": {
+      "args": [
+        "code-review-graph",
+        "mcp"
+      ],
+      "command": "uvx",
+      "type": "stdio"
+    }
+  }
+}

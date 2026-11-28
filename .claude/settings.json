@@ -1,0 +1,40 @@
+{
+  "enabledPlugins": {
+    "hippocampus": true,
+    "whatsup": true
+  },
+  "permissions": {
+    "deny": [
+      "Skill(hippocampus:knowledge-capture)",
+      "Skill(hippocampus:meeting-capture)",
+      "Skill(hippocampus:improve-harness)",
+      "Skill(hippocampus:slim-harness)",
+      "Skill(hippocampus:slim-unattended)",
+      "Skill(harness-update)",
+      "Skill(incident)",
+      "Skill(hippocampus:wiki-compile)",
+      "Skill(hippocampus:wiki-audit)",
+      "Skill(hippocampus:vault-compile)",
+      "Skill(hippocampus:vault-audit)",
+      "Skill(hippocampus:research-to-wiki)",
+      "Skill(obsidian-markdown)",
+      "Skill(obsidian-cli)",
+      "Skill(obsidian-bases)",
+      "Skill(json-canvas)",
+      "Skill(reminders)",
+      "Skill(process-inbox)",
+      "Skill(dev-build-sim-installed)",
+      "Skill(dev-build-sim-ephemeral)",
+      "Skill(dev-build-device)",
+      "Skill(dev-build-mac)",
+      "Skill(design-rubric)",
+      "Skill(frontend-design:frontend-design)",
+      "Skill(visual-qa)",
+      "Skill(backend-rubric)",
+      "Skill(release-signing)",
+      "Skill(voice-compile)",
+      "Skill(writing-capture)",
+      "Skill(co-writing)"
+    ]
+  }
+}
